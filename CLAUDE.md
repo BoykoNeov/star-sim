@@ -32,11 +32,16 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 ## Where things are
 
 - `backend/star_sim/` — `state.py`, `provider.py` (the §3 boundary),
-  `providers/stub.py` (v1 provider), `api.py` (FastAPI, the swap point).
-- `backend/tests/` — sanity checks wired from spec §10 (Sun anchor, ZAMS spread).
+  `providers/mist.py` (the real v1 provider), `providers/stub.py` (data-free
+  fallback), `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
+  `fetch_mist.py` (build-time grid fetch), `api.py` (FastAPI, the swap point).
+- `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
+  ZAMS spread, EEP-between-neighbors — the stub→MIST regression) and
+  `test_stub_provider.py`. MIST-dependent tests skip when grids aren't fetched
+  (`conftest.requires_mist_data`).
 - `frontend/` — static SPA (no bundler): `index.html`, `src/{main,star,hr,color}.js`.
   Three.js via CDN importmap. Served by FastAPI.
-- `data/` — downloaded grids (gitignored, currently empty; stub needs no data).
+- `data/` — downloaded grids (gitignored). Fetch once: `python -m star_sim.fetch_mist`.
 
 ## Commands
 
@@ -44,22 +49,28 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 # backend (from backend/)
 python -m venv .venv && . .venv/Scripts/activate   # Windows; or .venv/bin/activate
 pip install -e ".[dev]"
+python -m star_sim.fetch_mist                      # one-time: fetch MIST grids (~180 MB) into data/
 uvicorn star_sim.api:app --reload                  # serves API + frontend at :8000
-pytest                                             # run sanity tests
+pytest                                             # run sanity tests (MIST tests skip if grids absent)
 ```
 
 Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
 
 ## Current status & what's next
 
-- **Done:** the §3 spine, `StubProvider`, FastAPI `/state` `/ranges` `/age_range`
-  `/health`, and a runnable end-to-end frontend shell (Teff→color, R→size, point
-  on the HR diagram). The stub returns Sun values at 1 M☉ (spec §10).
-- **Next (first real Phase 0 step):** `MISTProvider` behind the same interface —
-  fetch the **current** MIST download location at build time (do not hard-code a
-  URL, spec §6), reuse MIST's `read_mist_models.py`, start with one [Fe/H].
-- Then Phase 1 (full EEP 2D interpolation, composition panel), Phase 2 (shader
-  beauty: granulation from H_p, limb darkening, corona from `activity`).
+- **Done:** the §3 spine; `MISTProvider` is the live provider (`PROVIDER` in
+  `api.py`) — real MIST v2.5 tracks, one [Fe/H] (solar), EEP-fixed mass
+  interpolation over the ZAMS→RGB-tip window. `fetch_mist.py` *discovers* the
+  current download URL by scraping MIST's model-grids page (the host moved
+  waps.cfa.harvard.edu→mist.science and version v1.2→v2.5 since the spec — §6
+  vindicated). `StubProvider` stays as a data-free fallback. The §10 anchors are
+  the regression test for the swap (Sun: L≈1.07, Teff≈5834 K at 4.6 Gyr).
+- **Next (Phase 1):** add the [Fe/H] axis (fetch a 2nd metallicity, outer-loop
+  interpolation per §6); composition panel; widen the exposed window past RGB
+  tip if desired; add the `.npz` parse cache + load the full mass grid (today's
+  provider loads a curated `DEFAULT_MASSES` subset for fast startup).
+- Then Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
+  `activity`).
 
 ## Conventions
 

@@ -12,6 +12,10 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "numpy>=2.0",
     "scipy>=1.14",
+    # MIST's vendored read_mist_models.py imports matplotlib.pyplot at module
+    # load (only for plotting helpers we don't use). A normal scientific dep
+    # for a local app — cheaper than a sys.modules shim. See providers/_vendor/.
+    "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]

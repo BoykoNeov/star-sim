@@ -16,6 +16,8 @@ from star_sim.api import app
 from star_sim.provider import ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import StubProvider
 
+from .conftest import requires_mist_data
+
 SUN_AGE_YR = 4.6e9
 
 
@@ -76,6 +78,8 @@ def test_out_of_range_raises(provider):
 
 
 # --- API round-trip: payload is exactly the StellarState shape ---------------
+# These exercise the live `app`, whose PROVIDER is now MISTProvider — so they
+# need the grids on disk. `/health` is the exception: it stays up data-or-not.
 
 EXPECTED_KEYS = {
     "age_yr", "eep", "phase", "mass_init_msun", "feh_init",
@@ -85,6 +89,7 @@ EXPECTED_KEYS = {
 }
 
 
+@requires_mist_data
 def test_api_state_payload_is_stellarstate_shape():
     client = TestClient(app)
     resp = client.get("/state", params={"mass": 1.0, "feh": 0.0, "age": SUN_AGE_YR})
@@ -92,14 +97,21 @@ def test_api_state_payload_is_stellarstate_shape():
     assert set(resp.json().keys()) == EXPECTED_KEYS
 
 
+@requires_mist_data
 def test_api_out_of_range_is_422():
     client = TestClient(app)
     resp = client.get("/state", params={"mass": 999.0, "feh": 0.0, "age": 0.0})
     assert resp.status_code == 422
 
 
-def test_api_health_and_ranges():
+def test_api_health_is_up():
+    # /health must report liveness even before the grids are fetched.
     client = TestClient(app)
     assert client.get("/health").json()["status"] == "ok"
+
+
+@requires_mist_data
+def test_api_ranges():
+    client = TestClient(app)
     rng = client.get("/ranges").json()
     assert "mass_msun" in rng and "feh" in rng

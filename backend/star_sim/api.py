@@ -18,11 +18,19 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .provider import ParameterOutOfRange, StellarStateProvider
-from .providers import StubProvider
+from .provider import (
+    ParameterOutOfRange,
+    ProviderDataMissing,
+    StellarStateProvider,
+)
+from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
-PROVIDER: StellarStateProvider = StubProvider()
+# v1 ships MISTProvider (real MIST grids). Construction is lazy, so this never
+# touches disk at import time; if the grids aren't fetched yet, requests that
+# need data surface an actionable 503 (see _provider_unavailable below) rather
+# than crashing the app. Swap to StubProvider() here for a data-free run.
+PROVIDER: StellarStateProvider = MISTProvider()
 
 # frontend/ lives next to backend/ at the repo root: star_sim/api.py -> parents
 #   [0]=star_sim  [1]=backend  [2]=repo root
@@ -37,15 +45,31 @@ app.add_middleware(
 )
 
 
+def _provider_unavailable(exc: ProviderDataMissing) -> HTTPException:
+    """Translate 'backing data not fetched yet' into an actionable 503."""
+    return HTTPException(status_code=503, detail=str(exc))
+
+
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "provider": getattr(PROVIDER, "name", type(PROVIDER).__name__)}
+    """Liveness + whether the provider's data is actually ready to serve state."""
+    info = {"status": "ok", "provider": getattr(PROVIDER, "name", type(PROVIDER).__name__)}
+    try:
+        info["ranges"] = PROVIDER.parameter_ranges()
+        info["data_ready"] = True
+    except ProviderDataMissing as exc:
+        info["data_ready"] = False
+        info["detail"] = str(exc)
+    return info
 
 
 @app.get("/ranges")
 def ranges() -> dict:
     """Valid mass / [Fe/H] ranges so the UI can never request an out-of-grid point."""
-    return PROVIDER.parameter_ranges()
+    try:
+        return PROVIDER.parameter_ranges()
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
 
 
 @app.get("/age_range")
@@ -57,6 +81,8 @@ def age_range(
         lo, hi = PROVIDER.age_range(mass, feh)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
     return {"min": lo, "max": hi}
 
 
@@ -71,6 +97,8 @@ def state(
         st = PROVIDER.state_at(mass, feh, age)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
     return asdict(st)
 
 

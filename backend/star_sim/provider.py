@@ -22,6 +22,16 @@ class ParameterOutOfRange(ValueError):
     """
 
 
+class ProviderDataMissing(RuntimeError):
+    """Raised when a provider's backing data (e.g. MIST grids) isn't present.
+
+    Kept on the boundary, not inside any one provider, because "the data layer
+    isn't ready" is a provider-agnostic condition the API must translate (to a
+    503) without knowing *which* grid is missing. The message should be
+    actionable — tell the operator how to fetch the data.
+    """
+
+
 @runtime_checkable
 class StellarStateProvider(Protocol):
     def parameter_ranges(self) -> dict:

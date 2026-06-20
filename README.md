@@ -9,11 +9,13 @@ Guiding value: **real data and real science, with approximation only where
 necessary.** See [`STAR_SIM_SPEC.md`](./STAR_SIM_SPEC.md) for the full design;
 [`CLAUDE.md`](./CLAUDE.md) for the short operational notes.
 
-> **Status: Phase 0 — the spine.** The architecture runs end to end on a
-> `StubProvider` (no external data). Mass/[Fe/H]/age controls drive one
-> `StellarState`; the star colors & resizes and a point moves on the HR diagram.
-> The next step is `MISTProvider` (real MESA/MIST tracks) behind the same
-> interface — see `CLAUDE.md`.
+> **Status: Phase 0 complete — real MIST tracks.** `MISTProvider` is the live
+> provider: it serves real MESA/MIST v2.5 stellar evolution tracks (one [Fe/H],
+> solar), interpolating across mass **at fixed evolutionary point** (EEP, not
+> age — spec §6). Drag the mass slider *or* scrub age and the star evolves:
+> ZAMS Sun → subgiant → 146 R☉ red giant. `StubProvider` remains as a data-free
+> fallback. The MIST grids are fetched at build time (see *Run it*). Next: a
+> second [Fe/H] axis + the composition panel (Phase 1) — see `CLAUDE.md`.
 
 ## Architecture in one sentence
 
@@ -36,12 +38,20 @@ cd backend
 python -m venv .venv
 . .venv/Scripts/activate          # Windows;  on macOS/Linux: . .venv/bin/activate
 pip install -e ".[dev]"
+python -m star_sim.fetch_mist     # one-time: discover + fetch MIST grids (~180 MB) into data/
 uvicorn star_sim.api:app --reload
 ```
 
 Then open **http://127.0.0.1:8000**. FastAPI serves both the JSON API and the
 frontend. Drag the **mass** slider — color and size should transform
-dramatically (cool red dwarf → hot blue giant).
+dramatically (cool red dwarf → hot blue giant) — and scrub **age** to walk the
+star along its evolutionary track.
+
+The `fetch_mist` step *discovers* the current MIST download location rather than
+hard-coding it (spec §6 — the host and version have already drifted). Without
+the grids, `/state` answers `503` pointing back at that command and `/health`
+still reports liveness; swap `PROVIDER` to `StubProvider()` in `api.py` for a
+fully data-free run.
 
 ## Test
 
@@ -59,13 +69,17 @@ in a real provider — they become the regression test for that swap.
 ```
 backend/
   star_sim/
-    state.py          # StellarState dataclass (the §3 spine)
-    provider.py       # StellarStateProvider Protocol (the boundary)
-    providers/stub.py # v1 provider: physically-flavored, no external data
-    api.py            # FastAPI; PROVIDER is the single swap point
-  tests/              # §10 sanity checks
+    state.py           # StellarState dataclass (the §3 spine)
+    provider.py        # StellarStateProvider Protocol + ProviderDataMissing (the boundary)
+    providers/
+      mist.py          # live provider: real MIST v2.5 tracks, EEP-fixed mass interpolation
+      stub.py          # data-free fallback: physically-flavored, no external data
+      _vendor/         # MIST's own read_mist_models.py parser (vendored, §6)
+    fetch_mist.py      # build-time grid fetch (discovers the download URL, §6)
+    api.py             # FastAPI; PROVIDER is the single swap point
+  tests/               # §10 sanity checks (MIST tests skip when grids absent)
 frontend/
   index.html
   src/{main,star,hr,color}.js   # Three.js star, canvas HR diagram, Teff→color
-data/                 # downloaded grids (gitignored; empty for now)
+data/                  # downloaded grids (gitignored; fetched at build time)
 ```
