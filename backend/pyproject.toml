@@ -1,0 +1,32 @@
+[project]
+name = "star-sim-backend"
+version = "0.1.0"
+description = "Backend for the Star Simulator — serves StellarState over localhost (see ../STAR_SIM_SPEC.md)."
+requires-python = ">=3.11"
+
+# Lower-bound pins: this runs locally only, so we want recent scientific
+# tooling without freezing to exact builds. Tighten to == once a known-good
+# combination is established.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "numpy>=2.0",
+    "scipy>=1.14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",  # FastAPI TestClient transport
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["star_sim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

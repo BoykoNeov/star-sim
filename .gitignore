@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Stellar data grids (downloaded, never committed) ---
+# MIST .track.eep / isochrone files and any other large grids live under data/
+# but must be fetched at build time, not stored in git (see STAR_SIM_SPEC.md §6).
+/data/*
+!/data/.gitkeep
+!/data/README.md
+
+# --- Editor / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Node (frontend uses CDN modules; nothing to install yet, but just in case) ---
+node_modules/

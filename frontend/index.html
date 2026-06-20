@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Star Simulator</title>
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- Three.js as an ES module from a CDN. This app is local-only (no bundle
+       budget, internet assumed at dev time — STAR_SIM_SPEC.md §2), so an
+       importmap to a pinned CDN build is the simplest sane setup. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Star Simulator <span class="tag">Phase 0 · StubProvider</span></h1>
+    <p class="sub">
+      Every panel below is a function of one <code>StellarState</code>
+      (spec §3). The data source is a stub — swap it for MIST and nothing here
+      changes.
+    </p>
+  </header>
+
+  <main>
+    <section class="panel star-panel">
+      <canvas id="star-canvas"></canvas>
+    </section>
+
+    <section class="panel hr-panel">
+      <h2>HR diagram</h2>
+      <canvas id="hr-canvas" width="360" height="320"></canvas>
+      <p class="note">Hot on the left (Teff reversed), per convention.</p>
+    </section>
+
+    <section class="panel controls-panel">
+      <h2>Controls</h2>
+
+      <label for="mass">Mass <span id="mass-val"></span> M<sub>☉</sub></label>
+      <input id="mass" type="range" />
+
+      <label for="feh">[Fe/H] <span id="feh-val"></span></label>
+      <input id="feh" type="range" />
+
+      <label for="age">Age <span id="age-val"></span></label>
+      <input id="age" type="range" />
+
+      <h2>State readout</h2>
+      <div id="readout" class="readout"></div>
+      <p class="note" id="status"></p>
+    </section>
+  </main>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
