@@ -44,7 +44,11 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,color,canvas}.js` (`comp.js` is the §5.4 composition
   panel; `canvas.js` is the shared HiDPI `fitCanvas` helper the HR & composition
-  panels both use). Three.js via CDN importmap. Served by FastAPI. The pedagogy
+  panels both use). `star.js` is the Phase 2 §7 shader (a `ShaderMaterial`:
+  Teff→color × H_p granulation × limb darkening, streak-proof rotation, + an
+  activity-driven corona quad); `color.js` is the reference Planck→CIE→sRGB color
+  pipeline (`teffToLinearRGB` for the shader, `teffToRGB`/`teffToCSS` for the 2D
+  UI). Three.js via CDN importmap. Served by FastAPI. The pedagogy
   is hover-revealed: a `?` glyph (panel headings, control labels, each readout
   row) and glyph-free dotted-underline hovers on the status-line tokens, all via
   one CSS `data-tip` tooltip. The age window + the snap-tick landmarks are
@@ -128,8 +132,27 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   writes are atomic (temp + `os.replace`). New tests: `test_full_grid_loaded_by_default`,
   `test_parsed_track_cache_roundtrip_fidelity` (bit-for-bit fresh-parse vs cache),
   `test_cache_fingerprint_rejects_stale_source`.
-- **Next:** Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
-  `activity`).
+- **Done (Phase 2, shader beauty — frontend-only):** `star.js` is now a
+  `ShaderMaterial` and `color.js` the reference color pipeline; **no backend / API
+  change, and the `activity` proxy was left untouched** (a §11 open question, not
+  Phase 2). Layers (spec §7): **color** = Planck blackbody → CIE 1931 (Wyman CMF
+  fit) → linear sRGB, gamma last, max-channel normalized (§10 holds: Sun warm
+  near-white, not yellow); **granulation** = animated 3D Worley whose cell
+  frequency is the pressure scale height `Q = R·10^logg/Teff` (Sun ≈22 cells,
+  clamped [2.5, 90] — the floor *is* the giant's "handful of enormous cells");
+  **limb darkening** = quadratic law; **rotation** = a continuous rigid spin
+  (latitude-independent → no shear) + a **bounded, per-lifetime-reset** differential
+  shear cross-faded across two reforming granule generations — this is the fix for
+  the real bug where naive `omega(lat)·t` winds granulation into longitudinal
+  **streaks** by ~60 s (don't revert it); **corona** = a camera-facing additive
+  quad (a back-shell gave a detached ring) whose intensity+extent scale with
+  `activity`, near-glowless for hot O/B stars on purpose, labelled "evocative, not
+  predictive" in code + UI. `uTime` comes from a `THREE.Clock` (frame-rate
+  independent). Verified with headless Chromium/SwiftShader screenshots (Sun / hot
+  15 M☉ / RGB-clump giant / 0.2 M☉ dwarf + a t=0/30/60 s wind-up check); there is
+  no JS test harness, so that screenshot pass *is* the regression check.
+- **Next:** Phase 3 — the Lane-Emden interior-structure panel (spec §8), validated
+  against Chandrasekhar's polytrope tables (n=0,1,5 closed forms).
 
 ## Conventions
 

@@ -19,14 +19,14 @@
 </head>
 <body>
   <header>
-    <h1>Star Simulator <span class="tag">Phase 1 · MIST tracks</span>
+    <h1>Star Simulator <span class="tag">Phase 2 · live shader</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
     </h1>
   </header>
 
   <main>
     <section class="panel star-panel">
-      <h2>3D star <span class="help" tabindex="0" data-tip="A live 3D view of the star. Its color is set by Teff (surface temperature) — cool stars red, hot stars blue-white. Its on-screen size scales with the radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout).">?</span></h2>
+      <h2>3D star <span class="help" tabindex="0" data-tip="A live, physically-motivated 3D star — every visual driven by a real StellarState number (spec §7). COLOR: the true blackbody color at Teff (Planck spectrum → CIE → sRGB), so the Sun is warm near-white, cool stars orange-red, hot stars blue-white. GRANULATION: convective cells whose size comes from the pressure scale height H_p ∝ Teff/g — a compact dwarf shows fine granules, a low-gravity giant only a handful of enormous cells. LIMB DARKENING dims the disk toward its edge; the surface slowly rotates (a plausible visual rate — the v/vcrit=0 grid carries no real rotation). CORONA: the additive outer glow tracks the activity proxy — bright and far-reaching for cool active stars, near-absent for hot ones. It is EVOCATIVE, NOT PREDICTIVE: real coronae and winds are magnetic or radiative structure we are not modeling. On-screen SIZE scales with radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout).">?</span></h2>
       <canvas id="star-canvas"></canvas>
     </section>
 

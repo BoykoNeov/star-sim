@@ -9,16 +9,21 @@ Guiding value: **real data and real science, with approximation only where
 necessary.** See [`STAR_SIM_SPEC.md`](./STAR_SIM_SPEC.md) for the full design;
 [`CLAUDE.md`](./CLAUDE.md) for the short operational notes.
 
-> **Status: Phase 1 — real MIST tracks, [Fe/H] axis, composition panel.**
-> `MISTProvider` is the live provider: real MESA/MIST v2.5 tracks over a 2D
+> **Status: Phase 2 — physically-driven 3D star (shader beauty).**
+> The data layer is the live `MISTProvider`: real MESA/MIST v2.5 tracks over a 2D
 > **(mass × [Fe/H])** grid (currently [Fe/H] −0.5…+0.5), interpolated **at fixed
 > evolutionary point** (EEP, not age — spec §6). Drag mass or [Fe/H], or scrub
-> age, and the star evolves: ZAMS Sun → subgiant → 146 R☉ red giant. The
-> composition panel shows core & surface H/He/metals vs EEP, and the HR diagram
-> draws the full evolutionary track with a marker at the current age.
-> `StubProvider` remains a data-free fallback; the MIST grids are fetched at build
-> time (see *Run it*). Next: full mass grid + parse cache, then Phase 2 shader
-> beauty — see `CLAUDE.md`.
+> age, and the star evolves: ZAMS Sun → subgiant → ~154 R☉ red giant. On top of
+> that, the 3D star is now a fragment shader where every visual is a real number
+> from the state (spec §7): true blackbody **color** (Planck → CIE → sRGB),
+> **granulation** whose cell size comes from the pressure scale height (fine for a
+> dwarf, a handful of huge cells for a giant), **limb darkening**, a gently
+> rotating surface, and an additive **corona** that scales with the activity proxy
+> (near-glowless for hot stars — evocative, not predictive). The composition panel
+> shows core & surface H/He/metals vs EEP; the HR diagram draws the full track
+> with a marker at the current age. `StubProvider` remains a data-free fallback;
+> the MIST grids are fetched at build time (see *Run it*). Next: Phase 3 — the
+> Lane-Emden interior-structure panel (spec §8) — see `CLAUDE.md`.
 
 ## Architecture in one sentence
 
@@ -107,6 +112,6 @@ backend/
   tests/               # §10 sanity checks (MIST tests skip when grids absent)
 frontend/
   index.html
-  src/{main,star,hr,comp,color,canvas}.js  # Three.js star, HR diagram, composition panel, Teff→color, HiDPI canvas helper
+  src/{main,star,hr,comp,color,canvas}.js  # star.js = §7 shader (color×granulation×limb×rotation + corona); color.js = Planck→CIE→sRGB; HR diagram, composition panel, HiDPI canvas helper
 data/                  # downloaded grids (gitignored; fetched at build time)
 ```
