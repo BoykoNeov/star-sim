@@ -19,9 +19,13 @@ import pytest
 
 from star_sim.provider import ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import MISTProvider
-from star_sim.providers.mist import DATA_DIR, _find_eep_dir
+from star_sim.providers.mist import DATA_DIR
 
-from .conftest import requires_mist_data
+from .conftest import (
+    requires_mist_data,
+    requires_mist_heldout_feh,
+    requires_mist_multifeh,
+)
 
 pytestmark = requires_mist_data
 
@@ -33,13 +37,28 @@ def provider() -> MISTProvider:
     return MISTProvider()
 
 
-# --- a tiny ground-truth loader for the interpolation test -------------------
-def _real_track(mass_code: str):
-    """Read a raw MIST track via the vendored parser (test ground truth only)."""
+# --- a tiny ground-truth loader for the interpolation tests ------------------
+def _feh_to_code(feh: float) -> str:
+    """0.0 -> 'p000', -0.5 -> 'm050', 0.5 -> 'p050' (MIST dir-name [Fe/H] code)."""
+    sign = "m" if feh < 0 else "p"
+    return f"{sign}{round(abs(feh) * 100):03d}"
+
+
+def _real_track(mass_code: str, feh: float = 0.0):
+    """Read a raw MIST track via the vendored parser (test ground truth only).
+
+    Defaults to the solar grid; the [Fe/H] tests pass a metallicity so they read
+    the *right* grid (with multiple grids on disk `_find_eep_dir` is ambiguous).
+    """
+    import glob
+
     from star_sim.providers._vendor import read_mist_models as rmm
 
-    path = os.path.join(str(_find_eep_dir(DATA_DIR)), f"{mass_code}M.track.eep")
-    return rmm.EEP(path, verbose=False).eeps
+    hits = glob.glob(
+        str(DATA_DIR / f"feh_{_feh_to_code(feh)}_*" / "**" / f"{mass_code}M.track.eep"),
+        recursive=True,
+    )
+    return rmm.EEP(hits[0], verbose=False).eeps
 
 
 def test_mist_satisfies_provider_protocol(provider):
@@ -104,8 +123,9 @@ def test_evolves_off_main_sequence(provider):
 def test_out_of_range_raises(provider):
     with pytest.raises(ParameterOutOfRange):
         provider.state_at(1000.0, 0.0, 0.0)   # mass past the grid
+    feh_max = provider.parameter_ranges()["feh"]["max"]
     with pytest.raises(ParameterOutOfRange):
-        provider.state_at(1.0, 0.5, 0.0)      # [Fe/H] off the single-metallicity grid
+        provider.state_at(1.0, feh_max + 1.0, 0.0)   # [Fe/H] past the grid
 
 
 def test_eep_interpolation_lies_between_neighbors(provider):
@@ -136,3 +156,90 @@ def test_eep_interpolation_lies_between_neighbors(provider):
 
     # Tracks the real 1.5 track closely (median ~1%); an age-interp would not.
     assert float(np.median(rel_errs)) < 0.05
+
+
+# --- the [Fe/H] axis (§6 outer loop) -----------------------------------------
+@requires_mist_multifeh
+def test_parameter_ranges_expose_feh_span(provider):
+    """With >=2 grids the feh range is a real interval, not a pinned point."""
+    feh = provider.parameter_ranges()["feh"]
+    assert feh["min"] < feh["max"]
+
+
+@requires_mist_multifeh
+def test_feh_interpolation_lies_between_metallicities(provider):
+    """The rigorous §6/§10 property for the metallicity axis: at a fixed EEP, an
+    interpolated [Fe/H] must lie *between* its bracketing grids on the HR diagram.
+
+    Blend-then-invert makes the blended logL/logT a convex combination of the two
+    grids at every row, so this is provably preserved — assert it tightly. (1.0
+    M_sun is a grid point, so each bracket's window is its raw track.)
+    """
+    provider._ensure_loaded()
+    fehs = provider._fehs
+    f_lo, f_hi = float(fehs[0]), float(fehs[1])     # first metallicity bracket
+    f_mid = 0.5 * (f_lo + f_hi)
+    t_lo = _real_track("00100", f_lo)
+    t_hi = _real_track("00100", f_hi)
+
+    lo, hi = provider.age_range(1.0, f_mid)
+    for frac in np.linspace(0.05, 0.95, 15):
+        st = provider.state_at(1.0, f_mid, lo + frac * (hi - lo))
+        row = int(round(st.eep)) - 1
+        logL, logT = math.log10(st.L_lsun), math.log10(st.Teff_K)
+        lL_lo, lL_hi = t_lo["log_L"][row], t_hi["log_L"][row]
+        lT_lo, lT_hi = t_lo["log_Teff"][row], t_hi["log_Teff"][row]
+        assert min(lL_lo, lL_hi) - 0.03 <= logL <= max(lL_lo, lL_hi) + 0.03
+        assert min(lT_lo, lT_hi) - 0.01 <= logT <= max(lT_lo, lT_hi) + 0.01
+
+
+@requires_mist_multifeh
+def test_metal_poor_is_hotter_and_brighter(provider):
+    """Physics sanity (§6): at fixed mass & age, lower [Fe/H] -> lower opacity ->
+    a hotter, more luminous star. The axis must reproduce this direction."""
+    feh = provider.parameter_ranges()["feh"]
+    poor = provider.state_at(1.0, feh["min"], SUN_AGE_YR)
+    rich = provider.state_at(1.0, feh["max"], SUN_AGE_YR)
+    assert poor.Teff_K > rich.Teff_K
+    assert poor.L_lsun > rich.L_lsun
+
+
+@requires_mist_heldout_feh
+def test_feh_interpolation_tracks_held_out_grid():
+    """Hold the solar grid out: interpolate at [Fe/H]=0 from only the m050/p050
+    grids and check it reproduces the *real* p000 run.
+
+    Empirical tolerance: a full 1.0-dex [Fe/H] bracket has real curvature (unlike
+    the near-linear 0.2-M_sun mass bracket), so this is looser than the mass test.
+    Measured L median ~3.3% (max ~11%); Teff median ~0.7%. The lies-between test
+    above is the *tight* guarantee; this one checks accuracy, not just bounds.
+    """
+    p = MISTProvider(fehs=(-0.5, 0.5))     # solar grid deliberately excluded
+    real = _real_track("00100", 0.0)        # ground truth: the real p000 1.0 track
+
+    lo, hi = p.age_range(1.0, 0.0)
+    L_errs, T_errs = [], []
+    for frac in np.linspace(0.05, 0.95, 25):
+        st = p.state_at(1.0, 0.0, lo + frac * (hi - lo))
+        row = int(round(st.eep)) - 1
+        L_real, T_real = 10 ** real["log_L"][row], 10 ** real["log_Teff"][row]
+        L_errs.append(abs(st.L_lsun - L_real) / L_real)
+        T_errs.append(abs(st.Teff_K - T_real) / T_real)
+
+    assert float(np.median(L_errs)) < 0.06    # measured 3.3%
+    assert float(np.median(T_errs)) < 0.015   # measured 0.7%
+
+
+@requires_mist_heldout_feh
+def test_dead_corner_excluded_per_metallicity():
+    """The valid (mass, [Fe/H]) domain isn't rectangular: super-solar low-mass
+    M-dwarfs have no evolved tracks, so mass_range tightens and the corner raises.
+    The §10 red dwarf survives at solar/sub-solar [Fe/H], where it does exist.
+    """
+    p = MISTProvider()
+    assert p.mass_range(0.0)[0] < 0.5          # red dwarfs available at solar [Fe/H]
+    assert p.mass_range(0.5)[0] >= 0.5         # ...but not super-solar
+    # the surviving red dwarf is the cool §10 anchor
+    assert p.state_at(0.1, 0.0, 0.0).Teff_K < 3500.0
+    with pytest.raises(ParameterOutOfRange):
+        p.state_at(0.1, 0.5, 0.0)              # the dead corner

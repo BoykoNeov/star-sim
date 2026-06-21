@@ -42,6 +42,16 @@ class StellarStateProvider(Protocol):
         """
         ...
 
+    def mass_range(self, feh: float) -> tuple[float, float]:
+        """(min_mass, max_mass) for the mass slider at this [Fe/H].
+
+        The valid mass span can depend on metallicity (a provider's grid may not
+        cover every mass at every [Fe/H]). The UI calls this per [Fe/H] so it can
+        clamp the mass slider and never request an out-of-grid point — without
+        knowing *why* the span tightens (§3: no provider internals leak out).
+        """
+        ...
+
     def age_range(self, mass: float, feh: float) -> tuple[float, float]:
         """(min_age_yr, max_age_yr) for the time scrubber at this (mass, feh)."""
         ...

@@ -67,6 +67,10 @@ class StubProvider:
             "feh": {"min": FEH_MIN, "max": FEH_MAX},
         }
 
+    def mass_range(self, feh: float) -> tuple[float, float]:
+        """Full mass span — the stub's analytic grid is rectangular in (mass, feh)."""
+        return (MASS_MIN, MASS_MAX)
+
     def age_range(self, mass: float, feh: float) -> tuple[float, float]:
         self._check_mass_feh(mass, feh)
         # Crude main-sequence lifetime: t ~ 10 Gyr * M^-2.5 (Sun -> 10 Gyr).

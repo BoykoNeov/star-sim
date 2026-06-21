@@ -36,9 +36,11 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   fallback), `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
   `fetch_mist.py` (build-time grid fetch), `api.py` (FastAPI, the swap point).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
-  ZAMS spread, EEP-between-neighbors — the stub→MIST regression) and
-  `test_stub_provider.py`. MIST-dependent tests skip when grids aren't fetched
-  (`conftest.requires_mist_data`).
+  ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
+  metallicities, held-out-grid accuracy, dead-corner exclusion) and
+  `test_stub_provider.py`. Skip markers in `conftest.py` gate by data present:
+  `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2), and
+  `requires_mist_heldout_feh` (the m050/p000/p050 trio).
 - `frontend/` — static SPA (no bundler): `index.html`, `src/{main,star,hr,color}.js`.
   Three.js via CDN importmap. Served by FastAPI.
 - `data/` — downloaded grids (gitignored). Fetch once: `python -m star_sim.fetch_mist`.
@@ -59,16 +61,24 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
 ## Current status & what's next
 
 - **Done:** the §3 spine; `MISTProvider` is the live provider (`PROVIDER` in
-  `api.py`) — real MIST v2.5 tracks, one [Fe/H] (solar), EEP-fixed mass
+  `api.py`) — real MIST v2.5 tracks, EEP-fixed **2D (mass × [Fe/H])**
   interpolation over the ZAMS→RGB-tip window. `fetch_mist.py` *discovers* the
   current download URL by scraping MIST's model-grids page (the host moved
   waps.cfa.harvard.edu→mist.science and version v1.2→v2.5 since the spec — §6
   vindicated). `StubProvider` stays as a data-free fallback. The §10 anchors are
   the regression test for the swap (Sun: L≈1.07, Teff≈5834 K at 4.6 Gyr).
-- **Next (Phase 1):** add the [Fe/H] axis (fetch a 2nd metallicity, outer-loop
-  interpolation per §6); composition panel; widen the exposed window past RGB
-  tip if desired; add the `.npz` parse cache + load the full mass grid (today's
-  provider loads a curated `DEFAULT_MASSES` subset for fast startup).
+- **Done (Phase 1, [Fe/H] axis):** the provider loads N per-metallicity grids
+  (currently m050/p000/p050 → [Fe/H] −0.5…+0.5) and does the §6 outer-loop
+  metallicity blend. Method: **blend-then-invert** — build the fully (mass,[Fe/H])
+  interpolated track window, *then* one age→EEP inversion (consistent with how the
+  mass axis already worked; do not "fix" it to per-grid invert). The valid domain
+  is **non-rectangular**: super-solar low-mass M-dwarfs have no evolved tracks, so
+  `mass_range(feh)` (new provider method + `/mass_range` endpoint) tightens the
+  mass floor for [Fe/H]>0; the frontend clamps the mass slider to it. The §10 red
+  dwarf survives at solar/sub-solar [Fe/H].
+- **Next (Phase 1):** composition panel; widen the exposed window past RGB tip if
+  desired; add the `.npz` parse cache + load the full mass grid (today's provider
+  loads a curated `DEFAULT_MASSES` subset per grid for fast startup).
 - Then Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
   `activity`).
 

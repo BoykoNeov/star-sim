@@ -32,9 +32,21 @@ const hr = createHR(document.getElementById("hr-canvas"));
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
 let ageFraction = 0.46;   // Sun's present age as a fraction of MS lifetime
 let maxAge = 1e10;
+// The valid mass span tightens with [Fe/H] (the backend has a dead low-mass
+// corner at high metallicity — super-solar M-dwarfs have no evolved tracks).
+// Refetched from /mass_range whenever [Fe/H] changes; used to clamp the slider
+// so the UI never requests an out-of-grid point (spec §6). The slider itself
+// doesn't know *why* the span moves — just that it does (§3).
+let validMassMin = 0.1, validMassMax = 40;
+let providerName = "";    // filled from /health, shown in the status line
 
+// The slider position spans the full bounding box; the physical mass is then
+// clamped to the span valid at the current [Fe/H] — a soft floor that moves with
+// metallicity.
 const massFromSlider = () =>
-  10 ** (logMassMin + Number(els.mass.value) * (logMassMax - logMassMin));
+  Math.min(Math.max(
+    10 ** (logMassMin + Number(els.mass.value) * (logMassMax - logMassMin)),
+    validMassMin), validMassMax);
 const sliderFromMass = (m) =>
   (Math.log10(m) - logMassMin) / (logMassMax - logMassMin);
 
@@ -71,7 +83,7 @@ function renderReadout(s) {
     ["log g", fmt(s.logg, 3)],
     ["X / Y / Z surf", `${fmt(s.X_surf)} / ${fmt(s.Y_surf)} / ${fmt(s.Z_surf, 2)}`],
     ["X / Y / Z core", `${fmt(s.X_core)} / ${fmt(s.Y_core)} / ${fmt(s.Z_core, 2)}`],
-    ["v_rot", s.v_rot_kms === null ? "n/a (stub)" : `${fmt(s.v_rot_kms)} km/s`],
+    ["v_rot", s.v_rot_kms === null ? "n/a" : `${fmt(s.v_rot_kms)} km/s`],
     ["activity", s.activity === null ? "n/a" : fmt(s.activity, 2)],
   ];
   els.readout.innerHTML = rows
@@ -84,6 +96,11 @@ async function refresh() {
   const mass = massFromSlider();
   const feh = Number(els.feh.value);
   const age = ageFraction * maxAge;
+
+  // If [Fe/H] pushed the valid floor above the thumb, snap the thumb up to the
+  // floor so it can't visually sit in the disabled (dead-corner) region.
+  const clampedPos = sliderFromMass(mass);
+  if (Math.abs(Number(els.mass.value) - clampedPos) > 1e-6) els.mass.value = clampedPos;
 
   els.massVal.textContent = fmt(mass);
   els.fehVal.textContent = feh.toFixed(2);
@@ -98,7 +115,7 @@ async function refresh() {
     hr.update(s);
     renderReadout(s);
     els.status.style.color = teffToCSS(s.Teff_K);
-    els.status.textContent = `OK · ${s.phase} · stub data`;
+    els.status.textContent = `OK · ${s.phase}` + (providerName ? ` · ${providerName}` : "");
   } catch (err) {
     if (token !== reqToken) return;
     els.status.style.color = "#ff6b6b";
@@ -119,11 +136,29 @@ async function refreshAgeRangeThenState() {
   await refresh();
 }
 
+// When [Fe/H] changes, the valid *mass* span can change (the dead corner), so
+// refresh it before the age window — refreshAgeRangeThenState() reads the clamped
+// mass, so the order matters.
+async function refreshMassRangeThenState() {
+  const feh = Number(els.feh.value);
+  try {
+    const mr = await fetchJSON(`/mass_range?feh=${feh}`);
+    validMassMin = mr.min;
+    validMassMax = mr.max;
+  } catch {
+    /* keep previous span; refresh() will surface any real error */
+  }
+  await refreshAgeRangeThenState();
+}
+
 async function init() {
   try {
     const ranges = await fetchJSON("/ranges");
     logMassMin = Math.log10(ranges.mass_msun.min);
     logMassMax = Math.log10(ranges.mass_msun.max);
+    validMassMin = ranges.mass_msun.min;
+    validMassMax = ranges.mass_msun.max;
+    try { providerName = (await fetchJSON("/health")).provider || ""; } catch { /* non-fatal */ }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
@@ -142,13 +177,13 @@ async function init() {
   }
 
   els.mass.addEventListener("input", refreshAgeRangeThenState);
-  els.feh.addEventListener("input", refreshAgeRangeThenState);
+  els.feh.addEventListener("input", refreshMassRangeThenState);
   els.age.addEventListener("input", () => {
     ageFraction = Number(els.age.value);
     refresh();
   });
 
-  await refreshAgeRangeThenState();
+  await refreshMassRangeThenState();
 }
 
 init();

@@ -10,13 +10,15 @@ index page — the part of the site least likely to move — is named here.
 
 Run once after checkout:
 
-    python -m star_sim.fetch_mist                 # solar, non-rotating (default)
-    python -m star_sim.fetch_mist --feh m100      # [Fe/H] = -1.00
-    python -m star_sim.fetch_mist --vvcrit 0.4    # rotating grid
+    python -m star_sim.fetch_mist                       # solar, non-rotating (default)
+    python -m star_sim.fetch_mist --feh m100            # [Fe/H] = -1.00
+    python -m star_sim.fetch_mist --feh m050,p000,p050  # the whole metallicity axis
+    python -m star_sim.fetch_mist --vvcrit 0.4          # rotating grid
 
-It downloads the ~180 MB tarball into data/ and extracts the `.track.eep`
-files there, where `MISTProvider` finds them. Idempotent: re-runs skip the
-download/extract if the data is already present.
+`--feh` takes one code or a comma-separated set; each is fetched in turn (so the
+[Fe/H] axis is one command). Each tarball is ~180 MB, extracted into data/ where
+`MISTProvider` discovers every grid present. Idempotent: re-runs skip the
+download/extract if the data is already there.
 """
 
 from __future__ import annotations
@@ -125,26 +127,39 @@ def extract(txz: Path, data_dir: Path) -> Path:
     return eep_dir
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Fetch MIST EEP tracks (spec §6).")
-    ap.add_argument("--feh", default="p000", help="MIST [Fe/H] code, e.g. p000, m100")
-    ap.add_argument("--afe", default="p0", help="MIST [a/Fe] code (default p0)")
-    ap.add_argument("--vvcrit", default="0.0", help="rotation v/vcrit (default 0.0)")
-    ap.add_argument("--keep-tarball", action="store_true", help="don't delete the .txz after extract")
-    args = ap.parse_args(argv)
-
-    print(f"Discovering MIST tarball (feh={args.feh}, afe={args.afe}, vvcrit={args.vvcrit}) ...")
-    url, filename = discover_tarball_url(args.feh, args.afe, args.vvcrit)
+def fetch_one(feh: str, afe: str, vvcrit: str, keep_tarball: bool) -> Path:
+    """Discover, download, and extract one (feh, afe, vvcrit) grid; return its dir."""
+    print(f"Discovering MIST tarball (feh={feh}, afe={afe}, vvcrit={vvcrit}) ...")
+    url, filename = discover_tarball_url(feh, afe, vvcrit)
     print(f"  -> {url}")
 
     txz = DATA_DIR / filename
     download(url, txz)
     eep_dir = extract(txz, DATA_DIR)
-    if not args.keep_tarball:
+    if not keep_tarball:
         txz.unlink(missing_ok=True)
 
     n = len(list(eep_dir.glob("*.track.eep")))
-    print(f"Done: {n} tracks under {eep_dir}")
+    print(f"  done: {n} tracks under {eep_dir}")
+    return eep_dir
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Fetch MIST EEP tracks (spec §6).")
+    ap.add_argument(
+        "--feh", default="p000",
+        help="MIST [Fe/H] code, or a comma-separated set, e.g. p000 or m050,p000,p050",
+    )
+    ap.add_argument("--afe", default="p0", help="MIST [a/Fe] code (default p0)")
+    ap.add_argument("--vvcrit", default="0.0", help="rotation v/vcrit (default 0.0)")
+    ap.add_argument("--keep-tarball", action="store_true", help="don't delete the .txz after extract")
+    args = ap.parse_args(argv)
+
+    fehs = [f.strip() for f in args.feh.split(",") if f.strip()]
+    for feh in fehs:
+        fetch_one(feh, args.afe, args.vvcrit, args.keep_tarball)
+
+    print(f"Done: fetched {len(fehs)} metallicity grid(s) ({', '.join(fehs)}).")
     print("Start the app (uvicorn star_sim.api:app --reload) or run: pytest")
     return 0
 

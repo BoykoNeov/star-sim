@@ -72,6 +72,24 @@ def ranges() -> dict:
         raise _provider_unavailable(exc) from exc
 
 
+@app.get("/mass_range")
+def mass_range(
+    feh: float = Query(..., description="initial [Fe/H]"),
+) -> dict:
+    """Valid mass span at this [Fe/H] so the UI can clamp the mass slider.
+
+    The (mass, [Fe/H]) domain isn't rectangular — some metallicities lack
+    low-mass tracks — so this can be narrower than /ranges' bounding box.
+    """
+    try:
+        lo, hi = PROVIDER.mass_range(feh)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+    return {"min": lo, "max": hi}
+
+
 @app.get("/age_range")
 def age_range(
     mass: float = Query(..., description="initial mass / M_sun"),
