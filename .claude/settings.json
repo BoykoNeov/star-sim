@@ -29,11 +29,11 @@
       "PowerShell(git log:*)",
       "PowerShell(git show:*)",
       "PowerShell(git add:*)",
-      "PowerShell(git branch:*)"
+      "PowerShell(git branch:*)",
+      "PowerShell(git push origin main:*)"
     ],
     "deny": [
-      "Bash(rm -rf:*)",
-      "PowerShell(git push:*)"
+      "Bash(rm -rf:*)"
     ]
   }
 }
