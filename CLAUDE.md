@@ -108,10 +108,27 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   the deferred full grid is the real fix, *not* denser `DEFAULT_MASSES`. New test:
   `test_cheb_interpolation_sampled_by_eep` (samples by EEP, since CHeB is a ~1%
   age-sliver the age-sampled tests miss).
-- **Next (Phase 1):** add the `.npz` parse cache + load the full mass grid (today's
-  provider loads a curated `DEFAULT_MASSES` subset per grid for fast startup) — this
-  is also what tames the ~2 M☉ transition-mass CHeB interpolation noted above.
-- Then Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
+- **Done (Phase 1, full grid + parse cache):** the provider now loads the **full**
+  mass grid per metallicity (every track on disk, **0.1…300 M☉** — was a curated
+  27-mass `DEFAULT_MASSES` subset), so the mass axis reaches the spec's massive-O-star
+  end (§10, ~10⁶ L☉) and the ~2 M☉ He-ignition cliff is **reduced (not eliminated)**
+  by tight bracketing (1.9/2.0/2.1 vs the old 1.8/2.0/2.5): measured CHeB median
+  L-error ~halves (~23%→~8%) and whole-window median drops <1%, but the steepest CHeB
+  rows at the transition stay rough (intrinsic morphology change — `lies_between` still
+  holds; `test_transition_mass_interpolation_reduced_not_eliminated` pins it honestly).
+  Parsing ~170 text tracks/grid is slow (~20 s), so the windowed
+  per-track arrays are cached to a per-grid `_parsed_tracks.npz` (under `data/`,
+  gitignored) keyed by a source-file fingerprint (name+size+mtime + `CACHE_VERSION`):
+  **62 s cold → 0.35 s warm**. Architecture is **parse-all → cache-all → select
+  subset** (`_load_all_tracks`/`_load_grid`): the cache always holds the full grid,
+  independent of any `masses=` subset. `DEFAULT_MASSES` survives as an opt-in curated
+  constant (the two interpolation tests now pin `masses=(1.4, 1.6)` so 1.5 M☉ stays
+  *interpolated* now that it's a real grid point). `fetch_mist` warms the cache after
+  download. Storage is pure numeric arrays (concat + `lengths` index, no pickle);
+  writes are atomic (temp + `os.replace`). New tests: `test_full_grid_loaded_by_default`,
+  `test_parsed_track_cache_roundtrip_fidelity` (bit-for-bit fresh-parse vs cache),
+  `test_cache_fingerprint_rejects_stale_source`.
+- **Next:** Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
   `activity`).
 
 ## Conventions

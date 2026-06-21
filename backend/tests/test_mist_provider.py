@@ -19,7 +19,15 @@ import pytest
 
 from star_sim.provider import ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import MISTProvider
-from star_sim.providers.mist import DATA_DIR
+from star_sim.providers.mist import (
+    DATA_DIR,
+    _TRACK_COLS,
+    _cache_path,
+    _find_eep_dirs,
+    _grid_fingerprint,
+    _parse_all_tracks,
+    _read_cache,
+)
 from star_sim.state import StellarState
 
 from .conftest import (
@@ -36,6 +44,19 @@ SUN_AGE_YR = 4.6e9
 @pytest.fixture(scope="module")
 def provider() -> MISTProvider:
     return MISTProvider()
+
+
+@pytest.fixture(scope="module")
+def interp_provider() -> MISTProvider:
+    """A provider whose mass axis is *only* {1.4, 1.6}, so 1.5 M_sun is genuinely
+    interpolated from those two neighbors.
+
+    The default provider now loads the full grid, where 1.5 is itself a grid point
+    — its `state_at(1.5, ...)` would read the raw 1.5 track, testing nothing about
+    interpolation. Pinning a tight bracket keeps the §6/§10 lies-between and
+    accuracy checks meaningful (and is exactly what the curated-subset path is for).
+    """
+    return MISTProvider(masses=(1.4, 1.6))
 
 
 # --- a tiny ground-truth loader for the interpolation tests ------------------
@@ -185,22 +206,119 @@ def test_out_of_range_raises(provider):
         provider.state_at(1.0, feh_max + 1.0, 0.0)   # [Fe/H] past the grid
 
 
-def test_eep_interpolation_lies_between_neighbors(provider):
+# --- full grid + the .npz parse cache ----------------------------------------
+def test_full_grid_loaded_by_default(provider):
+    """The default provider loads the *whole* grid, not the curated subset.
+
+    That's both the density that tames the ~2 M_sun interpolation cliff and the
+    widened domain: the mass axis now reaches the grid's true 300 M_sun ceiling
+    (the massive-O-star end the §10 ZAMS-spread note wants), and each metallicity
+    holds well over a hundred tracks — far more than DEFAULT_MASSES' 27.
+    """
+    provider._ensure_loaded()
+    assert all(len(g.masses) > 100 for g in provider._grids)
+    rng = provider.parameter_ranges()["mass_msun"]
+    assert rng["min"] == pytest.approx(0.1)
+    assert rng["max"] == pytest.approx(300.0)
+    # the fine spacing across the He-ignition transition is what tames the cliff
+    solar = next(g for g in provider._grids if abs(g.feh) < 1e-6)
+    near_2 = [float(m) for m in solar.masses if 1.8 <= m <= 2.2]
+    assert max(np.diff(sorted(near_2))) <= 0.1 + 1e-9   # 1.9/2.0/2.1 present, not 1.8->2.5
+
+
+def test_parsed_track_cache_roundtrip_fidelity(provider):
+    """The cache must reproduce a fresh parse *exactly* — every column, bit-for-bit.
+
+    Anchor tests can pass on a subtly-corrupt cache (a wrong offset that still
+    lands on plausible numbers); this can't. Force the cache to exist (loading the
+    provider writes it), then compare a from-scratch parse of one grid against what
+    `_read_cache` reconstructs: array_equal on every per-row column, and the
+    scalars round-tripping as exact ints / floats.
+    """
+    provider._ensure_loaded()   # writes each grid's _parsed_tracks.npz
+    eep_dir = _find_eep_dirs(DATA_DIR)[0]
+
+    fresh, fresh_feh = _parse_all_tracks(eep_dir)
+    reconstructed = _read_cache(_cache_path(eep_dir), _grid_fingerprint(eep_dir))
+    assert reconstructed is not None, "cache should exist and its fingerprint match"
+    cached, cached_feh = reconstructed
+
+    assert cached_feh == fresh_feh
+    assert len(cached) == len(fresh)
+    for a, b in zip(fresh, cached):
+        assert a.minit == b.minit
+        assert a.zams_row == b.zams_row and isinstance(b.zams_row, int)
+        assert a.track_end == b.track_end and isinstance(b.track_end, int)
+        for col in _TRACK_COLS:
+            assert np.array_equal(getattr(a, col), getattr(b, col)), col
+
+
+def test_cache_fingerprint_rejects_stale_source(provider):
+    """A changed source dir must invalidate the cache (no stale arrays served).
+
+    The fingerprint folds in file size + mtime, so any altered fingerprint string
+    makes `_read_cache` miss — the guard that forces a reparse after a re-fetch.
+    """
+    provider._ensure_loaded()
+    eep_dir = _find_eep_dirs(DATA_DIR)[0]
+    good = _grid_fingerprint(eep_dir)
+    assert _read_cache(_cache_path(eep_dir), good) is not None      # matches -> hit
+    assert _read_cache(_cache_path(eep_dir), good + "x") is None     # mismatch -> miss
+
+
+def test_transition_mass_interpolation_reduced_not_eliminated():
+    """The honest regression on the ~2 M_sun He-ignition cliff.
+
+    The full grid's payoff here is *density*: a held-out 2.0 M_sun interpolates from
+    the tight (1.9, 2.1) neighbors — a ~0.1-M_sun bracket — instead of the old
+    curated 0.5-M_sun one. That genuinely helps: the whole-window median L-error
+    drops well under 1%, and the hard core-He-burning (CHeB) sliver falls to ~8%
+    median (vs ~23% measured on the wide 2.0/2.5 bracket). But it does NOT eliminate
+    the cliff — the morphology change at the degenerate->non-degenerate He-ignition
+    boundary is intrinsic, so the steepest CHeB rows stay rough (their peak L-error
+    is intrinsically large and deliberately left unasserted). This pins the
+    measured *improvement* so the docstring's claim can't silently rot, while
+    refusing to pretend the sliver is accurate. lies_between (convexity) is the
+    separate tight guarantee; this is the accuracy one.
+    """
+    p = MISTProvider(masses=(1.9, 2.1))     # 2.0 held out, full-density bracket
+    real = _real_track("00200")             # ground truth: the real 2.0 M_sun track
+
+    all_err, cheb_err = [], []
+    for eep, st in {int(round(s.eep)): s for s in p.track(2.0, 0.0)}.items():
+        row = eep - 1
+        if row >= real["log_L"].size:
+            continue
+        L_real = 10 ** real["log_L"][row]
+        e = abs(st.L_lsun - L_real) / L_real
+        all_err.append(e)
+        if 605 <= eep <= 706:               # the CHeB span
+            cheb_err.append(e)
+
+    # The bulk of the track stays faithful under tight bracketing (measured ~0.7%)...
+    assert float(np.median(all_err)) < 0.03
+    # ...and the hard CHeB sliver is bounded well below the wide-bracket ~23%
+    # (measured ~8%), but is not claimed to be tight.
+    assert len(cheb_err) > 40
+    assert float(np.median(cheb_err)) < 0.15
+
+
+def test_eep_interpolation_lies_between_neighbors(interp_provider):
     """The direct §6/§10 test: interpolate on EEP, not age.
 
-    1.5 M_sun is absent from the curated grid, so it's interpolated from the 1.4
-    and 1.6 tracks. At the EEP the interpolated star reports, its HR position
-    must sit between those neighbors — and track the *real* 1.5 M_sun run, which
-    an age-based (phase-blending) interpolation would not.
+    With the bracket pinned to {1.4, 1.6}, 1.5 M_sun is interpolated from those
+    two tracks. At the EEP the interpolated star reports, its HR position must sit
+    between those neighbors — and track the *real* 1.5 M_sun run, which an
+    age-based (phase-blending) interpolation would not.
     """
     t14 = _real_track("00140")
     t16 = _real_track("00160")
     t15 = _real_track("00150")  # ground truth
 
-    lo, hi = provider.age_range(1.5, 0.0)
+    lo, hi = interp_provider.age_range(1.5, 0.0)
     rel_errs = []
     for frac in np.linspace(0.02, 0.98, 25):
-        st = provider.state_at(1.5, 0.0, lo + frac * (hi - lo))
+        st = interp_provider.state_at(1.5, 0.0, lo + frac * (hi - lo))
         row = int(round(st.eep)) - 1  # EEP n == row n-1, the same phase across masses
 
         logL, logL14, logL16 = math.log10(st.L_lsun), t14["log_L"][row], t16["log_L"][row]
@@ -215,22 +333,22 @@ def test_eep_interpolation_lies_between_neighbors(provider):
     assert float(np.median(rel_errs)) < 0.05
 
 
-def test_cheb_interpolation_sampled_by_eep(provider):
+def test_cheb_interpolation_sampled_by_eep(interp_provider):
     """The widened CHeB span (EEP 605..706), sampled by *EEP*, not age.
 
     The lies-between/accuracy tests above sample by age, but core-He burning is a
     ~1% age-sliver at the far end of the window — almost no age sample lands there,
     so the newly-exposed region would otherwise ship untested. track() emits one
     state per EEP row, so we can walk the post-RGB-tip rows directly. 1.5 M_sun is
-    interpolated from the 1.4/1.6 neighbors — a *narrow* bracket on purpose: the
-    transition-mass cliff (~2.0-2.1 M_sun, where even fine spacing is poor) is a
+    interpolated from the pinned 1.4/1.6 neighbors — a *narrow* bracket on purpose:
+    the transition-mass cliff (~2.0-2.1 M_sun, where even fine spacing is poor) is a
     documented limitation, not something this test pretends is accurate.
     """
     t14 = _real_track("00140")
     t16 = _real_track("00160")
     t15 = _real_track("00150")  # ground truth
 
-    by_eep = {int(round(s.eep)): s for s in provider.track(1.5, 0.0)}
+    by_eep = {int(round(s.eep)): s for s in interp_provider.track(1.5, 0.0)}
     cheb_eeps = sorted(e for e in by_eep if 605 <= e <= 706)
     assert len(cheb_eeps) > 40   # the window genuinely reaches into CHeB
 

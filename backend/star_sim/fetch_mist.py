@@ -31,7 +31,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin
 
-from .providers.mist import DATA_DIR  # single source of truth for where data lives
+from .providers.mist import DATA_DIR, MISTProvider  # single source of truth for where data lives
 
 # The index page only — deliberately *not* a deep link to a tarball. The first
 # (Harvard) URL is the long-standing canonical entry point; it currently 302s to
@@ -160,6 +160,17 @@ def main(argv: list[str] | None = None) -> int:
         fetch_one(feh, args.afe, args.vvcrit, args.keep_tarball)
 
     print(f"Done: fetched {len(fehs)} metallicity grid(s) ({', '.join(fehs)}).")
+
+    # Warm the parse cache now (~20 s/grid) so the first `uvicorn` request is fast
+    # instead of paying the full-grid parse on demand. Best-effort: a hiccup here
+    # just means the app reparses (and caches) lazily on first use.
+    print("Building the parsed-track cache (one-time; speeds the first run) ...")
+    try:
+        MISTProvider()._ensure_loaded()
+        print("  cache built.")
+    except Exception as exc:  # noqa: BLE001 - never let cache-warming fail the fetch
+        print(f"  skipped (will build lazily on first request): {exc}")
+
     print("Start the app (uvicorn star_sim.api:app --reload) or run: pytest")
     return 0
 

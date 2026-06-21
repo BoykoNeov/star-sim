@@ -33,8 +33,13 @@ Scope of this cut (widen later):
     tracks below ~0.5 M_sun. `parameter_ranges()` exposes the bounding box;
     `mass_range(feh)` tightens it so the UI can clamp out that dead corner (§6:
     clamp/disable out-of-grid points, never extrapolate).
-  * a curated mass subset spanning the grid, for fast load. (A precomputed .npz
-    cache, and full-grid loading, are a deferred optimization — see DEFAULT_MASSES.)
+  * the **full** mass grid (every track on disk, 0.1 .. 300 M_sun) is loaded by
+    default. Parsing ~170 MIST text tracks per metallicity is slow (~20 s/grid),
+    so the parsed-and-windowed tracks are cached to a per-grid `.npz` keyed by a
+    fingerprint of the source files (see _load_all_tracks); warm-cache startup is
+    sub-second. `DEFAULT_MASSES` survives as an *opt-in* curated subset (pass
+    `masses=...`) for fast data-light runs and for tests that need a controlled
+    interpolation bracket — it is no longer the default.
   * the exposed track runs ZAMS -> end of core-He burning (CHeB). It captures the
     RGB tip *and* the post-tip drama — the He flash (for low-mass stars) and the
     horizontal branch / blue loop — then stops short of the AGB. We stop before
@@ -48,9 +53,17 @@ Scope of this cut (widen later):
     with mass that cross-mass interpolation is poor even at fine spacing (~12%
     median, >300% peak L-error at 2.1 M_sun on the curated grid; ~2-3% away from
     the transition). `lies_between` still holds (the blend is convex at every
-    EEP, so it never loops through nonsense) — it's smoothed, not wrong. The real
-    fix is the deferred full mass grid, not denser DEFAULT_MASSES (which still
-    leaves the cliff while paying startup cost).
+    EEP, so it never loops through nonsense) — it's smoothed, not wrong. The full
+    mass grid (now the default) *reduces but does not eliminate* this. At full
+    density the bracket around the cliff is ~0.1 M_sun wide (1.9/2.0/2.1) instead
+    of 0.5 (1.8/2.0/2.5), which roughly halves the CHeB median L-error (~8% vs ~23%
+    on the wide bracket) and drops the whole-window median below 1%. But the
+    steepest CHeB rows right at the He-ignition boundary stay rough (peak L-error
+    still hundreds of % when 2.1 M_sun is held out): the morphology change there is
+    intrinsic, so tighter bracketing smooths it rather than removing it. Denser
+    DEFAULT_MASSES alone never helped — it's the bracket *width* at the cliff that
+    matters, which only the full grid narrows. Measured by
+    test_transition_mass_interpolation_reduced_not_eliminated.
 
 Anchors that must hold (the §10 regression for the stub->MIST swap, with
 *empirical* tolerances — see tests/test_mist_provider.py):
@@ -60,6 +73,7 @@ Anchors that must hold (the §10 regression for the stub->MIST swap, with
 from __future__ import annotations
 
 import glob
+import hashlib
 import math
 import os
 import re
@@ -98,14 +112,30 @@ _PHASE_NAMES = {
     9: "WR",
 }
 
-# Curated mass sampling (all are exact MIST grid points) spanning 0.1–40 M_sun.
-# Kept small so startup parses ~2 dozen files per metallicity, not ~130. Widen /
-# add an .npz cache later; the §10 ZAMS-spread test needs the 0.1 and 40 endpoints.
+# Opt-in curated mass sampling (all exact MIST grid points) spanning 0.1–40 M_sun.
+# No longer the default — the provider loads the *full* grid now (see the module
+# docstring + _load_all_tracks' .npz cache). Pass `masses=DEFAULT_MASSES` for a
+# fast data-light run, or a tighter subset (e.g. (1.4, 1.6)) to force a controlled
+# interpolation bracket in tests. Keeps the 0.1 and 40 endpoints the §10
+# ZAMS-spread test pins.
 DEFAULT_MASSES = (
     0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
     1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 4.0,
     5.0, 7.0, 10.0, 15.0, 20.0, 30.0, 40.0,
 )
+
+# --- parsed-track .npz cache --------------------------------------------------
+# Parsing the raw MIST text tracks dominates startup (~20 s for one full grid).
+# We cache the *windowed* per-track arrays (the only thing downstream reads) to a
+# per-grid `.npz`, keyed by a fingerprint of the source files. Bump CACHE_VERSION
+# whenever the parse/window logic or stored columns change, so old caches are
+# rejected instead of silently feeding stale arrays.
+CACHE_VERSION = 1
+CACHE_FILENAME = "_parsed_tracks.npz"
+# The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
+# one flat array each in the cache (variable-length tracks -> `lengths` index),
+# so the format is pure numeric arrays — no pickle.
+_TRACK_COLS = ("age", "logL", "logT", "logR", "logg", "Xs", "Ys", "Xc", "Yc", "phase")
 
 # [Fe/H] exact-hit tolerance: grid values are tenths of a dex, so this only
 # collapses a true grid point to a no-blend short-circuit (the Sun must hit the
@@ -150,14 +180,6 @@ class _Grid:
     masses: np.ndarray
     tracks: list[_Track]
     zams_row: int
-
-
-def _mass_from_filename(path: str) -> float:
-    """`00100M.track.eep` -> 1.0  (MIST encodes mass*100 in 5 zero-padded digits)."""
-    m = re.match(r"(\d+)M\.track\.eep$", os.path.basename(path))
-    if not m:
-        raise ValueError(f"unrecognized MIST track filename: {path}")
-    return int(m.group(1)) / 100.0
 
 
 def _feh_from_path(path: str) -> float | None:
@@ -218,57 +240,188 @@ def _phase_window(phase: np.ndarray) -> tuple[int, int] | None:
     return zams, track_end
 
 
-def _load_grid(eep_dir: Path, want_masses: tuple[float, ...]) -> _Grid | None:
-    """Load one metallicity directory into a `_Grid`, or None if it's unusable.
+def _parse_track_file(path: str) -> tuple[_Track, float] | None:
+    """Parse one `.track.eep` into a windowed `_Track` + its grid [Fe/H].
 
-    Snaps each requested mass to the nearest grid point actually on disk, parses
-    those tracks, clips each to its [ZAMS .. end of CHeB] window, and checks the
-    EEP-alignment invariant (one shared ZAMS row).
+    Returns None if the track has no usable MS->CHeB block (low-mass tracks with
+    no post-ZAMS row, or a malformed file). The [Fe/H] is read from the file's own
+    `abun` block — the authoritative value, not the dir-name hint.
     """
-    available = {
-        round(_mass_from_filename(f), 2): f
-        for f in glob.glob(str(eep_dir / "*.track.eep"))
-    }
-    if not available:
+    eep = rmm.EEP(path, verbose=False)
+    e = eep.eeps
+    phase = np.asarray(e["phase"], dtype=float)
+    win = _phase_window(phase)
+    if win is None:
         return None
-    grid_masses = np.array(sorted(available))
+    zams_row, track_end = win
+    track = _Track(
+        minit=float(eep.minit),
+        age=np.asarray(e["star_age"], dtype=float),
+        logL=np.asarray(e["log_L"], dtype=float),
+        logT=np.asarray(e["log_Teff"], dtype=float),
+        logR=np.asarray(e["log_R"], dtype=float),
+        logg=np.asarray(e["log_g"], dtype=float),
+        Xs=np.asarray(e["surface_h1"], dtype=float),
+        Ys=np.asarray(e["surface_he4"], dtype=float)
+        + np.asarray(e["surface_he3"], dtype=float),
+        Xc=np.asarray(e["center_h1"], dtype=float),
+        Yc=np.asarray(e["center_he4"], dtype=float)
+        + np.asarray(e["center_he3"], dtype=float),
+        phase=phase,
+        zams_row=zams_row,
+        track_end=track_end,
+    )
+    return track, float(eep.abun["[Fe/H]"])
 
-    chosen: dict[float, str] = {}
-    for want in want_masses:
-        nearest = float(grid_masses[int(np.argmin(np.abs(grid_masses - want)))])
-        chosen[nearest] = available[round(nearest, 2)]
 
+def _parse_all_tracks(eep_dir: Path) -> tuple[list[_Track], float]:
+    """Parse *every* track in one metallicity dir (the full grid). The slow path.
+
+    Returns (tracks sorted ascending by mass, grid [Fe/H]). Skips any file with no
+    usable window. This is what the `.npz` cache front-ends — call it only on a
+    cache miss.
+    """
     tracks: list[_Track] = []
     feh: float | None = None
-    for mass in sorted(chosen):
-        eep = rmm.EEP(chosen[mass], verbose=False)
-        e = eep.eeps
+    for f in sorted(glob.glob(str(eep_dir / "*.track.eep"))):
+        res = _parse_track_file(f)
+        if res is None:
+            continue
+        track, fh = res
         if feh is None:
-            feh = float(eep.abun["[Fe/H]"])
-        phase = np.asarray(e["phase"], dtype=float)
-        win = _phase_window(phase)
-        if win is None:
-            continue  # no usable MS->CHeB block; skip defensively
-        zams_row, track_end = win
+            feh = fh
+        tracks.append(track)
+    tracks.sort(key=lambda t: t.minit)
+    return tracks, (feh if feh is not None else 0.0)
+
+
+def _grid_fingerprint(eep_dir: Path) -> str:
+    """A cheap content fingerprint of a grid dir's source tracks.
+
+    Hashes the sorted (name, size, mtime_ns) of every `*.track.eep`, plus
+    CACHE_VERSION. Any re-fetch / re-extract changes mtime+size; any change to the
+    parse logic bumps the version — either invalidates the cache. We deliberately
+    *don't* read file contents (too slow for ~170 files); size+mtime is the same
+    signal build tools trust.
+    """
+    h = hashlib.sha256()
+    h.update(f"v{CACHE_VERSION}".encode())
+    for f in sorted(glob.glob(str(eep_dir / "*.track.eep"))):
+        st = os.stat(f)
+        h.update(os.path.basename(f).encode())
+        h.update(f"{st.st_size}:{st.st_mtime_ns}".encode())
+    return h.hexdigest()
+
+
+def _cache_path(eep_dir: Path) -> Path:
+    return eep_dir / CACHE_FILENAME
+
+
+def _write_cache(path: Path, tracks: list[_Track], feh: float, fingerprint: str) -> None:
+    """Write the parsed grid to a per-grid `.npz` atomically (temp + os.replace).
+
+    Variable-length tracks are stored as one concatenated flat array per column
+    plus a `lengths` index — pure numeric arrays, no pickle. The atomic rename
+    means an interrupted write (or a concurrent first run) never leaves a
+    half-written cache that the fingerprint would wrongly accept.
+    """
+    data: dict[str, np.ndarray] = {
+        "fingerprint": np.array(fingerprint),
+        "feh": np.array(float(feh)),
+        "minit": np.array([t.minit for t in tracks], dtype=np.float64),
+        "zams_row": np.array([t.zams_row for t in tracks], dtype=np.int64),
+        "track_end": np.array([t.track_end for t in tracks], dtype=np.int64),
+        "lengths": np.array([t.age.size for t in tracks], dtype=np.int64),
+    }
+    for col in _TRACK_COLS:
+        data[col] = np.concatenate([getattr(t, col) for t in tracks]).astype(np.float64)
+    tmp = path.parent / (path.name + ".tmp")
+    with open(tmp, "wb") as fh:
+        np.savez_compressed(fh, **data)
+    os.replace(tmp, path)
+
+
+def _read_cache(path: Path, fingerprint: str) -> tuple[list[_Track], float] | None:
+    """Reconstruct the parsed grid from its `.npz`, or None on miss/mismatch.
+
+    Returns None (caller reparses) when the file is absent, the fingerprint
+    doesn't match the current source files, or the archive is unreadable/corrupt.
+    """
+    if not path.is_file():
+        return None
+    try:
+        with np.load(path) as npz:
+            if str(npz["fingerprint"]) != fingerprint:
+                return None
+            feh = float(npz["feh"])
+            minit = npz["minit"]
+            zams = npz["zams_row"]
+            tend = npz["track_end"]
+            lengths = npz["lengths"]
+            cols = {c: npz[c] for c in _TRACK_COLS}  # materialize before the file closes
+    except Exception:
+        return None
+
+    offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+    tracks: list[_Track] = []
+    for i in range(int(minit.size)):
+        a, b = int(offsets[i]), int(offsets[i + 1])
+        sliced = {c: cols[c][a:b].copy() for c in _TRACK_COLS}  # own contiguous memory
         tracks.append(
             _Track(
-                minit=float(eep.minit),
-                age=np.asarray(e["star_age"], dtype=float),
-                logL=np.asarray(e["log_L"], dtype=float),
-                logT=np.asarray(e["log_Teff"], dtype=float),
-                logR=np.asarray(e["log_R"], dtype=float),
-                logg=np.asarray(e["log_g"], dtype=float),
-                Xs=np.asarray(e["surface_h1"], dtype=float),
-                Ys=np.asarray(e["surface_he4"], dtype=float)
-                + np.asarray(e["surface_he3"], dtype=float),
-                Xc=np.asarray(e["center_h1"], dtype=float),
-                Yc=np.asarray(e["center_he4"], dtype=float)
-                + np.asarray(e["center_he3"], dtype=float),
-                phase=phase,
-                zams_row=zams_row,
-                track_end=track_end,
+                minit=float(minit[i]),
+                zams_row=int(zams[i]),
+                track_end=int(tend[i]),
+                **sliced,
             )
         )
+    return tracks, feh
+
+
+def _load_all_tracks(eep_dir: Path) -> tuple[list[_Track], float]:
+    """Full grid for one metallicity dir, from the `.npz` cache if it's fresh.
+
+    Cache hit -> sub-second. Miss (no cache, stale fingerprint, or corrupt file)
+    -> reparse every track (~20 s) and write the cache back (best-effort: a failed
+    write never blocks serving).
+    """
+    fingerprint = _grid_fingerprint(eep_dir)
+    path = _cache_path(eep_dir)
+    cached = _read_cache(path, fingerprint)
+    if cached is not None:
+        return cached
+
+    tracks, feh = _parse_all_tracks(eep_dir)
+    if tracks:
+        try:
+            _write_cache(path, tracks, feh, fingerprint)
+        except Exception:
+            pass  # cache is an optimization; never let a write error break a load
+    return tracks, feh
+
+
+def _load_grid(eep_dir: Path, want_masses: tuple[float, ...] | None) -> _Grid | None:
+    """Load one metallicity directory into a `_Grid`, or None if it's unusable.
+
+    Loads the full parsed grid (cached), then keeps either *all* masses
+    (`want_masses is None`, the default) or the subset nearest each requested mass
+    (opt-in, snap-to-grid). Either way it checks the EEP-alignment invariant (one
+    shared ZAMS row) before handing the grid downstream.
+    """
+    all_tracks, feh = _load_all_tracks(eep_dir)
+    if not all_tracks:
+        return None
+
+    if want_masses is None:
+        tracks = list(all_tracks)            # already ascending by mass
+    else:
+        by_mass = {round(t.minit, 2): t for t in all_tracks}
+        grid_masses = np.array(sorted(by_mass))
+        chosen: dict[float, _Track] = {}
+        for want in want_masses:
+            nearest = float(grid_masses[int(np.argmin(np.abs(grid_masses - want)))])
+            chosen[round(nearest, 2)] = by_mass[round(nearest, 2)]
+        tracks = [chosen[m] for m in sorted(chosen)]
 
     if len(tracks) < 2:
         return None
@@ -283,7 +436,7 @@ def _load_grid(eep_dir: Path, want_masses: tuple[float, ...]) -> _Grid | None:
         )
 
     return _Grid(
-        feh=float(feh) if feh is not None else 0.0,
+        feh=float(feh),
         masses=np.array([t.minit for t in tracks]),
         tracks=tracks,
         zams_row=tracks[0].zams_row,
@@ -304,11 +457,14 @@ class MISTProvider:
     def __init__(
         self,
         data_dir: Path | None = None,
-        masses: tuple[float, ...] = DEFAULT_MASSES,
+        masses: tuple[float, ...] | None = None,
         fehs: tuple[float, ...] | None = None,
     ) -> None:
         self._data_dir = Path(data_dir) if data_dir is not None else DATA_DIR
-        self._want_masses = tuple(masses)
+        # None (default) = load the full grid on disk. A tuple opts into a curated
+        # subset (snap-to-grid) — DEFAULT_MASSES for a fast data-light run, or a
+        # tight bracket like (1.4, 1.6) to force interpolation in a test.
+        self._want_masses = tuple(masses) if masses is not None else None
         # Optional filter: load only these metallicity grids (nearest dir-name
         # match). None = load every grid on disk. Used by tests to hold one
         # metallicity out as ground truth, and by the API to curate the axis.

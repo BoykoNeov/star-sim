@@ -193,7 +193,7 @@ const providerTip = (name) =>
 // Round masses worth snapping to, filtered to the span valid at this [Fe/H].
 function rebuildMassTicks() {
   const opts = [];
-  for (const m of [0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 5, 8, 12, 20, 30, 40]) {
+  for (const m of [0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 5, 8, 12, 20, 30, 40, 60, 100, 200, 300]) {
     if (m < validMassMin - 1e-9 || m > validMassMax + 1e-9) continue;
     opts.push({ pos: clamp01(sliderFromMass(m)), label: `${m}` });
   }
