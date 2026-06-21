@@ -35,9 +35,22 @@ Scope of this cut (widen later):
     clamp/disable out-of-grid points, never extrapolate).
   * a curated mass subset spanning the grid, for fast load. (A precomputed .npz
     cache, and full-grid loading, are a deferred optimization — see DEFAULT_MASSES.)
-  * the exposed track runs ZAMS -> RGB tip (the §11 "sweet spot"). Capping at the
-    RGB tip keeps the user away from the He-flash / AGB phases that are
-    non-monotonic and messy to interpolate even in MIST.
+  * the exposed track runs ZAMS -> end of core-He burning (CHeB). It captures the
+    RGB tip *and* the post-tip drama — the He flash (for low-mass stars) and the
+    horizontal branch / blue loop — then stops short of the AGB. We stop before
+    the early-AGB (phase 4) and the thermally-pulsing AGB (phase 5), the
+    genuinely non-monotonic phases §6 says to defer. The He flash sits *inside*
+    the window but is handled, not interpolated across blindly: MIST resamples it
+    into strictly-increasing-age rows, so the age->EEP inversion is well-posed
+    (the flash is just a near-instant jump the marker passes through).
+      Caveat (documented, not fixed here): right at the degenerate->non-degenerate
+    He-ignition transition (~2.0-2.1 M_sun), CHeB morphology changes so sharply
+    with mass that cross-mass interpolation is poor even at fine spacing (~12%
+    median, >300% peak L-error at 2.1 M_sun on the curated grid; ~2-3% away from
+    the transition). `lies_between` still holds (the blend is convex at every
+    EEP, so it never loops through nonsense) — it's smoothed, not wrong. The real
+    fix is the deferred full mass grid, not denser DEFAULT_MASSES (which still
+    leaves the cliff while paying startup cost).
 
 Anchors that must hold (the §10 regression for the stub->MIST swap, with
 *empirical* tolerances — see tests/test_mist_provider.py):
@@ -122,7 +135,7 @@ class _Track:
     Yc: np.ndarray         # center He mass fraction
     phase: np.ndarray      # FSPS phase code (float)
     zams_row: int          # first row on the MS (phase >= 0)
-    rgb_end: int           # last row at or before the RGB tip (phase <= 2)
+    track_end: int         # last exposed row = end of core-He burning (phase 3)
 
 
 @dataclass
@@ -174,12 +187,18 @@ def _find_eep_dir(data_dir: Path) -> Path | None:
 
 
 def _phase_window(phase: np.ndarray) -> tuple[int, int] | None:
-    """(zams_row, rgb_end) for a track's FSPS-coded `phase` column, or None.
+    """(zams_row, track_end) for a track's FSPS-coded `phase` column, or None.
 
-    ZAMS = first row on the MS (phase 0). RGB tip = the last row of the
-    contiguous MS+SGB+RGB block (phase 0,2) *before* core-He ignition (phase 3).
-    We can't just take `phase <= 2`: MIST tags pre-MS with -1 and caps some
-    tracks with a -9 sentinel row, both of which are <= 2 but not what we want.
+    ZAMS = first row on the MS (phase 0). The exposed window now runs to the end
+    of **core-He burning** (CHeB, phase 3) — i.e. the last row *before* the
+    early-AGB (phase >= 4). So it spans MS -> subgiant -> RGB -> RGB tip -> (the
+    He flash, for low-mass stars) -> horizontal branch / blue loop, and stops
+    short of the AGB thermal pulses (phase 5), which are the genuinely
+    non-monotonic mess §6 says to defer. The He flash *is* inside the window now,
+    but it's safe: MIST resamples it into strictly-increasing-age rows (verified),
+    so the age->EEP inversion never sees a fold.
+    We can't just take `phase <= 3`: MIST tags pre-MS with -1 and caps some
+    tracks with a -9 sentinel row, both of which are <= 3 but not what we want.
     Low-mass tracks that never ignite He end on the MS/RGB; use their last real
     row (dropping the sentinel).
     """
@@ -188,22 +207,22 @@ def _phase_window(phase: np.ndarray) -> tuple[int, int] | None:
         return None
     zams = int(ge[0])
     after = phase[zams:]
-    cheb = np.where(after >= 3)[0]            # first core-He-burning row
-    if cheb.size:
-        rgb_end = zams + int(cheb[0]) - 1
+    eagb = np.where(after >= 4)[0]            # first early-AGB row (past CHeB)
+    if eagb.size:
+        track_end = zams + int(eagb[0]) - 1
     else:
-        valid = np.where(after >= 0)[0]       # never ignites He; drop -9 sentinel
-        rgb_end = zams + int(valid[-1])
-    if rgb_end <= zams:
+        valid = np.where(after >= 0)[0]       # never reaches the AGB; drop -9 sentinel
+        track_end = zams + int(valid[-1])
+    if track_end <= zams:
         return None
-    return zams, rgb_end
+    return zams, track_end
 
 
 def _load_grid(eep_dir: Path, want_masses: tuple[float, ...]) -> _Grid | None:
     """Load one metallicity directory into a `_Grid`, or None if it's unusable.
 
     Snaps each requested mass to the nearest grid point actually on disk, parses
-    those tracks, clips each to its [ZAMS .. RGB tip] window, and checks the
+    those tracks, clips each to its [ZAMS .. end of CHeB] window, and checks the
     EEP-alignment invariant (one shared ZAMS row).
     """
     available = {
@@ -229,8 +248,8 @@ def _load_grid(eep_dir: Path, want_masses: tuple[float, ...]) -> _Grid | None:
         phase = np.asarray(e["phase"], dtype=float)
         win = _phase_window(phase)
         if win is None:
-            continue  # no usable MS->RGB block; skip defensively
-        zams_row, rgb_end = win
+            continue  # no usable MS->CHeB block; skip defensively
+        zams_row, track_end = win
         tracks.append(
             _Track(
                 minit=float(eep.minit),
@@ -247,7 +266,7 @@ def _load_grid(eep_dir: Path, want_masses: tuple[float, ...]) -> _Grid | None:
                 + np.asarray(e["center_he3"], dtype=float),
                 phase=phase,
                 zams_row=zams_row,
-                rgb_end=rgb_end,
+                track_end=track_end,
             )
         )
 
@@ -389,7 +408,7 @@ class MISTProvider:
 
         win = self._interp_window(mass, feh)
         age_win = win["age"]
-        # age never extrapolates past the exposed window (ZAMS .. RGB tip).
+        # age never extrapolates past the exposed window (ZAMS .. end of CHeB).
         age = float(min(max(age_yr, age_win[0]), age_win[-1]))
 
         # Invert the monotonic age(row) relation to a fractional row position,
@@ -403,9 +422,10 @@ class MISTProvider:
         """Every exposed EEP row at (mass, [Fe/H]) as a StellarState (§3).
 
         No age inversion here: the window's rows already *are* the EEPs (ZAMS ..
-        RGB tip), so we emit one state per integer row. The window is monotonic
-        and pre-He-flash over this span, so the list is cleanly ordered for the HR
-        track and the composition panel's EEP axis.
+        end of CHeB), so we emit one state per integer row. Age is strictly
+        increasing across this span — including the He flash, which MIST resolves
+        into monotonically-aging rows — so the list is cleanly ordered by EEP for
+        the HR track and the composition panel's EEP axis.
         """
         self._ensure_loaded()
         self._check_mass_feh(mass, feh)
@@ -467,7 +487,7 @@ class MISTProvider:
 
     # -- EEP-fixed 2D (mass × [Fe/H]) interpolation (the core of §6) -----------
     def _interp_window(self, mass: float, feh: float) -> dict:
-        """Fully (mass, [Fe/H])-interpolated track window over [ZAMS .. RGB tip].
+        """Fully (mass, [Fe/H])-interpolated track window over [ZAMS .. end of CHeB].
 
         Outer loop is metallicity (§6 step 1): bracket [Fe/H], mass-interpolate
         each bracketing grid at fixed EEP (step 2), then blend the two grids
@@ -487,9 +507,10 @@ class MISTProvider:
         lo, hi = grid.tracks[i_lo], grid.tracks[i_hi]
 
         r0 = grid.zams_row
-        # Common window: stop at the earlier of the two RGB tips (and never run
-        # off the shorter track). Keeps both endpoints on real, aligned rows.
-        r1 = min(lo.rgb_end, hi.rgb_end, lo.age.size - 1, hi.age.size - 1)
+        # Common window: stop at the earlier of the two track ends (end of CHeB,
+        # and never run off the shorter track). Keeps both endpoints on real,
+        # aligned rows.
+        r1 = min(lo.track_end, hi.track_end, lo.age.size - 1, hi.age.size - 1)
         sl = slice(r0, r1 + 1)
 
         def mix(a: np.ndarray, b: np.ndarray) -> np.ndarray:

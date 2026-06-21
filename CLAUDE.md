@@ -86,9 +86,24 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   mass/[Fe/H] change (own latest-wins token), the marker moves on age scrub.
   Provider-side, `state_at` and `track` share one `_state_from_row` helper so they
   can't drift (the unchanged Sun anchor proves the refactor).
-- **Next (Phase 1):** widen the exposed window past RGB tip if desired; add the
-  `.npz` parse cache + load the full mass grid (today's provider loads a curated
-  `DEFAULT_MASSES` subset per grid for fast startup).
+- **Done (Phase 1, widened window):** the exposed track now runs **ZAMS → end of
+  core-He burning (CHeB)**, not just to the RGB tip. `_phase_window` caps at the
+  last row before the early-AGB (FSPS `phase >= 4`); `_Track.rgb_end` → `track_end`.
+  This adds the He flash + horizontal branch / blue loop — real post-tip drama —
+  while stopping short of the AGB thermal pulses (§6's "messy, defer" phases). The
+  He flash is *inside* the window but safe: MIST resamples it into strictly-
+  increasing-age rows, so the age→EEP inversion never folds. **Consequence to know:**
+  the age scrubber's far end is now a red-clump/early-AGB star (~13 R☉), and the
+  RGB-tip giant (~154 R☉) is a *mid-track* transient — the tests pull the tip via
+  `max(track, key=R)`, not the age-window endpoint. **Documented caveat:** right at
+  the He-ignition transition (~2.0–2.1 M☉) cross-mass CHeB interpolation is poor
+  even at fine spacing (intrinsic, not grid density — `lies_between` still holds);
+  the deferred full grid is the real fix, *not* denser `DEFAULT_MASSES`. New test:
+  `test_cheb_interpolation_sampled_by_eep` (samples by EEP, since CHeB is a ~1%
+  age-sliver the age-sampled tests miss).
+- **Next (Phase 1):** add the `.npz` parse cache + load the full mass grid (today's
+  provider loads a curated `DEFAULT_MASSES` subset per grid for fast startup) — this
+  is also what tames the ~2 M☉ transition-mass CHeB interpolation noted above.
 - Then Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
   `activity`).
 

@@ -110,22 +110,38 @@ def test_age_zero_clamps_to_zams(provider):
 
 
 def test_evolves_off_main_sequence(provider):
-    """The point of MIST over the stub: real post-MS drama (subgiant/RGB)."""
+    """The point of MIST over the stub: real post-MS drama (RGB tip giant, then
+    the He flash / horizontal branch).
+
+    The window now runs *past* the RGB tip to the end of core-He burning, so the
+    tip — the biggest, coolest the star ever gets — is a mid-track state, not the
+    age-window endpoint. Pull it explicitly (max radius on the track) so this keeps
+    verifying the star reaches *giant* dimensions; a regression that flattened the
+    RGB tip would otherwise slip past (the endpoint alone is the smaller red-clump
+    star, ~13 R_sun)."""
     lo, hi = provider.age_range(1.0, 0.0)
     zams = provider.state_at(1.0, 0.0, lo)
-    tip = provider.state_at(1.0, 0.0, hi)
+    track = provider.track(1.0, 0.0)
+    tip = max(track, key=lambda s: s.R_rsun)   # RGB tip == max radius on the track
     assert tip.eep > zams.eep
-    assert tip.R_rsun > 10.0 * zams.R_rsun    # swells into a giant (measured ~146 R_sun)
-    assert tip.Teff_K < zams.Teff_K           # and cools
+    assert tip.R_rsun > 50.0 * zams.R_rsun     # swells into a giant (measured ~154 R_sun)
+    assert tip.Teff_K < zams.Teff_K            # and is cool
     assert tip.phase in ("RGB", "CHeB")
-    assert tip.X_core < 1e-3                   # core H exhausted
+    assert tip.X_core < 1e-3                    # core H exhausted
+
+    # ...and the window keeps going *past* the tip into core-He burning, where the
+    # star shrinks back off the giant branch (the new, widened payload).
+    end = provider.state_at(1.0, 0.0, hi)
+    assert end.phase == "CHeB"
+    assert end.R_rsun < tip.R_rsun
 
 
 # --- the evolutionary track (the §5.2/§5.4 input: HR track + composition panel) --
 def test_track_is_ordered_stellarstate_list(provider):
-    """track() returns StellarStates from ZAMS to the RGB tip, ordered by EEP, age
-    strictly increasing — the §3-clean input the HR track and composition panel
-    consume. Each element is a StellarState (no window internals leak out)."""
+    """track() returns StellarStates from ZAMS through core-He burning (CHeB),
+    ordered by EEP, age strictly increasing — the §3-clean input the HR track and
+    composition panel consume. Each element is a StellarState (no window internals
+    leak out)."""
     t = provider.track(1.0, 0.0)
     assert len(t) > 1
     assert all(isinstance(s, StellarState) for s in t)
@@ -152,8 +168,9 @@ def test_track_endpoints_match_state_at(provider):
 
 
 def test_track_core_hydrogen_depletes_monotonically(provider):
-    """The teaching payload: core H falls from its ZAMS value to ~0 by the RGB tip
-    and never rises (core burning is one-way over this window)."""
+    """The teaching payload: core H falls from its ZAMS value to ~0 (exhausted by
+    the RGB tip, and stays ~0 through core-He burning) and never rises — core
+    burning is one-way over this window."""
     xc = [s.X_core for s in provider.track(1.0, 0.0)]
     assert xc[0] > 0.6            # ZAMS core H ~0.71
     assert xc[-1] < 1e-3          # exhausted by the tip
@@ -195,6 +212,42 @@ def test_eep_interpolation_lies_between_neighbors(provider):
         rel_errs.append(abs(st.L_lsun - 10 ** t15["log_L"][row]) / 10 ** t15["log_L"][row])
 
     # Tracks the real 1.5 track closely (median ~1%); an age-interp would not.
+    assert float(np.median(rel_errs)) < 0.05
+
+
+def test_cheb_interpolation_sampled_by_eep(provider):
+    """The widened CHeB span (EEP 605..706), sampled by *EEP*, not age.
+
+    The lies-between/accuracy tests above sample by age, but core-He burning is a
+    ~1% age-sliver at the far end of the window — almost no age sample lands there,
+    so the newly-exposed region would otherwise ship untested. track() emits one
+    state per EEP row, so we can walk the post-RGB-tip rows directly. 1.5 M_sun is
+    interpolated from the 1.4/1.6 neighbors — a *narrow* bracket on purpose: the
+    transition-mass cliff (~2.0-2.1 M_sun, where even fine spacing is poor) is a
+    documented limitation, not something this test pretends is accurate.
+    """
+    t14 = _real_track("00140")
+    t16 = _real_track("00160")
+    t15 = _real_track("00150")  # ground truth
+
+    by_eep = {int(round(s.eep)): s for s in provider.track(1.5, 0.0)}
+    cheb_eeps = sorted(e for e in by_eep if 605 <= e <= 706)
+    assert len(cheb_eeps) > 40   # the window genuinely reaches into CHeB
+
+    rel_errs = []
+    for eep in cheb_eeps:
+        st = by_eep[eep]
+        row = eep - 1  # EEP n == MIST row n-1, the same phase across masses
+        logL, logL14, logL16 = math.log10(st.L_lsun), t14["log_L"][row], t16["log_L"][row]
+        logT, logT14, logT16 = math.log10(st.Teff_K), t14["log_Teff"][row], t16["log_Teff"][row]
+        # lies-between is structural (the blend is convex at every EEP); tiny slack.
+        assert min(logL14, logL16) - 0.03 <= logL <= max(logL14, logL16) + 0.03
+        assert min(logT14, logT16) - 0.01 <= logT <= max(logT14, logT16) + 0.01
+        rel_errs.append(abs(st.L_lsun - 10 ** t15["log_L"][row]) / 10 ** t15["log_L"][row])
+
+    # Narrow bracket tracks the real 1.5 CHeB closely (measured median ~1%); the
+    # He-flash/red-clump region is steeper than the MS, so a few points are worse,
+    # but the median stays small.
     assert float(np.median(rel_errs)) < 0.05
 
 
