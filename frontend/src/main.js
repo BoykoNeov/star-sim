@@ -7,6 +7,7 @@
 import { createStar } from "./star.js";
 import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
+import { createLane } from "./lane.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -35,6 +36,11 @@ const els = {
 const star = createStar(document.getElementById("star-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
 const comp = createComp(document.getElementById("comp-canvas"));
+// The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
+// not a consumer of it — it's driven by the polytropic index n alone and owns its
+// own control + fetch. It's instantiated here but deliberately never wired into
+// refresh()/refreshTrack(): it does not move with mass/[Fe/H]/age.
+createLane({ api: API });
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges

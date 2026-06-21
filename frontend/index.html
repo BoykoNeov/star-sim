@@ -19,7 +19,7 @@
 </head>
 <body>
   <header>
-    <h1>Star Simulator <span class="tag">Phase 2 · live shader</span>
+    <h1>Star Simulator <span class="tag">Phase 3 · interior structure</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
     </h1>
   </header>
@@ -83,6 +83,32 @@
       </h2>
       <div id="readout" class="readout"></div>
       <p class="note" id="status"></p>
+    </section>
+
+    <section class="panel lane-panel">
+      <h2>Interior structure · Lane–Emden <span class="help" tabindex="0" data-tip="A live-computed STATIC polytrope (spec §8) — not evolution, and deliberately NOT the actual interior of the star above. It solves the dimensionless Lane–Emden equation θ″ + (2/ξ)θ′ = −θⁿ outward from the centre to the first zero ξ₁ (the surface), for a polytrope P = K·ρ^(1+1/n). The density profile ρ/ρc = θⁿ is the payoff: raise the index n and the star becomes far more centrally concentrated. n is yours to set — it is independent of the mass/[Fe/H]/age controls. Closed forms (n=0,1,5) and Chandrasekhar's tabulated ξ₁ validate the integrator in the backend tests.">?</span></h2>
+      <div class="lane-body">
+        <div>
+          <canvas id="lane-canvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#ff9966"></i>ρ/ρc — density (θⁿ)</span>
+            <span><i style="background:#5b8def"></i>θ — Lane–Emden function</span>
+          </div>
+        </div>
+        <div class="lane-controls">
+          <label for="lane-n">Index n
+            <input id="lane-n-num" class="val-input" type="number" />
+            <span class="help help-left" tabindex="0" data-tip="The polytropic index n in P = K·ρ^(1+1/n) — it sets how compressible the gas is, and so how centrally concentrated the star is. Landmarks: n=0 uniform density; n=1 the exact θ=sin ξ/ξ; n=1.5 a fully convective star (and non-relativistic degenerate matter, e.g. a white dwarf core); n=3 the Eddington standard model / radiative core (and a relativistic degenerate gas); n=5 the radius runs to infinity — no finite surface. Drag to snap to these, or type any value in 0–5.">?</span>
+          </label>
+          <div class="slider-wrap">
+            <input id="lane-n" type="range" list="lane-n-ticks" />
+            <div class="ticks" id="lane-n-marks"></div>
+          </div>
+          <datalist id="lane-n-ticks"></datalist>
+          <p class="lane-caption" id="lane-caption"></p>
+          <div id="lane-readout" class="readout"></div>
+        </div>
+      </div>
     </section>
   </main>
 

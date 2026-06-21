@@ -66,6 +66,22 @@ main {
 .note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
 .note b { color: #cbd2e0; font-weight: 600; }
 
+/* Lane–Emden interior panel (spec §8): a full-width third row — it's a static
+   structure piece independent of the StellarState spine, so it gets its own band
+   under the 2×2 of evolution panels rather than sharing their marker/row. */
+.lane-panel { grid-column: 1 / -1; }
+.lane-body {
+  display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: start;
+}
+@media (max-width: 800px) { .lane-body { grid-template-columns: 1fr; } }
+#lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; }
+.lane-controls { min-width: 0; }   /* let the readout values wrap, not overflow */
+/* The updating "what does this n mean physically" line under the n slider. */
+.lane-caption {
+  color: var(--accent); font-size: 12.5px; line-height: 1.45;
+  margin: 2px 0 12px; min-height: 1.4em;
+}
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

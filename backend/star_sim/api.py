@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .lane_emden import polytrope_profile
 from .provider import (
     ParameterOutOfRange,
     ProviderDataMissing,
@@ -136,6 +137,26 @@ def track(
     except ProviderDataMissing as exc:
         raise _provider_unavailable(exc) from exc
     return [asdict(st) for st in states]
+
+
+@app.get("/polytrope")
+def polytrope(
+    n: float = Query(
+        ...,
+        ge=0.0,
+        le=5.0,
+        description="polytropic index n (P = K ρ^(1+1/n)); 0 ≤ n ≤ 5",
+    ),
+) -> dict:
+    """(n) -> a static Lane-Emden polytrope profile (STAR_SIM_SPEC.md §8).
+
+    This is the one endpoint that does **not** go through `PROVIDER`: Lane-Emden is
+    a sibling to the StellarState spine, not a `StellarState`. It's a self-contained
+    static-structure teaching piece driven by the index `n` alone — independent of
+    whichever star the rest of the UI is showing. The valid domain is 0 ≤ n ≤ 5
+    (n ≥ 5 has no finite surface; n > 5 is unbound), enforced by the Query bounds.
+    """
+    return polytrope_profile(n)
 
 
 # --- static frontend ----------------------------------------------------------

@@ -34,17 +34,25 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `backend/star_sim/` — `state.py`, `provider.py` (the §3 boundary),
   `providers/mist.py` (the real v1 provider), `providers/stub.py` (data-free
   fallback), `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
-  `fetch_mist.py` (build-time grid fetch), `api.py` (FastAPI, the swap point).
+  `fetch_mist.py` (build-time grid fetch), `lane_emden.py` (the Phase 3 §8
+  polytrope solver — a **sibling** to the §3 spine, not a provider), `api.py`
+  (FastAPI, the swap point; also hosts `/polytrope`, the one route that does NOT
+  go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
-  metallicities, held-out-grid accuracy, dead-corner exclusion) and
-  `test_stub_provider.py`. Skip markers in `conftest.py` gate by data present:
+  metallicities, held-out-grid accuracy, dead-corner exclusion),
+  `test_stub_provider.py`, and `test_lane_emden.py` (§8 polytrope validation —
+  closed forms n=0/1/5 pointwise + Chandrasekhar table; needs no MIST data, so
+  always runs). Skip markers in `conftest.py` gate by data present:
   `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2), and
   `requires_mist_heldout_feh` (the m050/p000/p050 trio).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,color,canvas}.js` (`comp.js` is the §5.4 composition
-  panel; `canvas.js` is the shared HiDPI `fitCanvas` helper the HR & composition
-  panels both use). `star.js` is the Phase 2 §7 shader (a `ShaderMaterial`:
+  `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
+  panel; `lane.js` is the Phase 3 §8 Lane–Emden interior panel — a self-contained
+  sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
+  but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
+  HiDPI `fitCanvas` helper the HR, composition & Lane–Emden panels all use).
+  `star.js` is the Phase 2 §7 shader (a `ShaderMaterial`:
   Teff→color × H_p granulation × limb darkening, streak-proof rotation, + an
   activity-driven corona quad); `color.js` is the reference Planck→CIE→sRGB color
   pipeline (`teffToLinearRGB` for the shader, `teffToRGB`/`teffToCSS` for the 2D
@@ -151,8 +159,38 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   independent). Verified with headless Chromium/SwiftShader screenshots (Sun / hot
   15 M☉ / RGB-clump giant / 0.2 M☉ dwarf + a t=0/30/60 s wind-up check); there is
   no JS test harness, so that screenshot pass *is* the regression check.
-- **Next:** Phase 3 — the Lane-Emden interior-structure panel (spec §8), validated
-  against Chandrasekhar's polytrope tables (n=0,1,5 closed forms).
+- **Done (Phase 3, Lane–Emden interior panel — §8):** a live-computed **static
+  polytrope** (`P = K ρ^(1+1/n)`), built as a **sibling to the §3 spine, not a
+  provider** — the spec is emphatic it is "never the evolution engine," so it is
+  **not** a `StellarState` and `/polytrope?n=` is the one route that does **not**
+  touch `PROVIDER`. Backend `lane_emden.py` integrates θ″+(2/ξ)θ′=−θⁿ with a
+  series start off the ξ=0 singularity, DOP853 (rtol 1e-10), a **terminal event at
+  θ=0** for ξ₁, and `f=−max(θ,0)ⁿ` clamping in the RHS (a non-integer power of a
+  trial-point negative θ is NaN and would poison the step). Validation is the
+  point (§10): closed forms n=0 (√6, 2√6), n=1 (π, π), n=5 (no finite surface)
+  checked **pointwise across the domain**, plus both invariants ξ₁ **and**
+  −ξ₁²θ′(ξ₁); Chandrasekhar (1939) Table 4 n=1.5/2/3/4 as looser secondary
+  cross-checks (recited digits, so a mistyped table value can't impersonate an
+  integrator bug). Search cap is **ξ=100** (not 50): ξ₁ diverges as n→5
+  (n=4.7→54.8), and a too-small cap would mislabel a real-but-distant surface as
+  "no finite surface" — `test_high_n_finite_surface_found_past_old_cap` pins that.
+  The no-surface case (n≥5) plots against **raw ξ** out to a readable 20.
+  Frontend `lane.js` is **self-contained and decoupled** from the spine: its own
+  n-slider (snap presets 0/1/1.5/3/5, each carrying the physics as a *label* —
+  n=1.5≈fully convective, n=3≈Eddington/radiative core), own debounced latest-wins
+  fetch, never wired into `refresh()`. It plots **ρ/ρc=θⁿ prominently** (the §8
+  payoff — central concentration jumps 1→54 from n=0→3) with θ as a fainter line,
+  x normalized to r/R=ξ/ξ₁, and a readout of ξ₁, −ξ₁²θ′(ξ₁), and **ρc/ρ̄** (=1
+  uniform at n=0, ~54 at n=3). Auto-deriving n from the star was **rejected as
+  dishonest** — MIST gives no convective/radiative split, so it would fake a fit;
+  n is the user's to set. Verified via headless SwiftShader screenshots
+  (n=0/1.5/3/4.7/5); no JS test harness, so that screenshot pass is the regression
+  check (the pytest suite is the real gate on the math).
+- **Next:** Phase 4+ — optional deeper-science paths, each behind the existing §3
+  provider interface: `MESAProvider` (offline MESA history/profile files via
+  `mesa_reader`), per-element composition / more phases, eventually a
+  `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope
+  for now — see spec §9).
 
 ## Conventions
 
