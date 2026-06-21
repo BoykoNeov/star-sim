@@ -19,49 +19,68 @@
 </head>
 <body>
   <header>
-    <h1>Star Simulator <span class="tag">Phase 1 · MIST tracks</span></h1>
-    <p class="sub">
-      Every panel below is a function of one <code>StellarState</code>
-      (spec §3). The data source is interchangeable behind one interface — stub
-      or real MIST grids — and nothing here changes.
-    </p>
+    <h1>Star Simulator <span class="tag">Phase 1 · MIST tracks</span>
+      <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
+    </h1>
   </header>
 
   <main>
     <section class="panel star-panel">
+      <h2>3D star <span class="help" tabindex="0" data-tip="A live 3D view of the star. Its color is set by Teff (surface temperature) — cool stars red, hot stars blue-white. Its on-screen size scales with the radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout).">?</span></h2>
       <canvas id="star-canvas"></canvas>
     </section>
 
     <section class="panel hr-panel">
-      <h2>HR diagram</h2>
-      <canvas id="hr-canvas" width="360" height="320"></canvas>
-      <p class="note">Hot on the left (Teff reversed), per convention. Track + marker.</p>
+      <h2>HR diagram <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age.">?</span></h2>
+      <canvas id="hr-canvas"></canvas>
     </section>
 
     <section class="panel comp-panel">
-      <h2>Composition</h2>
-      <canvas id="comp-canvas" width="360" height="320"></canvas>
+      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions of hydrogen, helium and metals versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age.">?</span></h2>
+      <canvas id="comp-canvas"></canvas>
       <div class="legend">
-        <span><i style="background:#5b8def"></i>H (X)</span>
-        <span><i style="background:#ffce6b"></i>He (Y)</span>
+        <span><i style="background:#5b8def"></i>H — hydrogen (X)</span>
+        <span><i style="background:#ffce6b"></i>He — helium (Y)</span>
         <span><i style="background:#b083e0"></i>metals (Z)</span>
       </div>
-      <p class="note">Core (top) &amp; surface (bottom) mass fractions; marker at current age.</p>
     </section>
 
     <section class="panel controls-panel">
       <h2>Controls</h2>
 
-      <label for="mass">Mass <span id="mass-val"></span> M<sub>☉</sub></label>
-      <input id="mass" type="range" />
+      <label for="mass">Mass
+        <input id="mass-num" class="val-input" type="number" /> M<sub>☉</sub>
+        <span class="help help-left" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
+      </label>
+      <div class="slider-wrap">
+        <input id="mass" type="range" list="mass-ticks" />
+        <div class="ticks" id="mass-marks"></div>
+      </div>
+      <datalist id="mass-ticks"></datalist>
 
-      <label for="feh">[Fe/H] <span id="feh-val"></span></label>
-      <input id="feh" type="range" />
+      <label for="feh">[Fe/H]
+        <input id="feh-num" class="val-input" type="number" />
+        <span class="help help-left" tabindex="0" data-tip="Metallicity: log₁₀ of the iron-to-hydrogen ratio relative to the Sun. 0 = solar, + = metal-rich (cooler, dimmer), − = metal-poor (hotter, brighter). The marks below the slider are solar and the grid edges; type an exact value to land between them.">?</span>
+      </label>
+      <div class="slider-wrap">
+        <input id="feh" type="range" list="feh-ticks" />
+        <div class="ticks" id="feh-marks"></div>
+      </div>
+      <datalist id="feh-ticks"></datalist>
 
-      <label for="age">Age <span id="age-val"></span></label>
-      <input id="age" type="range" />
+      <label for="age">Age
+        <input id="age-num" class="val-input" type="number" /> Gyr
+        <span class="help help-left" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through to the end of core-helium burning. The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr.">?</span>
+      </label>
+      <div class="slider-wrap">
+        <input id="age" type="range" list="age-ticks" />
+        <div class="ticks" id="age-marks"></div>
+      </div>
+      <datalist id="age-ticks"></datalist>
 
-      <h2>State readout</h2>
+      <h2>State readout
+        <span class="help help-left" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
+      </h2>
       <div id="readout" class="readout"></div>
       <p class="note" id="status"></p>
     </section>

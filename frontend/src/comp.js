@@ -13,6 +13,8 @@
 // the marker, and knows nothing about where they came from. setTrack() takes the
 // list from /track; update() moves the marker from /state. Same split as hr.js.
 
+import { fitCanvas } from "./canvas.js";
+
 const PAD_L = 30, PAD_R = 10, PAD_T = 16, PAD_B = 26;
 const GAP = 22;   // vertical gap between the core and surface sub-charts
 
@@ -20,10 +22,9 @@ const GAP = 22;   // vertical gap between the core and surface sub-charts
 // band is a thin sliver at the top — honest, not a rendering bug.
 const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
 
-export function createComp(canvas) {
-  const ctx = canvas.getContext("2d");
-  const W = canvas.width;
-  const H = canvas.height;
+export function createComp(canvas, cssW = 300, cssH = 280) {
+  // Crisp at an explicit (smaller) display size; draw in logical W×H units.
+  const { ctx, W, H } = fitCanvas(canvas, cssW, cssH);
 
   let track = null;    // array of StellarState (age-independent, set per mass/feh)
   let marker = null;   // current StellarState (moves as age scrubs)
@@ -69,10 +70,11 @@ export function createComp(canvas) {
       ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
       ctx.strokeRect(PAD_L, top, W - PAD_L - PAD_R, h);
 
-      ctx.fillStyle = "#cbd2e0"; ctx.font = "600 11px system-ui, sans-serif";
-      ctx.fillText(label, PAD_L + 5, top + 13);
+      // "core" / "surface" as bright text on a dark pill — legible over any
+      // colored band beneath it (plain grey text vanished on the blue H band).
+      labelPill(label, PAD_L + 4, top + 4);
       // y ticks: 1 at top, 0 at bottom.
-      ctx.fillStyle = "#8a93a6"; ctx.font = "10px system-ui, sans-serif";
+      ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
       ctx.fillText("1", 14, top + 9);
       ctx.fillText("0", 14, top + h);
     }
@@ -85,10 +87,34 @@ export function createComp(canvas) {
     drawAxis();
   }
 
+  // A chart label drawn as bright text on a dark rounded pill, anchored at its
+  // top-left (x, y), so it reads clearly over whichever band sits behind it.
+  function labelPill(text, x, y) {
+    ctx.font = "600 12px system-ui, sans-serif";
+    const padX = 5, h = 16;
+    const w = ctx.measureText(text).width + padX * 2;
+    ctx.fillStyle = "rgba(8,10,18,0.80)";
+    roundRect(x, y, w, h, 4); ctx.fill();
+    ctx.fillStyle = "#f4f7fc";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + padX, y + h / 2 + 0.5);
+    ctx.textBaseline = "alphabetic";
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
   // Faint full-height line wherever the phase label changes, labeled once at the
   // top — turns the EEP axis into a readable MS | RGB map (a teaching cue).
   function drawPhaseDividers(xOf) {
-    ctx.font = "10px system-ui, sans-serif";
+    ctx.font = "11px system-ui, sans-serif";
     let prev = null, lastLabelX = -1e9;
     for (const s of track) {
       if (s.phase === prev) continue;
@@ -98,7 +124,7 @@ export function createComp(canvas) {
         ctx.strokeStyle = "rgba(138,147,166,0.30)"; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
       }
-      if (x - lastLabelX > 34) {
+      if (x - lastLabelX > 42) {   // looser on the now-narrower axis so labels don't crowd
         ctx.fillStyle = "#8a93a6";
         ctx.fillText(s.phase, x + 3, PAD_T - 5);
         lastLabelX = x;
@@ -119,8 +145,8 @@ export function createComp(canvas) {
   }
 
   function drawAxis() {
-    ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 74, H - 8);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
   return { setTrack, update };

@@ -41,8 +41,15 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `test_stub_provider.py`. Skip markers in `conftest.py` gate by data present:
   `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2), and
   `requires_mist_heldout_feh` (the m050/p000/p050 trio).
-- `frontend/` — static SPA (no bundler): `index.html`, `src/{main,star,hr,comp,color}.js`
-  (`comp.js` is the §5.4 composition panel). Three.js via CDN importmap. Served by FastAPI.
+- `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
+  `src/{main,star,hr,comp,color,canvas}.js` (`comp.js` is the §5.4 composition
+  panel; `canvas.js` is the shared HiDPI `fitCanvas` helper the HR & composition
+  panels both use). Three.js via CDN importmap. Served by FastAPI. The pedagogy
+  is hover-revealed: a `?` glyph (panel headings, control labels, each readout
+  row) and glyph-free dotted-underline hovers on the status-line tokens, all via
+  one CSS `data-tip` tooltip. The age window + the snap-tick landmarks are
+  derived from the `/track` result itself (single source — the slider domain and
+  the composition's EEP span can't drift), not a separate `/age_range` fetch.
 - `data/` — downloaded grids (gitignored). Fetch once: `python -m star_sim.fetch_mist`.
 
 ## Commands

@@ -40,7 +40,23 @@ fetch it once per (mass, [Fe/H]) and move their marker as age scrubs.
 
 ## Run it
 
-Requires Python 3.11+ and a browser. From the repo root:
+Requires Python 3.11+ and a browser.
+
+### One click (easiest)
+
+- **Windows:** double-click **`start.bat`**.
+- **macOS / Linux:** run **`./start.sh`** from the repo root.
+
+That's it. The first run creates the Python environment, installs the
+dependencies, and downloads the MIST stellar grids (~180 MB) — so it takes a
+couple of minutes and needs internet. Every run after that starts in a second or
+two. Your browser opens to the app automatically; **close the launcher window
+(or press Ctrl+C) to stop the server.** Double-clicking again while it's already
+running just reopens the browser tab.
+
+### Manual (if you prefer the terminal)
+
+From the repo root:
 
 ```bash
 cd backend
@@ -51,8 +67,8 @@ python -m star_sim.fetch_mist     # one-time: discover + fetch MIST grids (~180 
 uvicorn star_sim.api:app --reload
 ```
 
-Then open **http://127.0.0.1:8000**. FastAPI serves both the JSON API and the
-frontend. Drag the **mass** slider — color and size should transform
+Either way, open **http://127.0.0.1:8000**. FastAPI serves both the JSON API and
+the frontend. Drag the **mass** slider — color and size should transform
 dramatically (cool red dwarf → hot blue giant) — and scrub **age** to walk the
 star along its evolutionary track.
 
@@ -76,6 +92,8 @@ in a real provider — they become the regression test for that swap.
 ## Layout
 
 ```
+start.bat              # one-click launcher (Windows)
+start.sh               # one-click launcher (macOS / Linux)
 backend/
   star_sim/
     state.py           # StellarState dataclass (the §3 spine)
@@ -89,6 +107,6 @@ backend/
   tests/               # §10 sanity checks (MIST tests skip when grids absent)
 frontend/
   index.html
-  src/{main,star,hr,comp,color}.js   # Three.js star, canvas HR diagram, composition panel, Teff→color
+  src/{main,star,hr,comp,color,canvas}.js  # Three.js star, HR diagram, composition panel, Teff→color, HiDPI canvas helper
 data/                  # downloaded grids (gitignored; fetched at build time)
 ```

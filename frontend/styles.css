@@ -11,7 +11,7 @@
 
 body {
   margin: 0;
-  font: 15px/1.5 system-ui, "Segoe UI", sans-serif;
+  font: 16px/1.5 system-ui, "Segoe UI", sans-serif;
   background: radial-gradient(1200px 800px at 70% -10%, #161b2e, var(--bg));
   color: var(--ink);
   min-height: 100vh;
@@ -20,7 +20,7 @@ body {
 header {
   padding: 18px 24px 6px;
 }
-header h1 { margin: 0; font-size: 22px; font-weight: 650; }
+header h1 { margin: 0; font-size: 23px; font-weight: 650; }
 header .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 .tag {
   font-size: 12px; font-weight: 600; color: var(--bg);
@@ -32,13 +32,17 @@ code { color: var(--accent); }
 main {
   display: grid;
   /* 2×2: star | HR  /  composition | controls. The two evolution plots (HR and
-     composition) share the marker; keeping them on the same row reads as a pair. */
-  grid-template-columns: 1.2fr 1fr;
+     composition) share the marker; keeping them on the same row reads as a pair.
+     FIXED-px columns on purpose: the verbose descriptions must wrap to a bounded
+     width — a content-sized (max-content) column would stretch to fit the longest
+     description on one line and blow the layout out. */
+  grid-template-columns: 360px 380px;
+  justify-content: start;
   gap: 16px;
   padding: 16px 24px 32px;
   align-items: start;
 }
-@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { main { grid-template-columns: 1fr; } }
 
 .panel {
   background: var(--panel);
@@ -49,32 +53,150 @@ main {
 .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--muted); }
 
-.star-panel { padding: 0; overflow: hidden; aspect-ratio: 1 / 1; }
-#star-canvas { width: 100%; height: 100%; display: block; }
+/* The 3D star: a fixed, modest square (was a column-filling, oversized canvas). */
+#star-canvas {
+  width: 320px; height: 320px; display: block; margin: 0 auto;
+  background: #05070d; border-radius: 8px;
+}
 
+/* HR & composition: sized by JS (fitCanvas) to a crisp, smaller display box —
+   the stylesheet only handles framing and centering. */
 #hr-canvas,
-#comp-canvas { width: 100%; height: auto; background: #0b0f1c; border-radius: 8px; }
-.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+#comp-canvas { display: block; margin: 0 auto; background: #0b0f1c; border-radius: 8px; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
+.note b { color: #cbd2e0; font-weight: 600; }
 
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;
-  margin-top: 8px; font-size: 12px; color: var(--muted);
+  margin-top: 10px; font-size: 13px; color: var(--muted);
 }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i {
-  width: 11px; height: 11px; border-radius: 2px; display: inline-block;
+  width: 12px; height: 12px; border-radius: 2px; display: inline-block;
 }
 
 .controls-panel label {
-  display: block; margin: 14px 0 4px; font-size: 13px; color: var(--muted);
+  display: block; margin: 16px 0 2px; font-size: 14px; color: var(--muted);
 }
 .controls-panel label span { color: var(--ink); font-weight: 600; }
-.controls-panel input[type="range"] { width: 100%; accent-color: var(--accent); }
+.controls-panel input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 6px; }
 
-.readout {
-  display: grid; grid-template-columns: auto 1fr; gap: 2px 14px;
-  font-variant-numeric: tabular-nums; font-size: 13px; margin-top: 4px;
+/* Editable value inputs sitting inside each slider's label — type an exact value
+   as an alternative to dragging (the slider snaps to landmarks; this does not). */
+.val-input {
+  width: 5.5em;
+  font: 600 14px/1 system-ui, sans-serif;
+  color: var(--ink);
+  background: #0d1120;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-variant-numeric: tabular-nums;
 }
-.readout .k { color: var(--muted); }
-.readout .v { text-align: right; }
+.val-input:focus { outline: none; border-color: var(--accent); }
+.val-input::-webkit-inner-spin-button { opacity: 0.45; }
+
+/* The "what am I looking at" prose under sliders and headings. Bounded by the
+   fixed-width column, so it wraps instead of stretching the layout. */
+.hint {
+  color: var(--muted); font-size: 12.5px; line-height: 1.45; margin: 2px 0 0;
+}
+.hint code { font-size: inherit; }
+
+/* State readout: each row is term + one-line description on the left, value on
+   the right. */
+.readout {
+  display: flex; flex-direction: column; gap: 10px;
+  font-variant-numeric: tabular-nums; font-size: 14px; margin-top: 8px;
+}
+.readout .row {
+  display: grid; grid-template-columns: 1fr auto;
+  column-gap: 14px; align-items: baseline;
+}
+.readout .term { color: var(--ink); font-weight: 600; }
+.readout .desc {
+  display: block; margin-top: 1px;
+  color: var(--muted); font-weight: 400; font-size: 12px; line-height: 1.4;
+}
+.readout .v { text-align: right; color: var(--ink); white-space: nowrap; }
+
+/* "?" help glyph: the pedagogy (panel notes, control hints, per-quantity
+   descriptions) is now hover/focus-revealed instead of always-on prose, so the
+   panels and the readout stay compact. Panels keep overflow:visible so the
+   tooltip isn't clipped. */
+.help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; margin-left: 5px;
+  font: 700 10px/1 system-ui, sans-serif;
+  text-transform: none; letter-spacing: 0;
+  color: var(--muted); background: transparent;
+  border: 1px solid var(--line); border-radius: 50%;
+  cursor: help; vertical-align: middle; position: relative;
+  user-select: none;
+}
+.help:hover, .help:focus-visible {
+  color: var(--ink); border-color: var(--accent); outline: none;
+}
+.help::after, .tip::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 7px); left: 0;
+  width: max-content; max-width: 250px; padding: 9px 11px;
+  background: #0d1120; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px;
+  font: 400 12px/1.45 system-ui, sans-serif;
+  text-transform: none; letter-spacing: 0;
+  text-align: left; white-space: normal;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: opacity .12s ease, transform .12s ease;
+  z-index: 30; pointer-events: none;
+}
+.help:hover::after, .help:focus-visible::after,
+.tip:hover::after, .tip:focus-visible::after {
+  opacity: 1; visibility: visible; transform: translateY(0);
+}
+/* Glyphs in the rightmost (controls) column open the tooltip leftward, toward
+   screen center — opening rightward there could run off the viewport edge. */
+.help-left::after { left: auto; right: 0; }
+
+/* Glyph-free hover affordance: the text itself carries the tooltip (a subtle
+   dotted underline is the only visual cue — no "?" circle). Used for the status
+   line tokens (OK / phase / provider name). */
+.tip {
+  position: relative; cursor: help;
+  text-decoration: underline dotted; text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.tip:focus-visible { outline: none; }
+/* The status line sits near the bottom of the controls panel, so its tooltips
+   open UPWARD to stay on-screen (downward would clip below the viewport). */
+.tip-up::after { top: auto; bottom: calc(100% + 7px); transform: translateY(3px); }
+/* Win over `.controls-panel label span { color: var(--ink) }` so the glyph reads
+   as a muted affordance, not body text. */
+.controls-panel label .help { color: var(--muted); font-weight: 700; }
+.controls-panel label .help:hover,
+.controls-panel label .help:focus-visible { color: var(--ink); }
+
+/* Slider snap marks: a custom strip under each range input (native <datalist>
+   tick rendering is browser-roulette, so it's a bonus, not the source of truth).
+   Inset left/right by ~the thumb radius so a mark at pos% sits under the thumb at
+   that value (the few-px end drift from a non-exact radius is acceptable). */
+.slider-wrap { position: relative; margin-bottom: 22px; }
+.ticks {
+  position: absolute; left: 8px; right: 8px; top: 100%;
+  height: 20px; pointer-events: none;
+}
+.tick {
+  position: absolute; top: 0; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+}
+.tick::before {
+  content: ""; width: 1px; height: 5px;
+  background: var(--muted); opacity: 0.75;
+}
+.tick-label {
+  margin-top: 2px; font-size: 9.5px; line-height: 1;
+  color: var(--muted); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
