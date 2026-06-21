@@ -18,6 +18,7 @@
       "Bash(git show:*)",
       "Bash(git add:*)",
       "Bash(git branch:*)",
+      "Bash(git push origin main:*)",
       "PowerShell(python:*)",
       "PowerShell(py:*)",
       "PowerShell(pip:*)",
@@ -31,7 +32,6 @@
       "PowerShell(git branch:*)"
     ],
     "deny": [
-      "Bash(git push:*)",
       "Bash(rm -rf:*)",
       "PowerShell(git push:*)"
     ]
