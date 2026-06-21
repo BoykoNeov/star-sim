@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from star_sim.api import app
 from star_sim.provider import ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import StubProvider
+from star_sim.state import StellarState
 
 from .conftest import requires_mist_data
 
@@ -70,6 +71,22 @@ def test_core_hydrogen_depletes_with_age(provider):
     assert young_max > 0.0
 
 
+def test_track_walks_main_sequence(provider):
+    """track() returns StellarStates ordered by EEP from ZAMS to TAMS, each a
+    valid composition snapshot — the panel's input (§5.4). Endpoints align with
+    the age window the scrubber uses."""
+    t = provider.track(1.0, 0.0)
+    assert len(t) > 1
+    assert all(isinstance(s, StellarState) for s in t)
+    assert [s.eep for s in t] == sorted(s.eep for s in t)
+    lo, hi = provider.age_range(1.0, 0.0)
+    assert t[0].age_yr == pytest.approx(lo, abs=1e-3)
+    assert t[-1].age_yr == pytest.approx(hi, rel=1e-9)
+    assert t[-1].X_core < t[0].X_core            # core H burns down
+    for s in t:
+        assert s.X_surf + s.Y_surf + s.Z_surf == pytest.approx(1.0, abs=1e-9)
+
+
 def test_out_of_range_raises(provider):
     with pytest.raises(ParameterOutOfRange):
         provider.state_at(1000.0, 0.0, 0.0)
@@ -95,6 +112,20 @@ def test_api_state_payload_is_stellarstate_shape():
     resp = client.get("/state", params={"mass": 1.0, "feh": 0.0, "age": SUN_AGE_YR})
     assert resp.status_code == 200
     assert set(resp.json().keys()) == EXPECTED_KEYS
+
+
+@requires_mist_data
+def test_api_track_payload_is_stellarstate_list():
+    client = TestClient(app)
+    resp = client.get("/track", params={"mass": 1.0, "feh": 0.0})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list) and len(body) > 1
+    # every row is exactly the StellarState shape — the API adds nothing (§3/§4)
+    assert all(set(row.keys()) == EXPECTED_KEYS for row in body)
+    # ordered by EEP — the panel and HR track rely on this for their x-axis
+    eeps = [row["eep"] for row in body]
+    assert eeps == sorted(eeps)
 
 
 @requires_mist_data

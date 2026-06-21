@@ -9,13 +9,16 @@ Guiding value: **real data and real science, with approximation only where
 necessary.** See [`STAR_SIM_SPEC.md`](./STAR_SIM_SPEC.md) for the full design;
 [`CLAUDE.md`](./CLAUDE.md) for the short operational notes.
 
-> **Status: Phase 0 complete — real MIST tracks.** `MISTProvider` is the live
-> provider: it serves real MESA/MIST v2.5 stellar evolution tracks (one [Fe/H],
-> solar), interpolating across mass **at fixed evolutionary point** (EEP, not
-> age — spec §6). Drag the mass slider *or* scrub age and the star evolves:
-> ZAMS Sun → subgiant → 146 R☉ red giant. `StubProvider` remains as a data-free
-> fallback. The MIST grids are fetched at build time (see *Run it*). Next: a
-> second [Fe/H] axis + the composition panel (Phase 1) — see `CLAUDE.md`.
+> **Status: Phase 1 — real MIST tracks, [Fe/H] axis, composition panel.**
+> `MISTProvider` is the live provider: real MESA/MIST v2.5 tracks over a 2D
+> **(mass × [Fe/H])** grid (currently [Fe/H] −0.5…+0.5), interpolated **at fixed
+> evolutionary point** (EEP, not age — spec §6). Drag mass or [Fe/H], or scrub
+> age, and the star evolves: ZAMS Sun → subgiant → 146 R☉ red giant. The
+> composition panel shows core & surface H/He/metals vs EEP, and the HR diagram
+> draws the full evolutionary track with a marker at the current age.
+> `StubProvider` remains a data-free fallback; the MIST grids are fetched at build
+> time (see *Run it*). Next: full mass grid + parse cache, then Phase 2 shader
+> beauty — see `CLAUDE.md`.
 
 ## Architecture in one sentence
 
@@ -24,10 +27,16 @@ through a `StellarStateProvider`. Swapping the data source (Stub → MIST → li
 solver) changes nothing downstream. This boundary is non-negotiable (spec §3).
 
 ```
-controls ──▶ FastAPI /state ──▶ Provider.state_at() ──▶ StellarState ──▶ HR diagram
-                                                                      ├─▶ 3D star
-                                                                      └─▶ composition
+controls ─▶ FastAPI /state ─▶ Provider.state_at() ─▶ StellarState ──┐
+         └▶ FastAPI /track ─▶ Provider.track()    ─▶ [StellarState] ─┤
+                                                                     ├─▶ HR diagram (track + marker)
+                                                                     ├─▶ 3D star
+                                                                     └─▶ composition panel
 ```
+
+Both endpoints emit the *same* `StellarState` shape; `/track` is just the whole
+evolutionary curve (age-independent), so the HR diagram and composition panel
+fetch it once per (mass, [Fe/H]) and move their marker as age scrubs.
 
 ## Run it
 
@@ -72,14 +81,14 @@ backend/
     state.py           # StellarState dataclass (the §3 spine)
     provider.py        # StellarStateProvider Protocol + ProviderDataMissing (the boundary)
     providers/
-      mist.py          # live provider: real MIST v2.5 tracks, EEP-fixed mass interpolation
+      mist.py          # live provider: real MIST v2.5 tracks, EEP-fixed 2D (mass × [Fe/H]) interp; state_at + track
       stub.py          # data-free fallback: physically-flavored, no external data
       _vendor/         # MIST's own read_mist_models.py parser (vendored, §6)
     fetch_mist.py      # build-time grid fetch (discovers the download URL, §6)
-    api.py             # FastAPI; PROVIDER is the single swap point
+    api.py             # FastAPI (/state, /track, /ranges, /mass_range, /age_range); PROVIDER is the single swap point
   tests/               # §10 sanity checks (MIST tests skip when grids absent)
 frontend/
   index.html
-  src/{main,star,hr,color}.js   # Three.js star, canvas HR diagram, Teff→color
+  src/{main,star,hr,comp,color}.js   # Three.js star, canvas HR diagram, composition panel, Teff→color
 data/                  # downloaded grids (gitignored; fetched at build time)
 ```

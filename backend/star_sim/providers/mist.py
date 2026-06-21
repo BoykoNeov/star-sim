@@ -397,6 +397,34 @@ class MISTProvider:
         # "convert age to EEP, then interpolate there" step.
         rows = np.arange(age_win.size, dtype=float)
         frac = float(np.interp(age, age_win, rows))
+        return self._state_from_row(win, frac, mass, feh)
+
+    def track(self, mass: float, feh: float) -> list[StellarState]:
+        """Every exposed EEP row at (mass, [Fe/H]) as a StellarState (§3).
+
+        No age inversion here: the window's rows already *are* the EEPs (ZAMS ..
+        RGB tip), so we emit one state per integer row. The window is monotonic
+        and pre-He-flash over this span, so the list is cleanly ordered for the HR
+        track and the composition panel's EEP axis.
+        """
+        self._ensure_loaded()
+        self._check_mass_feh(mass, feh)
+        win = self._interp_window(mass, feh)
+        n = int(win["age"].size)
+        return [self._state_from_row(win, float(i), mass, feh) for i in range(n)]
+
+    def _state_from_row(
+        self, win: dict, frac: float, mass: float, feh: float
+    ) -> StellarState:
+        """Read a StellarState off the interpolated window at fractional row `frac`.
+
+        The single place a window becomes a StellarState — shared by `state_at`
+        (frac from the age inversion) and `track` (frac = each integer row) so the
+        two can never drift, and so `win`'s provider-internal keys never escape
+        past this boundary (§3).
+        """
+        rows = np.arange(win["age"].size, dtype=float)
+        age = float(np.interp(frac, rows, win["age"]))
 
         L = 10.0 ** np.interp(frac, rows, win["logL"])
         teff = 10.0 ** np.interp(frac, rows, win["logT"])

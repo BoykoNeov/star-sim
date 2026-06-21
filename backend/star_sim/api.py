@@ -120,6 +120,24 @@ def state(
     return asdict(st)
 
 
+@app.get("/track")
+def track(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+) -> list[dict]:
+    """(mass, [Fe/H]) -> the full evolutionary track: a list of StellarState dicts
+    ordered by EEP. Age-independent, so the HR diagram and composition panel fetch
+    it once per (mass, [Fe/H]) and move their marker as age scrubs. Same per-element
+    shape as /state — the API still adds no fields of its own (§3, §4)."""
+    try:
+        states = PROVIDER.track(mass, feh)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+    return [asdict(st) for st in states]
+
+
 # --- static frontend ----------------------------------------------------------
 # Mounted last so the API routes above take precedence. html=True serves
 # index.html at "/".

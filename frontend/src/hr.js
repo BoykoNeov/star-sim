@@ -1,6 +1,7 @@
 // HR diagram (STAR_SIM_SPEC.md §5): log L vs log Teff, Teff axis REVERSED (hot on
-// the left). Phase 0 shows the current single point; the full evolutionary track
-// is drawn here once the provider can return a track (Phase 0/1 with MIST).
+// the left). Draws the full evolutionary track for the chosen (mass, [Fe/H]) with
+// a marker at the current age — setTrack() takes the list from /track, update()
+// moves the marker from /state (same split the composition panel uses).
 
 import { teffToCSS } from "./color.js";
 
@@ -56,19 +57,38 @@ export function createHR(canvas) {
     ctx.restore();
   }
 
-  function update(state) {
-    drawAxes();
-    const x = xOf(Math.log10(state.Teff_K));
-    const y = yOf(Math.log10(state.L_lsun));
+  let track = null;    // array of StellarState (age-independent, set per mass/feh)
+  let marker = null;   // current StellarState (moves as age scrubs)
 
+  function drawTrack() {
+    if (!track || track.length < 2) return;
+    ctx.beginPath();
+    track.forEach((s, i) => {
+      const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "rgba(231,236,245,0.45)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function draw() {
+    drawAxes();
+    drawTrack();
+    if (!marker) return;
+    const x = xOf(Math.log10(marker.Teff_K));
+    const y = yOf(Math.log10(marker.L_lsun));
     ctx.beginPath();
     ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = teffToCSS(state.Teff_K);
+    ctx.fillStyle = teffToCSS(marker.Teff_K);
     ctx.fill();
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#e7ecf5";
     ctx.stroke();
   }
 
-  return { update };
+  function setTrack(t) { track = t && t.length ? t : null; draw(); }
+  function update(state) { marker = state; draw(); }
+
+  return { setTrack, update };
 }

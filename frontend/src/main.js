@@ -6,6 +6,7 @@
 
 import { createStar } from "./star.js";
 import { createHR } from "./hr.js";
+import { createComp } from "./comp.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -27,6 +28,7 @@ const els = {
 
 const star = createStar(document.getElementById("star-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
+const comp = createComp(document.getElementById("comp-canvas"));
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
@@ -64,7 +66,11 @@ function gyr(yr) {
 }
 
 // --- latest-request-wins -----------------------------------------------------
+// Two independent token streams: the per-change state fetch, and the track fetch
+// (which only fires on mass/feh changes, so a slow track can't be clobbered by a
+// fast age scrub). Each guards against a stale response overwriting a newer one.
 let reqToken = 0;
+let trackToken = 0;
 
 async function fetchJSON(path) {
   const res = await fetch(`${API}${path}`);
@@ -113,6 +119,7 @@ async function refresh() {
     if (token !== reqToken) return; // a newer request superseded this one
     star.update(s);
     hr.update(s);
+    comp.update(s);
     renderReadout(s);
     els.status.style.color = teffToCSS(s.Teff_K);
     els.status.textContent = `OK · ${s.phase}` + (providerName ? ` · ${providerName}` : "");
@@ -123,10 +130,28 @@ async function refresh() {
   }
 }
 
+// The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
+// fetched here (on mass/feh change), never on an age scrub. The HR diagram and
+// composition panel keep it and just move their marker as the age slides.
+async function refreshTrack() {
+  const token = ++trackToken;
+  const mass = massFromSlider();
+  const feh = Number(els.feh.value);
+  try {
+    const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}`);
+    if (token !== trackToken) return; // a newer track superseded this one
+    hr.setTrack(t);
+    comp.setTrack(t);
+  } catch {
+    /* non-fatal: refresh() surfaces hard errors; keep the last good track */
+  }
+}
+
 // When mass/feh change, the valid age window changes too.
 async function refreshAgeRangeThenState() {
   const mass = massFromSlider();
   const feh = Number(els.feh.value);
+  refreshTrack(); // independent of the age window; let it run in parallel
   try {
     const r = await fetchJSON(`/age_range?mass=${mass}&feh=${feh}`);
     maxAge = r.max;

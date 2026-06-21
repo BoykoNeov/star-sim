@@ -20,6 +20,7 @@ import pytest
 from star_sim.provider import ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import MISTProvider
 from star_sim.providers.mist import DATA_DIR
+from star_sim.state import StellarState
 
 from .conftest import (
     requires_mist_data,
@@ -118,6 +119,45 @@ def test_evolves_off_main_sequence(provider):
     assert tip.Teff_K < zams.Teff_K           # and cools
     assert tip.phase in ("RGB", "CHeB")
     assert tip.X_core < 1e-3                   # core H exhausted
+
+
+# --- the evolutionary track (the §5.2/§5.4 input: HR track + composition panel) --
+def test_track_is_ordered_stellarstate_list(provider):
+    """track() returns StellarStates from ZAMS to the RGB tip, ordered by EEP, age
+    strictly increasing — the §3-clean input the HR track and composition panel
+    consume. Each element is a StellarState (no window internals leak out)."""
+    t = provider.track(1.0, 0.0)
+    assert len(t) > 1
+    assert all(isinstance(s, StellarState) for s in t)
+    eeps = [s.eep for s in t]
+    ages = [s.age_yr for s in t]
+    assert eeps == sorted(eeps)
+    assert all(ages[i] < ages[i + 1] for i in range(len(ages) - 1))
+    for s in t:
+        assert s.X_surf + s.Y_surf + s.Z_surf == pytest.approx(1.0, abs=1e-6)
+
+
+def test_track_endpoints_match_state_at(provider):
+    """The track is the same read surface as state_at — its endpoints equal a
+    state_at call at the age-window bounds, so marker and track can't disagree."""
+    t = provider.track(1.0, 0.0)
+    lo, hi = provider.age_range(1.0, 0.0)
+    zams = provider.state_at(1.0, 0.0, lo)
+    tip = provider.state_at(1.0, 0.0, hi)
+    assert t[0].age_yr == pytest.approx(lo, rel=1e-9)
+    assert t[-1].age_yr == pytest.approx(hi, rel=1e-9)
+    assert t[0].eep == pytest.approx(zams.eep, abs=1e-9)
+    assert t[0].L_lsun == pytest.approx(zams.L_lsun, rel=1e-9)
+    assert t[-1].L_lsun == pytest.approx(tip.L_lsun, rel=1e-9)
+
+
+def test_track_core_hydrogen_depletes_monotonically(provider):
+    """The teaching payload: core H falls from its ZAMS value to ~0 by the RGB tip
+    and never rises (core burning is one-way over this window)."""
+    xc = [s.X_core for s in provider.track(1.0, 0.0)]
+    assert xc[0] > 0.6            # ZAMS core H ~0.71
+    assert xc[-1] < 1e-3          # exhausted by the tip
+    assert all(xc[i] >= xc[i + 1] - 1e-6 for i in range(len(xc) - 1))
 
 
 def test_out_of_range_raises(provider):

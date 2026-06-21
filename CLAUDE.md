@@ -41,8 +41,8 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `test_stub_provider.py`. Skip markers in `conftest.py` gate by data present:
   `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2), and
   `requires_mist_heldout_feh` (the m050/p000/p050 trio).
-- `frontend/` — static SPA (no bundler): `index.html`, `src/{main,star,hr,color}.js`.
-  Three.js via CDN importmap. Served by FastAPI.
+- `frontend/` — static SPA (no bundler): `index.html`, `src/{main,star,hr,comp,color}.js`
+  (`comp.js` is the §5.4 composition panel). Three.js via CDN importmap. Served by FastAPI.
 - `data/` — downloaded grids (gitignored). Fetch once: `python -m star_sim.fetch_mist`.
 
 ## Commands
@@ -76,9 +76,19 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   `mass_range(feh)` (new provider method + `/mass_range` endpoint) tightens the
   mass floor for [Fe/H]>0; the frontend clamps the mass slider to it. The §10 red
   dwarf survives at solar/sub-solar [Fe/H].
-- **Next (Phase 1):** composition panel; widen the exposed window past RGB tip if
-  desired; add the `.npz` parse cache + load the full mass grid (today's provider
-  loads a curated `DEFAULT_MASSES` subset per grid for fast startup).
+- **Done (Phase 1, composition panel):** the §5.4 panel — stacked-area surface &
+  core X/Y/Z vs **EEP** (`comp.js`). EEP not age on the x-axis on purpose: the
+  core-H→He transition near TAMS is an invisible sliver on a linear-age axis. Fed
+  by a new `track(mass, feh)` provider method + `/track` endpoint returning a list
+  of `StellarState` (same §3 dataclass, ordered by EEP — never the raw interp
+  window, which would leak provider internals). The same `/track` also draws the HR
+  diagram's full-track polyline (§5.2). Track is age-independent: fetched on
+  mass/[Fe/H] change (own latest-wins token), the marker moves on age scrub.
+  Provider-side, `state_at` and `track` share one `_state_from_row` helper so they
+  can't drift (the unchanged Sun anchor proves the refactor).
+- **Next (Phase 1):** widen the exposed window past RGB tip if desired; add the
+  `.npz` parse cache + load the full mass grid (today's provider loads a curated
+  `DEFAULT_MASSES` subset per grid for fast startup).
 - Then Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
   `activity`).
 

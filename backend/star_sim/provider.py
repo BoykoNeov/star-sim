@@ -59,3 +59,15 @@ class StellarStateProvider(Protocol):
     def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
         """The one method that matters: (mass, [Fe/H], age) -> StellarState."""
         ...
+
+    def track(self, mass: float, feh: float) -> list[StellarState]:
+        """The full evolutionary track at (mass, [Fe/H]) — a list of StellarStates
+        ordered by EEP (ZAMS -> the exposed-window end).
+
+        Age-independent: the HR diagram and composition panel fetch this once per
+        (mass, [Fe/H]) and move their own marker as the age scrubs. Each element
+        is a `StellarState` exactly as `state_at` would return at that point, so
+        consumers never see a provider's track columns (§3 — returning the raw
+        interpolation window would leak provider internals).
+        """
+        ...

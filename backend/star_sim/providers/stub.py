@@ -122,6 +122,16 @@ class StubProvider:
             activity=activity,
         )
 
+    def track(self, mass: float, feh: float) -> list[StellarState]:
+        """The stub's whole life is the main sequence (ZAMS -> TAMS), so sample it
+        uniformly in age. EEP is linear in age here, so even-age == even-EEP; the
+        composition panel's EEP axis lands on a regular grid. `state_at` does all
+        the real work — this just walks it."""
+        self._check_mass_feh(mass, feh)
+        _, t_ms = self.age_range(mass, feh)
+        n = 60
+        return [self.state_at(mass, feh, t_ms * i / (n - 1)) for i in range(n)]
+
     # -- validation ------------------------------------------------------------
     def _check_mass_feh(self, mass: float, feh: float) -> None:
         if not (MASS_MIN <= mass <= MASS_MAX):
