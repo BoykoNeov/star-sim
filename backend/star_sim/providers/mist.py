@@ -132,7 +132,9 @@ DEFAULT_MASSES = (
 # rejected instead of silently feeding stale arrays.
 # v2 (Phase 4) added the C/N/O surface+core columns — old v1 caches lack them, so
 # the fingerprint bump forces a one-time reparse rather than feeding short arrays.
-CACHE_VERSION = 2
+# v3 widened the element set to Ne/Mg/Fe (same reason: old v2 caches lack the six
+# new columns, so the bump forces one reparse instead of serving short arrays).
+CACHE_VERSION = 3
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
@@ -140,7 +142,8 @@ CACHE_FILENAME = "_parsed_tracks.npz"
 _TRACK_COLS = (
     "age", "logL", "logT", "logR", "logg",
     "Xs", "Ys", "Xc", "Yc",
-    "Cs", "Ns", "Os", "Cc", "Nc", "Oc",
+    "Cs", "Ns", "Os", "Nes", "Mgs", "Fes",
+    "Cc", "Nc", "Oc", "Nec", "Mgc", "Fec",
     "phase",
 )
 
@@ -171,14 +174,23 @@ class _Track:
     Xc: np.ndarray         # center H mass fraction
     Yc: np.ndarray         # center He mass fraction
     # Per-element metals (a breakdown of Z), each the sum of its isotopes. The CNO
-    # trio: the surface ones carry the first-dredge-up signature (N up, C down),
-    # the core ones the CNO-cycle / He-burning products (§5.4 detail view).
-    Cs: np.ndarray         # surface carbon  (c12 + c13)
+    # trio carries the burning story: the surface ones the first-dredge-up signature
+    # (N up, C down), the core ones the CNO-cycle / He-burning products. Ne/Mg are
+    # α-elements (mostly along for the ride this side of the AGB); Fe is the inert
+    # tracer that just marks the input [Fe/H] (modulo MIST's surface diffusion).
+    # All feed the §5.4 detail view.
+    Cs: np.ndarray         # surface carbon   (c12 + c13)
     Ns: np.ndarray         # surface nitrogen (n13 + n14 + n15)
-    Os: np.ndarray         # surface oxygen  (o14 + o15 + o16 + o17 + o18)
+    Os: np.ndarray         # surface oxygen   (o14 + o15 + o16 + o17 + o18)
+    Nes: np.ndarray        # surface neon     (ne18 + ne19 + ne20 + ne21 + ne22)
+    Mgs: np.ndarray        # surface magnesium (mg23 + mg24 + mg25 + mg26)
+    Fes: np.ndarray        # surface iron     (fe56)
     Cc: np.ndarray         # center carbon
     Nc: np.ndarray         # center nitrogen
     Oc: np.ndarray         # center oxygen
+    Nec: np.ndarray        # center neon
+    Mgc: np.ndarray        # center magnesium
+    Fec: np.ndarray        # center iron
     phase: np.ndarray      # FSPS phase code (float)
     zams_row: int          # first row on the MS (phase >= 0)
     track_end: int         # last exposed row = end of core-He burning (phase 3)
@@ -291,9 +303,15 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         Cs=elem("surface_", "c12", "c13"),
         Ns=elem("surface_", "n13", "n14", "n15"),
         Os=elem("surface_", "o14", "o15", "o16", "o17", "o18"),
+        Nes=elem("surface_", "ne18", "ne19", "ne20", "ne21", "ne22"),
+        Mgs=elem("surface_", "mg23", "mg24", "mg25", "mg26"),
+        Fes=elem("surface_", "fe56"),
         Cc=elem("center_", "c12", "c13"),
         Nc=elem("center_", "n13", "n14", "n15"),
         Oc=elem("center_", "o14", "o15", "o16", "o17", "o18"),
+        Nec=elem("center_", "ne18", "ne19", "ne20", "ne21", "ne22"),
+        Mgc=elem("center_", "mg23", "mg24", "mg25", "mg26"),
+        Fec=elem("center_", "fe56"),
         phase=phase,
         zams_row=zams_row,
         track_end=track_end,
@@ -647,11 +665,17 @@ class MISTProvider:
             "C": float(np.interp(frac, rows, win["Cs"])),
             "N": float(np.interp(frac, rows, win["Ns"])),
             "O": float(np.interp(frac, rows, win["Os"])),
+            "Ne": float(np.interp(frac, rows, win["Nes"])),
+            "Mg": float(np.interp(frac, rows, win["Mgs"])),
+            "Fe": float(np.interp(frac, rows, win["Fes"])),
         }
         metals_core = {
             "C": float(np.interp(frac, rows, win["Cc"])),
             "N": float(np.interp(frac, rows, win["Nc"])),
             "O": float(np.interp(frac, rows, win["Oc"])),
+            "Ne": float(np.interp(frac, rows, win["Nec"])),
+            "Mg": float(np.interp(frac, rows, win["Mgc"])),
+            "Fe": float(np.interp(frac, rows, win["Fec"])),
         }
 
         # phase is a discrete label: take the row we're nearest to.
@@ -730,9 +754,15 @@ class MISTProvider:
             "Cs": mix(lo.Cs, hi.Cs),
             "Ns": mix(lo.Ns, hi.Ns),
             "Os": mix(lo.Os, hi.Os),
+            "Nes": mix(lo.Nes, hi.Nes),
+            "Mgs": mix(lo.Mgs, hi.Mgs),
+            "Fes": mix(lo.Fes, hi.Fes),
             "Cc": mix(lo.Cc, hi.Cc),
             "Nc": mix(lo.Nc, hi.Nc),
             "Oc": mix(lo.Oc, hi.Oc),
+            "Nec": mix(lo.Nec, hi.Nec),
+            "Mgc": mix(lo.Mgc, hi.Mgc),
+            "Fec": mix(lo.Fec, hi.Fec),
             # phase is discrete: take it from the nearer of the two tracks.
             "phase": (lo.phase if w < 0.5 else hi.phase)[sl],
         }
@@ -826,6 +856,7 @@ def _blend_windows(a: dict, b: dict, w: float) -> dict:
     }
     for k in ("logL", "logT", "logR", "logg",
               "Xs", "Ys", "Xc", "Yc",
-              "Cs", "Ns", "Os", "Cc", "Nc", "Oc"):
+              "Cs", "Ns", "Os", "Nes", "Mgs", "Fes",
+              "Cc", "Nc", "Oc", "Nec", "Mgc", "Fec"):
         out[k] = (1.0 - w) * a[k][:n] + w * b[k][:n]
     return out

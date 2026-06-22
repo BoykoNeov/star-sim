@@ -36,11 +36,11 @@
     </section>
 
     <section class="panel comp-panel">
-      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and C·N·O detail (the carbon/nitrogen/oxygen breakdown of the metals).">?</span></h2>
+      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and a per-element detail (carbon, nitrogen, oxygen, neon, magnesium and iron — the breakdown of the metals).">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">
         <button type="button" class="mode-btn active" data-mode="bulk">H · He · metals</button>
-        <button type="button" class="mode-btn" data-mode="cno">C · N · O detail</button>
-        <span class="help" tabindex="0" data-tip="The carbon/nitrogen/oxygen breakdown of the metals (Z), as lines. The core and surface have INDEPENDENT vertical scales (read the number at each top-left): during helium burning the core's C and O climb to tens of percent, while the surface stays ~1% — a shared scale would hide the surface story. Watch the surface on the lower red-giant branch: nitrogen rises and carbon falls as the deepening convective envelope dredges CNO-cycle-processed material up from below (the 'first dredge-up'). Oxygen barely moves. The core, meanwhile, shows the CNO cycle itself: ¹⁴N piles up and ¹²C is consumed, then He-burning fills the core with C and O.">?</span>
+        <button type="button" class="mode-btn" data-mode="cno">per-element detail</button>
+        <span class="help" tabindex="0" data-tip="The per-element breakdown of the metals (Z), as lines: carbon, nitrogen, oxygen, neon, magnesium and iron. The core and surface have INDEPENDENT vertical scales (read the number at each top-left): during helium burning the core's C and O climb to tens of percent, while the surface stays ~1% — a shared scale would hide the surface story. Watch the surface on the lower red-giant branch: nitrogen rises and carbon falls as the deepening convective envelope dredges CNO-cycle-processed material up from below (the 'first dredge-up'). Oxygen barely moves. The core, meanwhile, shows the CNO cycle itself: ¹⁴N piles up and ¹²C is consumed, then He-burning fills the core with C and O. Ne and Mg are near-flat α-element tracers this side of the AGB; iron is inert — it just marks the input [Fe/H] (a steady backdrop that makes the CNO motion legible), though at low mass surface diffusion drags it down slightly over the main sequence.">?</span>
       </div>
       <canvas id="comp-canvas"></canvas>
       <div class="legend legend-bulk">
@@ -52,6 +52,9 @@
         <span><i style="background:#ff9f43"></i>C — carbon</span>
         <span><i style="background:#26de81"></i>N — nitrogen</span>
         <span><i style="background:#54a0ff"></i>O — oxygen</span>
+        <span><i style="background:#ff6b9d"></i>Ne — neon</span>
+        <span><i style="background:#feca57"></i>Mg — magnesium</span>
+        <span><i style="background:#a4b0be"></i>Fe — iron</span>
       </div>
     </section>
 

@@ -30,12 +30,18 @@ Z_SUN = 0.0152          # protosolar-ish metal mass fraction
 Y_PRIMORDIAL = 0.2485   # big-bang helium
 DYDZ = 1.78             # galactic helium enrichment slope (Y = Yp + dY/dZ * Z)
 
-# Fraction OF the metals Z carried by each of C, N, O at solar abundance (Asplund+
-# 2009 mass fractions / Z_sun). The stub has no nuclear processing, so it just
-# splits its Z by these fixed ratios — flat in age and identical surface vs core.
-# That is the honest stub stance (§ conventions): a static, *flavored* breakdown,
-# not the CNO-cycle / dredge-up evolution that only MISTProvider can show.
-CNO_OF_Z = {"C": 0.155, "N": 0.046, "O": 0.377}
+# Fraction OF the metals Z carried by each exposed element at solar abundance
+# (Asplund+ 2009 photospheric mass fractions / Z_sun). The stub has no nuclear
+# processing, so it just splits its Z by these fixed ratios — flat in age and
+# identical surface vs core. That is the honest stub stance (§ conventions): a
+# static, *flavored* breakdown, not the CNO-cycle / dredge-up / diffusion
+# evolution that only MISTProvider can show. The six match MISTProvider's element
+# set; they sum to ~0.82 of Z (the rest is Si/S/Ca/Ti/... we don't break out), so
+# the per-element sum stays safely under Z.
+METALS_OF_Z = {
+    "C": 0.155, "N": 0.046, "O": 0.377,   # the CNO trio
+    "Ne": 0.112, "Mg": 0.047, "Fe": 0.085,  # neon, magnesium, the iron tracer
+}
 
 # MIST EEP convention (real numbers, for honesty): ZAMS=202, TAMS=454.
 EEP_ZAMS = 202.0
@@ -63,8 +69,8 @@ def _composition(feh: float) -> tuple[float, float, float]:
 
 
 def _metals(z: float) -> dict[str, float]:
-    """Split a metal fraction Z into a fixed solar-ratio C/N/O breakdown (flavor)."""
-    return {el: frac * z for el, frac in CNO_OF_Z.items()}
+    """Split a metal fraction Z into a fixed solar-ratio per-element breakdown (flavor)."""
+    return {el: frac * z for el, frac in METALS_OF_Z.items()}
 
 
 class StubProvider:

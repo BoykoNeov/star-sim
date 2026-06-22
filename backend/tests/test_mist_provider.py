@@ -199,17 +199,19 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
 
 
 # --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
-def test_cno_breakdown_present_and_bounded(provider):
-    """metals_surf/metals_core carry C, N, O, each a physical sub-fraction of Z.
+def test_metal_breakdown_present_and_bounded(provider):
+    """metals_surf/metals_core carry C, N, O, Ne, Mg, Fe — each a sub-fraction of Z.
 
     The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
-    their sum can't exceed Z (only the exposed elements, not every metal). This is
-    the invariant that keeps the §5.4 detail view honest — the bands can never
-    out-sum the Z sliver they subdivide.
+    their sum can't exceed Z (only the exposed elements, not every metal — Si/S/Ca/…
+    stay folded into Z). This is the invariant that keeps the §5.4 detail view
+    honest — the lines can never out-sum the Z sliver they subdivide. The six sum
+    to ~0.91 of solar Z, so the headroom is ~1e-3 (measured), comfortably above the
+    1e-9 slack.
     """
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
     for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
-        assert set(metals) == {"C", "N", "O"}
+        assert set(metals) == {"C", "N", "O", "Ne", "Mg", "Fe"}
         for frac in metals.values():
             assert 0.0 <= frac <= z + 1e-9
         assert sum(metals.values()) <= z + 1e-9
@@ -259,6 +261,26 @@ def test_core_cno_equilibrium_signature(provider):
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
     assert s.metals_core["N"] > 3.0 * s.metals_surf["N"]   # measured ~5.6x
     assert s.metals_core["C"] < 0.1 * s.metals_surf["C"]   # measured ~0.004x
+
+
+def test_heavy_tracers_inert_while_cno_processes(provider):
+    """The detail-view contrast: Fe/Ne/Mg barely move while the CNO trio is rewritten.
+
+    As a 3 M_sun star dredges up CN-cycle-processed material (surface N triples, C
+    nearly halves), the heavier α / iron-peak tracers Fe, Ne, Mg are neither made
+    nor destroyed this side of the AGB, so the surface fractions hold to within a
+    few percent. That steady backdrop is exactly what makes the CNO motion legible
+    in the §5.4 view. We assert a *relative* bound (|Δ| small vs N's 3x), not strict
+    flatness: at 1 M_sun MIST's surface diffusion settles metals out and drags Fe
+    down ~10% over the MS (real physics, measured) — so we use the diffusion-quiet
+    3 M_sun grid point, where the tracers measure Fe x1.00, Ne x0.99, Mg x1.00.
+    """
+    t = provider.track(3.0, 0.0)
+    zams = t[0].metals_surf
+    tip = max(t, key=lambda s: s.R_rsun).metals_surf
+    assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.15x)
+    for el in ("Fe", "Ne", "Mg"):
+        assert abs(tip[el] / zams[el] - 1.0) < 0.05   # inert tracer (measured <1%)
 
 
 def test_out_of_range_raises(provider):
@@ -476,6 +498,31 @@ def test_metal_poor_is_hotter_and_brighter(provider):
     rich = provider.state_at(1.0, feh["max"], SUN_AGE_YR)
     assert poor.Teff_K > rich.Teff_K
     assert poor.L_lsun > rich.L_lsun
+
+
+@requires_mist_multifeh
+def test_iron_validates_the_feh_axis(provider):
+    """Fe is the element that *is* [Fe/H]: surface iron at ZAMS must track the axis.
+
+    [Fe/H] is by definition the log iron-to-hydrogen ratio vs solar, so the surface
+    Fe mass fraction at ZAMS (before processing/diffusion bite) is the cleanest
+    cross-check that the metallicity axis means what it says: it must rise
+    monotonically with [Fe/H], and step by ~10^Δ[Fe/H] per grid (here 0.5 dex →
+    ~10^0.5≈3.16). The ratio lands a touch *under* 10^Δ because [Fe/H] is a number
+    ratio against H while we report mass fractions and X shifts with Z — so the
+    tolerance is generous (±20%). Measured: Fe(+0.5)/Fe(0)=2.85, Fe(0)/Fe(-0.5)=3.05.
+    """
+    provider._ensure_loaded()
+    fehs = sorted(float(f) for f in provider._fehs)
+    fe = {}
+    for feh in fehs:
+        lo, _ = provider.age_range(1.0, feh)
+        fe[feh] = provider.state_at(1.0, feh, lo).metals_surf["Fe"]
+    # surface iron rises monotonically with [Fe/H]
+    assert [fe[f] for f in fehs] == sorted(fe[f] for f in fehs)
+    # ...and each grid step scales ~10^Δ[Fe/H] (generous: number- vs mass-ratio slack)
+    for f_lo, f_hi in zip(fehs, fehs[1:]):
+        assert fe[f_hi] / fe[f_lo] == pytest.approx(10.0 ** (f_hi - f_lo), rel=0.20)
 
 
 @requires_mist_heldout_feh

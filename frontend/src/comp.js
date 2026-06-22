@@ -3,12 +3,14 @@
 //
 //  * "bulk"  — X=H, Y=He, Z=metals as stacked-area bands (the default). Core on
 //              top (where the drama is), surface below.
-//  * "cno"   — the Phase 4 detail: carbon, nitrogen & oxygen mass fractions as
-//              lines. Core and surface get INDEPENDENT y-scales on purpose: during
-//              core-He burning the core's C/O climb to tens of percent while the
-//              surface stays ~1%, so a shared scale would flatten the surface
-//              first-dredge-up signature (N up, C down) — the actual teaching
-//              moment — into nothing.
+//  * "cno"   — the Phase 4 per-element detail: C, N, O, Ne, Mg & Fe mass fractions
+//              as lines (the id stays "cno" — it began as the CNO trio). Core and
+//              surface get INDEPENDENT y-scales on purpose: during core-He burning
+//              the core's C/O climb to tens of percent while the surface stays ~1%,
+//              so a shared scale would flatten the surface first-dredge-up signature
+//              (N up, C down) — the actual teaching moment — into nothing. Fe/Ne/Mg
+//              are near-flat tracers: Fe in particular just marks the input [Fe/H],
+//              a steady backdrop that makes the CNO motion legible.
 //
 // Why EEP and not linear age on the x-axis (§6): the teaching payoffs — core H→He
 // near TAMS, and the dredge-up on the lower RGB — are slivers on a linear-age
@@ -28,9 +30,15 @@ const GAP = 22;   // vertical gap between the core and surface sub-charts
 // Bulk band colors: H a cool blue, He a warm gold, metals a violet. Z is ~1.5%
 // so its band is a thin sliver at the top — honest, not a rendering bug.
 const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
-// CNO line colors — deliberately distinct from the bulk band palette above.
-const CNO_COL = { C: "#ff9f43", N: "#26de81", O: "#54a0ff" };
-const ELEMS = ["C", "N", "O"];
+// Per-element line colors — deliberately distinct from the bulk band palette
+// above and from each other. Fe is a steel-grey iron mnemonic (and the inert
+// tracer that just marks the input [Fe/H]); CNO keep their Phase-4 hues.
+const ELEM_COL = {
+  C: "#ff9f43", N: "#26de81", O: "#54a0ff",   // the CNO trio (orange/green/blue)
+  Ne: "#ff6b9d", Mg: "#feca57", Fe: "#a4b0be",  // neon rose / magnesium amber / iron grey
+};
+// Atomic-number order, so the legend reads C→Fe left to right.
+const ELEMS = ["C", "N", "O", "Ne", "Mg", "Fe"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
@@ -128,7 +136,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.strokeRect(PAD_L, top, W - PAD_L - PAD_R, h);
 
     for (const el of ELEMS) {
-      ctx.strokeStyle = CNO_COL[el]; ctx.lineWidth = 1.6;
+      ctx.strokeStyle = ELEM_COL[el]; ctx.lineWidth = 1.6;
       ctx.beginPath();
       track.forEach((s, i) => {
         const x = xOf(s.eep), y = yOf(pick(s)?.[el] ?? 0);

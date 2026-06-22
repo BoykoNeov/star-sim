@@ -48,8 +48,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mist_heldout_feh` (the m050/p000/p050 trio).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
-  panel — a **bulk H/He/metals** view and a Phase 4 **C·N·O detail** view, toggled
-  by `setMode`, the latter with independent core/surface scales; `lane.js` is the
+  panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
+  (C·N·O·Ne·Mg·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter with
+  independent core/surface scales; `lane.js` is the
   Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
   but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
@@ -214,10 +215,37 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   toggle + swapping legends live in `index.html`/`styles.css`/`main.js`; verified
   via headless SwiftShader screenshots (the screenshot pass is the frontend
   regression check, as in Phases 2–3).
+- **Done (Phase 4, widened element set → Ne/Mg/Fe):** the per-element view now
+  exposes **six** elements — C, N, O **+ Ne, Mg, Fe** — vindicating the dict design:
+  `state.py` was untouched (open-ended `metals_surf`/`metals_core`). Provider
+  threading mirrors the CNO add: `_Track` gained `Nes/Mgs/Fes` + `Nec/Mgc/Fec`
+  (Ne=ne18…ne22, Mg=mg23…mg26, **Fe=fe56**, a single isotope), `_TRACK_COLS` +
+  **`CACHE_VERSION` 2→3** (old `.npz` rejected → one ~60 s reparse), linear mixing in
+  `_grid_window`/`_blend_windows`, six entries each in `_state_from_row`'s dicts. The
+  stub's `CNO_OF_Z` became `METALS_OF_Z` (added Ne 0.112 / Mg 0.047 / Fe 0.085, solar
+  fractions-of-Z; the six sum to ~0.82 Z so the per-element sum stays under Z). **The
+  physics caught a wrong assumption** (advisor): Fe is *not* flat on the MS — MIST
+  models gravitational settling, so the **Sun's surface Fe dips ~10% ZAMS→4.6 Gyr**
+  (measured ×0.90). So the "inert tracer" test is at **3 M☉** (diffusion suppressed:
+  Fe ×1.00, Ne ×0.99, Mg ×1.00 while N ×3.15) and asserts a *relative* bound, not
+  flatness. Fe doubles as the **[Fe/H]-axis validator**: surface Fe at ZAMS scales
+  ~10^Δ[Fe/H] per grid (measured Fe(+0.5)/Fe(0)=2.85, Fe(0)/Fe(−0.5)=3.05 vs 3.16 —
+  a touch under, since [Fe/H] is a number ratio vs H; `rel=0.20`, multifeh-gated).
+  New/updated §10 tests: `test_metal_breakdown_present_and_bounded` (set is the six,
+  sum≤Z margin ~1e-3), `test_heavy_tracers_inert_while_cno_processes`,
+  `test_iron_validates_the_feh_axis`; stub `test_stub_metal_breakdown_bounded`.
+  Verified the full mass×[Fe/H] blend path via live API curl (off-grid 2.7 M☉ /
+  [Fe/H]=0.25 → six bounded keys, no KeyError; all 505 track rows carry the same
+  keyset). Frontend: `comp.js` `ELEMS`/`ELEM_COL` → six (atomic-number order; Fe a
+  steel-grey iron mnemonic); the drawing loop was already generic. Legend grew 3→6
+  (flex-wraps), button "C·N·O detail" → "per-element detail", **both** comp tooltips
+  (panel `<h2>` + mode help) updated; internal `mode="cno"` id kept (minimal churn).
+  Verified via headless Chrome screenshot of a throwaway probe rendering real 3 M☉
+  `/track` data in cno mode (six distinct lines, dredge-up visible, scales intact).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
-  widen the element set (Fe as a `[Fe/H]`-validation element, Ne/Mg — a one-line
-  dict add each), `MESAProvider` (offline MESA history/profile files via
-  `mesa_reader`), more phases (AGB — messy, §6 defers it), eventually a
+  more elements still (Si/S/Ca/Ti — same one-line dict add; would shrink the
+  sum-under-Z headroom further), `MESAProvider` (offline MESA history/profile files
+  via `mesa_reader`), more phases (AGB — messy, §6 defers it), eventually a
   `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope
   for now — see spec §9).
 
