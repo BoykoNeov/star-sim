@@ -134,26 +134,27 @@ def test_evolves_off_main_sequence(provider):
     """The point of MIST over the stub: real post-MS drama (RGB tip giant, then
     the He flash / horizontal branch).
 
-    The window now runs *past* the RGB tip to the end of core-He burning, so the
-    tip — the biggest, coolest the star ever gets — is a mid-track state, not the
-    age-window endpoint. Pull it explicitly (max radius on the track) so this keeps
-    verifying the star reaches *giant* dimensions; a regression that flattened the
-    RGB tip would otherwise slip past (the endpoint alone is the smaller red-clump
-    star, ~13 R_sun)."""
+    The window now runs *past* the RGB tip — through core-He burning and on into the
+    early-AGB (EAGB) — so the RGB tip, the biggest the star gets on its *first*
+    ascent, is a mid-track state, not the age-window endpoint. Pull it explicitly
+    (for 1 M_sun it is still the global max radius, ~154 R_sun, well above the EAGB's
+    ~83) so this keeps verifying the star reaches *giant* dimensions; a regression
+    that flattened the RGB tip would otherwise slip past."""
     lo, hi = provider.age_range(1.0, 0.0)
     zams = provider.state_at(1.0, 0.0, lo)
     track = provider.track(1.0, 0.0)
-    tip = max(track, key=lambda s: s.R_rsun)   # RGB tip == max radius on the track
+    tip = max(track, key=lambda s: s.R_rsun)   # RGB tip == max radius (1 M_sun: > EAGB)
     assert tip.eep > zams.eep
     assert tip.R_rsun > 50.0 * zams.R_rsun     # swells into a giant (measured ~154 R_sun)
     assert tip.Teff_K < zams.Teff_K            # and is cool
     assert tip.phase in ("RGB", "CHeB")
     assert tip.X_core < 1e-3                    # core H exhausted
 
-    # ...and the window keeps going *past* the tip into core-He burning, where the
-    # star shrinks back off the giant branch (the new, widened payload).
+    # ...and the window keeps going *past* the tip — through core-He burning and into
+    # the early-AGB, the second giant ascent, where the marker now ends (the new,
+    # widened payload). The EAGB endpoint is smaller than the first-ascent RGB tip.
     end = provider.state_at(1.0, 0.0, hi)
-    assert end.phase == "CHeB"
+    assert end.phase == "EAGB"
     assert end.R_rsun < tip.R_rsun
 
 
@@ -237,15 +238,19 @@ def test_first_dredge_up_surface_signature(provider):
     As an intermediate-mass star ascends the RGB, its deepening convective envelope
     dredges CN-cycle-processed material up: surface ¹⁴N rises, ¹²C falls. We check a
     *grid-point* mass (3.0 M_sun — raw MIST, no interpolation, well clear of the
-    ~2 M_sun He-ignition roughness) from ZAMS to the most-evolved giant (max R, the
-    same tip the radius tests use). O is deliberately *not* asserted: the ON cycle
-    is slow, so surface O barely moves here (measured ~0.92x) — asserting its
-    direction would be flaky. Ratios measured: N 3.15x up, C 0.63x down.
+    ~2 M_sun He-ignition roughness) from ZAMS to the **first-ascent RGB tip** (max R
+    among the RGB-phase rows). The tip is pulled from the RGB phase specifically, not
+    the global max radius: now that the window reaches the early-AGB (whose radius can
+    exceed the RGB tip for intermediate masses), the global max would land on the
+    EAGB and conflate *first* dredge-up with the later second dredge-up. O is
+    deliberately *not* asserted: the ON cycle is slow, so surface O barely moves here
+    (measured ~0.92x) — asserting its direction would be flaky. Ratios measured at the
+    RGB tip: N 3.14x up, C 0.63x down.
     """
     t = provider.track(3.0, 0.0)
     zams = t[0].metals_surf
-    tip = max(t, key=lambda s: s.R_rsun).metals_surf
-    assert tip["N"] / zams["N"] > 1.5    # measured 3.15x — nitrogen enrichment
+    tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
+    assert tip["N"] / zams["N"] > 1.5    # measured 3.14x — nitrogen enrichment
     assert tip["C"] / zams["C"] < 0.8    # measured 0.63x — carbon depletion
 
 
@@ -274,11 +279,13 @@ def test_heavy_tracers_inert_while_cno_processes(provider):
     flatness: at 1 M_sun MIST's surface diffusion settles metals out and drags Fe
     down ~10% over the MS (real physics, measured) — so we use the diffusion-quiet
     3 M_sun grid point, where the tracers measure Fe x1.00, Ne x0.99, Mg x1.00.
+    Measured at the first-ascent RGB tip (max R among RGB rows — not the global max,
+    which now lands on the early-AGB after the window was widened).
     """
     t = provider.track(3.0, 0.0)
     zams = t[0].metals_surf
-    tip = max(t, key=lambda s: s.R_rsun).metals_surf
-    assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.15x)
+    tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
+    assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.14x)
     for el in ("Fe", "Ne", "Mg"):
         assert abs(tip[el] / zams[el] - 1.0) < 0.05   # inert tracer (measured <1%)
 
@@ -452,6 +459,86 @@ def test_cheb_interpolation_sampled_by_eep(interp_provider):
     # He-flash/red-clump region is steeper than the MS, so a few points are worse,
     # but the median stays small.
     assert float(np.median(rel_errs)) < 0.05
+
+
+# --- the early-AGB extension (the window now runs ZAMS -> end of EAGB) --------
+def test_eagb_extends_window_and_tpagb_is_excluded(provider):
+    """The window now reaches the early-AGB (EAGB, phase 4) — the second giant
+    ascent — but hard-stops before the thermally-pulsing AGB (phase 5).
+
+    The TPAGB's thermal pulses are the non-monotonic mess §6 defers (and MIST v2.5's
+    weak third dredge-up wouldn't even pay off as a carbon star), so they must never
+    appear. An intermediate-mass track therefore reaches EAGB, no state is ever
+    TPAGB / post-AGB, and the age-window far end is a luminous, low-gravity AGB giant
+    (the §7 enormous-granule payoff)."""
+    for m in (1.0, 3.0):
+        phases = {s.phase for s in provider.track(m, 0.0)}
+        assert "EAGB" in phases                          # the newly-exposed phase
+        assert not (phases & {"TPAGB", "post-AGB"})      # the deferred thermal-pulse mess
+    # the far end of the age window is an EAGB giant: puffed up, cool, low-gravity
+    _, hi = provider.age_range(3.0, 0.0)
+    end = provider.state_at(3.0, 0.0, hi)
+    zams = provider.state_at(3.0, 0.0, 0.0)
+    assert end.phase == "EAGB"
+    assert end.R_rsun > 10.0 * zams.R_rsun               # swollen second-ascent giant
+    assert end.logg < zams.logg                          # low surface gravity
+
+
+def test_eagb_interpolation_sampled_by_eep(interp_provider):
+    """The newly-exposed EAGB span (EEP >= 707), sampled by *EEP*, not age.
+
+    EAGB is, like CHeB, a thin age-sliver at the far end of the window — the
+    age-sampled tests barely land on it — so we walk track()'s post-CHeB rows
+    directly. 1.5 M_sun is interpolated from the pinned 1.4/1.6 neighbors (both have
+    a real AGB). lies-between is structural (the blend is convex at every EEP);
+    accuracy tracks the real 1.5 EAGB closely (measured median ~2%)."""
+    t14 = _real_track("00140")
+    t16 = _real_track("00160")
+    t15 = _real_track("00150")  # ground truth
+
+    by_eep = {int(round(s.eep)): s for s in interp_provider.track(1.5, 0.0)}
+    eagb_eeps = sorted(e for e in by_eep if e >= 707)
+    assert len(eagb_eeps) > 40   # the window genuinely reaches into the EAGB
+
+    rel_errs = []
+    for eep in eagb_eeps:
+        st = by_eep[eep]
+        row = eep - 1  # EEP n == MIST row n-1, the same phase across masses
+        logL, logL14, logL16 = math.log10(st.L_lsun), t14["log_L"][row], t16["log_L"][row]
+        logT, logT14, logT16 = math.log10(st.Teff_K), t14["log_Teff"][row], t16["log_Teff"][row]
+        assert min(logL14, logL16) - 0.03 <= logL <= max(logL14, logL16) + 0.03
+        assert min(logT14, logT16) - 0.01 <= logT <= max(logT14, logT16) + 0.01
+        rel_errs.append(abs(st.L_lsun - 10 ** t15["log_L"][row]) / 10 ** t15["log_L"][row])
+
+    assert float(np.median(rel_errs)) < 0.06   # measured ~2%
+
+
+def test_eagb_interpolation_across_tpagb_boundary():
+    """The honest cross-mass EAGB check at the 6.5->7 M_sun boundary.
+
+    This is the EAGB analog of test_transition_mass_interpolation: §6 warns about
+    interpolating across a phase present on one side of a mass bracket and absent on
+    the other. At 6.5->7 M_sun it is the *TPAGB* that disappears (7 M_sun ends at
+    TPAGB onset, with no thermal pulses) — but the *early*-AGB exists on both sides
+    (7 M_sun does climb the EAGB before its track ends). So a held-out 6.5,
+    interpolated from the (6.0, 7.0) neighbors, stays accurate over the EAGB rows
+    (measured ~0.6% median L-error), confirming the boundary we chose is
+    interpolation-safe — unlike the TPAGB we refuse to interpolate."""
+    p = MISTProvider(masses=(6.0, 7.0))     # 6.5 held out, the boundary bracket
+    real = _real_track("00650")             # ground truth: the real 6.5 M_sun track
+
+    rel_errs = []
+    for eep, st in {int(round(s.eep)): s for s in p.track(6.5, 0.0)}.items():
+        if eep < 707:
+            continue                        # EAGB rows only (the newly-exposed span)
+        row = eep - 1
+        if row >= real["log_L"].size:
+            continue
+        L_real = 10 ** real["log_L"][row]
+        rel_errs.append(abs(st.L_lsun - L_real) / L_real)
+
+    assert len(rel_errs) > 40
+    assert float(np.median(rel_errs)) < 0.05   # measured ~0.6%
 
 
 # --- the [Fe/H] axis (§6 outer loop) -----------------------------------------

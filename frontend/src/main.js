@@ -188,6 +188,12 @@ const PHASE_TIP = {
   CHeB: "Core-helium burning — helium has ignited in the core (via the He flash " +
     "for low-mass stars); the star settles onto the horizontal branch / red " +
     "clump or runs a blue loop.",
+  EAGB: "Early asymptotic-giant branch — core helium is spent; the star ascends a " +
+    "second time as helium and hydrogen burn in shells around an inert carbon-" +
+    "oxygen core. It swells into a huge, cool, low-gravity giant (so the surface " +
+    "shows just a handful of enormous convective cells). The simulation stops here, " +
+    "before the thermally-pulsing AGB — those helium-shell flashes are too chaotic " +
+    "to interpolate honestly across mass.",
 };
 const phaseTip = (phase) =>
   PHASE_TIP[phase] ||
@@ -249,9 +255,14 @@ function criticalAges(track) {
       prev = s.phase;
     }
   }
-  let tip = track[0];
-  for (const s of track) if (s.R_rsun > tip.R_rsun) tip = s;
-  pts.push({ age: tip.age_yr, label: "RGB tip" });
+  // First-ascent RGB tip = max radius among the RGB-phase rows. Restricted to RGB
+  // (not the global max) because the window now reaches the early-AGB, whose radius
+  // can exceed the RGB tip for intermediate masses — the global max would mislabel
+  // an EAGB state as the "RGB tip". Skipped if the star never has an RGB phase.
+  let tip = null;
+  for (const s of track)
+    if (s.phase === "RGB" && (tip === null || s.R_rsun > tip.R_rsun)) tip = s;
+  if (tip !== null) pts.push({ age: tip.age_yr, label: "RGB tip" });
   return pts;
 }
 
@@ -307,7 +318,7 @@ function renderReadout(s) {
       "metallicity: log₁₀ of the star's iron-to-hydrogen ratio relative to the Sun (0 = solar, + = metal-rich, − = metal-poor)",
       fmt(s.feh_init, 2)],
     ["Phase",
-      "evolutionary stage — MS: core-hydrogen-burning main sequence · SGB/RGB: sub-/red-giant branch · CHeB: core-helium burning",
+      "evolutionary stage — MS: core-hydrogen-burning main sequence · SGB/RGB: sub-/red-giant branch · CHeB: core-helium burning · EAGB: early asymptotic-giant branch (the second giant ascent, where the track ends)",
       s.phase],
     ["EEP",
       "equivalent evolutionary point — a phase-aligned index so stars of any mass line up stage-by-stage (it is the x-axis of the composition panel)",

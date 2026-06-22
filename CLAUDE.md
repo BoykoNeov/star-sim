@@ -242,12 +242,45 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   (panel `<h2>` + mode help) updated; internal `mode="cno"` id kept (minimal churn).
   Verified via headless Chrome screenshot of a throwaway probe rendering real 3 M☉
   `/track` data in cno mode (six distinct lines, dredge-up visible, scales intact).
+- **Done (Phase 4, early-AGB extension):** the exposed window now runs **ZAMS → end
+  of the early-AGB (EAGB, phase 4)** — the second giant ascent — not just to CHeB.
+  One-line change at the §6 gate: `_phase_window` threshold `phase >= 4` → `>= 5`
+  (`track_end` ~705 → ~806); **`CACHE_VERSION` 3→4** (track_end is cached; old caches
+  hold the narrower value → one ~60 s reparse, arrays unchanged). The decision was
+  **data-driven, not assumed** (4 throwaway probes + advisor): across the full grid
+  the phase-4 onset is the *same* EEP row (~706) for every mass with a real AGB
+  (EEP-aligned like CHeB), age stays strictly increasing (inversion never folds), and
+  EAGB is smooth (2–4 logL/logR reversals/track) — vs the **TPAGB (phase 5) we
+  hard-stop before**: 30–100 reversals/track (thermal pulses survive resampling, at
+  different EEP rows per mass → cross-mass interp blends incoherent pulses, the §6
+  "messy, defer"), and MIST v2.5's third dredge-up is too weak to even deliver the
+  carbon-star payoff (surface C/O stays ~0.3). **Consequence to know:** the age
+  scrubber's far end is now a luminous, low-gravity EAGB giant (R up to a few hundred
+  R☉, logg ~0.6–1.2 — the §7 enormous-granule payoff), and for **intermediate masses
+  EAGB radius can exceed the RGB tip**, so tests (and the frontend "RGB tip" landmark)
+  now pull the first-ascent tip from **`phase=="RGB"` rows**, not the global max-R
+  (the dredge-up anchors are unchanged: N ×3.14, C ×0.63 at the RGB tip). **Two
+  honesty notes (advisor):** (a) the `"EAGB"` label is *nominal* for ~15–40 M☉ (MIST
+  tags phase-4 pre-collapse supergiant rows there, no literal AGB) — we report
+  MIST/FSPS's code faithfully rather than mass-relabel; massive stars >~8 M☉ have a
+  *zero-width* phase 4 so their window is untouched. (b) the 6.5→7 M☉ boundary is
+  where the *TPAGB* disappears, but EAGB survives both sides → interpolating across it
+  is accurate (measured ~0.6% median L-error for held-out 6.5). New §10 tests:
+  `test_eagb_extends_window_and_tpagb_is_excluded` (the scope proof — EAGB present,
+  TPAGB/post-AGB never), `test_eagb_interpolation_sampled_by_eep` (1.5 from 1.4/1.6,
+  EEP-sampled like the CHeB test), `test_eagb_interpolation_across_tpagb_boundary`
+  (the advisor-insisted cross-mass accuracy check at the boundary). Frontend (pure
+  pedagogy + one landmark fix): `PHASE_TIP.EAGB` gloss, Phase-readout + age-slider
+  tooltip text, `criticalAges` RGB-tip restricted to RGB rows. Verified end-to-end via
+  live API curl + a headless Chromium screenshot (3 M☉ at max age → EAGB giant
+  renders, status line "EAGB", no JS errors). 63 tests pass (was 60).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   more elements still (Si/S/Ca/Ti — same one-line dict add; would shrink the
   sum-under-Z headroom further), `MESAProvider` (offline MESA history/profile files
-  via `mesa_reader`), more phases (AGB — messy, §6 defers it), eventually a
-  `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope
-  for now — see spec §9).
+  via `mesa_reader`), the **TPAGB thermal pulses** (still deferred — §6's genuinely
+  messy phase; would need explicit per-grid handling, *not* cross-mass interpolation),
+  eventually a `LiveSolverProvider` or reduced nuclear network (large, explicitly out
+  of scope for now — see spec §9).
 
 ## Conventions
 

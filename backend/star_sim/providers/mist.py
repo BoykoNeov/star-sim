@@ -40,14 +40,32 @@ Scope of this cut (widen later):
     sub-second. `DEFAULT_MASSES` survives as an *opt-in* curated subset (pass
     `masses=...`) for fast data-light runs and for tests that need a controlled
     interpolation bracket — it is no longer the default.
-  * the exposed track runs ZAMS -> end of core-He burning (CHeB). It captures the
-    RGB tip *and* the post-tip drama — the He flash (for low-mass stars) and the
-    horizontal branch / blue loop — then stops short of the AGB. We stop before
-    the early-AGB (phase 4) and the thermally-pulsing AGB (phase 5), the
-    genuinely non-monotonic phases §6 says to defer. The He flash sits *inside*
-    the window but is handled, not interpolated across blindly: MIST resamples it
-    into strictly-increasing-age rows, so the age->EEP inversion is well-posed
-    (the flash is just a near-instant jump the marker passes through).
+  * the exposed track runs ZAMS -> end of the early-AGB (EAGB, phase 4). It
+    captures the RGB tip, the post-tip drama (the He flash for low-mass stars and
+    the horizontal branch / blue loop), *and* the early-AGB second ascent — a
+    luminous, low-gravity red giant swelling to a few hundred R_sun (the §7
+    "handful of enormous granulation cells" payoff). It stops short of the
+    thermally-pulsing AGB (phase 5), the genuinely non-monotonic mess §6 says to
+    defer: measured ~30-100 logL/logR reversals per track on the TPAGB (the thermal
+    pulses survive MIST's EEP resampling) vs 2-4 across the whole EAGB, so cross-mass
+    interpolation there would blend incoherent pulse phases. (And MIST v2.5's third
+    dredge-up is too weak to deliver the carbon-star payoff — surface C/O stays ~0.3,
+    never crossing 1 — that might have justified the risk.) The He flash and the EAGB
+    both sit *inside* the window but are handled, not interpolated across blindly:
+    MIST resamples them into strictly-increasing-age rows, so the age->EEP inversion
+    is well-posed. Across the full grid the phase-4 onset is the *same* EEP row
+    (~706) for every mass with a real AGB, so EAGB interpolates at fixed EEP exactly
+    like CHeB. Two honesty notes: (a) for massive stars (>~8 M_sun) phase 4 is
+    *zero-width* — they jump straight to phase >= 5 at one row — so they expose no
+    extra EAGB rows and their last exposed row stays on CHeB or earlier; but in the
+    ~15-40 M_sun band MIST does tag phase-4 rows that are physically pre-collapse
+    supergiant shell burning, not a literal AGB precursor. We report MIST/FSPS's own
+    phase code faithfully (the "EAGB" label is *nominal* there) rather than
+    second-guessing it with a mass-dependent relabel. (b) at the 6.5->7 M_sun
+    boundary the *TPAGB* disappears (7 M_sun ends at TPAGB onset, no thermal pulses)
+    but the EAGB survives on both sides, so EAGB interpolation across it stays
+    accurate (measured ~0.6% median L-error for a held-out 6.5) — unlike the TPAGB
+    we exclude.
       Caveat (documented, not fixed here): right at the degenerate->non-degenerate
     He-ignition transition (~2.0-2.1 M_sun), CHeB morphology changes so sharply
     with mass that cross-mass interpolation is poor even at fine spacing (~12%
@@ -134,7 +152,12 @@ DEFAULT_MASSES = (
 # the fingerprint bump forces a one-time reparse rather than feeding short arrays.
 # v3 widened the element set to Ne/Mg/Fe (same reason: old v2 caches lack the six
 # new columns, so the bump forces one reparse instead of serving short arrays).
-CACHE_VERSION = 3
+# v4 widened the exposed window from end-of-CHeB (phase 3) to end-of-EAGB (phase 4),
+# the early-AGB second ascent. The arrays are unchanged, but `track_end` (stored in
+# the cache) was ~705 (last CHeB row) and is now ~806 (last EAGB row); a stale v3
+# cache would serve the narrower window, so the bump forces one reparse that
+# recomputes track_end.
+CACHE_VERSION = 4
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
@@ -193,7 +216,7 @@ class _Track:
     Fec: np.ndarray        # center iron
     phase: np.ndarray      # FSPS phase code (float)
     zams_row: int          # first row on the MS (phase >= 0)
-    track_end: int         # last exposed row = end of core-He burning (phase 3)
+    track_end: int         # last exposed row = end of early-AGB (EAGB, phase 4)
 
 
 @dataclass
@@ -239,29 +262,39 @@ def _find_eep_dir(data_dir: Path) -> Path | None:
 def _phase_window(phase: np.ndarray) -> tuple[int, int] | None:
     """(zams_row, track_end) for a track's FSPS-coded `phase` column, or None.
 
-    ZAMS = first row on the MS (phase 0). The exposed window now runs to the end
-    of **core-He burning** (CHeB, phase 3) — i.e. the last row *before* the
-    early-AGB (phase >= 4). So it spans MS -> subgiant -> RGB -> RGB tip -> (the
-    He flash, for low-mass stars) -> horizontal branch / blue loop, and stops
-    short of the AGB thermal pulses (phase 5), which are the genuinely
-    non-monotonic mess §6 says to defer. The He flash *is* inside the window now,
-    but it's safe: MIST resamples it into strictly-increasing-age rows (verified),
-    so the age->EEP inversion never sees a fold.
-    We can't just take `phase <= 3`: MIST tags pre-MS with -1 and caps some
-    tracks with a -9 sentinel row, both of which are <= 3 but not what we want.
-    Low-mass tracks that never ignite He end on the MS/RGB; use their last real
-    row (dropping the sentinel).
+    ZAMS = first row on the MS (phase 0). The exposed window runs to the end of the
+    **early-AGB** (EAGB, phase 4) — i.e. the last row *before* the thermally-pulsing
+    AGB (phase >= 5). So it spans MS -> subgiant -> RGB -> RGB tip -> (the He flash,
+    for low-mass stars) -> horizontal branch / blue loop -> the early-AGB second
+    ascent, and stops short of the TPAGB thermal pulses (phase 5), the genuinely
+    non-monotonic mess §6 says to defer (measured: ~30-100 logL/logR reversals per
+    track on the TPAGB vs 2-4 across the whole EAGB — and MIST v2.5's third
+    dredge-up is too weak to even produce the carbon-star payoff that might justify
+    the risk; see the module docstring).
+
+    The EAGB is safe to expose where CHeB already was: MIST resamples it (and the He
+    flash) into strictly-increasing-age rows, so the age->EEP inversion never folds;
+    and across the full grid the phase-4 onset is the *same* EEP row (~706) for every
+    mass that has a real AGB, so cross-mass interpolation stays at fixed EEP. Massive
+    stars (>~8 M_sun) have a *zero-width* phase 4 — they jump straight to phase >= 5
+    at one row — so this >= 5 threshold leaves their window unchanged (their last
+    exposed row stays on CHeB or earlier), exactly as the old >= 4 threshold did.
+
+    We can't just take `phase <= 4`: MIST tags pre-MS with -1 and caps some tracks
+    with a -9 sentinel row, both of which are <= 4 but not what we want. Low-mass
+    tracks that never ignite He end on the MS/RGB; use their last real row (dropping
+    the sentinel).
     """
     ge = np.where(phase >= 0)[0]
     if ge.size == 0:
         return None
     zams = int(ge[0])
     after = phase[zams:]
-    eagb = np.where(after >= 4)[0]            # first early-AGB row (past CHeB)
-    if eagb.size:
-        track_end = zams + int(eagb[0]) - 1
+    tpagb = np.where(after >= 5)[0]           # first thermally-pulsing-AGB row (past EAGB)
+    if tpagb.size:
+        track_end = zams + int(tpagb[0]) - 1
     else:
-        valid = np.where(after >= 0)[0]       # never reaches the AGB; drop -9 sentinel
+        valid = np.where(after >= 0)[0]       # never reaches the TPAGB; drop -9 sentinel
         track_end = zams + int(valid[-1])
     if track_end <= zams:
         return None
