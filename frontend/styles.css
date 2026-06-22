@@ -70,6 +70,11 @@ main {
    structure piece independent of the StellarState spine, so it gets its own band
    under the 2×2 of evolution panels rather than sharing their marker/row. */
 .lane-panel { grid-column: 1 / -1; }
+/* The always-visible novice framing line under the §8 heading. The panel spans
+   the full grid width, so cap the prose at a readable measure (it would stretch
+   edge-to-edge otherwise) and give it room before the canvas/legend row. */
+.lane-intro { max-width: 72ch; margin: 4px 0 14px; }
+.lane-intro b { color: #cbd2e0; font-weight: 600; }
 .lane-body {
   display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: start;
 }
@@ -91,6 +96,24 @@ main {
 .legend i {
   width: 12px; height: 12px; border-radius: 2px; display: inline-block;
 }
+
+/* Composition view toggle (Phase 4): bulk H/He/metals vs C·N·O detail. The two
+   legends swap with the active view so the color key always matches the chart. */
+.comp-modes { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.mode-btn {
+  font: inherit; font-size: 12px; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 9px; cursor: pointer;
+}
+.mode-btn:hover { color: var(--ink); border-color: var(--accent); }
+.mode-btn.active {
+  color: var(--bg); background: var(--accent);
+  border-color: var(--accent); font-weight: 600;
+}
+.comp-modes .help { margin-left: auto; }
+.legend-cno { display: none; }
+.comp-panel.mode-cno .legend-bulk { display: none; }
+.comp-panel.mode-cno .legend-cno { display: flex; }
 
 .controls-panel label {
   display: block; margin: 16px 0 2px; font-size: 14px; color: var(--muted);

@@ -1,26 +1,36 @@
-// Composition panel (STAR_SIM_SPEC.md §5.4): surface & core mass fractions
-// X=H, Y=He, Z=metals as stacked-area bands vs EEP, with a marker at the current
-// age. Two sub-charts share one EEP axis — core on top (where the drama is),
-// surface below.
+// Composition panel (STAR_SIM_SPEC.md §5.4). Two views over the same EEP axis,
+// switched by setMode():
 //
-// Why EEP and not linear age on the x-axis (§6): the teaching payoff — core
-// hydrogen converting to helium as the star leaves the main sequence — happens
-// near TAMS. On a linear-age axis the MS eats ~90% of the width and that
-// transition is an invisible sliver; on an EEP axis the phases are evenly spaced
-// and you can actually watch it.
+//  * "bulk"  — X=H, Y=He, Z=metals as stacked-area bands (the default). Core on
+//              top (where the drama is), surface below.
+//  * "cno"   — the Phase 4 detail: carbon, nitrogen & oxygen mass fractions as
+//              lines. Core and surface get INDEPENDENT y-scales on purpose: during
+//              core-He burning the core's C/O climb to tens of percent while the
+//              surface stays ~1%, so a shared scale would flatten the surface
+//              first-dredge-up signature (N up, C down) — the actual teaching
+//              moment — into nothing.
 //
-// A consumer of StellarState ONLY (§3): it reads X/Y/Z and eep off the track and
-// the marker, and knows nothing about where they came from. setTrack() takes the
-// list from /track; update() moves the marker from /state. Same split as hr.js.
+// Why EEP and not linear age on the x-axis (§6): the teaching payoffs — core H→He
+// near TAMS, and the dredge-up on the lower RGB — are slivers on a linear-age
+// axis (the MS eats ~90% of the width). On an EEP axis the phases are evenly
+// spaced and you can actually watch them.
+//
+// A consumer of StellarState ONLY (§3): it reads X/Y/Z, the metals_surf/core
+// dicts, and eep off the track and marker, and knows nothing about where they
+// came from. setTrack() takes the list from /track; update() moves the marker
+// from /state; setMode() flips the view. Same split as hr.js.
 
 import { fitCanvas } from "./canvas.js";
 
 const PAD_L = 30, PAD_R = 10, PAD_T = 16, PAD_B = 26;
 const GAP = 22;   // vertical gap between the core and surface sub-charts
 
-// Band colors: H a cool blue, He a warm gold, metals a violet. Z is ~1.5% so its
-// band is a thin sliver at the top — honest, not a rendering bug.
+// Bulk band colors: H a cool blue, He a warm gold, metals a violet. Z is ~1.5%
+// so its band is a thin sliver at the top — honest, not a rendering bug.
 const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
+// CNO line colors — deliberately distinct from the bulk band palette above.
+const CNO_COL = { C: "#ff9f43", N: "#26de81", O: "#54a0ff" };
+const ELEMS = ["C", "N", "O"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
@@ -28,22 +38,32 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   let track = null;    // array of StellarState (age-independent, set per mass/feh)
   let marker = null;   // current StellarState (moves as age scrubs)
+  let mode = "bulk";   // "bulk" (X/Y/Z bands) | "cno" (C/N/O lines)
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
+  function setMode(m) { mode = m === "cno" ? "cno" : "bulk"; draw(); }
 
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    if (!track) return;
-
+  // Shared geometry both views build on: the EEP→x map and the two sub-chart
+  // bands (core on top, surface below).
+  function layout() {
     const e0 = track[0].eep;
     const e1 = track[track.length - 1].eep;
     const span = e1 - e0 || 1;
     const xOf = (eep) => PAD_L + (eep - e0) / span * (W - PAD_L - PAD_R);
-
     const chartH = (H - PAD_T - PAD_B - GAP) / 2;
-    const coreTop = PAD_T;
-    const surfTop = PAD_T + chartH + GAP;
+    return { e0, e1, xOf, chartH, coreTop: PAD_T, surfTop: PAD_T + chartH + GAP };
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    if (!track) return;
+    mode === "cno" ? drawCno() : drawBulk();
+  }
+
+  // -- bulk view: stacked X/Y/Z bands ---------------------------------------
+  function drawBulk() {
+    const { e0, e1, xOf, chartH, coreTop, surfTop } = layout();
 
     // Fill one stacked band: cumulative-fraction boundaries lowFn..highFn, mapped
     // so fraction 0 sits at the chart's bottom and 1 at its top.
@@ -70,8 +90,6 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
       ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
       ctx.strokeRect(PAD_L, top, W - PAD_L - PAD_R, h);
 
-      // "core" / "surface" as bright text on a dark pill — legible over any
-      // colored band beneath it (plain grey text vanished on the blue H band).
       labelPill(label, PAD_L + 4, top + 4);
       // y ticks: 1 at top, 0 at bottom.
       ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
@@ -85,6 +103,56 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     drawPhaseDividers(xOf);
     drawMarker(xOf, e0, e1);
     drawAxis();
+  }
+
+  // -- CNO view: C/N/O mass-fraction lines, core & surface independently scaled
+  function drawCno() {
+    const { e0, e1, xOf, chartH, coreTop, surfTop } = layout();
+    region(coreTop, chartH, xOf, "core", (s) => s.metals_core);
+    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf);
+    drawPhaseDividers(xOf);
+    drawMarker(xOf, e0, e1);
+    drawAxis();
+  }
+
+  // One sub-chart of C/N/O lines, auto-scaled to ITS OWN max (the core/surface
+  // decoupling that keeps the surface dredge-up visible against the huge core).
+  function region(top, h, xOf, label, pick) {
+    let max = 0;
+    for (const s of track)
+      for (const el of ELEMS) max = Math.max(max, pick(s)?.[el] ?? 0);
+    if (!(max > 0)) max = 1;
+    const yOf = (v) => top + h - (v / max) * h;
+
+    ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, top, W - PAD_L - PAD_R, h);
+
+    for (const el of ELEMS) {
+      ctx.strokeStyle = CNO_COL[el]; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      track.forEach((s, i) => {
+        const x = xOf(s.eep), y = yOf(pick(s)?.[el] ?? 0);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
+    labelPill(label, PAD_L + 4, top + 4);
+    // y ticks: the region max at top (the scale IS the lesson — core ~0.6 vs
+    // surface ~0.008), 0 at bottom.
+    ctx.fillStyle = "#8a93a6"; ctx.font = "10px system-ui, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(fmtFrac(max), PAD_L - 3, top + 9);
+    ctx.fillText("0", PAD_L - 3, top + h);
+    ctx.textAlign = "left";
+
+  }
+
+  // Format a mass fraction compactly for the y-axis cap: 0.60, 0.008, 2.3e-4.
+  function fmtFrac(v) {
+    if (v >= 0.1) return v.toFixed(2);
+    if (v >= 0.001) return v.toFixed(3);
+    return v.toExponential(1);
   }
 
   // A chart label drawn as bright text on a dark rounded pill, anchored at its
@@ -149,5 +217,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update };
+  return { setTrack, update, setMode };
 }

@@ -48,7 +48,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mist_heldout_feh` (the m050/p000/p050 trio).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
-  panel; `lane.js` is the Phase 3 §8 Lane–Emden interior panel — a self-contained
+  panel — a **bulk H/He/metals** view and a Phase 4 **C·N·O detail** view, toggled
+  by `setMode`, the latter with independent core/surface scales; `lane.js` is the
+  Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
   but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
   HiDPI `fitCanvas` helper the HR, composition & Lane–Emden panels all use).
@@ -186,9 +188,36 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   n is the user's to set. Verified via headless SwiftShader screenshots
   (n=0/1.5/3/4.7/5); no JS test harness, so that screenshot pass is the regression
   check (the pytest suite is the real gate on the math).
-- **Next:** Phase 4+ — optional deeper-science paths, each behind the existing §3
-  provider interface: `MESAProvider` (offline MESA history/profile files via
-  `mesa_reader`), per-element composition / more phases, eventually a
+- **Done (Phase 4, per-element CNO composition):** `StellarState` gained
+  `metals_surf`/`metals_core` — `dict[str, float]` of element symbol → mass
+  fraction (a **breakdown** of the lumped `Z`, not a replacement; X/Y/Z stay).
+  Chosen as a **dict, not flat fields**, because the element set is open-ended
+  (Fe/Ne/Mg are a one-line add later) and element symbols are a pure physics
+  concept, not provider columns (§3). v1 exposes **C, N, O** (the CNO-cycle +
+  first-dredge-up payoff), each summed over its isotopes (C=c12+c13,
+  N=n13+n14+n15, O=o14…o18) from the MIST `surface_`/`center_` columns. Threaded
+  through the whole §6 pipeline: `_Track` arrays Cs/Ns/Os/Cc/Nc/Oc, added to
+  `_TRACK_COLS` with **`CACHE_VERSION` 1→2** (old `.npz` rejected → one ~60 s
+  reparse), mixed linearly in `_grid_window`/`_blend_windows` (convex → lies-
+  between preserved), emitted float-wrapped (JSON-safety) by `_state_from_row`.
+  The stub fills a **flat solar-ratio C/N/O split of Z** (no processing →
+  surface==core, honest "flavor"). The API is unchanged (`asdict` carries the new
+  keys for free; `EXPECTED_KEYS` updated). New §10 tests (the proof): CNO bounds
+  (0≤elem≤Z, ΣCNO≤Z), Sun surface solar-ballpark, **first dredge-up** (3 M☉ grid
+  point, ZAMS→max-R tip: surface N ×3.15, C ×0.63 — assert N↑/C↓ only, O barely
+  moves), core CNO-equilibrium (core N≫surface N, core C≪surface C). **Verified
+  the feh-blend path by curl** (all tests use feh=0, which short-circuits the
+  blend): off-grid mass×[Fe/H] returns bounded CNO, no KeyError. Frontend:
+  `comp.js` has a **bulk ↔ CNO toggle** (`setMode`); the CNO view draws C/N/O as
+  lines with **independent core/surface y-scales** — core C/O reach tens of % in
+  CHeB while surface stays ~1%, so a shared scale would erase the dredge-up. The
+  toggle + swapping legends live in `index.html`/`styles.css`/`main.js`; verified
+  via headless SwiftShader screenshots (the screenshot pass is the frontend
+  regression check, as in Phases 2–3).
+- **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
+  widen the element set (Fe as a `[Fe/H]`-validation element, Ne/Mg — a one-line
+  dict add each), `MESAProvider` (offline MESA history/profile files via
+  `mesa_reader`), more phases (AGB — messy, §6 defers it), eventually a
   `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope
   for now — see spec §9).
 

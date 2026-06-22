@@ -36,6 +36,20 @@ const els = {
 const star = createStar(document.getElementById("star-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
 const comp = createComp(document.getElementById("comp-canvas"));
+// Composition view toggle: flip comp.js between the bulk H/He/metals bands and the
+// C·N·O detail lines, and mirror the choice onto the panel (so the right legend
+// shows) — purely a view switch, no refetch (the track already carries the metals).
+{
+  const panel = document.querySelector(".comp-panel");
+  const btns = panel.querySelectorAll(".comp-modes .mode-btn");
+  btns.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      btns.forEach((b) => b.classList.toggle("active", b === btn));
+      panel.classList.toggle("mode-cno", btn.dataset.mode === "cno");
+      comp.setMode(btn.dataset.mode);
+    }),
+  );
+}
 // The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
 // not a consumer of it — it's driven by the polytropic index n alone and owns its
 // own control + fetch. It's instantiated here but deliberately never wired into

@@ -198,6 +198,69 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
     assert all(xc[i] >= xc[i + 1] - 1e-6 for i in range(len(xc) - 1))
 
 
+# --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
+def test_cno_breakdown_present_and_bounded(provider):
+    """metals_surf/metals_core carry C, N, O, each a physical sub-fraction of Z.
+
+    The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
+    their sum can't exceed Z (only the exposed elements, not every metal). This is
+    the invariant that keeps the §5.4 detail view honest — the bands can never
+    out-sum the Z sliver they subdivide.
+    """
+    s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
+    for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
+        assert set(metals) == {"C", "N", "O"}
+        for frac in metals.values():
+            assert 0.0 <= frac <= z + 1e-9
+        assert sum(metals.values()) <= z + 1e-9
+
+
+def test_sun_surface_cno_solar_ballpark(provider):
+    """The Sun's surface C/N/O land near the known solar mass fractions (§10).
+
+    Measured off MIST v2.5 at 1 M_sun / [Fe/H]=0 / 4.6 Gyr; solar references
+    (Asplund+ 2009) in comments. MIST uses its own protosolar mixture, so this is a
+    ballpark anchor, not a precise match — it pins "these are really C, N, O at
+    roughly solar abundance," catching an isotope-summing or column-mapping slip.
+    """
+    m = provider.state_at(1.0, 0.0, SUN_AGE_YR).metals_surf
+    assert m["C"] == pytest.approx(0.0026, rel=0.20)   # measured 0.00259 (solar ~0.0024)
+    assert m["N"] == pytest.approx(0.0008, rel=0.20)   # measured 0.00076 (solar ~0.0007)
+    assert m["O"] == pytest.approx(0.0071, rel=0.20)   # measured 0.00708 (solar ~0.0057)
+
+
+def test_first_dredge_up_surface_signature(provider):
+    """The Phase 4 payoff: first dredge-up enriches surface N and depletes surface C.
+
+    As an intermediate-mass star ascends the RGB, its deepening convective envelope
+    dredges CN-cycle-processed material up: surface ¹⁴N rises, ¹²C falls. We check a
+    *grid-point* mass (3.0 M_sun — raw MIST, no interpolation, well clear of the
+    ~2 M_sun He-ignition roughness) from ZAMS to the most-evolved giant (max R, the
+    same tip the radius tests use). O is deliberately *not* asserted: the ON cycle
+    is slow, so surface O barely moves here (measured ~0.92x) — asserting its
+    direction would be flaky. Ratios measured: N 3.15x up, C 0.63x down.
+    """
+    t = provider.track(3.0, 0.0)
+    zams = t[0].metals_surf
+    tip = max(t, key=lambda s: s.R_rsun).metals_surf
+    assert tip["N"] / zams["N"] > 1.5    # measured 3.15x — nitrogen enrichment
+    assert tip["C"] / zams["C"] < 0.8    # measured 0.63x — carbon depletion
+
+
+def test_core_cno_equilibrium_signature(provider):
+    """The Sun's *core* shows CNO-cycle equilibrium: ¹⁴N built up, ¹²C burned away.
+
+    Distinct from the surface dredge-up — this is the core itself running the CNO
+    cycle, whose slowest step (¹⁴N + p) makes nitrogen pile up while carbon is
+    consumed. So core N greatly exceeds surface N, and core C is far below it. This
+    is exactly the contrast the detail view's independent core/surface scales exist
+    to show. Measured (Sun core): C~1e-5, N~0.0043 vs surface N~0.0008.
+    """
+    s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
+    assert s.metals_core["N"] > 3.0 * s.metals_surf["N"]   # measured ~5.6x
+    assert s.metals_core["C"] < 0.1 * s.metals_surf["C"]   # measured ~0.004x
+
+
 def test_out_of_range_raises(provider):
     with pytest.raises(ParameterOutOfRange):
         provider.state_at(1000.0, 0.0, 0.0)   # mass past the grid

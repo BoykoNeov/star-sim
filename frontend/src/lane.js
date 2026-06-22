@@ -22,11 +22,11 @@ const COL_THETA = "#5b8def"; // θ — the fainter dashed line
 // Landmark indices worth snapping to, each with the physics it stands for (§8).
 // These are the *labels* that carry the teaching; the curve itself is honest math.
 const PRESETS = [
-  { n: 0,   label: "0",   meaning: "n = 0 · uniform density (incompressible)" },
-  { n: 1,   label: "1",   meaning: "n = 1 · exact closed form θ = sin ξ / ξ" },
-  { n: 1.5, label: "1.5", meaning: "n = 1.5 · fully convective star · non-relativistic degenerate gas" },
-  { n: 3,   label: "3",   meaning: "n = 3 · Eddington standard model · radiative core · relativistic degenerate gas" },
-  { n: 5,   label: "5",   meaning: "n = 5 · radius → ∞, no finite surface" },
+  { n: 0,   label: "0",   meaning: "n = 0 · uniform density — the crudest guess (the same density everywhere). No real star is this simple; it is the anchor at one extreme." },
+  { n: 1,   label: "1",   meaning: "n = 1 · the exact closed form θ = sin ξ / ξ — a clean mathematical checkpoint, not a particular kind of star." },
+  { n: 1.5, label: "1.5", meaning: "n = 1.5 · fully convective stars (red dwarfs, giant envelopes) and non-relativistic degenerate gas (white-dwarf & brown-dwarf cores)." },
+  { n: 3,   label: "3",   meaning: "n = 3 · the textbook (Eddington) approximation to a Sun-like radiative star — its centre is ~54× denser than its average (the real Sun: ~110×)." },
+  { n: 5,   label: "5",   meaning: "n = 5 · the gas is so compressible the star has no surface at all — its radius runs to infinity. The mathematical edge of the family." },
 ];
 const N_MIN = 0, N_MAX = 5, N_DEFAULT = 3;
 
@@ -50,7 +50,7 @@ const help = (tip) =>
 // generic otherwise.
 function meaningOf(n) {
   for (const p of PRESETS) if (Math.abs(p.n - n) < 1e-6) return p.meaning;
-  return `n = ${fmt(n, 3)} · polytrope (interpolated between the landmarks)`;
+  return `n = ${fmt(n, 3)} · between the landmarks — higher n means more compressible gas and a more centrally concentrated star.`;
 }
 
 export function createLane({ api }) {
@@ -216,12 +216,12 @@ export function createLane({ api }) {
     const concentration = p.has_finite_surface
       ? (p.xi1 ** 3) / (3 * p.mass_invariant) : Infinity;
     const rows = [
-      ["n", "polytropic index in P = K·ρ^(1+1/n) — the single knob for this panel", fmt(p.n, 3)],
-      ["ξ₁", "first zero of θ — the dimensionless stellar surface. n ≥ 5 has none (radius → ∞).",
+      ["n", "polytropic index in P = K·ρ^(1+1/n) — the single knob for this panel; bigger n means more compressible gas and a denser-cored star.", fmt(p.n, 3)],
+      ["ξ₁", "first zero of θ — the star's surface in dimensionless units (multiply by the physical scale length to recover the real radius). n ≥ 5 has none (radius → ∞).",
         p.has_finite_surface ? fmt(p.xi1, 5) : "∞"],
-      ["−ξ₁²θ′(ξ₁)", "Chandrasekhar's dimensionless mass quantity; with K and ρc it fixes the star's total mass.",
+      ["−ξ₁²θ′(ξ₁)", "Chandrasekhar's dimensionless mass quantity; combined with K and the central density ρc it fixes the star's total mass.",
         p.has_finite_surface ? fmt(p.mass_invariant, 5) : "—"],
-      ["ρc / ρ̄", "central-to-mean density ratio — how centrally concentrated the star is. 1 = uniform (n=0); ~54 for the n=3 standard model.",
+      ["ρc / ρ̄", "central-to-mean density ratio — how centrally concentrated the star is. 1 = uniform (n=0); ~54 for the n=3 standard model (the real Sun is ~110, so this model lands within roughly 2×).",
         p.has_finite_surface ? fmt(concentration, 4) : "∞"],
     ];
     readout.innerHTML = rows

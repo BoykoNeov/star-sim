@@ -9,7 +9,7 @@ is a bug, not a shortcut.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -36,6 +36,17 @@ class StellarState:
     X_core: float
     Y_core: float
     Z_core: float
+
+    # --- per-element composition (mass fractions) --------------------------
+    # A breakdown of the lumped metals Z by element symbol -> mass fraction
+    # ("C", "N", "O", ... ), surface and core. Sum over the dict is <= Z (only the
+    # exposed elements, not every metal). Kept as a dict, not flat fields, because
+    # the element set is open-ended (Fe/Ne/Mg are a one-line add later) and it is a
+    # pure physics concept — element symbols, not a provider's column names (§3).
+    # Defaults empty: a provider with no per-element data still satisfies the
+    # contract, and consumers degrade gracefully.
+    metals_surf: dict[str, float] = field(default_factory=dict)
+    metals_core: dict[str, float] = field(default_factory=dict)
 
     # --- optional / for visuals (may be derived, may be None early on) ------
     v_rot_kms: float | None = None   # surface rotation, if modeled

@@ -36,12 +36,22 @@
     </section>
 
     <section class="panel comp-panel">
-      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions of hydrogen, helium and metals versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age.">?</span></h2>
+      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and C·N·O detail (the carbon/nitrogen/oxygen breakdown of the metals).">?</span></h2>
+      <div class="comp-modes" role="group" aria-label="composition view">
+        <button type="button" class="mode-btn active" data-mode="bulk">H · He · metals</button>
+        <button type="button" class="mode-btn" data-mode="cno">C · N · O detail</button>
+        <span class="help" tabindex="0" data-tip="The carbon/nitrogen/oxygen breakdown of the metals (Z), as lines. The core and surface have INDEPENDENT vertical scales (read the number at each top-left): during helium burning the core's C and O climb to tens of percent, while the surface stays ~1% — a shared scale would hide the surface story. Watch the surface on the lower red-giant branch: nitrogen rises and carbon falls as the deepening convective envelope dredges CNO-cycle-processed material up from below (the 'first dredge-up'). Oxygen barely moves. The core, meanwhile, shows the CNO cycle itself: ¹⁴N piles up and ¹²C is consumed, then He-burning fills the core with C and O.">?</span>
+      </div>
       <canvas id="comp-canvas"></canvas>
-      <div class="legend">
+      <div class="legend legend-bulk">
         <span><i style="background:#5b8def"></i>H — hydrogen (X)</span>
         <span><i style="background:#ffce6b"></i>He — helium (Y)</span>
         <span><i style="background:#b083e0"></i>metals (Z)</span>
+      </div>
+      <div class="legend legend-cno">
+        <span><i style="background:#ff9f43"></i>C — carbon</span>
+        <span><i style="background:#26de81"></i>N — nitrogen</span>
+        <span><i style="background:#54a0ff"></i>O — oxygen</span>
       </div>
     </section>
 
@@ -87,12 +97,19 @@
 
     <section class="panel lane-panel">
       <h2>Interior structure · Lane–Emden <span class="help" tabindex="0" data-tip="A live-computed STATIC polytrope (spec §8) — not evolution, and deliberately NOT the actual interior of the star above. It solves the dimensionless Lane–Emden equation θ″ + (2/ξ)θ′ = −θⁿ outward from the centre to the first zero ξ₁ (the surface), for a polytrope P = K·ρ^(1+1/n). The density profile ρ/ρc = θⁿ is the payoff: raise the index n and the star becomes far more centrally concentrated. n is yours to set — it is independent of the mass/[Fe/H]/age controls. Closed forms (n=0,1,5) and Chandrasekhar's tabulated ξ₁ validate the integrator in the backend tests.">?</span></h2>
+      <p class="hint lane-intro">
+        The simplest possible model of a star: gravity pulling inward, gas
+        pressure pushing back, held in balance — tuned by a single knob, the
+        index <b>n</b> (how compressible the gas is). A teaching idealization
+        for building intuition, <b>not</b> the real interior of the star above.
+        <span class="help" tabindex="0" data-tip="How close to reality? It gets two big things right: real stars genuinely balance gravity against pressure (hydrostatic equilibrium), and they are centrally concentrated — for n=3 the centre is ~54× denser than the star's average (the real Sun is ~110×, so the model lands within about 2×). What it leaves out: it assumes pressure depends on density ALONE (real pressure also depends on temperature and chemical composition), it uses one single n for the whole star, and it has no time, no nuclear burning, and no energy transport. So: right shape, right ballpark, wrong in the fine detail.">?</span>
+      </p>
       <div class="lane-body">
         <div>
           <canvas id="lane-canvas"></canvas>
           <div class="legend">
-            <span><i style="background:#ff9966"></i>ρ/ρc — density (θⁿ)</span>
-            <span><i style="background:#5b8def"></i>θ — Lane–Emden function</span>
+            <span><i style="background:#ff9966"></i><span class="tip tip-up" tabindex="0" data-tip="The density profile ρ/ρc = θⁿ — the gas density at each radius as a fraction of the central density. This is the payoff curve: as n rises it plunges more steeply, meaning the star packs ever more of its mass into a tiny core.">ρ/ρc — density (θⁿ)</span></span>
+            <span><i style="background:#5b8def"></i><span class="tip tip-up" tabindex="0" data-tip="θ (theta) is the raw solution of the Lane–Emden equation. It falls from 1 at the centre to 0 at the surface (ξ₁); pressure and temperature each scale with a power of it, and density is θ raised to the n. The density curve above is derived from this one.">θ — Lane–Emden function</span></span>
           </div>
         </div>
         <div class="lane-controls">

@@ -47,6 +47,17 @@ def test_composition_sums_to_one(provider):
     assert st.X_core + st.Y_core + st.Z_core == pytest.approx(1.0, abs=1e-9)
 
 
+def test_stub_cno_breakdown_bounded(provider):
+    """The stub still fills metals_surf/core with a C/N/O breakdown of Z, so the
+    §5.4 detail view renders data-free. It's a fixed solar-ratio split (no nuclear
+    processing), so surface == core and it sums to less than Z — bounded, honest,
+    flat."""
+    st = provider.state_at(1.0, 0.0, SUN_AGE_YR)
+    assert set(st.metals_surf) == {"C", "N", "O"}
+    assert st.metals_surf == st.metals_core          # stub has no CNO processing
+    assert 0.0 < sum(st.metals_surf.values()) < st.Z_surf
+
+
 def test_zams_spread_is_dramatic(provider):
     """Across the mass range, L spans ~9 orders and Teff sweeps red->blue (§10)."""
     lo = provider.state_at(0.1, 0.0, 0.0)
@@ -102,6 +113,7 @@ EXPECTED_KEYS = {
     "age_yr", "eep", "phase", "mass_init_msun", "feh_init",
     "L_lsun", "Teff_K", "R_rsun", "logg",
     "X_surf", "Y_surf", "Z_surf", "X_core", "Y_core", "Z_core",
+    "metals_surf", "metals_core",
     "v_rot_kms", "activity",
 }
 

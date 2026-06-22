@@ -30,6 +30,13 @@ Z_SUN = 0.0152          # protosolar-ish metal mass fraction
 Y_PRIMORDIAL = 0.2485   # big-bang helium
 DYDZ = 1.78             # galactic helium enrichment slope (Y = Yp + dY/dZ * Z)
 
+# Fraction OF the metals Z carried by each of C, N, O at solar abundance (Asplund+
+# 2009 mass fractions / Z_sun). The stub has no nuclear processing, so it just
+# splits its Z by these fixed ratios — flat in age and identical surface vs core.
+# That is the honest stub stance (§ conventions): a static, *flavored* breakdown,
+# not the CNO-cycle / dredge-up evolution that only MISTProvider can show.
+CNO_OF_Z = {"C": 0.155, "N": 0.046, "O": 0.377}
+
 # MIST EEP convention (real numbers, for honesty): ZAMS=202, TAMS=454.
 EEP_ZAMS = 202.0
 EEP_TAMS = 454.0
@@ -53,6 +60,11 @@ def _composition(feh: float) -> tuple[float, float, float]:
     y = Y_PRIMORDIAL + DYDZ * z
     x = 1.0 - y - z
     return x, y, z
+
+
+def _metals(z: float) -> dict[str, float]:
+    """Split a metal fraction Z into a fixed solar-ratio C/N/O breakdown (flavor)."""
+    return {el: frac * z for el, frac in CNO_OF_Z.items()}
 
 
 class StubProvider:
@@ -118,6 +130,8 @@ class StubProvider:
             logg=logg,
             X_surf=x_s, Y_surf=y_s, Z_surf=z_s,
             X_core=x_c, Y_core=y_c, Z_core=z_c,
+            metals_surf=_metals(z_s),
+            metals_core=_metals(z_c),   # = surface: the stub has no CNO processing
             v_rot_kms=None,             # the stub does not model rotation
             activity=activity,
         )
