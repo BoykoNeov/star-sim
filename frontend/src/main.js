@@ -37,7 +37,7 @@ const star = createStar(document.getElementById("star-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
 const comp = createComp(document.getElementById("comp-canvas"));
 // Composition view toggle: flip comp.js between the bulk H/He/metals bands and the
-// C·N·O detail lines, and mirror the choice onto the panel (so the right legend
+// per-element detail lines, and mirror the choice onto the panel (so the right legend
 // shows) — purely a view switch, no refetch (the track already carries the metals).
 {
   const panel = document.querySelector(".comp-panel");

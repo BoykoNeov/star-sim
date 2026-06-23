@@ -201,18 +201,21 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
 
 # --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
 def test_metal_breakdown_present_and_bounded(provider):
-    """metals_surf/metals_core carry C, N, O, Ne, Mg, Fe — each a sub-fraction of Z.
+    """metals_surf/metals_core carry C, N, O, Ne, Mg, Si, S, Ca, Ti, Fe — each a
+    sub-fraction of Z.
 
     The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
-    their sum can't exceed Z (only the exposed elements, not every metal — Si/S/Ca/…
-    stay folded into Z). This is the invariant that keeps the §5.4 detail view
-    honest — the lines can never out-sum the Z sliver they subdivide. The six sum
-    to ~0.91 of solar Z, so the headroom is ~1e-3 (measured), comfortably above the
-    1e-9 slack.
+    their sum can't exceed Z (only the exposed elements, not every metal — Na/Al/P/
+    Cr/Ni/… stay folded into Z). This is the invariant that keeps the §5.4 detail
+    view honest — the lines can never out-sum the Z sliver they subdivide. The ten
+    sum to ~0.98 of solar Z (measured: surface 0.982, core 0.976), so the headroom
+    is only ~3e-4 but still comfortably above the 1e-9 slack. (The bound is
+    physically guaranteed — the named elements are a disjoint subset of the metals —
+    so a sum *over* Z would mean a double-counted isotope, not a tolerance issue.)
     """
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
     for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
-        assert set(metals) == {"C", "N", "O", "Ne", "Mg", "Fe"}
+        assert set(metals) == {"C", "N", "O", "Ne", "Mg", "Si", "S", "Ca", "Ti", "Fe"}
         for frac in metals.values():
             assert 0.0 <= frac <= z + 1e-9
         assert sum(metals.values()) <= z + 1e-9
@@ -269,24 +272,24 @@ def test_core_cno_equilibrium_signature(provider):
 
 
 def test_heavy_tracers_inert_while_cno_processes(provider):
-    """The detail-view contrast: Fe/Ne/Mg barely move while the CNO trio is rewritten.
+    """The detail-view contrast: the heavy tracers barely move while CNO is rewritten.
 
     As a 3 M_sun star dredges up CN-cycle-processed material (surface N triples, C
-    nearly halves), the heavier α / iron-peak tracers Fe, Ne, Mg are neither made
-    nor destroyed this side of the AGB, so the surface fractions hold to within a
-    few percent. That steady backdrop is exactly what makes the CNO motion legible
-    in the §5.4 view. We assert a *relative* bound (|Δ| small vs N's 3x), not strict
-    flatness: at 1 M_sun MIST's surface diffusion settles metals out and drags Fe
-    down ~10% over the MS (real physics, measured) — so we use the diffusion-quiet
-    3 M_sun grid point, where the tracers measure Fe x1.00, Ne x0.99, Mg x1.00.
-    Measured at the first-ascent RGB tip (max R among RGB rows — not the global max,
-    which now lands on the early-AGB after the window was widened).
+    nearly halves), the heavier α / iron-peak tracers Fe, Ne, Mg, Si, S, Ca, Ti are
+    neither made nor destroyed this side of the AGB, so the surface fractions hold to
+    within a few percent. That steady backdrop is exactly what makes the CNO motion
+    legible in the §5.4 view. We assert a *relative* bound (|Δ| small vs N's 3x), not
+    strict flatness: at 1 M_sun MIST's surface diffusion settles metals out and drags
+    Fe down ~10% over the MS (real physics, measured) — so we use the diffusion-quiet
+    3 M_sun grid point, where the tracers all measure ~x1.00 (Fe/Si/S/Ca/Ti x1.00,
+    Ne x0.99). Measured at the first-ascent RGB tip (max R among RGB rows — not the
+    global max, which now lands on the early-AGB after the window was widened).
     """
     t = provider.track(3.0, 0.0)
     zams = t[0].metals_surf
     tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
     assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.14x)
-    for el in ("Fe", "Ne", "Mg"):
+    for el in ("Fe", "Ne", "Mg", "Si", "S", "Ca", "Ti"):
         assert abs(tip[el] / zams[el] - 1.0) < 0.05   # inert tracer (measured <1%)
 
 

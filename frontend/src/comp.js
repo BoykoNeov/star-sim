@@ -32,13 +32,17 @@ const GAP = 22;   // vertical gap between the core and surface sub-charts
 const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
 // Per-element line colors — deliberately distinct from the bulk band palette
 // above and from each other. Fe is a steel-grey iron mnemonic (and the inert
-// tracer that just marks the input [Fe/H]); CNO keep their Phase-4 hues.
+// tracer that just marks the input [Fe/H]); CNO keep their Phase-4 hues; the
+// α / iron-peak tracers fill the remaining hue gaps (violet/chartreuse/red/cyan).
 const ELEM_COL = {
-  C: "#ff9f43", N: "#26de81", O: "#54a0ff",   // the CNO trio (orange/green/blue)
-  Ne: "#ff6b9d", Mg: "#feca57", Fe: "#a4b0be",  // neon rose / magnesium amber / iron grey
+  C: "#ff9f43", N: "#26de81", O: "#54a0ff",     // the CNO trio (orange/green/blue)
+  Ne: "#ff6b9d", Mg: "#feca57",                 // neon rose / magnesium amber
+  Si: "#a55eea", S: "#c4e538",                  // silicon violet / sulfur lime-chartreuse (clear of Mg's amber)
+  Ca: "#ee5253", Ti: "#00d2d3",                 // calcium red / titanium cyan
+  Fe: "#a4b0be",                                // iron grey
 };
 // Atomic-number order, so the legend reads C→Fe left to right.
-const ELEMS = ["C", "N", "O", "Ne", "Mg", "Fe"];
+const ELEMS = ["C", "N", "O", "Ne", "Mg", "Si", "S", "Ca", "Ti", "Fe"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.

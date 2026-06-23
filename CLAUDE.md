@@ -49,8 +49,8 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
   panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
-  (C·N·O·Ne·Mg·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter with
-  independent core/surface scales; `lane.js` is the
+  (C·N·O·Ne·Mg·Si·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
+  with independent core/surface scales; `lane.js` is the
   Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
   but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
@@ -274,9 +274,40 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   tooltip text, `criticalAges` RGB-tip restricted to RGB rows. Verified end-to-end via
   live API curl + a headless Chromium screenshot (3 M☉ at max age → EAGB giant
   renders, status line "EAGB", no JS errors). 63 tests pass (was 60).
+- **Done (Phase 4, widened element set → Si/S/Ca/Ti):** the per-element view now
+  exposes **ten** elements — the six above **+ Si, S, Ca, Ti** — the dict design's
+  third payoff (`state.py` again untouched). Provider threading mirrors the Ne/Mg/Fe
+  add exactly: `_Track` gained `Sis/Ss/Cas/Tis` + `Sic/Sc/Cac/Tic` (Si=si27…si30,
+  S=s31…s34, **Ca=ca40** and **Ti=ti48**, both single-isotope like Fe — verified
+  against the real MIST track header before coding, *not* assumed), `_TRACK_COLS` +
+  **`CACHE_VERSION` 4→5** (old `.npz` rejected → one ~60 s reparse), linear mixing in
+  `_grid_window`/`_blend_windows`, ten entries each in `_state_from_row`'s dicts.
+  Field-name convention: trailing `s`=surface / `c`=core, so **`Sc` is sulfur-core,
+  not scandium** (commented). The stub's `METALS_OF_Z` added Si 0.044 / S 0.020 /
+  Ca 0.0042 / Ti 0.0002 (solar fractions-of-Z); the ten now sum to ~0.89 Z in the
+  stub. **The sum-under-Z headroom shrank as predicted:** measured at the Sun the ten
+  MIST elements sum to **~0.98 of Z** (surface 0.982, core 0.976 — headroom only
+  ~3e-4, still ≫ the 1e-9 slack). The bound is *physically* guaranteed (named
+  elements are a disjoint subset of the metals), so a sum >Z would mean a
+  double-counted isotope — re-measuring it is the real correctness check, not the
+  green assert. Updated §10 tests: `test_metal_breakdown_present_and_bounded` (set is
+  the ten; real sum/Z in the docstring) and `test_heavy_tracers_inert_while_cno_processes`
+  (extended to assert Si/S/Ca/Ti also ×1.00 at the 3 M☉ RGB tip — they're genuinely
+  inert this side of the AGB); stub `test_stub_metal_breakdown_bounded`. **Verified the
+  [Fe/H] blend path** (the real coverage gap — every `feh=0` test short-circuits
+  `_blend_windows`; multifeh tests assert only logL/logT, never the metals dict) via a
+  direct probe: off-grid 2.7 M☉ / [Fe/H]=0.25 → ten bounded keys, and all 606 track
+  rows carry the keyset & stay bounded. Frontend: `comp.js` `ELEMS`/`ELEM_COL` → ten
+  (atomic-number order C→Fe; the four new fill the open hue gaps — Si violet, S
+  sulfur-chartreuse, Ca red, Ti cyan); the drawing loop was already generic. Legend
+  grew 6→10 (still flex-wraps, 4+4+2), both comp tooltips + the panel `<h2>` gloss
+  updated; `mode="cno"` id kept. Verified via headless Chrome screenshot (3 M☉ in cno
+  mode: ten distinct lines, surface dredge-up + core C/O spike intact, legend wraps
+  cleanly, no JS errors). 63 tests pass (unchanged count — extended existing tests).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
-  more elements still (Si/S/Ca/Ti — same one-line dict add; would shrink the
-  sum-under-Z headroom further), `MESAProvider` (offline MESA history/profile files
+  yet more elements is possible (Na/Al/P/Cr/Mn/Ni — same one-line dict add) but the
+  pedagogical payoff is thin and the sum-under-Z headroom is now only ~3e-4, so it is
+  *not* the obvious next step; `MESAProvider` (offline MESA history/profile files
   via `mesa_reader`), the **TPAGB thermal pulses** (still deferred — §6's genuinely
   messy phase; would need explicit per-grid handling, *not* cross-mass interpolation),
   eventually a `LiveSolverProvider` or reduced nuclear network (large, explicitly out

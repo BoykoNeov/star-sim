@@ -35,12 +35,15 @@ DYDZ = 1.78             # galactic helium enrichment slope (Y = Yp + dY/dZ * Z)
 # processing, so it just splits its Z by these fixed ratios — flat in age and
 # identical surface vs core. That is the honest stub stance (§ conventions): a
 # static, *flavored* breakdown, not the CNO-cycle / dredge-up / diffusion
-# evolution that only MISTProvider can show. The six match MISTProvider's element
-# set; they sum to ~0.82 of Z (the rest is Si/S/Ca/Ti/... we don't break out), so
-# the per-element sum stays safely under Z.
+# evolution that only MISTProvider can show. The ten match MISTProvider's element
+# set; they sum to ~0.89 of Z (the rest is Na/Al/P/Cl/Ar/K/Cr/Mn/Ni/... we don't
+# break out), so the per-element sum stays safely under Z.
 METALS_OF_Z = {
-    "C": 0.155, "N": 0.046, "O": 0.377,   # the CNO trio
-    "Ne": 0.112, "Mg": 0.047, "Fe": 0.085,  # neon, magnesium, the iron tracer
+    "C": 0.155, "N": 0.046, "O": 0.377,    # the CNO trio
+    "Ne": 0.112, "Mg": 0.047,              # neon, magnesium
+    "Si": 0.044, "S": 0.020,               # silicon, sulfur
+    "Ca": 0.0042, "Ti": 0.0002,            # calcium, titanium
+    "Fe": 0.085,                           # the iron tracer
 }
 
 # MIST EEP convention (real numbers, for honesty): ZAMS=202, TAMS=454.
