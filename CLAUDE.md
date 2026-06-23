@@ -32,20 +32,29 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 ## Where things are
 
 - `backend/star_sim/` — `state.py`, `provider.py` (the §3 boundary),
-  `providers/mist.py` (the real v1 provider), `providers/stub.py` (data-free
-  fallback), `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
-  `fetch_mist.py` (build-time grid fetch), `lane_emden.py` (the Phase 3 §8
-  polytrope solver — a **sibling** to the §3 spine, not a provider), `api.py`
-  (FastAPI, the swap point; also hosts `/polytrope`, the one route that does NOT
-  go through `PROVIDER`).
+  `providers/mist.py` (the real v1 provider), `providers/mesa.py` (the **second**
+  real provider — offline MESA `history.data`, a different on-disk format behind
+  the same boundary; single-track / snap-to-mass, no cross-mass interp; used to
+  **validate MIST**), `providers/stub.py` (data-free fallback),
+  `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
+  `fetch_mist.py` / `fetch_mesa.py` (build-time grid fetches), `lane_emden.py`
+  (the Phase 3 §8 polytrope solver — a **sibling** to the §3 spine, not a
+  provider), `api.py` (FastAPI, the swap point; also hosts `/polytrope`, the one
+  route that does NOT go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
-  `test_stub_provider.py`, and `test_lane_emden.py` (§8 polytrope validation —
-  closed forms n=0/1/5 pointwise + Chandrasekhar table; needs no MIST data, so
-  always runs). Skip markers in `conftest.py` gate by data present:
-  `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2), and
-  `requires_mist_heldout_feh` (the m050/p000/p050 trio).
+  `test_mesa_provider.py` (parser/dedup/window unit tests on a committed
+  synthetic fixture + full provider API on a tmp copy — both always run — and
+  gated physical-sanity on the real grid), `test_mesa_vs_mist.py` (the **measured**
+  MESA-vs-MIST cross-validation, matched on Z + central-Xc via the public
+  `track()` API), `test_stub_provider.py`, and `test_lane_emden.py` (§8 polytrope
+  validation — closed forms n=0/1/5 pointwise + Chandrasekhar table; needs no MIST
+  data, so always runs). Skip markers in `conftest.py` gate by data present:
+  `requires_mist_data` (≥1 grid), `requires_mist_multifeh` (≥2),
+  `requires_mist_heldout_feh` (the m050/p000/p050 trio), `requires_mesa_data`
+  (≥1 MESA run), and `requires_mist_lowz` (the m100/m075 grids bracketing the
+  MESA sample Z).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
   panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
@@ -304,14 +313,55 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   updated; `mode="cno"` id kept. Verified via headless Chrome screenshot (3 M☉ in cno
   mode: ten distinct lines, surface dredge-up + core C/O spike intact, legend wraps
   cleanly, no JS errors). 63 tests pass (unchanged count — extended existing tests).
+- **Done (Phase 4, MESAProvider — the second real provider, validates MIST):**
+  `providers/mesa.py` reads offline MESA `history.data` runs — a **completely
+  different on-disk format** behind the same §3 boundary, proving the abstraction a
+  second time (Stub→MIST showed nothing downstream changes; a second *real* physics
+  provider shows it again). Scope is honest and deliberately narrow: a **discrete-grid,
+  single-track** provider — `state_at`/`track` **snap to the nearest run** and report
+  that run's **true** `mass_init_msun` (never silent extrapolation, §6); the only
+  interpolation is the along-track age→row inversion (safe, stays within one track).
+  **No cross-mass/[Fe/H] interpolation on purpose**: raw history has no EEP column, and
+  identifying EEPs to row-align tracks *is* MIST's `iso` machinery (spec rules out "a
+  MESA reimplementation"). So the §10 lies-between test is MIST-specific and N/A here.
+  Parser is a self-contained ~40-line `history.data` reader (no `mesa_reader` dep —
+  parity with the vendored MIST parser); it **dedups retry/backup rows by
+  `model_number`** (keeps the last write, like py_mesa_reader) so `star_age` is
+  strictly increasing for the inversion. Honest proxies, all commented: **ZAMS** =
+  first row where central H dropped ~0.0015 below initial (skips pre-MS); **eep** = a
+  plain monotonic row index (MESA has no EEP → *not* comparable to MIST's; the frontend
+  derives its axis from the track itself, so nothing downstream assumes an origin);
+  **[Fe/H]** derived from ZAMS surface Z = log10(Z/Z_sun), rounded 2 dp (he3-in-Z
+  bias is a few hundredths); **phase** a coarse MS→RGB→CHeB→post-CHeB label from
+  central H/He (no FSPS code in raw history). Per-element `metals_*` come back **empty**
+  (tutorial runs log no isotopes — `StellarState` defaults handle it gracefully). Data:
+  `fetch_mesa.py` pulls a small public grid (`bearums/InteractivePlots`, pinned SHA —
+  **no upstream license, so NOT redistributed**: downloaded into gitignored `data/mesa/`
+  for local use, like the MIST grids; 1/2/4/6/10/14/20 M☉, single Z≈0.0022 → [Fe/H]≈−0.84).
+  **The validation (the upgraded scope) is the payoff — and it is *measured*, not a
+  green check with a priori tolerances** (advisor): `test_mesa_vs_mist.py` diffs MESA vs
+  MIST through the public `track()` API, controlling **both** confounds — matched on
+  **Z** (solve the MIST [Fe/H] whose ZAMS Z = the MESA run's; the sample Z=0.00218 sits
+  between MIST m100 Zinit=0.00171 and m075 Zinit=0.00303, so `fetch_mist --feh m075,m100`
+  is required) **not** on derived [Fe/H] (different Z_sun/Y(Z) laws → equal "[Fe/H]" ≠
+  equal Z), and compared at **shared central Xc** (0.6/0.4/0.2) not each code's ZAMS
+  label. Yinit agrees (~0.2518 both) so Y is not a confound. **Measured gaps** (M=1/2/6):
+  near ZAMS |ΔlogL|≤0.036, |ΔTeff|≤2.3%, |ΔR|≤8.2%; by late MS |ΔlogL|≤0.126, |ΔTeff|≤4.4%,
+  |ΔR|≤20.3% — MESA systematically more luminous/larger, gap **growing off ZAMS**
+  (late-MS overshoot/mixing/opacity sensitivity; tutorial inlist ≠ MIST v2.5). Tolerances
+  pin those measured numbers with margin (the `test_mist_provider.py` pattern). MESA is
+  **opt-in** — `PROVIDER` in `api.py` stays `MISTProvider`. New conftest gates:
+  `requires_mesa_data`, `requires_mist_lowz`. 85 tests pass (was 63; +22 MESA, the rest
+  are the now-present m075/m100 grids exercising existing [Fe/H]-axis tests).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   yet more elements is possible (Na/Al/P/Cr/Mn/Ni — same one-line dict add) but the
   pedagogical payoff is thin and the sum-under-Z headroom is now only ~3e-4, so it is
-  *not* the obvious next step; `MESAProvider` (offline MESA history/profile files
-  via `mesa_reader`), the **TPAGB thermal pulses** (still deferred — §6's genuinely
-  messy phase; would need explicit per-grid handling, *not* cross-mass interpolation),
-  eventually a `LiveSolverProvider` or reduced nuclear network (large, explicitly out
-  of scope for now — see spec §9).
+  *not* the obvious next step; a **multi-[Fe/H] MESA grid** (the current MESAProvider is
+  single-metallicity — a real MESA-Web solar-Z run would also give a *clean* Sun anchor
+  vs MIST, sidestepping the metal-poor tutorial grid); the **TPAGB thermal pulses**
+  (still deferred — §6's genuinely messy phase; would need explicit per-grid handling,
+  *not* cross-mass interpolation), eventually a `LiveSolverProvider` or reduced nuclear
+  network (large, explicitly out of scope for now — see spec §9).
 
 ## Conventions
 

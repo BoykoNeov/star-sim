@@ -11,11 +11,16 @@ from __future__ import annotations
 
 import pytest
 
+from star_sim.providers.mesa import MESA_DATA_DIR, _find_history_files
 from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
 
 
 def mist_data_available() -> bool:
     return _find_eep_dir(DATA_DIR) is not None
+
+
+def mesa_data_available() -> bool:
+    return len(_find_history_files(MESA_DATA_DIR)) > 0
 
 
 def mist_fehs_available() -> set[float]:
@@ -42,4 +47,19 @@ _HELDOUT_FEHS = {-0.5, 0.0, 0.5}
 requires_mist_heldout_feh = pytest.mark.skipif(
     not _HELDOUT_FEHS.issubset(mist_fehs_available()),
     reason="needs the m050/p000/p050 grids — fetch with `--feh m050` and `--feh p050`",
+)
+
+# MESAProvider needs offline MESA history.data runs (fetched via
+# `python -m star_sim.fetch_mesa`, never committed — see fetch_mesa.py provenance).
+requires_mesa_data = pytest.mark.skipif(
+    not mesa_data_available(),
+    reason="MESA runs not fetched — run: python -m star_sim.fetch_mesa",
+)
+
+# The MESA-vs-MIST cross-validation needs the two MIST grids that bracket the
+# sample MESA grid's Z=0.00218 ([Fe/H]~-0.84): m100 (-1.0) and m075 (-0.75).
+_MESA_BRACKET_FEHS = {-1.0, -0.75}
+requires_mist_lowz = pytest.mark.skipif(
+    not _MESA_BRACKET_FEHS.issubset(mist_fehs_available()),
+    reason="needs the m100/m075 MIST grids — fetch with `--feh m075,m100`",
 )
