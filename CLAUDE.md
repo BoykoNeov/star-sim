@@ -34,8 +34,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `backend/star_sim/` — `state.py`, `provider.py` (the §3 boundary),
   `providers/mist.py` (the real v1 provider), `providers/mesa.py` (the **second**
   real provider — offline MESA `history.data`, a different on-disk format behind
-  the same boundary; single-track / snap-to-mass, no cross-mass interp; used to
-  **validate MIST**), `providers/stub.py` (data-free fallback),
+  the same boundary; **multi-metallicity by snapping** — `[Fe/H]` buckets, snap
+  feh-then-mass, no cross-mass/cross-feh interp; used to **validate MIST**),
+  `providers/stub.py` (data-free fallback),
   `providers/_vendor/read_mist_models.py` (MIST's own parser, §6),
   `fetch_mist.py` / `fetch_mesa.py` (build-time grid fetches), `lane_emden.py`
   (the Phase 3 §8 polytrope solver — a **sibling** to the §3 spine, not a
@@ -353,15 +354,55 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   **opt-in** — `PROVIDER` in `api.py` stays `MISTProvider`. New conftest gates:
   `requires_mesa_data`, `requires_mist_lowz`. 85 tests pass (was 63; +22 MESA, the rest
   are the now-present m075/m100 grids exercising existing [Fe/H]-axis tests).
+- **Done (Phase 4, MESAProvider → multi-metallicity by snapping):** the provider
+  went from a hard single-Z guard (raised if runs spanned >0.02 dex in [Fe/H]) to
+  **multi-metallicity by snapping** — runs group into `[Fe/H]` buckets (key = derived
+  feh rounded 2 dp), and a request **snaps feh-then-mass**: nearest grid [Fe/H] bucket,
+  then nearest mass within it. `_snap(mass)` → `_snap(mass, feh)` is the single choke
+  point (age_range/state_at/track can't disagree); `parameter_ranges`/`mass_range` now
+  report a **real feh span** with a **non-rectangular** per-Z mass domain; off-grid feh
+  **snaps in-range / raises out-of-range**, reporting the *true* grid feh in `feh_init`
+  (mirrors the existing true-mass honesty — never a silent extrapolation, §6). **Still no
+  cross-mass/cross-feh interpolation** (raw history has no EEP = MIST's `iso`, out of
+  scope — unchanged). The single-Z grid is just the degenerate one-bucket case, so all
+  prior behavior is preserved; **no `CACHE_VERSION`** (MESA has no parse cache). Tests:
+  5 new **always-on** multi-Z tests on a programmatic two-bucket synthetic fixture
+  (deliberately non-rectangular: solar 1.0+2.0 M☉ / metal-poor −0.5 1.0 M☉) exercise
+  snap-feh-then-mass, per-feh `mass_range`, true-value reporting, and out-of-grid raises.
+  90 tests pass (was 85). The capability is **latent / multi-Z-ready**: a future grid
+  with a second metallicity drops into `data/mesa/` with **zero code** — today the
+  provider still loads only the metal-poor bearums bucket. **Drop-in caveat:** buckets
+  are keyed by *per-track* `round(derived_feh, 2)`, so when a real second-Z grid lands,
+  confirm each physical grid collapses to **exactly one** bucket key (a grid whose
+  per-mass derived feh straddles a 2-dp rounding boundary would fragment into two —
+  bearums is uniform today, so `feh min==max` holds; the future-proof fix, if ever
+  needed, is to bucket by clustering rather than raw rounding).
+  **Why no solar grid was added (the deliberate non-action — finding worth keeping):**
+  a clean, fetchable, *native* multi-mass **solar** MESA grid with surface composition
+  in standard `history.data` format **does not exist publicly** (thorough hunt). The one
+  multi-mass solar grid, `konkolyseismolab/mesalab`, is **MIST tracks repackaged** as
+  history.data (its inlists literally say "Dummy inlist for MIST data … automatically
+  generated") → feeding it through `MESAProvider` makes the MESA-vs-MIST cross-validation
+  **circular** (MIST-vs-MIST, a fake green check) — **rejected** (also has no 1 M☉). The
+  one genuine *native* solar source, `sai-veeresh/computational-astrophysics`, is real
+  MESA (verified sane Sun anchor: MESA ~0.04–0.05 dex brighter / 60–90 K hotter than MIST
+  p000 at matched Xc — real independent scatter) **but has no bulk surface composition at
+  all** (only `center_*` + `surface_c12/o16`), so `X/Y/Z_surf` — *required* §3 fields —
+  would have to be fabricated or the non-negotiable spine mutated, plus a non-standard
+  1-line-header format and 1 M☉-only-at-solar. Not worth ingesting. **The real path to a
+  clean solar Sun anchor is a one-off MESA-Web solar run** (clean full-column standard
+  format → fits the existing parser, zero surgery) — now a pure drop-in thanks to this
+  generalization. Deferred at the user's call.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
-  yet more elements is possible (Na/Al/P/Cr/Mn/Ni — same one-line dict add) but the
-  pedagogical payoff is thin and the sum-under-Z headroom is now only ~3e-4, so it is
-  *not* the obvious next step; a **multi-[Fe/H] MESA grid** (the current MESAProvider is
-  single-metallicity — a real MESA-Web solar-Z run would also give a *clean* Sun anchor
-  vs MIST, sidestepping the metal-poor tutorial grid); the **TPAGB thermal pulses**
-  (still deferred — §6's genuinely messy phase; would need explicit per-grid handling,
-  *not* cross-mass interpolation), eventually a `LiveSolverProvider` or reduced nuclear
-  network (large, explicitly out of scope for now — see spec §9).
+  the **solar MESA grid** is now a *data* task, not a code task — a one-off MESA-Web
+  solar run drops into `data/mesa/` with zero code (the public-grid route is exhausted:
+  circular or surface-less, see the Done bullet above); yet more elements is possible
+  (Na/Al/P/Cr/Mn/Ni — same one-line dict add) but the pedagogical payoff is thin and the
+  sum-under-Z headroom is now only ~3e-4, so it is *not* the obvious next step; the
+  **TPAGB thermal pulses** (still deferred — §6's genuinely messy phase; would need
+  explicit per-grid handling, *not* cross-mass interpolation), eventually a
+  `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope for
+  now — see spec §9).
 
 ## Conventions
 

@@ -36,6 +36,44 @@ from .conftest import requires_mesa_data
 FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_history.data"
 
 
+def _history_text(mass: float, x_surf: float, y_surf: float) -> str:
+    """A minimal valid MESA `history.data` string for one synthetic run.
+
+    The column set/order matches the committed fixture so the *real* parser
+    handles it (whitespace-tokenized, so the exact spacing is irrelevant). Only
+    `star_mass` and the **surface** abundances are parametrized — those set the
+    run's mass and its derived [Fe/H] bucket. The center-H/He evolution (hence the
+    ZAMS trim and the phase labels) is shared across buckets on purpose: the
+    multi-Z tests below only exercise the snap routing / ranges, not physics.
+    """
+    z = 1.0 - x_surf - y_surf
+    # (model, star_age, log_L, log_Teff, radius, log_g, center_h1, center_he4)
+    rows = [
+        (1, 1.0e2, 0.10, 3.760, 0.90, 4.50, 0.7200, 0.26480),  # pre-MS -> trimmed at ZAMS
+        (2, 5.0e7, 0.00, 3.762, 0.88, 4.52, 0.7180, 0.26680),  # ZAMS
+        (3, 1.0e9, 0.05, 3.763, 0.90, 4.50, 0.6000, 0.38480),  # MS
+        (4, 3.0e9, 0.12, 3.765, 0.95, 4.45, 0.4000, 0.58480),  # MS
+        (5, 5.0e9, 0.20, 3.766, 1.00, 4.40, 0.2000, 0.78480),  # late MS
+        (6, 8.0e9, 1.50, 3.700, 5.00, 3.50, 0.0000, 0.98480),  # RGB
+        (7, 9.0e9, 2.00, 3.650, 8.00, 3.00, 0.0000, 0.50000),  # CHeB
+    ]
+    head = (
+        "         1            2            3\n"
+        "version_number    initial_mass    initial_z\n"
+        f"         12115     {mass:.6E}    {z:.6E}\n"
+        "\n"
+        "         1            2            3            4            5            6            7            8            9           10           11\n"
+        "  model_number     star_age    star_mass        log_L     log_Teff"
+        "       radius        log_g    center_h1   center_he4   surface_h1  surface_he4\n"
+    )
+    body = "\n".join(
+        f"{m:14d} {age:.4E} {mass:.4E} {logl:.4E} {logt:.4E} {rad:.4E} {logg:.4E} "
+        f"{ch1:.4E} {che4:.4E} {x_surf:.4E} {y_surf:.4E}"
+        for (m, age, logl, logt, rad, logg, ch1, che4) in rows
+    )
+    return head + body + "\n"
+
+
 # --- parser / builder unit tests (always run) --------------------------------
 def test_read_mesa_history_parses_header_and_columns():
     header, data = _read_mesa_history(str(FIXTURE))
@@ -121,6 +159,65 @@ def test_synth_out_of_range_raises(synth_provider):
         synth_provider.state_at(5.0, 0.0, 1e9)             # mass off the (1,1) grid
     with pytest.raises(ParameterOutOfRange):
         synth_provider.state_at(1.0, 0.5, 1e9)             # [Fe/H] off the single grid
+        # NB: 0.5 is *outside* the single-Z grid [0,0], so it still raises (snap
+        # only kicks in for in-range [Fe/H] — see the multi-Z tests below).
+
+
+# --- multi-metallicity snap path on synthetic data (always run) --------------
+@pytest.fixture()
+def multiz_provider(tmp_path) -> MESAProvider:
+    """Two [Fe/H] buckets — solar (1.0 & 2.0 Msun) + metal-poor -0.5 (1.0 Msun) —
+    written as separate runs under one data dir. Deliberately *non-rectangular*
+    (the solar bucket has an extra mass), so the snap-feh-then-mass path and the
+    per-feh mass_range are exercised always-on, without any real download."""
+    def write(sub: str, mass: float, x: float, y: float) -> None:
+        d = tmp_path / sub
+        d.mkdir()
+        (d / "history.data").write_text(_history_text(mass, x, y))
+
+    write("solar_1", 1.0, 0.7200, 0.26480)   # Z=0.0152  -> [Fe/H] 0.0
+    write("solar_2", 2.0, 0.7200, 0.26480)   # Z=0.0152  -> [Fe/H] 0.0
+    write("mp_1", 1.0, 0.7500, 0.24520)      # Z=0.0048  -> [Fe/H] -0.50
+    return MESAProvider(data_dir=tmp_path)
+
+
+def test_multiz_feh_is_a_real_span(multiz_provider):
+    r = multiz_provider.parameter_ranges()
+    assert r["feh"]["min"] == pytest.approx(-0.50, abs=1e-9)
+    assert r["feh"]["max"] == pytest.approx(0.0, abs=1e-9)
+    assert r["feh"]["min"] != r["feh"]["max"]            # no longer a pinned point
+    assert r["mass_msun"] == {"min": 1.0, "max": 2.0}    # global span across buckets
+
+
+def test_multiz_mass_range_is_per_feh_nonrectangular(multiz_provider):
+    assert multiz_provider.mass_range(0.0) == (1.0, 2.0)    # solar has two masses
+    assert multiz_provider.mass_range(-0.5) == (1.0, 1.0)   # metal-poor has one
+
+
+def test_multiz_snaps_feh_and_reports_true_value(multiz_provider):
+    # -0.1 is nearer solar (0.0) -> snaps there, reports the *true* grid [Fe/H].
+    near_solar = multiz_provider.state_at(1.0, -0.1, 1e9)
+    assert near_solar.feh_init == pytest.approx(0.0, abs=1e-9)
+    # -0.4 is nearer -0.5 -> snaps to the metal-poor bucket.
+    near_mp = multiz_provider.state_at(1.0, -0.4, 1e9)
+    assert near_mp.feh_init == pytest.approx(-0.5, abs=1e-9)
+
+
+def test_multiz_snaps_mass_within_bucket(multiz_provider):
+    # 1.6 at solar -> nearest mass 2.0 (|1.6-2| < |1.6-1|); true mass reported.
+    s = multiz_provider.state_at(1.6, 0.0, 1e9)
+    assert s.mass_init_msun == 2.0
+    # the metal-poor bucket has only 1.0, so 1.6 is off *that* bucket -> raises
+    # (the domain is non-rectangular; no silent cross-bucket borrow).
+    with pytest.raises(ParameterOutOfRange):
+        multiz_provider.state_at(1.6, -0.5, 1e9)
+
+
+def test_multiz_out_of_grid_feh_raises(multiz_provider):
+    with pytest.raises(ParameterOutOfRange):
+        multiz_provider.state_at(1.0, 0.6, 1e9)     # above max [Fe/H] (0.0)
+    with pytest.raises(ParameterOutOfRange):
+        multiz_provider.state_at(1.0, -1.0, 1e9)    # below min [Fe/H] (-0.5)
 
 
 # --- physical-sanity tests on the real sample grid (gated) -------------------

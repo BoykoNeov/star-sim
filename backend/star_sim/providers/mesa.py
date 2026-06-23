@@ -14,17 +14,27 @@ same `StellarState` — so the swap is invisible downstream. Everything
 MESA-specific (the column names, the file layout, the windowing) stays sealed in
 this module.
 
+It is **multi-metallicity by snapping, not interpolation**: runs are grouped into
+[Fe/H] buckets, and a request snaps to the nearest grid [Fe/H] and then the
+nearest mass within it. Multiple grids at different Z load side by side as
+separate buckets. *Today only the metal-poor bearums tutorial grid is present (one
+bucket)* — but the capability is the point: a second-metallicity grid (e.g. a
+solar-Z MESA-Web run for a *clean Sun anchor* vs MIST, instead of cross-matching
+through the metal-poor grid) drops into `data/mesa/` as another bucket with **no
+code change**. (The single-Z case is just the degenerate one-bucket grid; a clean
+fetchable native solar grid was sought and none was suitable — see CLAUDE.md.)
+
 What this provider is NOT (honest scope):
   * **No cross-mass / cross-[Fe/H] interpolation.** Raw MESA `history.data` has
     no EEP column — only `model_number` / `star_age`. Identifying EEPs from raw
     history to make tracks row-aligned for interpolation is exactly MIST's `iso`
     machinery, which the spec rules out ("not a MESA reimplementation"). So this
     is a *discrete-grid, single-track* provider: `state_at`/`track` snap to the
-    nearest available run and report that run's **true** initial mass in
-    `mass_init_msun` (never a silently-extrapolated value — §6). The only
-    interpolation done here is the along-track age->row inversion, which is safe
-    because it stays within one track. The §10 "lies-between" interpolation test
-    is MIST-specific and does not apply.
+    nearest available run (in both [Fe/H] and mass) and report that run's **true**
+    initial mass and [Fe/H] in `mass_init_msun`/`feh_init` (never a silently-
+    extrapolated value — §6). The only interpolation done here is the along-track
+    age->row inversion, which is safe because it stays within one track. The §10
+    "lies-between" interpolation test is MIST-specific and does not apply.
   * **No per-element composition** unless the run logged isotopes. The tutorial
     grid `fetch_mesa.py` pulls logs only `center_/surface_h1,he4`, so
     `metals_surf`/`metals_core` come back empty — `StellarState` defaults them
@@ -296,9 +306,10 @@ class MESAProvider:
     def __init__(self, data_dir: Path | None = None) -> None:
         self._data_dir = Path(data_dir) if data_dir is not None else MESA_DATA_DIR
         self._loaded = False
-        self._tracks: list[_MesaTrack] = []
-        self._masses: np.ndarray | None = None
-        self._feh: float = 0.0
+        # Tracks are grouped into [Fe/H] buckets (snap on feh, then mass within it).
+        self._tracks_by_feh: dict[float, list[_MesaTrack]] = {}
+        self._masses_by_feh: dict[float, np.ndarray] = {}
+        self._fehs: np.ndarray | None = None   # sorted unique grid [Fe/H] values
 
     # -- lazy data load --------------------------------------------------------
     def _ensure_loaded(self) -> None:
@@ -311,59 +322,60 @@ class MESAProvider:
         tracks = [t for f in files if (t := _build_track(f)) is not None]
         if not tracks:
             raise ProviderDataMissing(_FETCH_HINT.format(data_dir=self._data_dir))
-        tracks.sort(key=lambda t: t.minit)
 
-        # This cut is single-metallicity: every run must share one [Fe/H], or
-        # snap-to-nearest-mass would silently mix metallicities. (A multi-[Fe/H]
-        # MESA grid is a future extension; the sample grid is one Z.)
-        fehs = [t.feh for t in tracks]
-        if max(fehs) - min(fehs) > 0.02:
-            raise ProviderDataMissing(
-                f"MESA runs span multiple [Fe/H] ({min(fehs):.2f}..{max(fehs):.2f}); "
-                "this single-metallicity provider expects one. Keep one Z under "
-                f"{self._data_dir}."
-            )
-
-        # Report one grid [Fe/H], rounded to 2 dp: precision beyond that is
-        # spurious here (the he3-in-Z bias alone is a few hundredths dex), and a
-        # round value lets a caller echo /ranges' [Fe/H] back without a tolerance
-        # miss. Stamp it onto every track so states' feh_init matches /ranges.
-        self._feh = round(float(np.median(fehs)), 2)
+        # Group runs into [Fe/H] buckets keyed by the derived metallicity rounded
+        # to 2 dp. Precision beyond that is spurious here (the he3-in-Z bias alone
+        # is a few hundredths dex), and a round key lets a caller echo /ranges'
+        # [Fe/H] back without a tolerance miss. Each run within a bucket shares one
+        # Z, so snap-to-nearest-mass stays within a single metallicity; the snap on
+        # [Fe/H] (below) is what makes this provider multi-metallicity. Stamp the
+        # rounded key onto every track so its state's feh_init matches /ranges.
+        buckets: dict[float, list[_MesaTrack]] = {}
         for t in tracks:
-            t.feh = self._feh
-        self._tracks = tracks
-        self._masses = np.array([t.minit for t in tracks])
+            key = round(t.feh, 2)
+            t.feh = key
+            buckets.setdefault(key, []).append(t)
+        for ts in buckets.values():
+            ts.sort(key=lambda t: t.minit)
+
+        self._tracks_by_feh = buckets
+        self._masses_by_feh = {k: np.array([t.minit for t in ts]) for k, ts in buckets.items()}
+        self._fehs = np.array(sorted(buckets))
         self._loaded = True
 
     # -- UI metadata -----------------------------------------------------------
     def parameter_ranges(self) -> dict:
         self._ensure_loaded()
-        assert self._masses is not None
+        assert self._fehs is not None
+        all_masses = np.concatenate(list(self._masses_by_feh.values()))
         return {
-            "mass_msun": {"min": float(self._masses[0]), "max": float(self._masses[-1])},
-            # A single point: the sample grid is one metallicity (slider pinned).
-            "feh": {"min": self._feh, "max": self._feh},
+            # Global mass span across all metallicities (outer slider domain);
+            # mass_range(feh) tightens it per [Fe/H] for the non-rectangular domain.
+            "mass_msun": {"min": float(all_masses.min()), "max": float(all_masses.max())},
+            # A real range now (was a pinned point) — one entry per grid Z. With a
+            # single-Z grid min==max still, so the slider pins as before.
+            "feh": {"min": float(self._fehs[0]), "max": float(self._fehs[-1])},
         }
 
     def mass_range(self, feh: float) -> tuple[float, float]:
-        """Full discrete mass span. Rectangular here (one [Fe/H]). Raises if
-        [Fe/H] is off the single grid value (no extrapolation, §6)."""
+        """Discrete mass span at the [Fe/H] bucket nearest `feh`. The domain is
+        **non-rectangular** in general (different masses per Z), so this is per-Z,
+        not global. `feh` snaps to the nearest grid value; out of the grid's
+        [Fe/H] span it raises (no extrapolation, §6)."""
         self._ensure_loaded()
-        assert self._masses is not None
-        self._check_feh(feh)
-        return float(self._masses[0]), float(self._masses[-1])
+        key = self._snap_feh(feh)
+        m = self._masses_by_feh[key]
+        return float(m[0]), float(m[-1])
 
     def age_range(self, mass: float, feh: float) -> tuple[float, float]:
         self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
-        t = self._snap(mass)
+        t = self._snap(mass, feh)
         return float(t.age[0]), float(t.age[-1])
 
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
         self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
-        t = self._snap(mass)
+        t = self._snap(mass, feh)
         age = float(min(max(age_yr, t.age[0]), t.age[-1]))  # never extrapolate in age
         rows = np.arange(t.age.size, dtype=float)
         frac = float(np.interp(age, t.age, rows))           # age -> fractional row
@@ -373,17 +385,26 @@ class MESAProvider:
         """Every exposed row of the snapped run as a StellarState (§3), ordered by
         EEP. No age inversion: the run's rows already are the EEP sequence."""
         self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
-        t = self._snap(mass)
+        t = self._snap(mass, feh)
         return [self._state_from_track(t, float(i)) for i in range(t.age.size)]
 
     # -- internals -------------------------------------------------------------
-    def _snap(self, mass: float) -> _MesaTrack:
-        """The run whose initial mass is nearest `mass`. Centralized so
-        age_range/state_at/track can never disagree on which run they picked."""
-        assert self._masses is not None
-        i = int(np.argmin(np.abs(self._masses - mass)))
-        return self._tracks[i]
+    def _snap(self, mass: float, feh: float) -> _MesaTrack:
+        """The run nearest `(mass, feh)` — snap [Fe/H] to the nearest grid bucket
+        first, then snap mass within it. Centralized so age_range/state_at/track
+        can never disagree on which run they picked. Reports the run's *true*
+        initial mass and [Fe/H] downstream (the snap is honest, never a silent
+        extrapolation — §6). Raises if mass is outside the snapped bucket's span
+        (the domain is non-rectangular) or [Fe/H] is outside the grid."""
+        key = self._snap_feh(feh)
+        masses = self._masses_by_feh[key]
+        lo, hi = float(masses[0]), float(masses[-1])
+        if not (lo <= mass <= hi):
+            raise ParameterOutOfRange(
+                f"mass {mass} M_sun outside the MESA grid [{lo}, {hi}] at [Fe/H]={key:.2f}"
+            )
+        i = int(np.argmin(np.abs(masses - mass)))
+        return self._tracks_by_feh[key][i]
 
     def _state_from_track(self, t: _MesaTrack, frac: float) -> StellarState:
         """Read a StellarState off one run's arrays at fractional row `frac`.
@@ -429,18 +450,17 @@ class MESAProvider:
         )
 
     # -- validation ------------------------------------------------------------
-    def _check_feh(self, feh: float) -> None:
-        if not math.isclose(feh, self._feh, abs_tol=_FEH_TOL):
+    def _snap_feh(self, feh: float) -> float:
+        """The grid [Fe/H] bucket nearest `feh`. Snaps in-range (mirroring the
+        mass snap — the state reports the *true* grid value, not the request) and
+        raises out of the grid's [Fe/H] span (no extrapolation, §6). On a single-Z
+        grid min==max, so only that one value (within _FEH_TOL) is accepted — the
+        original exact-match behavior is preserved as the degenerate case."""
+        assert self._fehs is not None
+        lo, hi = float(self._fehs[0]), float(self._fehs[-1])
+        if not (lo - _FEH_TOL <= feh <= hi + _FEH_TOL):
             raise ParameterOutOfRange(
-                f"[Fe/H] {feh} not on the single-metallicity MESA grid "
-                f"(only {self._feh:.3f} available)"
+                f"[Fe/H] {feh} outside the MESA grid [{lo:.2f}, {hi:.2f}]"
             )
-
-    def _check_mass_feh(self, mass: float, feh: float) -> None:
-        self._check_feh(feh)
-        assert self._masses is not None
-        lo, hi = float(self._masses[0]), float(self._masses[-1])
-        if not (lo <= mass <= hi):
-            raise ParameterOutOfRange(
-                f"mass {mass} M_sun outside the MESA grid [{lo}, {hi}]"
-            )
+        i = int(np.argmin(np.abs(self._fehs - feh)))
+        return float(self._fehs[i])
