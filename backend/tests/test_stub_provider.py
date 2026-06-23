@@ -49,11 +49,13 @@ def test_composition_sums_to_one(provider):
 
 def test_stub_metal_breakdown_bounded(provider):
     """The stub still fills metals_surf/core with a per-element breakdown of Z (C,
-    N, O, Ne, Mg, Si, S, Ca, Ti, Fe), so the §5.4 detail view renders data-free.
-    It's a fixed solar-ratio split (no nuclear processing or diffusion), so surface
-    == core and it sums to less than Z — bounded, honest, flat."""
+    N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe), so the §5.4 detail view renders
+    data-free. It's a fixed solar-ratio split (no nuclear processing or diffusion),
+    so surface == core and it sums to less than Z — bounded, honest, flat."""
     st = provider.state_at(1.0, 0.0, SUN_AGE_YR)
-    assert set(st.metals_surf) == {"C", "N", "O", "Ne", "Mg", "Si", "S", "Ca", "Ti", "Fe"}
+    assert set(st.metals_surf) == {
+        "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"
+    }
     assert st.metals_surf == st.metals_core          # stub has no processing
     assert 0.0 < sum(st.metals_surf.values()) < st.Z_surf
 

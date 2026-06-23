@@ -160,7 +160,11 @@ DEFAULT_MASSES = (
 # v5 widened the element set again — Si/S/Ca/Ti surface+core (same reason as v2/v3:
 # old caches lack the eight new columns, so the bump forces one reparse instead of
 # serving short arrays).
-CACHE_VERSION = 5
+# v6 widened the element set once more — Na/Al/P surface+core (the odd-Z light metals
+# MIST *does* track; Cr/Mn/Ni were requested too but are NOT in MIST v2.5's network,
+# verified against the real track header — so they can't be added). Same reason as
+# v2/v3/v5: old caches lack the six new columns, so the bump forces one reparse.
+CACHE_VERSION = 6
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
@@ -168,8 +172,8 @@ CACHE_FILENAME = "_parsed_tracks.npz"
 _TRACK_COLS = (
     "age", "logL", "logT", "logR", "logg",
     "Xs", "Ys", "Xc", "Yc",
-    "Cs", "Ns", "Os", "Nes", "Mgs", "Sis", "Ss", "Cas", "Tis", "Fes",
-    "Cc", "Nc", "Oc", "Nec", "Mgc", "Sic", "Sc", "Cac", "Tic", "Fec",
+    "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
+    "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
     "phase",
 )
 
@@ -201,17 +205,22 @@ class _Track:
     Yc: np.ndarray         # center He mass fraction
     # Per-element metals (a breakdown of Z), each the sum of its isotopes. The CNO
     # trio carries the burning story: the surface ones the first-dredge-up signature
-    # (N up, C down), the core ones the CNO-cycle / He-burning products. Ne/Mg/Si/S/
-    # Ca/Ti are α / iron-peak tracers (mostly along for the ride this side of the
-    # AGB); Fe is the inert tracer that just marks the input [Fe/H] (modulo MIST's
-    # surface diffusion). All feed the §5.4 detail view. Field names carry a trailing
-    # `s` (surface) / `c` (core) — so `Sc` is sulfur-core, not scandium.
+    # (N up, C down), the core ones the CNO-cycle / He-burning products. Ne/Mg/Al/Si/
+    # P/S/Ca/Ti are α / odd-Z / iron-peak tracers (mostly along for the ride this side
+    # of the AGB — except Na, which the Ne-Na cycle dredges up at the surface of
+    # intermediate-mass giants, measured ×1.4 at 3 M_sun); Fe is the inert tracer that
+    # just marks the input [Fe/H] (modulo MIST's surface diffusion). All feed the §5.4
+    # detail view. Field names carry a trailing `s` (surface) / `c` (core) — so `Sc` is
+    # sulfur-core (not scandium) and `Pc` is phosphorus-core.
     Cs: np.ndarray         # surface carbon    (c12 + c13)
     Ns: np.ndarray         # surface nitrogen  (n13 + n14 + n15)
     Os: np.ndarray         # surface oxygen    (o14 + o15 + o16 + o17 + o18)
     Nes: np.ndarray        # surface neon      (ne18 + ne19 + ne20 + ne21 + ne22)
+    Nas: np.ndarray        # surface sodium    (na21 + na22 + na23 + na24)
     Mgs: np.ndarray        # surface magnesium (mg23 + mg24 + mg25 + mg26)
+    Als: np.ndarray        # surface aluminium (al25 + al26 + al27)
     Sis: np.ndarray        # surface silicon   (si27 + si28 + si29 + si30)
+    Ps: np.ndarray         # surface phosphorus (p30 + p31)
     Ss: np.ndarray         # surface sulfur    (s31 + s32 + s33 + s34)
     Cas: np.ndarray        # surface calcium   (ca40)
     Tis: np.ndarray        # surface titanium  (ti48)
@@ -220,9 +229,12 @@ class _Track:
     Nc: np.ndarray         # center nitrogen
     Oc: np.ndarray         # center oxygen
     Nec: np.ndarray        # center neon
+    Nac: np.ndarray        # center sodium
     Mgc: np.ndarray        # center magnesium
+    Alc: np.ndarray        # center aluminium
     Sic: np.ndarray        # center silicon
-    Sc: np.ndarray         # center sulfur
+    Pc: np.ndarray         # center phosphorus
+    Sc: np.ndarray         # center sulfur     (`Sc` = sulfur-core, not scandium)
     Cac: np.ndarray        # center calcium
     Tic: np.ndarray        # center titanium
     Fec: np.ndarray        # center iron
@@ -349,8 +361,11 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         Ns=elem("surface_", "n13", "n14", "n15"),
         Os=elem("surface_", "o14", "o15", "o16", "o17", "o18"),
         Nes=elem("surface_", "ne18", "ne19", "ne20", "ne21", "ne22"),
+        Nas=elem("surface_", "na21", "na22", "na23", "na24"),
         Mgs=elem("surface_", "mg23", "mg24", "mg25", "mg26"),
+        Als=elem("surface_", "al25", "al26", "al27"),
         Sis=elem("surface_", "si27", "si28", "si29", "si30"),
+        Ps=elem("surface_", "p30", "p31"),
         Ss=elem("surface_", "s31", "s32", "s33", "s34"),
         Cas=elem("surface_", "ca40"),
         Tis=elem("surface_", "ti48"),
@@ -359,8 +374,11 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         Nc=elem("center_", "n13", "n14", "n15"),
         Oc=elem("center_", "o14", "o15", "o16", "o17", "o18"),
         Nec=elem("center_", "ne18", "ne19", "ne20", "ne21", "ne22"),
+        Nac=elem("center_", "na21", "na22", "na23", "na24"),
         Mgc=elem("center_", "mg23", "mg24", "mg25", "mg26"),
+        Alc=elem("center_", "al25", "al26", "al27"),
         Sic=elem("center_", "si27", "si28", "si29", "si30"),
+        Pc=elem("center_", "p30", "p31"),
         Sc=elem("center_", "s31", "s32", "s33", "s34"),
         Cac=elem("center_", "ca40"),
         Tic=elem("center_", "ti48"),
@@ -719,8 +737,11 @@ class MISTProvider:
             "N": float(np.interp(frac, rows, win["Ns"])),
             "O": float(np.interp(frac, rows, win["Os"])),
             "Ne": float(np.interp(frac, rows, win["Nes"])),
+            "Na": float(np.interp(frac, rows, win["Nas"])),
             "Mg": float(np.interp(frac, rows, win["Mgs"])),
+            "Al": float(np.interp(frac, rows, win["Als"])),
             "Si": float(np.interp(frac, rows, win["Sis"])),
+            "P": float(np.interp(frac, rows, win["Ps"])),
             "S": float(np.interp(frac, rows, win["Ss"])),
             "Ca": float(np.interp(frac, rows, win["Cas"])),
             "Ti": float(np.interp(frac, rows, win["Tis"])),
@@ -731,8 +752,11 @@ class MISTProvider:
             "N": float(np.interp(frac, rows, win["Nc"])),
             "O": float(np.interp(frac, rows, win["Oc"])),
             "Ne": float(np.interp(frac, rows, win["Nec"])),
+            "Na": float(np.interp(frac, rows, win["Nac"])),
             "Mg": float(np.interp(frac, rows, win["Mgc"])),
+            "Al": float(np.interp(frac, rows, win["Alc"])),
             "Si": float(np.interp(frac, rows, win["Sic"])),
+            "P": float(np.interp(frac, rows, win["Pc"])),
             "S": float(np.interp(frac, rows, win["Sc"])),
             "Ca": float(np.interp(frac, rows, win["Cac"])),
             "Ti": float(np.interp(frac, rows, win["Tic"])),
@@ -816,8 +840,11 @@ class MISTProvider:
             "Ns": mix(lo.Ns, hi.Ns),
             "Os": mix(lo.Os, hi.Os),
             "Nes": mix(lo.Nes, hi.Nes),
+            "Nas": mix(lo.Nas, hi.Nas),
             "Mgs": mix(lo.Mgs, hi.Mgs),
+            "Als": mix(lo.Als, hi.Als),
             "Sis": mix(lo.Sis, hi.Sis),
+            "Ps": mix(lo.Ps, hi.Ps),
             "Ss": mix(lo.Ss, hi.Ss),
             "Cas": mix(lo.Cas, hi.Cas),
             "Tis": mix(lo.Tis, hi.Tis),
@@ -826,8 +853,11 @@ class MISTProvider:
             "Nc": mix(lo.Nc, hi.Nc),
             "Oc": mix(lo.Oc, hi.Oc),
             "Nec": mix(lo.Nec, hi.Nec),
+            "Nac": mix(lo.Nac, hi.Nac),
             "Mgc": mix(lo.Mgc, hi.Mgc),
+            "Alc": mix(lo.Alc, hi.Alc),
             "Sic": mix(lo.Sic, hi.Sic),
+            "Pc": mix(lo.Pc, hi.Pc),
             "Sc": mix(lo.Sc, hi.Sc),
             "Cac": mix(lo.Cac, hi.Cac),
             "Tic": mix(lo.Tic, hi.Tic),
@@ -925,7 +955,7 @@ def _blend_windows(a: dict, b: dict, w: float) -> dict:
     }
     for k in ("logL", "logT", "logR", "logg",
               "Xs", "Ys", "Xc", "Yc",
-              "Cs", "Ns", "Os", "Nes", "Mgs", "Sis", "Ss", "Cas", "Tis", "Fes",
-              "Cc", "Nc", "Oc", "Nec", "Mgc", "Sic", "Sc", "Cac", "Tic", "Fec"):
+              "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
+              "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec"):
         out[k] = (1.0 - w) * a[k][:n] + w * b[k][:n]
     return out

@@ -201,21 +201,24 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
 
 # --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
 def test_metal_breakdown_present_and_bounded(provider):
-    """metals_surf/metals_core carry C, N, O, Ne, Mg, Si, S, Ca, Ti, Fe — each a
-    sub-fraction of Z.
+    """metals_surf/metals_core carry C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe —
+    each a sub-fraction of Z.
 
     The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
-    their sum can't exceed Z (only the exposed elements, not every metal — Na/Al/P/
-    Cr/Ni/… stay folded into Z). This is the invariant that keeps the §5.4 detail
-    view honest — the lines can never out-sum the Z sliver they subdivide. The ten
-    sum to ~0.98 of solar Z (measured: surface 0.982, core 0.976), so the headroom
-    is only ~3e-4 but still comfortably above the 1e-9 slack. (The bound is
-    physically guaranteed — the named elements are a disjoint subset of the metals —
-    so a sum *over* Z would mean a double-counted isotope, not a tolerance issue.)
+    their sum can't exceed Z (only the exposed elements, not every metal — Cl/Ar/K/
+    Cr/Ni/… stay folded into Z, and MIST's network doesn't even track those). This is
+    the invariant that keeps the §5.4 detail view honest — the lines can never out-sum
+    the Z sliver they subdivide. The thirteen sum to ~0.99 of solar Z (measured:
+    surface 0.988, core 0.989), so the headroom is only ~2e-4 but still comfortably
+    above the 1e-9 slack. (The bound is physically guaranteed — the named elements are
+    a disjoint subset of the metals — so a sum *over* Z would mean a double-counted
+    isotope, not a tolerance issue; re-measuring the real sum/Z, not the green assert,
+    is the actual correctness check as the headroom keeps shrinking.)
     """
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
+    expected = {"C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"}
     for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
-        assert set(metals) == {"C", "N", "O", "Ne", "Mg", "Si", "S", "Ca", "Ti", "Fe"}
+        assert set(metals) == expected
         for frac in metals.values():
             assert 0.0 <= frac <= z + 1e-9
         assert sum(metals.values()) <= z + 1e-9
@@ -275,21 +278,29 @@ def test_heavy_tracers_inert_while_cno_processes(provider):
     """The detail-view contrast: the heavy tracers barely move while CNO is rewritten.
 
     As a 3 M_sun star dredges up CN-cycle-processed material (surface N triples, C
-    nearly halves), the heavier α / iron-peak tracers Fe, Ne, Mg, Si, S, Ca, Ti are
-    neither made nor destroyed this side of the AGB, so the surface fractions hold to
-    within a few percent. That steady backdrop is exactly what makes the CNO motion
-    legible in the §5.4 view. We assert a *relative* bound (|Δ| small vs N's 3x), not
-    strict flatness: at 1 M_sun MIST's surface diffusion settles metals out and drags
-    Fe down ~10% over the MS (real physics, measured) — so we use the diffusion-quiet
-    3 M_sun grid point, where the tracers all measure ~x1.00 (Fe/Si/S/Ca/Ti x1.00,
-    Ne x0.99). Measured at the first-ascent RGB tip (max R among RGB rows — not the
-    global max, which now lands on the early-AGB after the window was widened).
+    nearly halves), most heavier α / odd-Z / iron-peak tracers — Fe, Ne, Mg, Al, Si,
+    P, S, Ca, Ti — are neither made nor destroyed this side of the AGB, so their
+    surface fractions hold to within a few percent. That steady backdrop is exactly
+    what makes the CNO motion legible in the §5.4 view. We assert a *relative* bound
+    (|Δ| small vs N's 3x), not strict flatness: at 1 M_sun MIST's surface diffusion
+    settles metals out and drags Fe down ~10% over the MS (real physics, measured) —
+    so we use the diffusion-quiet 3 M_sun grid point, where these tracers all measure
+    ~x1.00 (Fe/Al/Si/P/S/Ca/Ti x1.00, Ne x0.99).
+
+    **Na is the deliberate exception** and gets its own assertion: the Ne-Na cycle
+    runs alongside CN burning, so first dredge-up enriches surface sodium too —
+    measured ×1.41 at the 3 M_sun RGB tip (the real Na-O / Na-rich-giant physics). It
+    is a data-only signal here, far too small (3e-5 vs O's 7e-3) to be visible on the
+    §5.4 chart's shared per-region scale, but it must not be mislabeled "inert."
+    Measured at the first-ascent RGB tip (max R among RGB rows — not the global max,
+    which now lands on the early-AGB after the window was widened).
     """
     t = provider.track(3.0, 0.0)
     zams = t[0].metals_surf
     tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
     assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.14x)
-    for el in ("Fe", "Ne", "Mg", "Si", "S", "Ca", "Ti"):
+    assert tip["Na"] / zams["Na"] > 1.2        # Ne-Na cycle dredge-up (measured 1.41x)
+    for el in ("Fe", "Ne", "Mg", "Al", "Si", "P", "S", "Ca", "Ti"):
         assert abs(tip[el] / zams[el] - 1.0) < 0.05   # inert tracer (measured <1%)
 
 

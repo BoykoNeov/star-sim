@@ -3,14 +3,17 @@
 //
 //  * "bulk"  — X=H, Y=He, Z=metals as stacked-area bands (the default). Core on
 //              top (where the drama is), surface below.
-//  * "cno"   — the Phase 4 per-element detail: C, N, O, Ne, Mg & Fe mass fractions
-//              as lines (the id stays "cno" — it began as the CNO trio). Core and
-//              surface get INDEPENDENT y-scales on purpose: during core-He burning
-//              the core's C/O climb to tens of percent while the surface stays ~1%,
-//              so a shared scale would flatten the surface first-dredge-up signature
-//              (N up, C down) — the actual teaching moment — into nothing. Fe/Ne/Mg
-//              are near-flat tracers: Fe in particular just marks the input [Fe/H],
-//              a steady backdrop that makes the CNO motion legible.
+//  * "cno"   — the Phase 4 per-element detail: thirteen element mass fractions as
+//              lines — C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe (the id stays
+//              "cno" — it began as the CNO trio). Core and surface get INDEPENDENT
+//              y-scales on purpose: during core-He burning the core's C/O climb to
+//              tens of percent while the surface stays ~1%, so a shared scale would
+//              flatten the surface first-dredge-up signature (N up, C down) — the
+//              actual teaching moment — into nothing. The α / odd-Z / iron-peak
+//              tracers are near-flat: Fe in particular just marks the input [Fe/H], a
+//              steady backdrop that makes the CNO motion legible. (Na is enriched ~1.4x
+//              by Ne-Na-cycle dredge-up in intermediate-mass giants, but at ~3e-5 of
+//              mass it's a sub-pixel wiggle against O's ~7e-3 on the shared scale.)
 //
 // Why EEP and not linear age on the x-axis (§6): the teaching payoffs — core H→He
 // near TAMS, and the dredge-up on the lower RGB — are slivers on a linear-age
@@ -33,16 +36,20 @@ const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
 // Per-element line colors — deliberately distinct from the bulk band palette
 // above and from each other. Fe is a steel-grey iron mnemonic (and the inert
 // tracer that just marks the input [Fe/H]); CNO keep their Phase-4 hues; the
-// α / iron-peak tracers fill the remaining hue gaps (violet/chartreuse/red/cyan).
+// α / odd-Z / iron-peak tracers fill the remaining hue gaps (violet/chartreuse/
+// red/cyan, plus a sodium-D yellow, aluminium silver and phosphorus orchid).
+// Na/Al/P are tiny floor-huggers (~1e-5 of mass); they cluster at the bottom of
+// each sub-chart, so they need only differ from each other and from Fe/Ca/Ti.
 const ELEM_COL = {
   C: "#ff9f43", N: "#26de81", O: "#54a0ff",     // the CNO trio (orange/green/blue)
-  Ne: "#ff6b9d", Mg: "#feca57",                 // neon rose / magnesium amber
-  Si: "#a55eea", S: "#c4e538",                  // silicon violet / sulfur lime-chartreuse (clear of Mg's amber)
-  Ca: "#ee5253", Ti: "#00d2d3",                 // calcium red / titanium cyan
+  Ne: "#ff6b9d", Na: "#ffe14d",                 // neon rose / sodium D-line yellow
+  Mg: "#feca57", Al: "#cdd6e0",                 // magnesium amber / aluminium silver
+  Si: "#a55eea", P: "#c77dff",                  // silicon violet / phosphorus orchid
+  S: "#c4e538", Ca: "#ee5253", Ti: "#00d2d3",   // sulfur lime / calcium red / titanium cyan
   Fe: "#a4b0be",                                // iron grey
 };
 // Atomic-number order, so the legend reads C→Fe left to right.
-const ELEMS = ["C", "N", "O", "Ne", "Mg", "Si", "S", "Ca", "Ti", "Fe"];
+const ELEMS = ["C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.

@@ -59,7 +59,7 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
   panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
-  (C·N·O·Ne·Mg·Si·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
+  (C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
   with independent core/surface scales; `lane.js` is the
   Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
@@ -314,6 +314,43 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   updated; `mode="cno"` id kept. Verified via headless Chrome screenshot (3 M☉ in cno
   mode: ten distinct lines, surface dredge-up + core C/O spike intact, legend wraps
   cleanly, no JS errors). 63 tests pass (unchanged count — extended existing tests).
+- **Done (Phase 4, widened element set → Na/Al/P):** the per-element view now exposes
+  **thirteen** elements — the ten above **+ Na, Al, P** (the odd-Z light metals). Provider
+  threading mirrors the Si/S/Ca/Ti add exactly: `_Track` gained `Nas/Als/Ps` + `Nac/Alc/Pc`
+  (Na=na21…na24, Al=al25…al27, P=p30+p31), `_TRACK_COLS` + **`CACHE_VERSION` 5→6** (old
+  `.npz` rejected → one ~60 s reparse), linear mixing in `_grid_window`/`_blend_windows`,
+  three entries each in `_state_from_row`'s dicts; the stub's `METALS_OF_Z` added Na 0.0020 /
+  Al 0.0038 / P 0.0004 (Asplund fractions-of-Z; the thirteen now sum to ~0.90 Z in the
+  stub). Field-name convention `s`=surface/`c`=core means **`Pc` is phosphorus-core**
+  (commented next to the existing `Sc`=sulfur-core note). **The requested set was Na/Al/P
+  *plus Cr/Mn/Ni*, but Cr/Mn/Ni are NOT in MIST v2.5's nuclear network** — verified against
+  the real track header (isotopes stop at the Ca40/Ti48/Fe56 region; no chromium/manganese/
+  nickel columns exist), so only Na/Al/P could be added. **The physics caught another
+  wrong assumption** (advisor + measured): Na is **not inert** — the Ne-Na cycle dredges
+  it up, so surface Na rises **×1.41** at the 3 M☉ RGB tip (real Na-O / Na-rich-giant
+  physics). So Na gets its *own* dredge-up assertion (`>1.2`), while only Al/P join the
+  inert-tracer loop (both ×1.00). **Honesty note (advisor):** the Na enrichment is a
+  *data-only* signal — at ~3e-5 of mass vs O's ~7e-3 it's a sub-pixel wiggle on `comp.js`'s
+  shared per-region scale, invisible to the user; making it visible (per-line normalize /
+  log scale) is a separate rendering decision, not part of "add elements." So this is
+  honestly **filler-plus-one-invisible-wrinkle** — Li (lithium depletion) is the visible
+  payoff if more elements are wanted (see Next). The sum-under-Z headroom shrank as
+  expected but holds: measured at the Sun the thirteen sum to **~0.99 of Z** (surface 0.988,
+  core 0.989 — headroom ~2e-4, still ≫ the 1e-9 slack; the bound is physically guaranteed
+  by disjointness, so re-measuring is the real check). Updated §10 tests:
+  `test_metal_breakdown_present_and_bounded` (set is the thirteen; real surface/core sum/Z
+  in the docstring), `test_heavy_tracers_inert_while_cno_processes` (Al/P added to the inert
+  loop, Na carved out with its own assertion); stub `test_stub_metal_breakdown_bounded`.
+  **Verified the [Fe/H] blend path** via a direct probe (off-grid 2.7 M☉ / [Fe/H]=0.25 →
+  thirteen bounded keys; all 606 track rows carry the keyset & stay bounded). Frontend:
+  `comp.js` `ELEMS`/`ELEM_COL` → thirteen (atomic-number order, interleaved — Na after Ne,
+  Al after Mg, P after Si — *not* appended; the three new fill open hue gaps: Na sodium-D
+  yellow, Al aluminium silver, P phosphorus orchid); the drawing loop was already generic.
+  Legend grew 10→13 (still flex-wraps), both comp tooltips + the panel `<h2>` gloss updated;
+  `mode="cno"` id kept. Verified via headless Chrome screenshot (3 M☉ in cno mode: thirteen
+  distinct lines, surface dredge-up + core C/O spike intact, Na/Al/P render as the expected
+  floor-huggers, legend wraps cleanly, no JS errors). 90 tests pass (unchanged count —
+  extended existing tests; MESA suite already at 90).
 - **Done (Phase 4, MESAProvider — the second real provider, validates MIST):**
   `providers/mesa.py` reads offline MESA `history.data` runs — a **completely
   different on-disk format** behind the same §3 boundary, proving the abstraction a
@@ -396,10 +433,15 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is now a *data* task, not a code task — a one-off MESA-Web
   solar run drops into `data/mesa/` with zero code (the public-grid route is exhausted:
-  circular or surface-less, see the Done bullet above); yet more elements is possible
-  (Na/Al/P/Cr/Mn/Ni — same one-line dict add) but the pedagogical payoff is thin and the
-  sum-under-Z headroom is now only ~3e-4, so it is *not* the obvious next step; the
-  **TPAGB thermal pulses** (still deferred — §6's genuinely messy phase; would need
+  circular or surface-less, see the Done bullet above); the **Na/Al/P add is done** (see
+  the Done bullet) — and it taught that **Cr/Mn/Ni are NOT addable** (not in MIST v2.5's
+  network, verified against the header) and that Na/Al/P are nearly all invisible
+  floor-huggers, so *more heavy elements is a dead end for payoff*; the genuinely
+  *visible* next element is **Li (lithium depletion)** — Li burns at low temperature, so
+  the surface Li drops sharply as the convective envelope deepens (a famous, observable
+  story that would actually *move* on the chart, unlike Na/Al/P), one more one-line dict
+  add (Li=li7; Be/B/F are also in the network if a light-element panel is ever wanted);
+  the **TPAGB thermal pulses** (still deferred — §6's genuinely messy phase; would need
   explicit per-grid handling, *not* cross-mass interpolation), eventually a
   `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope for
   now — see spec §9).
