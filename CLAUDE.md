@@ -588,3 +588,13 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   predictive" per spec §7).
 - Don't let scope creep in: no live structure solve, no nuclear network, no
   deploy/bundle concerns (spec §2). This runs locally.
+- **Claude's auto-memory is tracked in the repo** at `docs/memory/` (`MEMORY.md`
+  index + one file per fact). The harness still reads/writes memory from its fixed
+  path `~/.claude/projects/M--claud-projects-star-sim/memory`, which is a **directory
+  junction** pointing at `docs/memory/` — so every memory write lands in the repo.
+  Consequence: after writing or editing memory, **`git add docs/memory` and commit
+  it** like any other tracked change (the session-end ritual already covers this). If
+  the junction is ever missing (fresh clone on another machine, or it got replaced by
+  a real dir), re-create it: `New-Item -ItemType Junction -Path "<that .claude path>"
+  -Target "<repo>\docs\memory"` (Windows; no admin needed) — the repo copy is the
+  source of truth.
