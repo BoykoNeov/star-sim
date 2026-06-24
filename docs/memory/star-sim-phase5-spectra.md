@@ -1,6 +1,6 @@
 ---
 name: star-sim-phase5-spectra
-description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP (3-D [Fe/H]) + OSTAR2002 HOT SPLICE (→55000 K, He lines) + HOT-END NO-MODEL NOTICE DONE: MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime unchanged through CAP18 swap AND OSTAR splice (NO BAKE_VERSION bump) — real new code is the bake going single-grid→multi-grid (--hot-grid). He I/He II guides (minTeff-gated). Above the 55000 K ceiling (hottest draggable ≈78500 K) the panel BLANKS + shows 'no spectral model … reach {teff_max} K' instead of the fake clamped spectrum — backend reports teff_requested/teff_min/teff_max, policy in spectrum.js, HOT end only (cool floor keeps honest clamp), keyed off teff_max not a literal. 120 tests."
+description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP (3-D [Fe/H]) + OSTAR2002 HOT SPLICE (→55000 K, He lines) + HOT-END NO-MODEL NOTICE + GÖTTINGEN COOL SPLICE (<3500 K, TiO bands) DONE: MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime unchanged through CAP18 swap AND both splices (NO BAKE_VERSION bump) — real new code is the bake going single-grid→multi-grid (--hot-grid / --cool-grid). He I/He II guides (minTeff-gated, hot) + TiO bandhead guides (maxTeff-gated, cool). Cool splice = Göttingen/PHOENIX sg-Goettingen-MedRes-A.h5 (Husser+2013, 1.7GB, EXACTLY 3-axis Teff/[Fe/H]/logg, log [Fe/H] like CAP18 → no Z/Zo conv, log g 0-6 covers dwarfs+giants → floor 3500→2300 K, the 2809 K coolest star now a REAL spectrum). Above the 55000 K ceiling (hottest draggable ≈78500 K) the panel BLANKS + shows 'no spectral model … reach {teff_max} K'; HOT end only (cool now real-data-covered to 2300). 121 tests."
 metadata:
   node_type: memory
   type: project
@@ -153,19 +153,55 @@ notice considered + **rejected**. Message keys off `teff_max` from the response,
 via Playwright on the **real UI** (drove mass/feh/age number inputs — they commit-on-change, bypassing
 snapping): 78453 K → message w/ dynamic ceiling, no JS errors; in-range 53656 K → normal draw.
 
+**GÖTTINGEN COOL SPLICE — DONE (this session, the symmetric mirror of OSTAR).** Trigger was the user's
+question "is the clamped low-T data plausible?" — answer (MEASURED via live provider): the coolest
+draggable stars reach **~2809 K** (0.1 M☉ M-dwarf) and most low-mass RGB/AGB tips (incl. the **Sun's own
+giant tip ~3278 K**) sit below CAP18's 3500 K floor, where **TiO molecular bands** dominate and the 3500 K
+clamp understated them badly (in-grid 3500→4000 K the blue/red continuum ratio already ~triples). Spliced
+**`sg-Goettingen-MedRes-A.h5`** (Husser+2013 PHOENIX, the canonical cool-star library, ~1.7 GB,
+`…/grids/Goettingen/MedRes-A/v3/…`) onto the cool Teff end. **Why this grid** (verified vs the live grids
+page, NOT assumed): **exactly 3-axis `Teff/[Fe/H]/log g`**, **log [Fe/H] like CAP18 → NO Z/Zo conversion**
+(simpler than the hot splice), **Teff [2300,12000]**, **log g [0,6] covers dwarfs AND giants** (decisive —
+**ruled out SPHINX**, a 2000–4000 K cool grid but **dwarf-gravity-only log g 4.0–5.5** → would clamp every
+cool giant; also Coelho14 only-to-3000, C3K voids-warning, NewEra 4.9 GB-no-benefit). Real new code =
+`bake_spectra.py --cool-grid` (`_prepend_cool_teff`/`_cool_grid_info`, mirror of the hot helpers): prepends
+**19 log-spaced Teff nodes** below 3500 at the cool axis' own log-step (96 CAP18 nodes NOT re-spread).
+Axis = `[19 cool][96 CAP18][27 hot]` = **142 nodes [2300..55000]**, cube `142×12×11×2400` **~98 MB**.
+**Runtime+frontend axis-generic, NO BAKE_VERSION bump**; `teff_min` auto-dropped to 2300 → the 2809–3500 K
+stars are now **real spectra, not the frozen clamp** (cool clamp no longer fires for any reachable star).
+**≥3500 K block BIT-IDENTICAL** (verified: 123 CAP18/OSTAR nodes+flux byte-for-byte unchanged — splice purely
+ADDED sub-3500). **Payoff = maxTeff-gated TiO bandhead guides** (5167/6159/7053 Å, mirror of the He II
+minTeff gate) lighting up in the M regime. **Honesty (advisor — the recurring "don't label a non-feature"
+trap):** all 3 TiO heads verified through the runtime path with a **slope-minimal narrow-window** measure
+(step **0.55–0.75 at 2809 K vs ~0.03 in Sun**), but **VO 7400 DROPPED** (reads ~0/flat like a control λ — no
+clean bandhead at reachable Teff; the **boron-b8 / invisible-Na lesson AGAIN** — verify a feature is real
+before labeling it). **Seam graceful** (measured): TiO 6159 essentially continuous across 3500 (0.361→0.356),
+the bigger PHOENIX-vs-ATLAS TiO 7053 difference a smooth interpolated ramp not a discontinuity. Void-fill **0
+fallback**; neg-flux clamp 8840→**14120** (PHOENIX deep cores, 0.03%, depths still sane). New test
+`test_cool_grid_extends_below_3500_with_molecular_bands` (TiO deep-in-M/gone-in-Sun/deepens-as-cools + off-grid
+feh ±0.5 bounded — the recurring feh=0 short-circuit gap; self-skips on a no-cool-grid cube). **Stale "3500
+floor" rationale fixed** (`teffAboveGrid()`'s "3300 K red dwarf as 3500 K" was now false). **121 tests.**
+Playwright: 3145 K M-dwarf → 3 TiO guides on deep troughs (real Göttingen spectrum, would've clamped to 3500
+before); Sun → no TiO guides; no JS errors. Recipe §5b (fetch + rationale + findings) + §6 (3-grid bake).
+
 **Why:** records a shipped phase + the non-obvious decisions (axis-generic for the CAP18 swap,
 runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp NOW a "no model"
 notice, CAP18's 30000 K ceiling) — and that the CAP18 swap *did* pay off as a zero-code re-bake
 exactly as designed.
 
-**How to apply:** the CAP18 swap AND the OSTAR2002 hot-end splice are **done** (cube reaches 55000 K,
-He lines live). To go further (more line detail, or NLTE B-star spectra): re-bake from
-`sg-CAP18-high.h5`/`ultra` or OSTAR `medium`/`high` for finer spectra, or splice **`BSTAR2006`**
-(15000–30000 K, NLTE) if CAP18's LTE hot end is ever a concern — all re-bakes/data work, the runtime
-stays axis-generic. **Splice mechanics that paid off (reuse for BSTAR):** `bake_spectra.py --hot-grid`
-appends Teff nodes at the cool axis' own log-step (never re-spread); translate any `Z/Zo`-axis grid via
-`Z/Zo=10^[Fe/H]` floored at the smallest *positive* node (dodge the metal-free `ValueError` cliff);
-keep the same-Teff void-fill pass (preserves the dominant Teff axis). General rules that still hold:
+**How to apply:** the CAP18 swap, the OSTAR2002 hot splice AND the **Göttingen cool splice** are **done**
+(cube spans **2300–55000 K**: TiO bands at the cool end, He lines at the hot end). To go further (more line
+detail, or NLTE B-star spectra): re-bake from `sg-CAP18-high.h5`/`ultra`, OSTAR `medium`/`high`, or
+Göttingen `HiRes`/`MedRes-R` for finer spectra, or splice **`BSTAR2006`** (15000–30000 K, NLTE) if CAP18's
+LTE hot end is ever a concern — all re-bakes/data work, the runtime stays axis-generic. **Splice mechanics
+that paid off (reuse for BSTAR / any future grid):** `bake_spectra.py --hot-grid` *appends* Teff nodes above
+the ceiling, `--cool-grid` *prepends* below the floor — both at the primary axis' own log-step (never
+re-spread the CAP18 nodes; the ≥-/≤-overlap block stays bit-identical); translate any `Z/Zo`-axis grid via
+`Z/Zo=10^[Fe/H]` floored at the smallest *positive* node (a log-[Fe/H] grid like Göttingen needs NO
+conversion); keep the same-Teff void-fill pass (preserves the dominant Teff axis). **For a cool grid, pick
+one with broad log g (dwarfs AND giants) — a dwarf-only grid (SPHINX) clamps cool giants.** **Verify every UI
+guide is a REAL feature** (slope-minimal narrow-window step through the runtime path) before labeling it — VO
+7400 was dropped for reading flat (boron-b8 lesson). General rules that still hold:
 keep `/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-container only); keep Query
 bounds wider than any real star so dragging never 422s; bake the cube into the build container
 (`msg_spike`) and `docker cp` the `.npz` out — never import pymsg at run time. **chrome --headless

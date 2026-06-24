@@ -246,13 +246,31 @@ auto-tracks a hotter re-bake. New test `test_response_reports_teff_coverage_for_
 pins the contract (`teff_requested > teff_max` while `teff == teff_max`). **120 tests pass.**
 Verified via Playwright on the real UI: 78453 K star → message with dynamic 55000 K ceiling,
 no JS errors; in-range 53656 K O star → normal spectrum still draws right up to the ceiling.
+(At the time the cool floor was 3500 K and kept its honest clamp — *since extended to 2300 K
+by the cool splice below*, so the hot end is now the only model gap; the notice stays hot-only.)
+
+**Cool-end splice (Göttingen/PHOENIX, <3500 K) — DONE (this session).** CAP18's 3500 K
+floor was a poor stand-in for the coolest stars (measured: a 0.1 M☉ M-dwarf reaches **2809 K**,
+and most low-mass RGB/AGB tips — incl. the **Sun's own giant tip ~3278 K** — sit below 3500 K;
+below ~3000 K the spectrum is dominated by **TiO molecular bands** the 3500 K clamp badly
+understated). Spliced in the **Göttingen grid** (Husser+2013 PHOENIX, `sg-Goettingen-MedRes-A.h5`,
+1.7 GB) onto the cool end — chosen because it is **exactly 3-axis `Teff/[Fe/H]/log g`** (log
+[Fe/H] like CAP18, *no* Z/Zo conversion — simpler than the hot splice), **2300–12000 K**, and
+**log g 0–6** covering cool dwarfs *and* giants (ruling out SPHINX, whose log g is dwarf-only).
+`bake_spectra.py --cool-grid` prepends 19 log-spaced Teff nodes below 3500 K (mirror of
+`_append_hot_teff`); the ≥3500 K block stays **bit-identical**. The cool floor is now 2300 K,
+below every reachable star, so the cool clamp no longer fires. **Payoff** (mirror of the He II
+guides): `maxTeff`-gated **TiO bandhead guides** (5167/6159/7053 Å) light up dragging into the
+M regime — all three verified real through the runtime path (step ~0.55–0.75 at 2809 K vs ~0.03
+in the Sun); **VO 7400 was DROPPED** (reads ~0/flat — no clean bandhead at reachable Teff, the
+boron-b8 "don't label a non-feature" rule). New test `test_cool_grid_extends_below_3500_with_molecular_bands`
+(self-skips on a no-cool-grid cube). **121 tests pass.** Verified via Playwright: 3145 K M-dwarf
+→ TiO guides lit + deep molecular troughs; Sun → no TiO guides; no JS errors.
 
 **Next (future, optional):** raise wavelength/Teff/[Fe/H] density (the `coarse` grid is
 the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); splice
 **BSTAR2006** for NLTE B-star spectra (15000–30000 K) if CAP18's LTE hot end is ever a
 concern; or a `medium`/`high` OSTAR tier for finer O-star line detail. All pure data work.
-(A symmetric cool-end "no model" notice was *considered and rejected* — the cool clamp is a
-small honest extrapolation, not a model gap; blanking it would regress flagship cool stars.)
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

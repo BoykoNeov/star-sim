@@ -28,16 +28,33 @@ const PAD_L = 44, PAD_R = 12, PAD_T = 30, PAD_B = 34;
 // so we shade it as a rainbow and grey-out the UV/IR flanks.
 const VIS_LO = 3800, VIS_HI = 7800;
 
-// Principal absorption lines worth labelling — the pedagogy. Hydrogen Balmer
+// Principal absorption features worth labelling — the pedagogy. Hydrogen Balmer
 // series (peak at A stars) + Ca II H&K and Na D (strong in cool stars) are drawn
-// always. The helium lines are the hot-star payoff of the OSTAR2002 splice (which
-// extended the grid past CAP18's 30000 K ceiling): they carry a `minTeff`, so a
-// guide appears only once the star is hot enough to actually show the line — He I
-// 4471 in B/A stars and hotter, He II 4686 only in O stars (>~30000 K — the OSTAR
-// splice regime), where it is THE defining feature. So dragging into the O-star regime
-// literally lights up the He II 4686 guide. Drawn as faint vertical guides with a
-// short label; only those inside the panel's λ range (and past minTeff) show.
+// always. Two TEMPERATURE-GATED families bracket them:
+//
+//   • Helium lines (`minTeff`) — the hot-star payoff of the OSTAR2002 splice (which
+//     extended the grid past CAP18's 30000 K ceiling): He I 4471 in B/A and hotter,
+//     He II 4686 only in O stars (>~30000 K), where it is THE defining feature.
+//     Dragging into the O-star regime literally lights up the He II 4686 guide.
+//
+//   • Molecular bands (`maxTeff`) — the cool-star payoff of the Göttingen/PHOENIX
+//     COOL splice (which extended the grid below CAP18's 3500 K floor to 2300 K):
+//     TiO bandheads dominate the optical spectrum of M stars. They carry a `maxTeff`,
+//     so dragging into the M-dwarf / red-giant-tip regime lights up the TiO guides —
+//     the spectrum visibly turns into a forest of molecular troughs (which is exactly
+//     why a 3500 K clamp was a poor stand-in for a 2800 K star: those bands deepen
+//     fast below the old floor). Only TiO bandheads are MARKED: all three (5167/6159/
+//     7053 Å) were verified through the runtime path as real, deep edges at the
+//     coolest reachable stars (step ~0.5–0.75 at 2809 K vs ~0.03 in the Sun). VO and
+//     other metal oxides also strengthen in the very latest M's, but they form no
+//     single clean isolated bandhead in this grid's reachable range, so — per the
+//     project's "don't label a non-feature" rule — they are described in the panel
+//     prose but get no guide line.
+//
+// Drawn as faint vertical guides with a short label; only those inside the panel's
+// λ range AND within the star's [minTeff, maxTeff] gate show.
 const COL_HE = "rgba(150,205,255,0.55)";   // a cool-blue tint marks the hot-star He guides
+const COL_MOL = "rgba(255,170,105,0.5)";   // a warm tint marks the cool-star molecular bands
 const LINES = [
   { lam: 3933, label: "Ca K" },
   { lam: 3968, label: "Ca H" },
@@ -46,8 +63,11 @@ const LINES = [
   { lam: 4471, label: "He I", minTeff: 10000, col: COL_HE },   // neutral He — B/A and hotter
   { lam: 4686, label: "He II", minTeff: 30000, col: COL_HE },  // ionized He — O stars (the OSTAR splice regime; below 30000 K it's ~continuum)
   { lam: 4861, label: "Hβ" },
+  { lam: 5167, label: "TiO", maxTeff: 4000, col: COL_MOL },    // TiO γ′ bandhead (near Mg b) — mid/late M
   { lam: 5893, label: "Na D" },
+  { lam: 6159, label: "TiO", maxTeff: 4300, col: COL_MOL },    // TiO γ bandhead — late K / M onward
   { lam: 6563, label: "Hα" },
+  { lam: 7053, label: "TiO", maxTeff: 4300, col: COL_MOL },    // TiO ε bandhead — the strongest red TiO trough in M
 ];
 
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
@@ -110,9 +130,12 @@ export function createSpectrum({ api }) {
   // (teff_max comes from the response — the real ceiling, never a literal 55000,
   // so this auto-tracks a denser/hotter re-bake). Past it we have NO model
   // atmosphere: drawing the clamped ceiling spectrum would be a fake, so we blank
-  // the panel and say so. Strictly the HOT end only — the cool floor keeps its
-  // honest clamp (a 3300 K red dwarf shown as 3500 K is a small extrapolation; a
-  // 70000 K star shown as 55000 K is a different ionization regime entirely).
+  // the panel and say so. Strictly the HOT end only — the cool end is now covered
+  // down to 2300 K (the Göttingen/PHOENIX cool splice), below every reachable star
+  // (~2800 K), so the cool floor no longer clamps a real star at all. And even if a
+  // future grid floor sat above some star, a cool clamp would be an honest small
+  // extrapolation (cool model atmospheres exist and are ingestible) — unlike the hot
+  // end, where past 55000 K no model exists, so blanking is the only honest move.
   function teffAboveGrid() {
     return data && data.teff_requested != null && data.teff_max != null &&
       data.teff_requested > data.teff_max + 0.5;
@@ -189,13 +212,15 @@ export function createSpectrum({ api }) {
     // Absorption-line guides. Every in-range line gets a dashed guide, but the
     // LABEL is collision-skipped (the Ca K / Ca H / Hδ cluster at the Balmer jump
     // would overprint into mush otherwise) — same idea as the slider tick strip.
-    // A `minTeff` line (the He guides) is shown only when the star is that hot, so
-    // helium appears exactly where it physically matters (hot stars).
+    // Temperature-gated guides show only where they physically matter: a `minTeff`
+    // line (the He guides) appears only when the star is that hot, a `maxTeff` line
+    // (the TiO/VO molecular bands) only when it is that cool.
     ctx.lineWidth = 1;
     let lastLabelX = -1e9;
     for (const ln of LINES) {
       if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
       if (ln.minTeff && data.teff < ln.minTeff) continue;   // hot-star lines: only when hot
+      if (ln.maxTeff && data.teff > ln.maxTeff) continue;   // cool-star bands: only when cool
       const x = xOf(ln.lam);
       ctx.strokeStyle = ln.col || "rgba(231,236,245,0.35)";
       ctx.setLineDash([2, 4]);

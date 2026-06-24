@@ -36,10 +36,21 @@ them via ``Z/Zo = 10**[Fe/H]`` (clamped to the hot grid's range) and clamp log g
 to the hot grid's narrower span. The cube stays one regular ``(teff, feh, logg,
 lam)`` block — the runtime is unchanged (only the Teff axis is longer).
 
+A symmetric optional **cool-grid splice** (``--cool-grid``) extends the Teff axis
+below the primary grid's *floor*. CAP18 stops at 3500 K, but the coolest draggable
+stars (0.1 M☉ M-dwarfs, the RGB/AGB tips of low-mass stars) reach ~2800 K; splicing
+the Göttingen/PHOENIX grid (Husser+2013, 2300–12000 K) *prepends* log-spaced Teff
+nodes down to 2300 K so those stars get a real molecular-band spectrum instead of
+the frozen 3500 K clamp. The Göttingen grid shares CAP18's logarithmic ``[Fe/H]``
+(no Z/Zo conversion) and spans dwarf+giant gravities (log g 0–6), so the cool
+sampling is even simpler than the hot one. Both splices compose — the Teff axis
+becomes ``[cool nodes < 3500][CAP18 3500–30000][hot nodes > 30000]``.
+
 Run inside the container (env per the recipe), e.g.:
 
     python bake_spectra.py --grid /tmp/sg-CAP18-coarse.h5 \
                            --hot-grid /tmp/sg-OSTAR2002-low.h5 \
+                           --cool-grid /tmp/sg-Goettingen-MedRes-A.h5 \
                            --out /tmp/spectra_grid.npz
 
 then `docker cp` the `.npz` out to the host `data/spectra/`.
@@ -115,6 +126,30 @@ def _append_hot_teff(cool: np.ndarray, hi_hot: float) -> np.ndarray:
     hot = np.exp(np.log(cool[-1]) + logstep * np.arange(1, n_hot + 1))
     hot[-1] = hi_hot
     return np.concatenate([cool, hot])
+
+
+def _prepend_cool_teff(warm: np.ndarray, lo_cool: float) -> np.ndarray:
+    """Extend a log-spaced Teff axis DOWN to `lo_cool` by PREPENDING nodes that
+    continue the warm axis' own log-step — never re-spreading the warm nodes (the
+    cool-end mirror of `_append_hot_teff`).
+
+    CAP18's floor is 3500 K, but the coolest draggable star (a 0.1 M☉ M-dwarf, and
+    the RGB/AGB tips of low-mass stars) reaches ~2800 K. Splicing a cool grid
+    (Göttingen/PHOENIX, 2300–12000 K) prepends nodes below 3500 K so those cool
+    stars get a *real* molecular-band spectrum instead of the frozen 3500 K clamp.
+    We keep CAP18's tuned cool nodes exactly and add more below them at the same
+    log spacing, snapping the lowest to `lo_cool` so the grid floor is a real node.
+    (The log-step is read from `warm` as-is; if the hot nodes were already appended
+    the step is the combined-axis step — within ~0.2% of CAP18's native step, a
+    negligible difference in cool-node placement.)
+    """
+    if lo_cool >= warm[0]:
+        return warm
+    logstep = (np.log(warm[-1]) - np.log(warm[0])) / (warm.size - 1)
+    n_cool = int(np.ceil((np.log(warm[0]) - np.log(lo_cool)) / logstep))
+    cool = np.exp(np.log(warm[0]) - logstep * np.arange(n_cool, 0, -1))
+    cool[0] = lo_cool
+    return np.concatenate([cool, warm])
 
 
 def _fill_voids_along(cube: np.ndarray, valid: np.ndarray, logg_axis: int,
@@ -237,8 +272,40 @@ def _hot_grid_info(hg, hot_grid_path: str) -> dict:
     }
 
 
+def _cool_grid_info(cg, cool_grid_path: str) -> dict:
+    """Locate a cool grid's (Teff, [Fe/H], log g) axis labels + bounds for the
+    cool-end splice (the mirror of `_hot_grid_info`).
+
+    Unlike the TLUSTY hot grids (linear ``Z/Zo``), the Göttingen/PHOENIX cool grids
+    carry metallicity as logarithmic ``[Fe/H]`` — the SAME convention as CAP18 — so
+    there is **no Z/Zo conversion**: we sample ``[Fe/H]`` directly, clamped to the
+    cool grid's range. log g is clamped to the cool grid's range (a cool grid spans
+    dwarf *and* giant gravities, e.g. Göttingen 0–6, so this rarely bites); Teff is
+    shared. We assert the metallicity axis really is ``[Fe/H]`` — a future Z/Zo cool
+    grid would need the hot path's ``10**[Fe/H]`` conversion, deliberately not
+    implemented here.
+    """
+    labels = list(cg.axis_labels)
+    teff_l = next(l for l in labels if _canon(l) == "teff")
+    logg_l = next(l for l in labels if _canon(l) == "logg")
+    feh_candidates = [l for l in labels if _canon(l) == "feh"]
+    if not feh_candidates:
+        raise ValueError(
+            f"cool grid {os.path.basename(cool_grid_path)} has no [Fe/H] axis "
+            f"(axes={labels}); only log-[Fe/H] cool grids are supported"
+        )
+    feh_l = feh_candidates[0]
+    return {
+        "teff_l": teff_l, "logg_l": logg_l, "feh_l": feh_l,
+        "teff_min": float(cg.axis_x_min[teff_l]),
+        "feh_min": float(cg.axis_x_min[feh_l]), "feh_max": float(cg.axis_x_max[feh_l]),
+        "g_min": float(cg.axis_x_min[logg_l]), "g_max": float(cg.axis_x_max[logg_l]),
+    }
+
+
 def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
-         lam_step: float, n_teff: int | None, hot_grid_path: str | None = None) -> None:
+         lam_step: float, n_teff: int | None, hot_grid_path: str | None = None,
+         cool_grid_path: str | None = None) -> None:
     import pymsg  # imported here so `--help` works outside the container
 
     sg = pymsg.SpecGrid(grid_path)
@@ -262,6 +329,20 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
               f"(Teff -> {hot['teff_max']:.0f} K, {hot['z_l']} {hot['z_min']}..{hot['z_max']}, "
               f"log g {hot['g_min']}..{hot['g_max']})", flush=True)
 
+    # Optional cool-grid splice: Göttingen/PHOENIX extends Teff below the primary
+    # grid's floor (CAP18 stops at 3500 K; the spliced axis reaches Göttingen's
+    # 2300 K, so the coolest M-dwarfs / RGB-AGB tips get a real molecular spectrum).
+    cg = None
+    cool = None
+    primary_teff_min = float(sg.axis_x_min[next(l for l in labels if _canon(l) == "teff")]) \
+        if "teff" in keys else None
+    if cool_grid_path is not None:
+        cg = pymsg.SpecGrid(cool_grid_path)
+        cool = _cool_grid_info(cg, cool_grid_path)
+        print(f"cool grid: {os.path.basename(cool_grid_path)}  axes={list(cg.axis_labels)} "
+              f"(Teff -> {cool['teff_min']:.0f} K, {cool['feh_l']} {cool['feh_min']}.."
+              f"{cool['feh_max']}, log g {cool['g_min']}..{cool['g_max']})", flush=True)
+
     # Build our regular axes over the grid's own bounds; extend Teff if splicing.
     axes: list[np.ndarray] = []
     axis_log: list[bool] = []
@@ -271,6 +352,8 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
         nodes = _build_axis(key, lo, hi)
         if key == "teff" and hot is not None:
             nodes = _append_hot_teff(nodes, hot["teff_max"])
+        if key == "teff" and cool is not None:
+            nodes = _prepend_cool_teff(nodes, cool["teff_min"])
         axes.append(nodes)
         axis_log.append(_AXIS_PLAN.get(key, _AXIS_PLAN_DEFAULT)["log"])
         print(f"  axis {key}: {nodes.size} nodes [{nodes[0]:.4g} .. {nodes[-1]:.4g}]"
@@ -280,11 +363,13 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
     feh_i = keys.index("feh") if "feh" in keys else None
     logg_i = keys.index("logg") if "logg" in keys else None
 
-    # Wavelength bins: clamp to BOTH grids' coverage; store bin CENTRES.
+    # Wavelength bins: clamp to ALL spliced grids' coverage; store bin CENTRES.
     grid_lam_min = max(float(np.ceil(sg.lam_min)),
-                       float(np.ceil(hg.lam_min)) if hg is not None else -np.inf)
+                       float(np.ceil(hg.lam_min)) if hg is not None else -np.inf,
+                       float(np.ceil(cg.lam_min)) if cg is not None else -np.inf)
     grid_lam_max = min(float(np.floor(sg.lam_max)),
-                       float(np.floor(hg.lam_max)) if hg is not None else np.inf)
+                       float(np.floor(hg.lam_max)) if hg is not None else np.inf,
+                       float(np.floor(cg.lam_max)) if cg is not None else np.inf)
     lo = max(lam_min, grid_lam_min)
     hi = min(lam_max, grid_lam_max)
     lam_edges = np.arange(lo, hi + lam_step, lam_step)
@@ -302,6 +387,7 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
     t0 = time.time()
     n_void = 0
     n_hot_nodes = 0
+    n_cool_nodes = 0
     for idx in np.ndindex(param_shape):
         teff_val = float(axes[teff_i][idx[teff_i]]) if teff_i is not None else None
         if hot is not None and teff_val is not None and teff_val > cool_teff_max + 1e-6:
@@ -315,6 +401,18 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
             }
             grid = hg
             n_hot_nodes += 1
+        elif cool is not None and teff_val is not None and teff_val < primary_teff_min - 1e-6:
+            # Sample the cool grid: [Fe/H] is the SAME log convention as CAP18 (no
+            # Z/Zo conversion), just clamp [Fe/H] and log g to the cool grid's span.
+            feh_val = float(axes[feh_i][idx[feh_i]]) if feh_i is not None else 0.0
+            logg_val = float(axes[logg_i][idx[logg_i]]) if logg_i is not None else 4.0
+            x = {
+                cool["teff_l"]: teff_val,
+                cool["feh_l"]: min(max(feh_val, cool["feh_min"]), cool["feh_max"]),
+                cool["logg_l"]: min(max(logg_val, cool["g_min"]), cool["g_max"]),
+            }
+            grid = cg
+            n_cool_nodes += 1
         else:
             x = {label: float(axes[i][idx[i]]) for i, label in enumerate(labels)}
             grid = sg
@@ -324,9 +422,13 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
             valid[idx] = True
         except LookupError:
             n_void += 1  # a grid void; filled below
+    spliced = []
+    if hot is not None:
+        spliced.append(f"{n_hot_nodes} from hot grid")
+    if cool is not None:
+        spliced.append(f"{n_cool_nodes} from cool grid")
     print(f"    done in {time.time() - t0:.1f}s; {n_void} voids ({100*n_void/n_nodes:.1f}%)"
-          f"{f'; {n_hot_nodes} nodes from hot grid' if hot is not None else ''}",
-          flush=True)
+          f"{('; ' + ', '.join(spliced)) if spliced else ''}", flush=True)
 
     logg_axis = keys.index("logg") if "logg" in keys else None
     if n_void:
@@ -350,6 +452,8 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
     grid_name = os.path.basename(grid_path)
     if hot_grid_path is not None:
         grid_name = f"{grid_name}+{os.path.basename(hot_grid_path)}"
+    if cool_grid_path is not None:
+        grid_name = f"{grid_name}+{os.path.basename(cool_grid_path)}"
     data: dict[str, np.ndarray] = {
         "bake_version": np.array(BAKE_VERSION),
         "grid_name": np.array(grid_name),
@@ -383,6 +487,12 @@ def main(argv: list[str] | None = None) -> int:
                         "the Teff axis above the primary grid's ceiling, extending "
                         ">30000 K coverage. Its linear Z/Zo axis is sampled via "
                         "Z/Zo=10**[Fe/H]; log g is clamped to the hot grid's range.")
+    p.add_argument("--cool-grid", default=None,
+                   help="optional cool grid (e.g. sg-Goettingen-MedRes-A.h5) spliced "
+                        "onto the Teff axis below the primary grid's floor, extending "
+                        "<3500 K coverage for the coolest M-dwarfs / RGB-AGB tips. It "
+                        "shares CAP18's log-[Fe/H] convention (no Z/Zo conversion); "
+                        "[Fe/H] and log g are clamped to the cool grid's range.")
     p.add_argument("--out", default="/tmp/spectra_grid.npz",
                    help="output .npz path (copy to host data/spectra/ after)")
     p.add_argument("--lam-min", type=float, default=3000.0)
@@ -393,7 +503,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="override the number of (log-spaced) Teff nodes")
     a = p.parse_args(argv)
     bake(a.grid, a.out, lam_min=a.lam_min, lam_max=a.lam_max,
-         lam_step=a.lam_step, n_teff=a.n_teff, hot_grid_path=a.hot_grid)
+         lam_step=a.lam_step, n_teff=a.n_teff, hot_grid_path=a.hot_grid,
+         cool_grid_path=a.cool_grid)
     return 0
 
 

@@ -174,16 +174,19 @@ def spectrum(
     (Teff, log g, [Fe/H]) — the same numbers `color.js` turns into the star's
     colour. The `Query` bounds are deliberately *wider than any real star* the grid
     can produce (the hottest draggable star — a massive metal-poor O star — reaches
-    ~80000 K, far above the CAP18 grid's 30000 K ceiling), so dragging the controls
+    ~80000 K, above the baked grid's 55000 K ceiling), so dragging the controls
     never trips a 422: `spectrum_data` clamps BOTH ends to the baked grid's real
-    coverage (a cool M-dwarf floors to the coolest spectrum, a hot O/B star caps at
-    the hottest — symmetric). 422 is reserved for genuinely absurd inputs. The
-    response also reports `teff_requested` + the grid's `teff_min`/`teff_max`, so the
-    panel can tell a real interpolated spectrum from a clamped-ceiling one: past the
-    HOT end (no model atmosphere exists) it shows a "no spectral model for this
+    coverage (a star below the floor floors to the coolest spectrum, a hot O/B star
+    caps at the hottest — symmetric). 422 is reserved for genuinely absurd inputs.
+    The response also reports `teff_requested` + the grid's `teff_min`/`teff_max`, so
+    the panel can tell a real interpolated spectrum from a clamped-ceiling one: past
+    the HOT end (no model atmosphere exists) it shows a "no spectral model for this
     range" notice instead of the misleading boundary spectrum, keyed off the grid's
-    real ceiling. The cool floor keeps its honest small-extrapolation clamp. If the
-    grid hasn't been baked yet, return 503 with an actionable hint (analogue of a
+    real ceiling. The cool end is covered down to 2300 K (the Göttingen/PHOENIX cool
+    splice), below every reachable star (~2800 K), so in practice the cool floor never
+    clamps a real star — and a cool clamp would be an honest small extrapolation
+    anyway (cool models exist), not a model gap, so there is no cool-end notice. If
+    the grid hasn't been baked yet, return 503 with an actionable hint (analogue of a
     missing provider grid)."""
     try:
         return spectrum_data(teff, logg, feh)

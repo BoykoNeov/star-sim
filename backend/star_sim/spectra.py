@@ -133,8 +133,9 @@ def spectrum_data(
     """The JSON-friendly spectrum the `/spectrum` endpoint serves and the panel
     plots. Pure numbers, no StellarState — a sibling to the §3 spine.
 
-    Parameters are clamped to the baked grid's coverage (a cool M-dwarf below the
-    grid floor shows the floor spectrum; `feh` is ignored for a solar grid). Raises
+    Parameters are clamped to the baked grid's coverage (a star below the grid floor
+    — now 2300 K via the Göttingen/PHOENIX cool splice, below any reachable star —
+    shows the floor spectrum; `feh` is ignored for a solar grid). Raises
     `SpectraDataMissing` if the grid hasn't been baked.
 
     Returns
@@ -159,8 +160,9 @@ def spectrum_data(
 
     # Expose the Teff coverage so the panel can distinguish "this is a real
     # interpolated spectrum" from "the star is off the hot end of every grid we
-    # have, here's the clamped ceiling". The cool floor stays an honest small
-    # extrapolation (clamp + report); only the hot end is a true model gap.
+    # have, here's the clamped ceiling". The cool end is covered down to the grid
+    # floor (2300 K with the cool splice, below any reachable star), so only the hot
+    # end is a true model gap; a cool clamp, if ever hit, is an honest extrapolation.
     ti = s.axis_keys.index("teff")
     teff_min, teff_max = s.bounds[ti]
 

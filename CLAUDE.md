@@ -692,19 +692,66 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   `teffAboveGrid()` guard (`teff_requested > teff_max`) → `drawNoModel()` draws a faint frame +
   centred "No spectral model for this temperature / our model atmospheres reach {teff_max} K — this
   star is ≈ {teff_requested} K", and `renderCaption()` mirrors it; **distinct from the 503 "grid not
-  baked" empty-state** (different failure). **Hot end ONLY** — the cool floor keeps its honest
-  small-extrapolation clamp (a 3300 K red dwarf shown as 3500 K), so flagship cool stars (M-dwarfs,
-  RGB/AGB tips ~2900–3200 K) are **not** regressed; strict `>` means cool requests never hit the
-  blank path. Message text keys off `teff_max` from the response, **never a literal 55000**, so it
-  auto-tracks a hotter/denser re-bake (honors the user's "or what we have as data"). A symmetric
-  cool-end notice was considered + **rejected** (the cool clamp is a small honest extrapolation, not
-  a model gap). New test `test_response_reports_teff_coverage_for_no_model_notice` pins the contract
+  baked" empty-state** (different failure). **Hot end ONLY** — at the time the cool floor was 3500 K
+  and kept its honest small-extrapolation clamp (**since extended to 2300 K by the cool splice — see
+  the next bullet**), so flagship cool stars (M-dwarfs, RGB/AGB tips ~2900–3200 K) were never
+  regressed; strict `>` means cool requests never hit the blank path. Message text keys off `teff_max`
+  from the response, **never a literal 55000**, so it auto-tracks a hotter/denser re-bake (honors the
+  user's "or what we have as data"). A symmetric cool-end notice was considered + **rejected** (the
+  cool end is a small honest extrapolation, not a model gap — and is now real-data-covered to 2300 K
+  anyway). New test `test_response_reports_teff_coverage_for_no_model_notice` pins the contract
   (in-grid: `teff == teff_requested`; too-hot: `teff_requested > teff_max` while `teff == teff_max`).
   **120 tests pass** (was 119). Verified via Playwright on the **real served UI** (drove mass/feh/age
   number inputs, which commit-on-change bypassing snapping): 78453 K star → message with the dynamic
   55000 K ceiling, no JS errors; in-range 53656 K O star → normal spectrum still draws right up to
   the ceiling (He II 4686 guide lit). (No JS test harness — the screenshot pass *is* the regression
   check, as in Phases 2–5.)
+- **Done (Phase 5, Göttingen/PHOENIX cool-end splice — <3500 K, the symmetric mirror of OSTAR):**
+  CAP18's **3500 K floor** is closed at the cool end, the analogue of the OSTAR hot splice. The
+  question "is the clamped low-T data plausible?" was the trigger: **measured** through the live
+  provider, the coolest draggable stars reach **~2809 K** (a 0.1 M☉ M-dwarf) and most low-mass
+  RGB/AGB tips — incl. the **Sun's own giant tip ~3278 K** — sit below 3500 K, where the optical
+  spectrum is dominated by **TiO molecular bands** the 3500 K clamp badly understates (in-grid
+  3500→4000 K the blue/red continuum ratio already ~triples). Spliced in **`sg-Goettingen-MedRes-A.h5`**
+  (Husser+2013 PHOENIX, the canonical cool-star library, ~1.7 GB) onto the cool Teff end. **Why this
+  grid** (verified against the live grids page, not assumed): it is **exactly 3-axis `Teff/[Fe/H]/log g`**
+  with **logarithmic `[Fe/H]` like CAP18** → *no* Z/Zo conversion (even simpler than the hot splice's
+  TLUSTY `Z/Zo=10^[Fe/H]`); **Teff [2300, 12000] K** (covers the whole gap, generous 3500–12000 overlap
+  for a clean seam); **log g [0, 6]** spanning cool **dwarfs *and* giants** (decisive — the RGB/AGB
+  tips at log g ~0–1.5 need it; this **ruled out SPHINX**, a 2000–4000 K cool grid but **dwarf-gravity-only**
+  log g 4.0–5.5 that would clamp every cool giant; also ruled out Coelho14 (only to 3000 K), C3K (voids
+  warning), NewEra LowRes (exact-3-axis but 4.9 GB for no benefit). **The real new code is the bake
+  going single-grid→multi-grid the OTHER direction**: `bake_spectra.py --cool-grid` adds `_prepend_cool_teff`
+  + `_cool_grid_info` (mirrors `_append_hot_teff`/`_hot_grid_info`) — prepends 19 log-spaced Teff nodes
+  below 3500 at the cool axis' own log-step (the 96 CAP18 nodes are **NOT re-spread**), samples Göttingen
+  for nodes <3500. Both splices compose: Teff axis = `[19 cool < 3500][96 CAP18][27 hot > 30000]` = **142
+  nodes [2300..55000]**, cube `142×12×11×2400` **~98 MB** (was 76). **Runtime + frontend stayed
+  axis-generic — NO `BAKE_VERSION` bump** (only the Teff axis length + `grid_name` differ); the runtime's
+  `teff_min` auto-dropped to 2300, so the 2809–3500 K stars are now **real interpolated spectra, not the
+  frozen clamp** (the cool clamp no longer fires for any reachable star). The **≥3500 K block is
+  bit-identical** to the pre-splice cube (verified: 19 nodes prepended, the 123 CAP18/OSTAR nodes + flux
+  byte-for-byte unchanged) — the splice purely *added* sub-3500 coverage. **Payoff = `maxTeff`-gated TiO
+  bandhead guides** (5167/6159/7053 Å, the mirror of the He II `minTeff` gate) that light up dragging into
+  the M regime. **Honesty (advisor-caught, the recurring "don't label a non-feature" trap):** all three TiO
+  heads were verified through the runtime path with a slope-minimal narrow-window measure (step **0.55–0.75
+  at 2809 K vs ~0.03 in the Sun**), but **VO 7400 Å was DROPPED** — it reads ~0/flat like a control
+  wavelength (no clean isolated bandhead at reachable Teff — the boron-b8 / invisible-Na lesson again); VO is
+  described in the prose, not marked. **The seam is graceful** (measured): TiO 6159 essentially continuous
+  across 3500 K (Göttingen 0.361 → CAP18 0.356); the larger PHOENIX-vs-ATLAS TiO 7053 difference is a smooth
+  interpolated ramp, not a discontinuity (and per-spectrum normalization hides any continuum offset). Void-fill
+  **0 fallback** (6390 along-logg, 990 same-Teff — the cool low-gravity voids filled same-Teff, no Teff-crossing);
+  neg-flux clamp rose 8840→**14120** (0.03%, PHOENIX deep molecular cores undershoot more, cool corner depths
+  still sane — TiO step ~0.6 at 2900 K, not pinned to black). New §10 test
+  `test_cool_grid_extends_below_3500_with_molecular_bands` (measured TiO 6159 deep in M / gone in Sun /
+  deepens as it cools, + the off-grid feh-blend probe — the recurring feh=0 short-circuit gap — bounded TiO
+  at feh ±0.5; self-skips on a no-cool-grid cube like `test_feh_axis_deepens_metal_lines` does on a solar one).
+  **Stale "3500 floor" rationale fixed** (advisor): `teffAboveGrid()`'s "a 3300 K red dwarf shown as 3500 K is
+  a small extrapolation" was now false (3300 K is a real spectrum) — fixed across `spectrum.js`/`spectra.py`/
+  `api.py`/tests/recipe/plan. **121 tests pass** (was 120). Verified via Playwright on the real served UI:
+  3145 K M-dwarf → three TiO guides lit on deep molecular troughs (a real Göttingen spectrum that would have
+  clamped to 3500 K before); Sun → no TiO guides; no JS errors. Göttingen `.h5` gitignored under
+  `data/spectra/grids/` (kept for re-bake); recipe §5b (fetch + grid-choice rationale + findings) + §6 (3-grid
+  bake cmd + 142-node cube). Spectrum stays a sibling (`/spectrum` bypasses `PROVIDER` like `/polytrope`).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

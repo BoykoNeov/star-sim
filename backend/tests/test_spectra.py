@@ -34,6 +34,7 @@ client = TestClient(app)
 # / He I 4471 are the defining O-star features the OSTAR2002 splice unlocks (>30000 K).
 HA, HB, CA_K, NA_D = 6563.0, 4861.0, 3933.0, 5893.0
 HE2_4686, HE1_4471 = 4686.0, 4471.0
+TIO_6159, TIO_7053 = 6159.0, 7053.0   # TiO bandheads — the M-star (cool-splice) payoff
 
 
 def _line_depth(d: dict, center: float, core_hw: float = 5.0,
@@ -49,6 +50,21 @@ def _line_depth(d: dict, center: float, core_hw: float = 5.0,
     red = flux[(lam > center + cont_lo) & (lam < center + cont_hi)]
     cont = np.concatenate([blue, red]).mean()
     return 1.0 - core / cont
+
+
+def _band_step(d: dict, head: float, hw: float = 30.0) -> float:
+    """Absorption STEP across a molecular bandhead: 1 - mean(redward)/mean(blueward),
+    over a NARROW ±hw window so the blackbody continuum slope over the interval is
+    tiny. A molecular bandhead (TiO degrades redward) shows a sharp positive step;
+    a smooth-continuum region reads ~0. This is the cool-band analogue of
+    `_line_depth` (which suits narrow atomic lines, not broad band EDGES); the narrow
+    window is what makes it slope-robust (verified: at a non-band control wavelength
+    it stays within ±0.05 while real TiO heads read 0.4–0.75 at 2809 K)."""
+    lam = np.asarray(d["wavelength"])
+    flux = np.asarray(d["flux"])
+    blue = flux[(lam > head - hw - 2) & (lam < head - 2)].mean()
+    red = flux[(lam > head + 2) & (lam < head + 2 + hw)].mean()
+    return 1.0 - red / blue
 
 
 # --- always-on: the route contract (no baked grid required) ------------------
@@ -110,10 +126,17 @@ def test_spectrum_endpoint_well_formed():
 
 @requires_spectra_data
 def test_cool_params_clamp_to_grid_floor():
-    """A star below the grid's Teff floor shows the floor spectrum (the used Teff
-    is reported honestly, never a silent extrapolation)."""
-    d = spectrum_data(2500, 5.2, 0.0)             # below the 3500 K grid floor
-    assert d["teff"] == pytest.approx(3500.0, abs=1.0)
+    """A star below the grid's Teff floor shows the floor spectrum (the used Teff is
+    reported honestly, never a silent extrapolation).
+
+    Floor-AGNOSTIC: it reads the grid's real `teff_min` from the response and queries
+    below it, so it holds whether or not the Göttingen cool grid is spliced in —
+    CAP18's floor is 3500 K, the cool splice drops it to 2300 K. (The cool floor keeps
+    its honest clamp either way; only the HOT end trips the no-model notice.)"""
+    floor = spectrum_data(5000, 4.5, 0.0)["teff_min"]
+    d = spectrum_data(floor - 500, 5.2, 0.0)      # below the real grid floor
+    assert d["teff"] == pytest.approx(floor, abs=1.0)
+    assert d["teff_requested"] < d["teff"]         # honestly reports the clamp
     assert np.all(np.asarray(d["flux"]) >= 0)
 
 
@@ -271,3 +294,45 @@ def test_hot_grid_extends_above_30000_with_helium():
     # And He I 4471 is present (not a flat continuum) in a mid-O star — the splice
     # carved real helium features, not just a bluer blackbody.
     assert _line_depth(spectrum_data(35000, 4.0, 0.0), HE1_4471) > 0.08
+
+
+@requires_spectra_data
+def test_cool_grid_extends_below_3500_with_molecular_bands():
+    """The Göttingen/PHOENIX COOL splice's payoff (the mirror of the OSTAR He II test):
+    below CAP18's old 3500 K floor the panel now shows *real M-star spectra* — and the
+    defining cool-star feature is TiO molecular-band absorption (titanium oxide forms
+    once the gas is cool enough and carves deep troughs across the optical). Measured
+    through the runtime path:
+
+      1. The grid floor extended to ~2300 K, so a 2900 K M-dwarf returns a *real* 2900 K
+         spectrum, NOT the old 3500 K clamp (used teff == 2900).
+      2. The TiO 6159 Å bandhead is deep in the M star and negligible in the Sun
+         (measured step ~0.63 at 2900 K vs ~0.03 at 5772 K), and deepens as the star
+         cools (2900 K deeper than 3300 K). TiO 7053 Å is present too (a second band).
+
+    Self-skips on a cube WITHOUT the cool grid (floor still ~3500 K) — the mirror of
+    test_feh_axis_deepens_metal_lines self-skipping on a solar grid."""
+    floor = spectrum_data(5000, 4.5, 0.0)["teff_min"]
+    if floor > 3000:
+        pytest.skip("no cool grid spliced (floor still ~3500 K)")
+    assert floor == pytest.approx(2300.0, abs=1.0)   # the Göttingen-extended floor
+
+    m = spectrum_data(2900, 4.8, 0.0)
+    assert m["teff"] == pytest.approx(2900.0, abs=1.0)   # a real sample, not clamped to 3500
+    sun = spectrum_data(5772, 4.44, 0.0)
+    warm = spectrum_data(3300, 4.9, 0.0)
+
+    d_m = _band_step(m, TIO_6159)
+    d_sun = _band_step(sun, TIO_6159)
+    assert d_m > 0.3                    # a real, deep TiO band in the M star (~0.63)
+    assert d_m > d_sun + 0.3             # negligible in the Sun (TiO needs a cool star)
+    assert d_m > _band_step(warm, TIO_6159) + 0.1   # deepens as the star cools (2900 < 3300 K)
+    assert _band_step(m, TIO_7053) > 0.2            # a second TiO bandhead is present too
+
+    # Off-grid [Fe/H] (the recurring feh=0 short-circuit gap): the cool block is
+    # bounded & lined across metallicity, not just at feh=0.
+    for feh in (-0.5, 0.5):
+        d = spectrum_data(2900, 4.8, feh)
+        flux = np.asarray(d["flux"])
+        assert np.all(np.isfinite(flux)) and np.all(flux >= 0) and flux.max() > 0
+        assert _band_step(d, TIO_6159) > 0.3        # TiO still deep off-grid
