@@ -641,9 +641,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   the reachable corner's depths are sane: Na D 0.48, Ca K 0.85, not pinned to black). MESA-style provenance:
   the `.h5` is gitignored under `data/spectra/grids/` (kept so a re-bake doesn't re-download); the
   reproducibility recipe is `backend/docs/msg_spectra_build_recipe.md` §5–§6. **118 tests pass** (was
-  116). Verified via curl (Na D depth 0.24→0.48 as `[Fe/H]` −1→+0.5) + Playwright. **Next (optional):**
-  re-bake from `sg-CAP18-high.h5`/`ultra` for finer line detail, or splice OSTAR2002/BSTAR2006 for
-  >30000 K — both pure data work, the runtime stays axis-generic.
+  116). Verified via curl (Na D depth 0.24→0.48 as `[Fe/H]` −1→+0.5) + Playwright.
+- **Done (Phase 5, OSTAR2002 hot-end splice — >30000 K coverage, He lines):** CAP18's **30000 K
+  ceiling** is closed. `sg-OSTAR2002-low.h5` (Lanz & Hubeny 2003 TLUSTY O-star grid, ~50 MB,
+  27500–55000 K) is **spliced onto the hot end of the Teff axis**, so the baked cube now reaches
+  **55000 K** (`123 × 12 × 11 × 2400`, **~76 MB**; was `96×…` ~69 MB). **The real new code is the
+  bake going single-grid → multi-grid** (`bake_spectra.py --hot-grid`); **runtime + frontend stayed
+  axis-generic — NO `BAKE_VERSION` bump** (only the Teff axis length + `grid_name` differ). Method:
+  *append* log-spaced Teff nodes above 30000 at the cool axis' own log-step (the 96 cool CAP18 nodes
+  are **NOT re-spread** — advisor-flagged: bumping `hi` would coarsen the tuned cool end), 27 hot
+  nodes added. Nodes >30000 sampled from OSTAR, reconciling its **linear `Z/Zo`** axis to CAP18's
+  **log `[Fe/H]`** via `Z/Zo = 10**[Fe/H]`, log g clamped to OSTAR's 3.0–4.75 (honest edge). **The
+  seam is clean** (measured, not assumed): OSTAR/CAP18 mean flux ≈0.97–0.99 at the 28000–30000
+  overlap, continuum slope continuous, only a small honest two-code Balmer-depth step (0.347→0.307) —
+  and the panel normalizes per-spectrum so even that is subtle; non-solar `[Fe/H]=−0.5` seam equally
+  smooth. **`BSTAR2006` deliberately NOT used** (advisor): it spans 15000–30000 K, *entirely inside*
+  CAP18 → adds nothing >30000; its only role would be replacing CAP18's hot LTE end with NLTE (bigger
+  change, worse seam — BSTAR/CAP18≈0.94). **Two bake gotchas found by measurement (not assumed):**
+  (1) **floor `Z/Zo` at the smallest *positive* node 0.001** ([Fe/H]=−3), not 0.0 — a query between
+  0.0 (metal-free) and 0.001 needs the metal-free bracket, masked at hot/high-g points, so MSG raises
+  `ValueError('invalid argument')` (a partial-cell void) not the clean `LookupError` (8 such nodes);
+  (2) the old void-fill fallback pulled the **30000 K cool spectrum** for the metal-poor+hot corner
+  (nearest in index space) — a wrong-Teff fill, exactly the advisor's flagged risk — so the bake
+  gained a **same-Teff fill pass** before the global fallback: **6390 along log g, 990 same-Teff, 0
+  fallback** (no Teff-crossing fill). 8840 neg-flux bins clamped (unchanged — OSTAR added 0; confirms
+  the cool region re-baked bit-identically). **Payoff (the advisor's "invisible-addition" bar):** the
+  defining >30000 K feature is **He II 4686** (+ He I 4471), NOT the Balmer/Ca/Na the panel drew, so
+  `spectrum.js` gained He I/He II guides with a **`minTeff` gate** (He I ≥10000 K, He II ≥25000 K) in
+  a cool-blue tint — they appear *only* when the star is hot enough, so dragging into the O-star
+  regime literally lights up He II 4686. Hover pedagogy (legend entry + `<h2>` tooltip). New §10 test
+  `test_hot_grid_extends_above_30000_with_helium` (measured through the runtime path: He II deepens
+  0.034→0.164 over 30000→45000 K, far deeper than the Sun; 45000 K returns a *real* sample, not the
+  old 30000 clamp; He I 4471 present in a mid-O star). Existing 40000 K "clamp" tests still pass (now
+  real OSTAR samples — Balmer/Ca orderings robust); stale "clamps to 30000 K" comments fixed across
+  tests/recipe/plan. **119 tests pass** (was 118). Verified via Playwright (Sun → no He guides;
+  42673 K O star → He II labelled cool-blue, blue continuum, no JS errors) + the seam/He physics
+  through the runtime path. OSTAR `.h5` gitignored under `data/spectra/grids/` (kept for re-bake);
+  recipe §5a (fetch + gotchas) + §6 (splice bake cmd); spectrum stays a sibling (`/spectrum` bypasses
+  `PROVIDER` like `/polytrope`). **Next (optional):** raise grid density (`sg-CAP18-high`/`ultra`,
+  OSTAR `medium`/`high`), or splice `BSTAR2006` for NLTE B-star spectra — all pure data work, runtime
+  stays axis-generic.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

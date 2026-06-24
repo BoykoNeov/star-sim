@@ -211,9 +211,28 @@ fixes. The one real trade-off: CAP18 caps at **30000 K** (vs the solar MVP's 490
 so hot O/B stars clamp lower — accepted, the clamp is honest and the metallicity axis
 was the goal.
 
+**OSTAR2002 hot-end splice — DONE (this session).** The CAP18 30000 K ceiling is closed:
+`sg-OSTAR2002-low.h5` (a TLUSTY O-star grid, 27500–55000 K) is spliced onto the Teff axis,
+so the baked cube now reaches **55000 K** (`123 × 12 × 11 × 2400`, ~76 MB). The bake
+(`bake_spectra.py --hot-grid`) appends log-spaced Teff nodes above 30000 (the 96 cool nodes
+are NOT re-spread), samples OSTAR for them via `Z/Zo = 10**[Fe/H]` (floored at OSTAR's
+smallest positive node 0.001 to dodge a `ValueError` cliff near the metal-free node) with
+log g clamped to 3.0–4.75, and a new **same-Teff void-fill pass** keeps the metal-poor hot
+corner from pulling a wrong-Teff cool spectrum (990 same-Teff, **0 fallback**). The seam at
+30000 K is clean (OSTAR/CAP18 mean flux ≈0.97–0.99, continuum slope continuous, a small
+honest two-code Balmer step). **BSTAR2006 was deliberately not used** (15000–30000 K sits
+entirely inside CAP18; adds nothing >30000). Frontend: He I 4471 / He II 4686 line guides
+with a `minTeff` gate (appear only when the star is hot enough — He II lights up in the
+O-star regime, the payoff). New test `test_hot_grid_extends_above_30000_with_helium` (He II
+deepens 30000→45000 K, far deeper than the Sun; 45000 K is a real sample, not the old clamp).
+**119 tests pass.** Verified via Playwright (Sun → no He guides; 42673 K O star → He II
+labelled in cool-blue). Recipe §5a + §6. Runtime/frontend stayed axis-generic — no
+`BAKE_VERSION` bump.
+
 **Next (future, optional):** raise wavelength/Teff/[Fe/H] density (the `coarse` grid is
-the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); or splice a
-hot grid (OSTAR2002/BSTAR2006) for >30000 K coverage if the hot-end clamp ever matters.
+the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); splice
+**BSTAR2006** for NLTE B-star spectra (15000–30000 K) if CAP18's LTE hot end is ever a
+concern; or a `medium`/`high` OSTAR tier for finer O-star line detail. All pure data work.
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

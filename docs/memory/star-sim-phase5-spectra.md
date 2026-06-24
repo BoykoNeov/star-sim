@@ -1,6 +1,6 @@
 ---
 name: star-sim-phase5-spectra
-description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP DONE (real 3-D [Fe/H] axis live): MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic, so swapping the solar sg-demo for CAP18 (3-D Teff/[Fe/H]/logg) was a ZERO-code re-bake — only a new [Fe/H]-physics test. 118 tests. CAP18 caps at 30000 K (vs solar MVP's 49000) — trades hot-end coverage for metallicity."
+description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP DONE (3-D [Fe/H]) + OSTAR2002 HOT SPLICE DONE (>30000 K closed, →55000 K, He lines): MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime+frontend unchanged through both the CAP18 swap AND the OSTAR splice (NO BAKE_VERSION bump either time) — the real new code is the bake going single-grid→multi-grid (--hot-grid: append Teff nodes, Z/Zo=10^[Fe/H], same-Teff void-fill). He I/He II guides (minTeff-gated). 119 tests."
 metadata:
   node_type: memory
   type: project
@@ -46,8 +46,43 @@ the advisor's flagged risk, checked & clean); **8840** negative-flux bins clampe
 undershoot in deep cores — far more than the solar bake's **1** bin, since CAP18's R=10000 lines
 ring harder, but only 0.029% of bins and reachable-corner depths are sane: Na D 0.48, Ca K 0.85).
 **The one real trade-off:** CAP18 caps at **30000 K** (the recipe's old "~50000 K" claim was
-WRONG — verified) vs the solar MVP's 49000 K, so hot O/B stars now clamp lower — accepted, the
-metallicity axis was the goal and the clamp is honest.
+WRONG — verified) vs the solar MVP's 49000 K, so hot O/B stars clamped lower — **now CLOSED by
+the OSTAR2002 splice (next section).**
+
+**OSTAR2002 HOT SPLICE — DONE (this session, >30000 K closed).** Spliced
+**`sg-OSTAR2002-low.h5`** (Lanz & Hubeny 2003 TLUSTY O-star grid, ~50 MB, 27500–55000 K) onto the
+hot end of the Teff axis → baked cube now reaches **55000 K** (`123 × 12 × 11 × 2400`, ~76 MB).
+**The real new code is `bake_spectra.py` going single-grid → multi-grid (`--hot-grid`); runtime +
+frontend stayed axis-generic, NO `BAKE_VERSION` bump** (only Teff axis length + `grid_name` differ).
+- **Method:** *append* log-spaced Teff nodes above 30000 at the cool axis' OWN log-step (the 96 cool
+  CAP18 nodes are **NOT re-spread** — advisor: bumping `hi` would coarsen the tuned cool end; 27 hot
+  nodes added). Nodes >30000 sampled from OSTAR, reconciling its **linear `Z/Zo`** (0–2) to CAP18's
+  **log `[Fe/H]`** via `Z/Zo = 10**[Fe/H]`; log g clamped to OSTAR's 3.0–4.75 (honest edge).
+- **Seam is CLEAN (measured):** OSTAR/CAP18 mean flux ≈0.97–0.99 at the 28000–30000 overlap,
+  continuum slope continuous, only a small honest two-code Balmer-depth step (0.347→0.307) — and the
+  panel normalizes per-spectrum so even that is subtle; non-solar `[Fe/H]=−0.5` seam equally smooth.
+- **`BSTAR2006` deliberately NOT used (advisor):** 15000–30000 K sits *entirely inside* CAP18 → adds
+  nothing >30000; its only role would be replacing CAP18's hot LTE end with NLTE (bigger change,
+  WORSE seam — BSTAR/CAP18≈0.94 vs OSTAR≈0.97–0.99). User confirmed OSTAR-only via AskUserQuestion.
+- **TWO bake gotchas (found by measurement, not assumed):** (1) **floor `Z/Zo` at the smallest
+  *positive* node 0.001** ([Fe/H]=−3), NOT 0.0 — a query between 0.0 (metal-free) and 0.001 needs the
+  metal-free bracket, masked at hot/high-g points, so MSG raises `ValueError('invalid argument')` (a
+  partial-cell void) not the clean `LookupError` the bake catches (8 such nodes; read the smallest
+  positive node from the grid's own axis via h5py). (2) The old void-fill fallback pulled the
+  **30000 K cool spectrum** for the metal-poor+hot corner (nearest in *index* space) — a wrong-Teff
+  fill, exactly the advisor's flagged risk — so the bake gained a **same-Teff fill pass** before the
+  global fallback: **6390 along logg, 990 same-Teff, 0 fallback** (no Teff-crossing fill). 8840
+  neg-flux bins clamped (UNCHANGED — OSTAR added 0; confirms the cool region re-baked bit-identically).
+- **PAYOFF = He lines (the advisor's "invisible-addition" bar):** the defining >30000 K feature is
+  **He II 4686** (+ He I 4471), NOT the Balmer/Ca/Na the panel drew → `spectrum.js` gained He I/He II
+  guides with a **`minTeff` gate** (He I ≥10000 K, He II ≥25000 K) in a cool-blue tint: they appear
+  ONLY when the star is hot enough, so dragging into the O-star regime literally lights up He II 4686.
+  He physics correct & measured: He II deepens monotonically with Teff (0.034→0.164 over 30000→45000),
+  He I PEAKS ~35000 then weakens as He doubly ionizes. New test
+  `test_hot_grid_extends_above_30000_with_helium`; existing 40000 K "clamp" tests still pass (now real
+  OSTAR samples; orderings robust), stale "clamps to 30000 K" comments fixed. **119 tests** (was 118).
+  Verified via Playwright (Sun → no He guides; 42673 K O star → He II labelled cool-blue, blue
+  continuum). Recipe §5a (fetch + gotchas) + §6 (splice bake cmd).
 
 **Key build/bake decisions (advisor-guided, measured):**
 - **Log-spaced Teff** (cool-end line resolution; runtime interpolates in `log10(Teff)` via
@@ -105,9 +140,15 @@ valid path or `fypp_deps` crashes. **Bake env:** `MSG_DIR=/tmp/msg-2.2`,
 runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp, CAP18's 30000 K
 ceiling) — and that the CAP18 swap *did* pay off as a zero-code re-bake exactly as designed.
 
-**How to apply:** the CAP18 swap is **done**. To go further (more line detail or hotter coverage):
-re-bake from `sg-CAP18-high.h5`/`ultra` for finer spectra, or splice OSTAR2002/BSTAR2006 for
->30000 K — both are re-bakes/data work, the runtime stays axis-generic. General rules that still
-hold: keep `/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-container only);
-keep Query bounds wider than any real star so dragging never 422s; bake the cube into the
-build container (`msg_spike`) and `docker cp` the `.npz` out — never import pymsg at run time.
+**How to apply:** the CAP18 swap AND the OSTAR2002 hot-end splice are **done** (cube reaches 55000 K,
+He lines live). To go further (more line detail, or NLTE B-star spectra): re-bake from
+`sg-CAP18-high.h5`/`ultra` or OSTAR `medium`/`high` for finer spectra, or splice **`BSTAR2006`**
+(15000–30000 K, NLTE) if CAP18's LTE hot end is ever a concern — all re-bakes/data work, the runtime
+stays axis-generic. **Splice mechanics that paid off (reuse for BSTAR):** `bake_spectra.py --hot-grid`
+appends Teff nodes at the cool axis' own log-step (never re-spread); translate any `Z/Zo`-axis grid via
+`Z/Zo=10^[Fe/H]` floored at the smallest *positive* node (dodge the metal-free `ValueError` cliff);
+keep the same-Teff void-fill pass (preserves the dominant Teff axis). General rules that still hold:
+keep `/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-container only); keep Query
+bounds wider than any real star so dragging never 422s; bake the cube into the build container
+(`msg_spike`) and `docker cp` the `.npz` out — never import pymsg at run time. **chrome --headless
+hijacks the user's running Chrome → use Playwright's bundled Chromium for headless shots.**

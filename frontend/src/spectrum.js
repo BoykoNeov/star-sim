@@ -29,14 +29,22 @@ const PAD_L = 44, PAD_R = 12, PAD_T = 30, PAD_B = 34;
 const VIS_LO = 3800, VIS_HI = 7800;
 
 // Principal absorption lines worth labelling — the pedagogy. Hydrogen Balmer
-// series (peak at A stars) + Ca II H&K and Na D (strong in cool stars). Drawn as
-// faint vertical guides with a short label; only those inside the panel's λ range
-// show.
+// series (peak at A stars) + Ca II H&K and Na D (strong in cool stars) are drawn
+// always. The helium lines are the hot-star payoff of the OSTAR2002 splice (which
+// extended the grid past CAP18's 30000 K ceiling): they carry a `minTeff`, so a
+// guide appears only once the star is hot enough to actually show the line — He I
+// 4471 in B/A stars and hotter, He II 4686 only in O stars (>~30000 K — the OSTAR
+// splice regime), where it is THE defining feature. So dragging into the O-star regime
+// literally lights up the He II 4686 guide. Drawn as faint vertical guides with a
+// short label; only those inside the panel's λ range (and past minTeff) show.
+const COL_HE = "rgba(150,205,255,0.55)";   // a cool-blue tint marks the hot-star He guides
 const LINES = [
   { lam: 3933, label: "Ca K" },
   { lam: 3968, label: "Ca H" },
   { lam: 4102, label: "Hδ" },
   { lam: 4340, label: "Hγ" },
+  { lam: 4471, label: "He I", minTeff: 10000, col: COL_HE },   // neutral He — B/A and hotter
+  { lam: 4686, label: "He II", minTeff: 30000, col: COL_HE },  // ionized He — O stars (the OSTAR splice regime; below 30000 K it's ~continuum)
   { lam: 4861, label: "Hβ" },
   { lam: 5893, label: "Na D" },
   { lam: 6563, label: "Hα" },
@@ -168,16 +176,20 @@ export function createSpectrum({ api }) {
     // Absorption-line guides. Every in-range line gets a dashed guide, but the
     // LABEL is collision-skipped (the Ca K / Ca H / Hδ cluster at the Balmer jump
     // would overprint into mush otherwise) — same idea as the slider tick strip.
-    ctx.strokeStyle = "rgba(231,236,245,0.35)"; ctx.lineWidth = 1;
+    // A `minTeff` line (the He guides) is shown only when the star is that hot, so
+    // helium appears exactly where it physically matters (hot stars).
+    ctx.lineWidth = 1;
     let lastLabelX = -1e9;
     for (const ln of LINES) {
       if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
+      if (ln.minTeff && data.teff < ln.minTeff) continue;   // hot-star lines: only when hot
       const x = xOf(ln.lam);
+      ctx.strokeStyle = ln.col || "rgba(231,236,245,0.35)";
       ctx.setLineDash([2, 4]);
       ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
       ctx.setLineDash([]);
       if (x - lastLabelX >= 24) {     // skip labels that would overlap the last
-        ctx.fillStyle = "#aeb7c8";
+        ctx.fillStyle = ln.col ? "#bcd8f4" : "#aeb7c8";
         ctx.fillText(ln.label, x, PAD_T - 4);
         lastLabelX = x;
       }

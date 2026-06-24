@@ -30,8 +30,10 @@ from .conftest import requires_spectra_data
 client = TestClient(app)
 
 # Principal lines (Å). Balmer Hα/Hβ peak at A stars; Ca II K and Na D are strong
-# in cool stars (Ca K vanishes when hot; Na D deepens with metallicity).
+# in cool stars (Ca K vanishes when hot; Na D deepens with metallicity). He II 4686
+# / He I 4471 are the defining O-star features the OSTAR2002 splice unlocks (>30000 K).
 HA, HB, CA_K, NA_D = 6563.0, 4861.0, 3933.0, 5893.0
+HE2_4686, HE1_4471 = 4686.0, 4471.0
 
 
 def _line_depth(d: dict, center: float, core_hw: float = 5.0,
@@ -64,9 +66,9 @@ def test_spectrum_out_of_range_is_422(params):
 
 
 def test_spectrum_hot_star_does_not_422_and_clamps():
-    """A massive O star reaches ~80000 K — far above the CAP18 grid's 30000 K
-    ceiling (the solar sg-demo MVP reached 49000 K; CAP18 trades hot-end coverage
-    for the [Fe/H] axis). The bounds must be wide enough that dragging there never
+    """A massive O star reaches ~80000 K — still above even the OSTAR2002-spliced
+    grid's 55000 K ceiling (CAP18 alone stopped at 30000 K; the splice extends the
+    hot end to 55000 K). The bounds must be wide enough that dragging there never
     422s; the hot end clamps to the grid max, symmetric with the cool floor (so the
     panel never silently freezes on a hot star). Always-on: never a 422 (200 if
     baked, 503 if not)."""
@@ -117,8 +119,9 @@ def test_cool_params_clamp_to_grid_floor():
 
 @requires_spectra_data
 def test_void_region_query_is_filled():
-    """A hot + low-gravity point sits in a grid void; the void-filled bake means
-    the runtime still returns a finite, positive spectrum (no LookupError leaks)."""
+    """A hot + low-gravity point sits in a grid void (OSTAR has no log g < 3.5
+    model at 40000 K); the void-filled bake means the runtime still returns a
+    finite, positive spectrum (no LookupError leaks)."""
     d = spectrum_data(40000, 0.5, 0.0)
     flux = np.asarray(d["flux"])
     assert np.all(np.isfinite(flux)) and np.all(flux >= 0) and flux.max() > 0
@@ -130,12 +133,12 @@ def test_void_region_query_is_filled():
 def test_balmer_lines_peak_at_a_stars():
     """Hydrogen Balmer absorption (Hα, Hβ) is deepest around A stars (~9500 K) and
     shallower in both the cooler Sun and a hot star — the classic spectral sequence,
-    measured here on the baked+interpolated spectra. The hot query (40000 K) clamps
-    to the CAP18 grid's 30000 K ceiling, but Balmer is already well past its peak
-    there, so the ordering holds."""
+    measured here on the baked+interpolated spectra. The hot query (40000 K) is now a
+    real OSTAR2002 sample (post-splice; it used to clamp to CAP18's 30000 K ceiling),
+    where Balmer is well past its peak, so the ordering holds."""
     a = spectrum_data(9500, 4.0, 0.0)
     sun = spectrum_data(5772, 4.44, 0.0)
-    hot = spectrum_data(40000, 4.5, 0.0)           # clamps to the 30000 K ceiling
+    hot = spectrum_data(40000, 4.5, 0.0)           # a real OSTAR O-star spectrum now
 
     for line in (HA, HB):
         d_a = _line_depth(a, line)
@@ -152,7 +155,7 @@ def test_ca_k_strong_in_cool_stars_gone_when_hot():
     essentially absent in hot stars (Ca is too ionized)."""
     sun = spectrum_data(5772, 4.44, 0.0)
     a = spectrum_data(9500, 4.0, 0.0)
-    hot = spectrum_data(40000, 4.5, 0.0)           # clamps to the 30000 K ceiling
+    hot = spectrum_data(40000, 4.5, 0.0)           # a real OSTAR O-star spectrum now
 
     d_sun = _line_depth(sun, CA_K)
     d_a = _line_depth(a, CA_K)
@@ -207,3 +210,35 @@ def test_feh_axis_deepens_metal_lines():
         balmer_shift = abs(_line_depth(rich, line) - _line_depth(poor, line))
         assert balmer_shift < 0.12
         assert balmer_shift < na_swing
+
+
+@requires_spectra_data
+def test_hot_grid_extends_above_30000_with_helium():
+    """The OSTAR2002 splice's payoff (the analogue of test_feh_axis_deepens_metal_lines):
+    above CAP18's old 30000 K ceiling the panel now shows *real O-star spectra* — and
+    the defining O-star feature is He II 4686 Å absorption (singly-ionized helium needs
+    the hottest stars). Measured through the runtime path:
+
+      1. A 45000 K query returns a 45000 K spectrum, NOT the old 30000 K clamp — the
+         splice genuinely extended the Teff axis (used teff == 45000, and the He II
+         line is far deeper than at the seam).
+      2. He II 4686 deepens monotonically into the hot regime (30000 -> 45000 K,
+         measured Δ ~0.13), and is a hot-star-only line: far deeper than in the Sun
+         (where it is essentially a weak metal blend, ~0.06).
+
+    He I 4471 (which *peaks* near mid-O and weakens at the hottest as He doubly ionizes)
+    is the complement; we pin the cleaner, monotonic He II line here."""
+    hot = spectrum_data(45000, 4.0, 0.0)
+    assert hot["teff"] == pytest.approx(45000.0, abs=1.0)   # a real sample, not clamped to 30000
+
+    d_seam = _line_depth(spectrum_data(30000, 4.0, 0.0), HE2_4686)
+    d_hot = _line_depth(hot, HE2_4686)
+    d_sun = _line_depth(spectrum_data(5772, 4.44, 0.0), HE2_4686)
+
+    assert d_hot > 0.1                  # a real, deep He II line in the O star (~0.15)
+    assert d_hot > d_seam + 0.05         # deepens into the hot extension (measured Δ ~0.13)
+    assert d_hot > d_sun + 0.05          # a hot-star-only line, far deeper than the Sun
+
+    # And He I 4471 is present (not a flat continuum) in a mid-O star — the splice
+    # carved real helium features, not just a bluer blackbody.
+    assert _line_depth(spectrum_data(35000, 4.0, 0.0), HE1_4471) > 0.08

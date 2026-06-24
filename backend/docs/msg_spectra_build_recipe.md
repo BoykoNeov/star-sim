@@ -165,11 +165,49 @@ Grids are large HDF5 downloads, gitignored like `data/mist` and `data/mesa` (kee
 
 **Heads-up — CAP18's Teff ceiling is 30000 K, not ~50000.** (The earlier note here
 claiming ~50000 K was wrong — verified against the grid: `Teff∈[3500, 30000]`,
-`log(g)∈[0, 5]`, `[Fe/H]∈[−5, 0.5]`.) So swapping CAP18 in for the solar `sg-demo`
-(which reached 49000 K) **trades hot-end coverage for the metallicity axis**: the
-hottest draggable star (~80000 K) now clamps to 30000 K instead of 49000 K. The clamp
-is symmetric with the cool floor and handled honestly in `spectrum_data` — a hot O/B
-star shows the 30000 K spectrum, never a 422/freeze.
+`log(g)∈[0, 5]`, `[Fe/H]∈[−5, 0.5]`.) On its own CAP18 **traded hot-end coverage for
+the metallicity axis** vs the solar `sg-demo` (which reached 49000 K). That hot-end gap
+is now closed by the **OSTAR2002 splice** (§5a below): the baked grid reaches **55000 K**.
+The clamp is symmetric with the cool floor and handled honestly in `spectrum_data` — a
+star hotter than 55000 K shows the 55000 K spectrum, never a 422/freeze.
+
+## 5a. The hot-end splice (OSTAR2002, >30000 K)
+
+CAP18 stops at 30000 K, but the hottest draggable star (a massive metal-poor O star)
+reaches ~80000 K. To give those O stars *real* spectra — whose defining feature is
+**He II 4686** absorption, not the Balmer/Ca/Na lines of cooler stars — we splice in
+**OSTAR2002** (Lanz & Hubeny 2003, a TLUSTY O-star grid, 27500–55000 K) onto the hot end
+of the Teff axis. The `low` variant is the right tier (smallest, like CAP18 `coarse`):
+
+```bash
+curl -fL -o data/spectra/grids/sg-OSTAR2002-low.h5 \
+  http://user.astro.wisc.edu/~townsend/resource/download/msg/grids/OSTAR2002/low/sg-OSTAR2002-low.h5
+```
+
+(~50 MB; gitignored like the other grids — kept so a re-bake doesn't re-download.) Its
+axes are `Teff / Z/Zo / log(g)` — note the **linear** metallicity ratio `Z/Zo` (0…2), not
+CAP18's logarithmic `[Fe/H]`. The bake reconciles them by sampling OSTAR at
+`Z/Zo = 10**[Fe/H]` (floored at OSTAR's smallest *positive* node 0.001 = [Fe/H]=−3 — see
+the gotcha below) and clamping log g to OSTAR's 3.0–4.75 (hot models live at high gravity;
+the flat clamp below 3.0 is the honest edge). **BSTAR2006 was deliberately NOT used**: it
+spans 15000–30000 K, entirely inside CAP18's range, so it adds nothing above 30000 K (its
+only role would be replacing CAP18's hot LTE end with NLTE, a bigger change for a worse
+seam — measured BSTAR/CAP18≈0.94 vs OSTAR/CAP18≈0.97–0.99 at the overlap).
+
+**Two splice gotchas (each cost a bake iteration):**
+
+1. **Floor `Z/Zo` at the smallest *positive* node, not 0.0.** A query at `Z/Zo` between
+   0.0 (OSTAR's metal-free model) and 0.001 needs the metal-free bracket, which is masked
+   at hot/high-gravity points — MSG then raises `ValueError('invalid argument')` (a
+   partial-cell void) rather than the clean `LookupError` the bake fills. Flooring at
+   0.001 stays among the metal nodes; [Fe/H]<−3 is below any real star anyway.
+2. **Void-fill must preserve Teff.** OSTAR masks low gravity at hot Teff, and at the
+   metal-poor + intermediate-hot corner an *entire* log g line can be void. The old fill
+   fell back to nearest-neighbour over the full param space, which (in index distance)
+   pulls the 30000 K *cool-grid* neighbour — a wrong-Teff fill. The bake now has a
+   **same-Teff fill pass** before the global fallback (clamps metallicity, keeps the
+   temperature exact). On the CAP18+OSTAR bake: 6390 along log g, **990 same-Teff, 0
+   fallback** — no Teff-crossing fill anywhere.
 
 ## 6. Running the bake (`scripts/bake_spectra.py` → `data/spectra/spectra_grid.npz`)
 
@@ -187,49 +225,60 @@ Inside the `msg_spike` container (env per §3), with `scripts/bake_spectra.py` a
 the grid copied in:
 
 ```bash
-# (host) copy the script + the CAP18 grid into the reusable build container
+# (host) copy the script + BOTH grids into the reusable build container
 docker cp backend/scripts/bake_spectra.py msg_spike:/tmp/bake_spectra.py
 docker cp data/spectra/grids/sg-CAP18-coarse.h5 msg_spike:/tmp/sg-CAP18-coarse.h5
+docker cp data/spectra/grids/sg-OSTAR2002-low.h5 msg_spike:/tmp/sg-OSTAR2002-low.h5
 
-# (container) bake — set the MSG runtime env first
+# (container) bake CAP18 + the OSTAR2002 hot-end splice — set the MSG runtime env first
 docker exec msg_spike bash -c '
   source /opt/conda/etc/profile.d/conda.sh && conda activate base
   export MSG_DIR=/tmp/msg-2.2 MESASDK_ROOT="$CONDA_PREFIX"
   export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$MSG_DIR/lib"
   python /tmp/bake_spectra.py \
-    --grid /tmp/sg-CAP18-coarse.h5 \
-    --out  /tmp/spectra_grid.npz'
-# (for the original solar MVP, --grid /tmp/msg-2.2/data/grids/sg-demo.h5 instead)
+    --grid     /tmp/sg-CAP18-coarse.h5 \
+    --hot-grid /tmp/sg-OSTAR2002-low.h5 \
+    --out      /tmp/spectra_grid.npz'
+# (drop --hot-grid for a CAP18-only cube; --grid /tmp/msg-2.2/data/grids/sg-demo.h5
+#  for the original solar MVP)
 
 # (host) copy the cube out to where the runtime looks for it
 docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz
 ```
 
-The CAP18 bake is a `(96 Teff × 12 [Fe/H] × 11 log g × 2400 λ)` cube, **~69 MB**
-(the solar `sg-demo` bake was a 2-D `96 × 11 × 2400`, ~4.7 MB):
+The CAP18+OSTAR2002 bake is a `(123 Teff × 12 [Fe/H] × 11 log g × 2400 λ)` cube,
+**~76 MB** (CAP18-only was `96 × 12 × 11 × 2400`, ~69 MB; the solar `sg-demo` bake was
+a 2-D `96 × 11 × 2400`, ~4.7 MB):
 
-- **Teff** 3500–30000 K, **log-spaced** (cool-end resolution where lines change
-  fast); the runtime interpolates in `log10(Teff)` via the `axis_log` flag.
+- **Teff** 3500–**55000 K**, **log-spaced**: 96 nodes over CAP18's 3500–30000 (cool-end
+  resolution where lines change fast), then 27 more *appended* at the same log-step up to
+  OSTAR2002's 55000 (the cool nodes are NOT re-spread). The runtime interpolates in
+  `log10(Teff)` via the `axis_log` flag. Nodes >30000 K are sampled from OSTAR2002.
 - **[Fe/H]** −5…+0.5 in 0.5 steps (12 nodes; grid-driven — real stars only reach
   ~−0.85…+0.5, the rest just clamp).
 - **log g** 0–5 in 0.5 steps.
 - **λ** 3000–9000 Å in 2.5 Å bins (bin *centres* stored).
-- **Voids** (hot + low-gravity corners with no model → `LookupError`, **36%** of
-  nodes for CAP18) are filled **along log g at fixed Teff *and* [Fe/H]** (the voids
-  are a contiguous high-log g block, so this preserves the dominant Teff/[Fe/H]
-  variation exactly). On the CAP18 bake **all 4560 voids filled along log g, 0
-  fell to the fallback nearest-neighbour** — i.e. no void in the reachable box got
-  a wrong-Teff/wrong-[Fe/H] spectrum. The stored cube is fully regular for
-  `RegularGridInterpolator`. (The bake also clamps **8840** negative-flux bins — cubic
-  spline undershoot in deep line cores — to 0; min was −2.19e4. That's far more than
-  the solar `sg-demo` bake's **1** bin — CAP18's higher R=10000 lines ring harder under
-  cubic interp — but still only 0.029% of bins, and the reachable cool/metal-rich corner
-  gives sane line depths, NOT cores pinned to black: Na D 0.48, Ca K 0.85 at
-  [Fe/H]=+0.5. So it's a resolution artefact in deep cores, not a broken cube.)
-- Knobs: `--n-teff`, `--lam-min/--lam-max/--lam-step`, `--grid`, `--out`.
+- **Voids** (hot + low-gravity corners with no model → `LookupError`, **45%** of
+  nodes for the spliced cube — CAP18's high-log g block plus OSTAR's low-gravity
+  block) are filled in three passes, each preserving Teff as far as possible:
+  **(1) along log g** at fixed Teff *and* [Fe/H] (the voids are contiguous log g
+  blocks, so this preserves the dominant Teff/[Fe/H] variation exactly); **(2)
+  same-Teff** nearest valid, for a whole log g line that was *entirely* void (the
+  metal-poor + intermediate-hot OSTAR corner) — clamps metallicity but keeps the
+  temperature exact; **(3) global fallback** (can cross Teff — a last resort,
+  logged). On the CAP18+OSTAR bake: **6390 along log g, 990 same-Teff, 0 fallback**
+  — i.e. no void anywhere got a wrong-Teff spectrum. The stored cube is fully
+  regular for `RegularGridInterpolator`. (The bake also clamps **8840** negative-flux
+  bins — cubic spline undershoot in deep CAP18 line cores — to 0; min was −2.19e4;
+  unchanged by the splice, as OSTAR added 0 negative bins. Still only ~0.02% of bins,
+  and the reachable cool/metal-rich corner gives sane depths, NOT cores pinned to
+  black: Na D 0.48, Ca K 0.85 at [Fe/H]=+0.5 — a resolution artefact, not a broken cube.)
+- Knobs: `--grid`, `--hot-grid` (the OSTAR splice), `--n-teff`,
+  `--lam-min/--lam-max/--lam-step`, `--out`.
 - `BAKE_VERSION` must match `star_sim/spectra.py`'s; the runtime rejects a stale
-  cube (re-bake to fix). The CAP18 swap did **not** bump it — the on-disk schema is
-  axis-generic and unchanged; only the axis count + `grid_name` differ.
+  cube (re-bake to fix). Neither the CAP18 swap nor the OSTAR splice bumped it — the
+  on-disk schema is axis-generic and unchanged; only the Teff axis length +
+  `grid_name` differ.
 
 Then the pure-Python runtime (`star_sim/spectra.py`, `scipy` only — no pymsg)
 serves `/spectrum`; `pytest backend/tests/test_spectra.py` gates the line physics
