@@ -565,6 +565,22 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   on the lower RGB, Be dipping modestly, F flat — and the cno-log view still renders its
   fourteen elements intact after the `region()` refactor. (No JS test harness — the screenshot
   pass *is* the regression check, as in Phases 2–4.)
+- **In progress (Phase 5, synthetic-spectrum panel — spike proven + planned, NO code yet):**
+  a new spectrum view (λ vs flux with real absorption lines) derived from the state's
+  `(Teff, logg, [Fe/H])` — making visible the very spectrum `color.js` already collapses
+  into the star's one-pixel colour. It is a **sibling to the §3 spine, NOT a `StellarState`**
+  (exactly like Lane–Emden): `/spectrum` is, like `/polytrope`, the *other* route that does
+  **not** go through `PROVIDER`. Engine = **MSG/pymsg** (Townsend's Multidimensional Spectral
+  Grids) used as a **build-time bake** (mirrors the MESA build-time precedent): MSG is built
+  **once in a container**, `pymsg` bakes a dense void-filled `(Teff,logg,[Fe/H])` flux cube →
+  `data/spectra/spectra_grid.npz` (gitignored), and the **runtime backend is pure-Python**
+  (`scipy` `RegularGridInterpolator` — no pymsg/Fortran/Docker at run time, Windows-clean).
+  **Spike proven:** MSG 2.2 + pymsg builds on a **lean conda-forge stack — NO MESA SDK**
+  (gfortran 15 + conda lapack/hdf5 + netlib LAPACK95 from source); `sg.flux` returns
+  physically-correct lined spectra 3500–49000 K (Balmer peak at A, Ca K strong-cool/gone-hot).
+  Full design + resume order: `docs/plans/graceful-toasting-thimble.md`; MSG build recipe +
+  every gotcha: `backend/docs/msg_spectra_build_recipe.md`; reusable build container
+  `msg_spike`. **No backend code/tests/frontend yet** — only the spike + the two committed docs.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three
