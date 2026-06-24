@@ -87,6 +87,23 @@ main {
   margin: 2px 0 12px; min-height: 1.4em;
 }
 
+/* Spectrum panel (spec §5): a full-width band like the Lane–Emden panel — the
+   wavelength axis wants width, and it's a derived view (of Teff/log g/[Fe/H]),
+   not part of the 2×2 evolution grid. */
+.spectrum-panel { grid-column: 1 / -1; }
+#spectrum-canvas {
+  display: block; width: 100%; max-width: 720px; margin: 0 auto;
+  background: #05070d; border-radius: 8px;
+}
+/* The honest parameter line under the spectrum (and the no-[Fe/H]-axis note). */
+.spectrum-caption {
+  color: var(--accent); font-size: 12.5px; min-height: 1.4em; margin: 8px 0 0;
+  text-align: center;
+}
+/* The legend's gradient swatch needs to be a touch wider to read as a rainbow. */
+.spectrum-panel .legend { justify-content: center; }
+.spectrum-panel .legend i { width: 22px; }
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

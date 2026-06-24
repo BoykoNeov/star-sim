@@ -151,3 +151,52 @@ Balmer Hα/Hβ absorption depth peaks at A stars (Hα 42%, Hβ 62% at 9500 K), C
 [MSG grid-files page](http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids)
 — **CAP18** (Allende Prieto 2018) reaches ~50000 K and varies metallicity. Grids
 are large HDF5 downloads, gitignored like `data/mist` and `data/mesa`.
+
+## 6. Running the bake (`scripts/bake_spectra.py` → `data/spectra/spectra_grid.npz`)
+
+The Phase 5 panel ships the **solar-only `sg-demo.h5` MVP** (the CAP18 grids-page
+host was unreachable at build time, and the MVP de-risks the whole vertical slice;
+the bake is **axis-generic**, so a 3-D CAP18 re-bake later is a pure data swap with
+**zero code change** — it just produces a 4-D cube the runtime reads back out of
+the `.npz`). The baked `.npz` is **gitignored** (like all of `data/`), so this is
+the only reproducibility path — re-run it after any `BAKE_VERSION` bump or grid
+change.
+
+Inside the `msg_spike` container (env per §3), with `scripts/bake_spectra.py`
+copied in:
+
+```bash
+# (host) copy the script into the reusable build container
+docker cp backend/scripts/bake_spectra.py msg_spike:/tmp/bake_spectra.py
+
+# (container) bake — set the MSG runtime env first
+docker exec msg_spike bash -c '
+  source /opt/conda/etc/profile.d/conda.sh && conda activate base
+  export MSG_DIR=/tmp/msg-2.2 MESASDK_ROOT="$CONDA_PREFIX"
+  export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$MSG_DIR/lib"
+  python /tmp/bake_spectra.py \
+    --grid /tmp/msg-2.2/data/grids/sg-demo.h5 \
+    --out  /tmp/spectra_grid.npz'
+
+# (host) copy the cube out to where the runtime looks for it
+docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz
+```
+
+The default bake is a `(96 Teff × 11 log g × 2400 λ)` cube, ~4.7 MB:
+
+- **Teff** 3500–49000 K, **log-spaced** (cool-end resolution where lines change
+  fast); the runtime interpolates in `log10(Teff)` via the `axis_log` flag.
+- **log g** 0–5 in 0.5 steps.
+- **λ** 3000–9000 Å in 2.5 Å bins (bin *centres* stored).
+- **Voids** (hot + low-gravity corners with no model → `LookupError`, ~38% of
+  nodes for sg-demo) are filled **along log g at fixed Teff** (the voids are a
+  contiguous high-log g block, so this preserves the dominant Teff variation
+  exactly), making the stored cube fully regular for `RegularGridInterpolator`.
+- Knobs: `--n-teff`, `--lam-min/--lam-max/--lam-step`, `--grid`, `--out`.
+- `BAKE_VERSION` must match `star_sim/spectra.py`'s; the runtime rejects a stale
+  cube (re-bake to fix).
+
+Then the pure-Python runtime (`star_sim/spectra.py`, `scipy` only — no pymsg)
+serves `/spectrum`; `pytest backend/tests/test_spectra.py` gates the line physics
+(measured through the runtime path), and the `requires_spectra_data` marker skips
+those if the cube is absent.

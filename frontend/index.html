@@ -19,7 +19,7 @@
 </head>
 <body>
   <header>
-    <h1>Star Simulator <span class="tag">Phase 3 · interior structure</span>
+    <h1>Star Simulator <span class="tag">Phase 5 · spectra</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
     </h1>
   </header>
@@ -115,6 +115,18 @@
       </h2>
       <div id="readout" class="readout"></div>
       <p class="note" id="status"></p>
+    </section>
+
+    <section class="panel spectrum-panel">
+      <h2>Spectrum <span class="help" tabindex="0" data-tip="The star's synthetic spectrum — flux versus wavelength, with real absorption lines — for the current effective temperature, surface gravity and metallicity. This is the spectrum the 3D star's single colour is the eye's average of: integrate this curve against the eye's response and you get that one pixel. Interpolated from a grid of model-atmosphere spectra (MSG / Townsend) baked once into the backend. The visible band (3800–7800 Å) is painted in its true per-wavelength colour, so you see a spectrograph's rainbow with dark absorption lines notched into it; the ultraviolet and near-infrared flanks are shown muted grey. Flux is normalized to each spectrum's own peak — the absolute brightness (which varies thousands-fold from cool to hot stars) lives in the 3D star and the luminosity readout; here the story is the CONTINUUM SLOPE (hot stars rise toward the blue, cool stars toward the red) and the LINES. Watch the hydrogen Balmer lines (Hα, Hβ, …) deepen to a maximum around A-type stars (~9500 K) and fade in both hotter and cooler stars, while the Ca II H&K and Na D lines are strong in cool stars and vanish when hot. The dashed gold line is the Wien peak (the blackbody's brightest wavelength), shown when it falls in range.">?</span></h2>
+      <canvas id="spectrum-canvas"></canvas>
+      <p class="note spectrum-caption" id="spectrum-caption"></p>
+      <div class="legend">
+        <span><i style="background:linear-gradient(90deg,#7a00ff,#00b3ff,#33dd33,#ffdd00,#ff3300)"></i>visible band (true spectral colour)</span>
+        <span><i style="background:#9aa6bd;opacity:.4"></i>UV / near-IR (outside the eye's range)</span>
+        <span><span class="tip" tabindex="0" data-tip="Hydrogen Balmer lines (Hα 6563 Å, Hβ 4861 Å, Hγ, Hδ): absorption from hydrogen atoms with an electron already in the second level. They need warmth to populate that level but are wiped out if the gas is too hot to keep the atom neutral — so they peak around A-type stars (~9500 K) and fade toward both cooler and hotter stars.">H Balmer (Hα, Hβ …)</span></span>
+        <span><span class="tip" tabindex="0" data-tip="Singly-ionized calcium (Ca II H 3968 Å &amp; K 3933 Å) and neutral sodium (Na D, 5893 Å): strong in cool stars (the Sun, K and M dwarfs) where these metals sit in the right ionization state, and essentially gone in hot stars. Among the deepest features in a solar-type spectrum.">Ca II H&amp;K · Na D</span></span>
+      </div>
     </section>
 
     <section class="panel lane-panel">

@@ -13,6 +13,7 @@ import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
 from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
+from star_sim.spectra import GRID_FILENAME, SPECTRA_DATA_DIR
 
 
 def mist_data_available() -> bool:
@@ -88,4 +89,16 @@ _SOLAR_BRACKET_FEHS = {-0.5, 0.0}
 requires_mist_solar_bracket = pytest.mark.skipif(
     not _SOLAR_BRACKET_FEHS.issubset(mist_fehs_available()),
     reason="needs the m050/p000 MIST grids to bracket the solar MESA Z — fetch with `--feh m050`",
+)
+
+
+def spectra_data_available() -> bool:
+    return (SPECTRA_DATA_DIR / GRID_FILENAME).is_file()
+
+
+# The /spectrum line-physics tests need the baked spectrum grid (built once in the
+# MSG container, never committed — see backend/docs/msg_spectra_build_recipe.md).
+requires_spectra_data = pytest.mark.skipif(
+    not spectra_data_available(),
+    reason="spectrum grid not baked — see backend/docs/msg_spectra_build_recipe.md",
 )

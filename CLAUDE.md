@@ -565,22 +565,56 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   on the lower RGB, Be dipping modestly, F flat — and the cno-log view still renders its
   fourteen elements intact after the `region()` refactor. (No JS test harness — the screenshot
   pass *is* the regression check, as in Phases 2–4.)
-- **In progress (Phase 5, synthetic-spectrum panel — spike proven + planned, NO code yet):**
+- **Done (Phase 5, synthetic-spectrum panel — the solar MVP, full vertical slice):**
   a new spectrum view (λ vs flux with real absorption lines) derived from the state's
   `(Teff, logg, [Fe/H])` — making visible the very spectrum `color.js` already collapses
   into the star's one-pixel colour. It is a **sibling to the §3 spine, NOT a `StellarState`**
   (exactly like Lane–Emden): `/spectrum` is, like `/polytrope`, the *other* route that does
-  **not** go through `PROVIDER`. Engine = **MSG/pymsg** (Townsend's Multidimensional Spectral
-  Grids) used as a **build-time bake** (mirrors the MESA build-time precedent): MSG is built
-  **once in a container**, `pymsg` bakes a dense void-filled `(Teff,logg,[Fe/H])` flux cube →
-  `data/spectra/spectra_grid.npz` (gitignored), and the **runtime backend is pure-Python**
-  (`scipy` `RegularGridInterpolator` — no pymsg/Fortran/Docker at run time, Windows-clean).
-  **Spike proven:** MSG 2.2 + pymsg builds on a **lean conda-forge stack — NO MESA SDK**
-  (gfortran 15 + conda lapack/hdf5 + netlib LAPACK95 from source); `sg.flux` returns
-  physically-correct lined spectra 3500–49000 K (Balmer peak at A, Ca K strong-cool/gone-hot).
-  Full design + resume order: `docs/plans/graceful-toasting-thimble.md`; MSG build recipe +
-  every gotcha: `backend/docs/msg_spectra_build_recipe.md`; reusable build container
-  `msg_spike`. **No backend code/tests/frontend yet** — only the spike + the two committed docs.
+  **not** go through `PROVIDER`, and `spectrum.js` is a live consumer of the marker's three
+  numbers (owns its own debounced latest-wins fetch, not the track). Engine = **MSG/pymsg**
+  (Townsend's Multidimensional Spectral Grids) used as a **build-time bake** (mirrors the MESA
+  build-time precedent): MSG was built **once in the `msg_spike` container**, `bake_spectra.py`
+  (`backend/scripts/`, the one place that imports pymsg — NOT in the `star_sim` package) bakes
+  a dense void-filled flux cube → `data/spectra/spectra_grid.npz` (gitignored, 96×11×2400,
+  4.7 MB), and the **runtime backend is pure-Python** (`star_sim/spectra.py`: `scipy`
+  `RegularGridInterpolator` over the `.npz` — no pymsg/Fortran/Docker at run time, Windows-clean).
+  **Shipped on the solar-only `sg-demo.h5` grid** (3500–49000 K, no `[Fe/H]` axis): the CAP18
+  grids-page host (`user.astro.wisc.edu`) was **unreachable** (ECONNREFUSED) at build time, so
+  per the advisor's fallback the MVP de-risks the whole slice — and the bake + runtime are
+  **axis-generic** (read `sg.axis_labels`, store `axis_keys`/`axis_log`), so a 3-D CAP18 re-bake
+  later is a **pure data swap, zero code change** (the runtime reads the axis list back and
+  lights up the feh axis; the panel caption keys on `feh_varies` and honestly says "solar-
+  metallicity grid" until then). Bake choices (advisor-guided): **log-spaced Teff** (cool-end
+  line resolution; interpolated in `log10` via the `axis_log` flag), **void-fill along logg at
+  fixed Teff** (the voids are a contiguous high-logg block — preserves the dominant Teff
+  variation vs a Teff-swamped 2-D nearest-neighbour), **absolute flux stored** (normalized
+  per-spectrum in the frontend draw). **The hot-end seam (advisor-caught, FIXED):** the hottest
+  *draggable* star is ~80000 K (60 M☉ metal-poor — far above the 49000 K grid ceiling), so the
+  `/spectrum` Query bounds were widened to `teff 1000–200000` / `logg −2…7` (wider than any real
+  star) and `spectrum_data` **clamps BOTH ends** to grid coverage — symmetric with the cool
+  floor, so dragging to a massive star shows the 49000 K spectrum instead of a silent 422 freeze
+  (422 reserved for genuinely absurd inputs). **Tests (the proof):** `requires_spectra_data`
+  conftest marker + `tests/test_spectra.py` (15 tests) — always-on route contract (422 on absurd
+  inputs; the hot-star NO-422 case; 503 when not baked), plus data-gated **line physics MEASURED
+  through the runtime path** (NOT the recipe's raw-pymsg numbers — interpolation at a non-node
+  star differs a few %): Balmer Hα/Hβ deepest at A (~9500 K) vs Sun vs hot O; Ca II K strong in
+  the Sun, gone when hot; cool clamp to the 3500 K floor; void-region query stays finite.
+  **116 tests pass** (was 102). **Frontend:** `spectrum.js` draws flux-vs-λ with the visible
+  band (3800–7800 Å) painted in true per-wavelength spectral colour (`color.js` gained
+  `wavelengthToCSS`, reusing the CIE fit), a Wien-peak marker + Balmer/Ca/Na line guides with
+  **collision-skipped labels** (the Ca K/Ca H/Hδ cluster at the Balmer jump), per-spectrum
+  normalization (the story is the continuum slope + lines, not absolute brightness — that lives
+  in the 3D star + L readout), and an honest caption; full-width panel in `index.html` + CSS;
+  wired into `main.js` `refresh()`. **Graceful failure:** a never-loaded panel (fresh checkout,
+  unbaked grid → 503) shows "spectrum unavailable" rather than a blank box (the first data-
+  dependent sibling — lane.js never had this case). **Verified** via Playwright (bundled
+  Chromium — `chrome --headless` hijacks the user's running Chrome) across the spectral sequence:
+  hot O blue continuum / A deep Balmer + Balmer jump / Sun balanced + Ca K + Wien peak / M red
+  molecular-rich, plus the ~80000 K→49000 K clamp (no freeze), no JS errors (the screenshot pass
+  is the frontend regression check, as in Phases 2–4). Full design + resume: `docs/plans/graceful-
+  toasting-thimble.md`; MSG build + bake recipe: `backend/docs/msg_spectra_build_recipe.md`;
+  reusable build container `msg_spike`. **Next:** swap in CAP18 (3-D `[Fe/H]`) once the grids-page
+  host is reachable (fetch it, re-run `bake_spectra.py --grid <cap18>.h5`, drop the `.npz` in).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

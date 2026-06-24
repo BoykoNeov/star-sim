@@ -8,6 +8,7 @@ import { createStar } from "./star.js";
 import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
+import { createSpectrum } from "./spectrum.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -68,6 +69,14 @@ const comp = createComp(document.getElementById("comp-canvas"));
 // own control + fetch. It's instantiated here but deliberately never wired into
 // refresh()/refreshTrack(): it does not move with mass/[Fe/H]/age.
 createLane({ api: API });
+
+// The spectrum panel (spec §5) is a live consumer of the StellarState — it reads
+// the marker's (Teff, log g, [Fe/H]) and fetches the matching synthetic spectrum.
+// Like color.js it's a derived view of those three numbers (the backend route
+// bypasses PROVIDER, the same way /polytrope does), so it's updated inside
+// refresh() alongside the other panels — but owns its own debounced latest-wins
+// fetch (it doesn't need the track, just the current state).
+const spectrum = createSpectrum({ api: API });
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
@@ -402,6 +411,7 @@ async function refresh() {
     star.update(s);
     hr.update(s);
     comp.update(s);
+    spectrum.update(s);
     renderReadout(s);
     els.status.style.color = teffToCSS(s.Teff_K);
     // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the

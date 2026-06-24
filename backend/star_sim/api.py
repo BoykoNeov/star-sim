@@ -24,6 +24,7 @@ from .provider import (
     ProviderDataMissing,
     StellarStateProvider,
 )
+from .spectra import SpectraDataMissing, spectrum_data
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -157,6 +158,32 @@ def polytrope(
     (n ≥ 5 has no finite surface; n > 5 is unbound), enforced by the Query bounds.
     """
     return polytrope_profile(n)
+
+
+@app.get("/spectrum")
+def spectrum(
+    teff: float = Query(..., ge=1000.0, le=200000.0, description="effective temperature / K"),
+    logg: float = Query(..., ge=-2.0, le=7.0, description="surface gravity, cgs dex"),
+    feh: float = Query(0.0, ge=-5.0, le=2.0, description="initial [Fe/H]"),
+) -> dict:
+    """(Teff, log g, [Fe/H]) -> a synthetic spectrum (λ vs flux, with absorption
+    lines), STAR_SIM_SPEC §5.
+
+    Like `/polytrope`, this does **not** go through `PROVIDER`: a spectrum is a
+    sibling to the StellarState spine, a derived view of the state's
+    (Teff, log g, [Fe/H]) — the same numbers `color.js` turns into the star's
+    colour. The `Query` bounds are deliberately *wider than any real star* the grid
+    can produce (the hottest draggable star — a massive metal-poor O star — reaches
+    ~80000 K, far above the 49000 K solar-grid ceiling), so dragging the controls
+    never trips a 422: `spectrum_data` clamps BOTH ends to the baked grid's real
+    coverage (a cool M-dwarf floors to the coolest spectrum, a hot O star caps at
+    the hottest — symmetric). 422 is reserved for genuinely absurd inputs. If the
+    grid hasn't been baked yet, return 503 with an actionable hint (analogue of a
+    missing provider grid)."""
+    try:
+        return spectrum_data(teff, logg, feh)
+    except SpectraDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 # --- static frontend ----------------------------------------------------------

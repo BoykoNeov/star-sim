@@ -103,3 +103,20 @@ export function teffToCSS(kelvin) {
   const [r, g, b] = teffToRGB(kelvin).map((v) => Math.round(v * 255));
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+// Monochromatic wavelength (nm) -> the perceived sRGB hue of light at exactly
+// that wavelength, for the spectrum panel's "rainbow" continuum shading. Same
+// CIE-fit machinery as the Teff color, but the XYZ tristimulus IS the CMF value
+// at this single λ (a delta-function spectrum). Clamp out-of-gamut negatives,
+// normalize to a vivid full-brightness hue (we're painting a spectral strip, not
+// matching a luminance), gamma last. Outside ~380–700 nm the CMFs fall to ~0, so
+// the deep violet/red ends darken naturally.
+export function wavelengthToCSS(nm) {
+  const X = cieX(nm), Y = cieY(nm), Z = cieZ(nm);
+  let rgb = xyzToLinearSRGB(X, Y, Z).map((c) => Math.max(0, c));
+  const max = Math.max(rgb[0], rgb[1], rgb[2]) || 1;
+  const [r, g, b] = rgb
+    .map((c) => linearToSRGB(c / max))
+    .map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  return `rgb(${r}, ${g}, ${b})`;
+}
