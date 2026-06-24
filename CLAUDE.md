@@ -681,6 +681,30 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   `PROVIDER` like `/polytrope`). **Next (optional):** raise grid density (`sg-CAP18-high`/`ultra`,
   OSTAR `medium`/`high`), or splice `BSTAR2006` for NLTE B-star spectra — all pure data work, runtime
   stays axis-generic.
+- **Done (Phase 5, hot-end "no model" notice — past the grid ceiling, blank not clamp):** above the
+  spliced 55000 K ceiling there is **no model atmosphere** (the hottest draggable star — a 60 M☉
+  metal-poor O star — reaches ~78500 K, verified through live `/track`), so showing the clamped
+  ceiling spectrum would be a fake. The panel now **blanks and says so** instead of drawing the
+  boundary spectrum. **Layering kept honest** (advisor): the backend still clamps + returns a
+  spectrum (so `test_cool_params_clamp_to_grid_floor` is untouched — the clamp is the backend's
+  honest behavior), but `spectrum_data` now also reports `teff_requested` + the grid's
+  `teff_min`/`teff_max`; the policy (blank vs draw) lives in `spectrum.js`. Frontend: a
+  `teffAboveGrid()` guard (`teff_requested > teff_max`) → `drawNoModel()` draws a faint frame +
+  centred "No spectral model for this temperature / our model atmospheres reach {teff_max} K — this
+  star is ≈ {teff_requested} K", and `renderCaption()` mirrors it; **distinct from the 503 "grid not
+  baked" empty-state** (different failure). **Hot end ONLY** — the cool floor keeps its honest
+  small-extrapolation clamp (a 3300 K red dwarf shown as 3500 K), so flagship cool stars (M-dwarfs,
+  RGB/AGB tips ~2900–3200 K) are **not** regressed; strict `>` means cool requests never hit the
+  blank path. Message text keys off `teff_max` from the response, **never a literal 55000**, so it
+  auto-tracks a hotter/denser re-bake (honors the user's "or what we have as data"). A symmetric
+  cool-end notice was considered + **rejected** (the cool clamp is a small honest extrapolation, not
+  a model gap). New test `test_response_reports_teff_coverage_for_no_model_notice` pins the contract
+  (in-grid: `teff == teff_requested`; too-hot: `teff_requested > teff_max` while `teff == teff_max`).
+  **120 tests pass** (was 119). Verified via Playwright on the **real served UI** (drove mass/feh/age
+  number inputs, which commit-on-change bypassing snapping): 78453 K star → message with the dynamic
+  55000 K ceiling, no JS errors; in-range 53656 K O star → normal spectrum still draws right up to
+  the ceiling (He II 4686 guide lit). (No JS test harness — the screenshot pass *is* the regression
+  check, as in Phases 2–5.)
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

@@ -177,7 +177,12 @@ def spectrum(
     ~80000 K, far above the CAP18 grid's 30000 K ceiling), so dragging the controls
     never trips a 422: `spectrum_data` clamps BOTH ends to the baked grid's real
     coverage (a cool M-dwarf floors to the coolest spectrum, a hot O/B star caps at
-    the hottest — symmetric). 422 is reserved for genuinely absurd inputs. If the
+    the hottest — symmetric). 422 is reserved for genuinely absurd inputs. The
+    response also reports `teff_requested` + the grid's `teff_min`/`teff_max`, so the
+    panel can tell a real interpolated spectrum from a clamped-ceiling one: past the
+    HOT end (no model atmosphere exists) it shows a "no spectral model for this
+    range" notice instead of the misleading boundary spectrum, keyed off the grid's
+    real ceiling. The cool floor keeps its honest small-extrapolation clamp. If the
     grid hasn't been baked yet, return 503 with an actionable hint (analogue of a
     missing provider grid)."""
     try:

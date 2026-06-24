@@ -1,6 +1,6 @@
 ---
 name: star-sim-phase5-spectra
-description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP DONE (3-D [Fe/H]) + OSTAR2002 HOT SPLICE DONE (>30000 K closed, →55000 K, He lines): MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime+frontend unchanged through both the CAP18 swap AND the OSTAR splice (NO BAKE_VERSION bump either time) — the real new code is the bake going single-grid→multi-grid (--hot-grid: append Teff nodes, Z/Zo=10^[Fe/H], same-Teff void-fill). He I/He II guides (minTeff-gated). 119 tests."
+description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP (3-D [Fe/H]) + OSTAR2002 HOT SPLICE (→55000 K, He lines) + HOT-END NO-MODEL NOTICE DONE: MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime unchanged through CAP18 swap AND OSTAR splice (NO BAKE_VERSION bump) — real new code is the bake going single-grid→multi-grid (--hot-grid). He I/He II guides (minTeff-gated). Above the 55000 K ceiling (hottest draggable ≈78500 K) the panel BLANKS + shows 'no spectral model … reach {teff_max} K' instead of the fake clamped spectrum — backend reports teff_requested/teff_min/teff_max, policy in spectrum.js, HOT end only (cool floor keeps honest clamp), keyed off teff_max not a literal. 120 tests."
 metadata:
   node_type: memory
   type: project
@@ -136,9 +136,27 @@ strips conda-prefix `-I`; `CPATH` does NOT work for Fortran modules); set `MESAS
 valid path or `fypp_deps` crashes. **Bake env:** `MSG_DIR=/tmp/msg-2.2`,
 `LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$MSG_DIR/lib`, conda base active.
 
+**Hot-end "no model" notice — DONE** (above the grid ceiling, blank not clamp). Past the spliced
+**55000 K** ceiling there is **no model atmosphere at all** (hottest draggable star ≈78500 K — a
+60 M☉ metal-poor O star, verified via live `/track`), so the old clamp showed a *fake* boundary
+spectrum there. The panel now **blanks + says so**. **Layering (advisor):** backend still clamps +
+returns a spectrum (so `test_cool_params_clamp_to_grid_floor` is untouched — the clamp IS the
+backend's honest behavior), but `spectrum_data` now also returns `teff_requested` + grid
+`teff_min`/`teff_max`; the **blank-vs-draw policy lives in `spectrum.js`** (`teffAboveGrid()` =
+`teff_requested > teff_max` → `drawNoModel()`: faint frame + centred "No spectral model … reach
+{teff_max} K — this star ≈ {teff_requested} K", caption mirrors). **HOT end only** — cool floor keeps
+its honest small-extrapolation clamp (3300 K dwarf shown as 3500 K), so flagship cool stars (M-dwarfs,
+RGB/AGB tips ~2900–3200 K) are **not** regressed (strict `>` → cool never blanks); symmetric cool-end
+notice considered + **rejected**. Message keys off `teff_max` from the response, **never a literal
+55000** → auto-tracks a hotter re-bake. **Distinct from the 503 "grid not baked" empty-state.** Test
+`test_response_reports_teff_coverage_for_no_model_notice` pins the contract. **120 tests.** Verified
+via Playwright on the **real UI** (drove mass/feh/age number inputs — they commit-on-change, bypassing
+snapping): 78453 K → message w/ dynamic ceiling, no JS errors; in-range 53656 K → normal draw.
+
 **Why:** records a shipped phase + the non-obvious decisions (axis-generic for the CAP18 swap,
-runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp, CAP18's 30000 K
-ceiling) — and that the CAP18 swap *did* pay off as a zero-code re-bake exactly as designed.
+runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp NOW a "no model"
+notice, CAP18's 30000 K ceiling) — and that the CAP18 swap *did* pay off as a zero-code re-bake
+exactly as designed.
 
 **How to apply:** the CAP18 swap AND the OSTAR2002 hot-end splice are **done** (cube reaches 55000 K,
 He lines live). To go further (more line detail, or NLTE B-star spectra): re-bake from

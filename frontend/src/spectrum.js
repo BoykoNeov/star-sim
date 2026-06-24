@@ -106,10 +106,23 @@ export function createSpectrum({ api }) {
     debounce = setTimeout(() => fetchSpectrum(teff, logg, feh ?? 0), 90);
   }
 
+  // True when the star is hotter than the HOTTEST spectrum any baked grid covers
+  // (teff_max comes from the response — the real ceiling, never a literal 55000,
+  // so this auto-tracks a denser/hotter re-bake). Past it we have NO model
+  // atmosphere: drawing the clamped ceiling spectrum would be a fake, so we blank
+  // the panel and say so. Strictly the HOT end only — the cool floor keeps its
+  // honest clamp (a 3300 K red dwarf shown as 3500 K is a small extrapolation; a
+  // 70000 K star shown as 55000 K is a different ionization regime entirely).
+  function teffAboveGrid() {
+    return data && data.teff_requested != null && data.teff_max != null &&
+      data.teff_requested > data.teff_max + 0.5;
+  }
+
   // --- drawing ---------------------------------------------------------------
   function draw() {
     ctx.clearRect(0, 0, W, H);
     if (!data) return;
+    if (teffAboveGrid()) { drawNoModel(); return; }
 
     const lam = data.wavelength, flux = data.flux;
     const n = lam.length;
@@ -230,11 +243,38 @@ export function createSpectrum({ api }) {
     ctx.textAlign = "left";
   }
 
+  // The "no model for this range" state: the star is hotter than every grid we
+  // have, so there's nothing honest to plot. A faint frame keeps the panel reading
+  // as intentionally empty (not broken); the message names the real ceiling and
+  // this star's temperature so it's clear WHY it's blank — and it's distinct from
+  // the "grid not baked" (503) message, a different failure entirely.
+  function drawNoModel() {
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD_T, W - PAD_L - PAD_R, H - PAD_T - PAD_B);
+    const cx = (PAD_L + W - PAD_R) / 2, cy = (PAD_T + H - PAD_B) / 2;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#aeb7c8"; ctx.font = "14px system-ui, sans-serif";
+    ctx.fillText("No spectral model for this temperature", cx, cy - 8);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(
+      `Our model atmospheres reach ${Math.round(data.teff_max)} K — ` +
+      `this star is ≈ ${Math.round(data.teff_requested)} K.`,
+      cx, cy + 13,
+    );
+    ctx.textAlign = "left";
+  }
+
   // The honest "what am I looking at" caption: the parameters the spectrum stands
   // for, plus — when the grid has no metallicity axis — a plain note that the
   // [Fe/H] control does not (yet) change this panel.
   function renderCaption() {
     if (!caption || !data) return;
+    if (teffAboveGrid()) {
+      caption.textContent =
+        `Teff ≈ ${Math.round(data.teff_requested)} K is beyond our hottest ` +
+        `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
+      return;
+    }
     const t = Math.round(data.teff);
     const parts = [`Teff ${t} K`, `log g ${Number(data.logg).toFixed(2)}`];
     if (data.feh_varies) parts.push(`[Fe/H] ${Number(data.feh).toFixed(2)}`);

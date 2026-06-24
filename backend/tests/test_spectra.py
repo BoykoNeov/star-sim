@@ -118,6 +118,35 @@ def test_cool_params_clamp_to_grid_floor():
 
 
 @requires_spectra_data
+def test_response_reports_teff_coverage_for_no_model_notice():
+    """The contract the panel's "no spectral model for this range" notice relies on:
+    the response reports the *requested* Teff and the grid's real Teff coverage, so
+    the frontend can tell a genuine interpolated spectrum from a clamped-ceiling one
+    WITHOUT hardcoding the ceiling (it auto-tracks a hotter/denser re-bake).
+
+    An in-grid star reports teff == teff_requested (no clamp); a star hotter than
+    every grid reports teff_requested > teff_max while teff stays pinned to teff_max
+    (the clamped boundary spectrum is still returned, but the panel blanks it). The
+    cool floor stays an honest clamp (covered by test_cool_params_clamp_to_grid_floor),
+    so only the hot end trips the notice."""
+    d_in = spectrum_data(9500, 4.0, 0.0)
+    for k in ("teff_requested", "teff_min", "teff_max"):
+        assert k in d_in
+    assert d_in["teff_min"] < d_in["teff_max"]
+    assert d_in["teff_requested"] == pytest.approx(9500.0)
+    assert d_in["teff_min"] <= d_in["teff_requested"] <= d_in["teff_max"]
+    assert d_in["teff"] == pytest.approx(9500.0, abs=1.0)   # in-grid: not clamped
+
+    # The hottest draggable star (~80000 K) is past even the spliced grid's ceiling:
+    # requested > max, used == max. This > is exactly what the frontend keys "blank
+    # + show notice" off of.
+    d_hot = spectrum_data(80000, 4.0, 0.0)
+    assert d_hot["teff_requested"] == pytest.approx(80000.0)
+    assert d_hot["teff_requested"] > d_hot["teff_max"]
+    assert d_hot["teff"] == pytest.approx(d_hot["teff_max"], abs=1.0)
+
+
+@requires_spectra_data
 def test_void_region_query_is_filled():
     """A hot + low-gravity point sits in a grid void (OSTAR has no log g < 3.5
     model at 40000 K); the void-filled bake means the runtime still returns a

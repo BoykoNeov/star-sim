@@ -229,10 +229,30 @@ deepens 30000→45000 K, far deeper than the Sun; 45000 K is a real sample, not 
 labelled in cool-blue). Recipe §5a + §6. Runtime/frontend stayed axis-generic — no
 `BAKE_VERSION` bump.
 
+**Hot-end "no model" notice — DONE (this session).** Above the spliced grid's 55000 K
+ceiling there is **no model atmosphere at all** (the hottest draggable star, a 60 M☉
+metal-poor O star, reaches ~78500 K — verified through the live `/track`). Showing the
+clamped 55000 K spectrum there would be a fake, so the panel now **blanks and says so**
+instead. Implementation keeps the layering honest: the backend still clamps + returns a
+spectrum (no change to `test_cool_params_clamp_to_grid_floor`), but `spectrum_data` now
+also reports `teff_requested` + the grid's `teff_min`/`teff_max`; `spectrum.js` blanks the
+curve and draws a centred "No spectral model for this temperature / our model atmospheres
+reach {teff_max} K — this star is ≈ {teff_requested} K" message (faint frame so it reads as
+intentionally empty, distinct from the 503 "grid not baked" state). **Hot end only** — the
+cool floor keeps its honest small-extrapolation clamp (a 3300 K red dwarf as 3500 K), so
+common cool stars (M-dwarfs, RGB/AGB tips) are not regressed; the message text is keyed off
+the grid's real ceiling (`teff_max` from the response), never a literal 55000, so it
+auto-tracks a hotter re-bake. New test `test_response_reports_teff_coverage_for_no_model_notice`
+pins the contract (`teff_requested > teff_max` while `teff == teff_max`). **120 tests pass.**
+Verified via Playwright on the real UI: 78453 K star → message with dynamic 55000 K ceiling,
+no JS errors; in-range 53656 K O star → normal spectrum still draws right up to the ceiling.
+
 **Next (future, optional):** raise wavelength/Teff/[Fe/H] density (the `coarse` grid is
 the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); splice
 **BSTAR2006** for NLTE B-star spectra (15000–30000 K) if CAP18's LTE hot end is ever a
 concern; or a `medium`/`high` OSTAR tier for finer O-star line detail. All pure data work.
+(A symmetric cool-end "no model" notice was *considered and rejected* — the cool clamp is a
+small honest extrapolation, not a model gap; blanking it would regress flagship cool stars.)
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

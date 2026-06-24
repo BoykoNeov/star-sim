@@ -143,12 +143,26 @@ def spectrum_data(
       wavelength : λ bin centres (Å)
       flux       : flux per bin (erg/cm²/s/Å), same length as wavelength
       teff,logg,feh : the (clamped) values the spectrum actually represents
+      teff_requested : the *raw* requested Teff (pre-clamp) — so a consumer can
+                       tell a real in-grid spectrum from a clamped-boundary one
+      teff_min,teff_max : the grid's Teff coverage. A star hotter than teff_max
+                       has NO model atmosphere (the returned spectrum is the
+                       clamped ceiling); the panel uses this to show a "no model
+                       for this range" notice instead of a misleading boundary
+                       spectrum, keyed off the grid's real ceiling (not a literal).
       feh_varies : bool — false for a solar-only grid (panel labels it honestly)
       flux_unit, grid_name : provenance
     """
     s = _load()
     flux, used = s.evaluate({"teff": teff, "logg": logg, "feh": feh})
     lam = s.lam
+
+    # Expose the Teff coverage so the panel can distinguish "this is a real
+    # interpolated spectrum" from "the star is off the hot end of every grid we
+    # have, here's the clamped ceiling". The cool floor stays an honest small
+    # extrapolation (clamp + report); only the hot end is a true model gap.
+    ti = s.axis_keys.index("teff")
+    teff_min, teff_max = s.bounds[ti]
 
     # Optional uniform downsample for the panel (default: full baked resolution).
     if n_display is not None and n_display < lam.size:
@@ -162,6 +176,9 @@ def spectrum_data(
         "teff": used["teff"],
         "logg": used["logg"],
         "feh": used.get("feh", float(feh)),
+        "teff_requested": float(teff),
+        "teff_min": teff_min,
+        "teff_max": teff_max,
         "feh_varies": s.feh_varies,
         "flux_unit": s.flux_unit,
         "grid_name": s.grid_name,
