@@ -463,19 +463,22 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   `track()` API, matched on **Z** (the solar ZAMS `Z_surf=0.01523` is **below** MIST p000's
   `0.01635`, so p000 alone can't bracket it — the straddling grids are **m050 + p000**,
   matched MIST `[Fe/H]≈−0.05`; Yinit agrees ~0.269) and compared at shared **Xc=0.6/0.4/0.2**.
-  **Measured |ΔlogL|≤0.014, |ΔTeff|≤0.04%, |ΔR|≤1.5%** — an **order of magnitude tighter**
-  than the metal-poor bearums bracket (late-MS |ΔlogL|≤0.13, |ΔR|≤20%): at solar Z, matched
-  on Z+Y+Xc, the two independent codes are nearly indistinguishable on the MS (MESA stays
-  marginally brighter, the documented direction, but ~0.01 dex not ~0.13). **Sun anchor
+  **Measured (masses 1/2/6):** the **1 M☉ Sun is dramatically tight** (|ΔlogL|≤0.014,
+  |ΔTeff|≤0.04%, |ΔR|≤1.5% — ~10× under the metal-poor bracket), while the **intermediate
+  masses grow off ZAMS** (worst at Xc=0.2: |ΔlogL|≤0.069, |ΔR|≤9.9% — the convective-core-hook
+  regime), staying inside but approaching the metal-poor envelope (late-MS |ΔlogL|≤0.13,
+  |ΔR|≤20%). **Honest note:** the ΔlogL sign is **not uniform** (MESA brighter at 1 M☉, MIST
+  brighter at 2/6), so — unlike the metal-poor grid — there's no "MESA systematically
+  brighter" assertion here. **Sun anchor
   (4.6 Gyr): L=1.18, Teff=5894 K, R=1.04, mid-MS** — *not* solar-calibrated (no α_MLT/Y
   tuning to force L=1; the offset is real and honest, on the MESA-brighter trend). MESA
-  stays **opt-in** (`PROVIDER` in `api.py` is still `MISTProvider`). **94 tests pass** (was
-  92; +2 solar cross-val). Gotchas worth keeping (all in the recipe doc): `pkill -x star`
-  not `pkill -f .../star` (the `-f` pattern matches its own argv and the kill suicides);
-  `docker exec -d` to detach the run from the client; `pgstar_flag=.false.` removes the
-  whole Xming/X11 prerequisite. **Remaining solar follow-on:** add **2 & 6 M☉** solar runs
-  (quick with the warm container) to parametrize the solar cross-val over the same masses
-  as the metal-poor one — currently solar tests only 1 M☉.
+  stays **opt-in** (`PROVIDER` in `api.py` is still `MISTProvider`). **102 tests pass** (was
+  92; +10 solar cross-val over 1/2/6 M☉). Gotchas worth keeping (all in the recipe doc):
+  `pkill -x star` not `pkill -f .../star` (the `-f` pattern matches its own argv and the kill
+  suicides); `docker exec -d` to detach the run from the client; `pgstar_flag=.false.` removes
+  the whole Xming/X11 prerequisite. **2 & 6 M☉ added** (same warm container): the solar bucket
+  now spans **1/2/6 M☉**, the cross-val parametrizes over all three, and a dedicated
+  `test_one_msun_sun_is_exceptionally_tight` pins the Sun-specific ~10× tightness.
 - **Done (Phase 4, Li lithium + the log-scale per-element view):** the per-element view
   now exposes **fourteen** elements — the thirteen above **+ Li** (li7, single isotope
   like Ca/Ti/Fe; placed *first* in `ELEMS`, atomic order Z=3). The provider threading is
@@ -563,11 +566,10 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   fourteen elements intact after the `region()` refactor. (No JS test harness — the screenshot
   pass *is* the regression check, as in Phases 2–4.)
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
-  the **solar MESA grid** is **done** (1 M☉ at Z=0.0152 via a local Docker MESA run →
-  a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val; see the solar-grid
-  Done bullet + `backend/docs/mesa_solar_recipe.md`). The cheap follow-on is **2 & 6 M☉
-  solar runs** (warm container) so the solar cross-val parametrizes over the same masses as
-  the metal-poor one (it currently tests 1 M☉ only). The per-element view is **done
+  the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
+  a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three
+  masses; see the solar-grid Done bullet + `backend/docs/mesa_solar_recipe.md`). The per-element
+  view is **done
   through Li** and the light-element panel is **done (Li/Be/F)**, and the lesson holds
   that *adding more individual metals is a dead end for payoff* (Na/Al/P are invisible
   floor-huggers; Cr/Mn/Ni aren't even in MIST v2.5's network; **boron's only isotope is

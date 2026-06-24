@@ -119,13 +119,23 @@ print(p.parameter_ranges())          # feh now spans -0.84 .. 0.00
 print(p.state_at(1.0, 0.0, 4.6e9))   # Sun anchor
 ```
 
-## 5. Measured result (this run)
+> The 2 & 6 M☉ solar runs were made **identically** — same inlist, only
+> `initial_mass = 2.0` / `6.0` (same `Z=0.0152`, same TAMS stop). They land in
+> the same `[Fe/H]≈0.00` bucket, giving a solar grid of **1/2/6 M☉** that matches
+> the metal-poor cross-val's masses.
 
-- Buckets: `[-0.84, 0.00]` — bearums (1–20 M☉) + solar (1 M☉).
-- `feh_init = +0.00`, `mass_init = 1.0`, ZAMS `Z_surf = 0.01523`.
-- **Sun anchor (4.6 Gyr): L = 1.18 L☉, Teff = 5894 K, R = 1.04 R☉, logg = 4.40,
-  mid-MS.** Compare MIST p000 (≈1.07 / 5834 K): MESA is ~ΔlogL 0.04 brighter /
-  ~60 K hotter — on the documented "MESA systematically more luminous" trend.
+## 5. Measured result
+
+- Buckets: `[-0.84, 0.00]` — bearums (1–20 M☉) + solar (**1/2/6 M☉**).
+- `feh_init = +0.00`, ZAMS `Z_surf = 0.01523` (all three masses).
+- **Sun anchor (1 M☉, 4.6 Gyr): L = 1.18 L☉, Teff = 5894 K, R = 1.04 R☉,
+  logg = 4.40, mid-MS** — *not* solar-calibrated (no α_MLT/Y tuning to force L=1).
+- **Solar MESA-vs-MIST cross-val (matched Z+Y+Xc, masses 1/2/6):** the 1 M☉ Sun
+  is dramatically tight (|ΔlogL|≤0.014, |ΔTeff|≤0.04%, |ΔR|≤1.5% — ~10× under the
+  metal-poor bracket); the intermediate masses grow off ZAMS (worst at Xc=0.2:
+  |ΔlogL|≤0.069, |ΔR|≤9.9%, the convective-core hook), staying inside the
+  metal-poor envelope. ΔlogL sign is not uniform (MESA brighter at 1 M☉, MIST at
+  2/6). See `backend/tests/test_mesa_vs_mist_solar.py`.
 
 ## 6. Cross-validation bracket note
 
