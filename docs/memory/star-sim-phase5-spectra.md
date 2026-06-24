@@ -1,6 +1,6 @@
 ---
 name: star-sim-phase5-spectra
-description: "Phase 5 synthetic-spectrum panel — DONE (solar sg-demo MVP, full vertical slice): MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic so CAP18 (3-D [Fe/H]) is a zero-code re-bake. 116 tests. Solar-only because the CAP18 grids host was unreachable."
+description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP DONE (real 3-D [Fe/H] axis live): MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic, so swapping the solar sg-demo for CAP18 (3-D Teff/[Fe/H]/logg) was a ZERO-code re-bake — only a new [Fe/H]-physics test. 118 tests. CAP18 caps at 30000 K (vs solar MVP's 49000) — trades hot-end coverage for metallicity."
 metadata:
   node_type: memory
   type: project
@@ -25,13 +25,29 @@ over the `.npz` — NO pymsg/Fortran/Docker at run time, Windows-clean). Panel i
 `PROVIDER` like `/polytrope`. `spectrum.js` is a live consumer of the marker's three
 numbers (own debounced latest-wins fetch, not the track), wired into `main.js` `refresh()`.
 
-**Shipped solar-only** (`sg-demo.h5`, 3500–49000 K, no `[Fe/H]` axis) because the **CAP18
-grids-page host `user.astro.wisc.edu` was UNREACHABLE (ECONNREFUSED)** at build time — so
-per the advisor's documented fallback the MVP de-risks the slice. The bake + runtime are
-**axis-generic** (read `sg.axis_labels`, store `axis_keys`/`axis_log`), so a future CAP18
-(3-D `[Fe/H]`) is a **pure re-bake, ZERO code change**: `bake_spectra.py --grid <cap18>.h5`
-produces a 4-D cube, the runtime reads the axis list back, the panel caption keys on
-`feh_varies` (honestly says "solar-metallicity grid" until then).
+**First shipped solar-only** (`sg-demo.h5`, 3500–49000 K, no `[Fe/H]` axis) because the
+**CAP18 grids-page host `user.astro.wisc.edu` was UNREACHABLE (ECONNREFUSED)** at build time
+— per the advisor's documented fallback the MVP de-risked the slice. The bake + runtime are
+**axis-generic** (read `sg.axis_labels`, store `axis_keys`/`axis_log`), so CAP18 was a **pure
+re-bake, ZERO code change**.
+
+**CAP18 SWAP — DONE (this session, the axis-generic payoff realized).** The host came back up.
+Fetched **`sg-CAP18-coarse.h5`** (~339 MB, the right variant — smallest with **exactly 3 axes
+`Teff/[Fe/H]/log(g)`**; `large` adds α/ξ at 73 GB, `high`/`ultra` are 3-axis but higher-res we
+resample away) from `…/grids/CAP18/coarse/sg-CAP18-coarse.h5`; re-baked in `msg_spike` → a
+**4-D `96 Teff × 12 [Fe/H] × 11 logg × 2400 λ` cube, ~69 MB** (`feh` nodes −5…+0.5 @ 0.5);
+dropped into `data/spectra/`. The runtime read `axis_keys`, lit up the `feh` axis, the caption
+flipped to show `[Fe/H]` automatically — **no runtime/frontend code change**. **NO `BAKE_VERSION`
+bump** (schema axis-generic & unchanged; only axis count + `grid_name` differ). Verified via curl
+(Na D depth 0.24→0.48 as `[Fe/H]` −1→+0.5) + Playwright (metal-poor vs metal-rich K/M dwarf, the
+`[Fe/H]` caption live). Grid facts: `Teff∈[3500, 30000]`, `[Fe/H]∈[−5, 0.5]`, `log(g)∈[0, 5]`;
+void-fill **4560 along logg, 0 fallback** (no reachable-box void got a wrong-Teff/feh spectrum —
+the advisor's flagged risk, checked & clean); **8840** negative-flux bins clamped to 0 (cubic
+undershoot in deep cores — far more than the solar bake's **1** bin, since CAP18's R=10000 lines
+ring harder, but only 0.029% of bins and reachable-corner depths are sane: Na D 0.48, Ca K 0.85).
+**The one real trade-off:** CAP18 caps at **30000 K** (the recipe's old "~50000 K" claim was
+WRONG — verified) vs the solar MVP's 49000 K, so hot O/B stars now clamp lower — accepted, the
+metallicity axis was the goal and the clamp is honest.
 
 **Key build/bake decisions (advisor-guided, measured):**
 - **Log-spaced Teff** (cool-end line resolution; runtime interpolates in `log10(Teff)` via
@@ -44,16 +60,24 @@ produces a 4-D cube, the runtime reads the axis list back, the panel caption key
   scale and pull a wrong-Teff spectrum). MSG cubic interp can undershoot slightly <0 in deep
   line cores → clamp negatives to 0 (1 bin, −26 vs ~1e6 flux).
 - **The hot-end seam (advisor-caught, FIXED):** the hottest *draggable* star is **~80000 K**
-  (60 M☉ metal-poor — far above the 49000 K grid ceiling), so a too-tight Query ceiling →
-  422 → silent panel freeze. Fix: widen `/spectrum` Query bounds to `teff 1000–200000` /
-  `logg −2…7` (wider than any real star) and **clamp BOTH ends** in `spectrum_data` (symmetric
-  with the cool 3500 K floor) — dragging to a massive star shows the 49000 K spectrum, never a
-  freeze. 422 reserved for genuinely absurd inputs.
+  (60 M☉ metal-poor — far above the grid ceiling: 49000 K on the solar MVP, **30000 K on
+  CAP18**), so a too-tight Query ceiling → 422 → silent panel freeze. Fix: widen `/spectrum`
+  Query bounds to `teff 1000–200000` / `logg −2…7` (wider than any real star) and **clamp BOTH
+  ends** in `spectrum_data` (symmetric with the cool 3500 K floor) — dragging to a massive star
+  shows the ceiling spectrum (30000 K with CAP18), never a freeze. 422 reserved for genuinely
+  absurd inputs. (This generic clamp is exactly why the CAP18 swap — with its *lower* ceiling —
+  needed no code change.)
 - **Tests (advisor's insistence): line-depth anchors MEASURED THROUGH THE RUNTIME PATH** (baked
   `.npz` → RGI interpolation at a non-node test star), NOT the recipe's raw-pymsg numbers (a
-  few % off). `tests/test_spectra.py` (15): always-on 422/503 contract + the hot-star NO-422
-  case; data-gated Balmer-peaks-at-A, Ca-K-strong-cool-gone-hot, cool clamp, void-fill. 116
-  pass (was 102). `requires_spectra_data` conftest marker gates the data tests.
+  few % off). `tests/test_spectra.py` (16): always-on 422/503 contract + the hot-star NO-422
+  case; data-gated Balmer-peaks-at-A, Ca-K-strong-cool-gone-hot, cool clamp, void-fill. **118
+  pass** (was 116). `requires_spectra_data` conftest marker gates the data tests. **The CAP18
+  payoff test `test_feh_axis_deepens_metal_lines`** (advisor's headline): a "feh changed the
+  flux" assert is too weak — instead, at a fixed COOL Teff (~5000 K) assert higher `[Fe/H]`
+  **deepens the METAL lines (Na D ~+0.24, Ca K ~+0.05 — near-saturated)** while **Balmer stays
+  ~flat as the CONTROL** (proves the axis carves real metal features, not a global rescale).
+  Self-skips on a solar cube (`feh_varies` false), mirror of `test_solar_grid_ignores_feh` —
+  one of the pair runs per cube, suite green either way.
 - **Frontend honesty + polish:** visible band 3800–7800 Å painted in true per-wavelength
   spectral colour (`color.js` gained `wavelengthToCSS`, reusing the CIE fit); Wien-peak marker
   + Balmer/Ca/Na guides with **collision-skipped labels** (Ca K/Ca H/Hδ cluster at the Balmer
@@ -78,10 +102,12 @@ valid path or `fypp_deps` crashes. **Bake env:** `MSG_DIR=/tmp/msg-2.2`,
 `LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$MSG_DIR/lib`, conda base active.
 
 **Why:** records a shipped phase + the non-obvious decisions (axis-generic for the CAP18 swap,
-runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp) so a future
-session swaps in CAP18 without re-deriving them.
+runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp, CAP18's 30000 K
+ceiling) — and that the CAP18 swap *did* pay off as a zero-code re-bake exactly as designed.
 
-**How to apply:** to add CAP18 — reach the grids host, fetch the 3-D grid, re-run
-`bake_spectra.py --grid <cap18>.h5`, drop the `.npz` in `data/spectra/`; no code change. Keep
-`/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-container only); keep the
-Query bounds wider than any real star so dragging never 422s.
+**How to apply:** the CAP18 swap is **done**. To go further (more line detail or hotter coverage):
+re-bake from `sg-CAP18-high.h5`/`ultra` for finer spectra, or splice OSTAR2002/BSTAR2006 for
+>30000 K — both are re-bakes/data work, the runtime stays axis-generic. General rules that still
+hold: keep `/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-container only);
+keep Query bounds wider than any real star so dragging never 422s; bake the cube into the
+build container (`msg_spike`) and `docker cp` the `.npz` out — never import pymsg at run time.

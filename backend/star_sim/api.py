@@ -174,9 +174,9 @@ def spectrum(
     (Teff, log g, [Fe/H]) — the same numbers `color.js` turns into the star's
     colour. The `Query` bounds are deliberately *wider than any real star* the grid
     can produce (the hottest draggable star — a massive metal-poor O star — reaches
-    ~80000 K, far above the 49000 K solar-grid ceiling), so dragging the controls
+    ~80000 K, far above the CAP18 grid's 30000 K ceiling), so dragging the controls
     never trips a 422: `spectrum_data` clamps BOTH ends to the baked grid's real
-    coverage (a cool M-dwarf floors to the coolest spectrum, a hot O star caps at
+    coverage (a cool M-dwarf floors to the coolest spectrum, a hot O/B star caps at
     the hottest — symmetric). 422 is reserved for genuinely absurd inputs. If the
     grid hasn't been baked yet, return 503 with an actionable hint (analogue of a
     missing provider grid)."""

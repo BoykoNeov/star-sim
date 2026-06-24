@@ -578,28 +578,33 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   a dense void-filled flux cube → `data/spectra/spectra_grid.npz` (gitignored, 96×11×2400,
   4.7 MB), and the **runtime backend is pure-Python** (`star_sim/spectra.py`: `scipy`
   `RegularGridInterpolator` over the `.npz` — no pymsg/Fortran/Docker at run time, Windows-clean).
-  **Shipped on the solar-only `sg-demo.h5` grid** (3500–49000 K, no `[Fe/H]` axis): the CAP18
-  grids-page host (`user.astro.wisc.edu`) was **unreachable** (ECONNREFUSED) at build time, so
-  per the advisor's fallback the MVP de-risks the whole slice — and the bake + runtime are
-  **axis-generic** (read `sg.axis_labels`, store `axis_keys`/`axis_log`), so a 3-D CAP18 re-bake
-  later is a **pure data swap, zero code change** (the runtime reads the axis list back and
-  lights up the feh axis; the panel caption keys on `feh_varies` and honestly says "solar-
-  metallicity grid" until then). Bake choices (advisor-guided): **log-spaced Teff** (cool-end
+  **First shipped on the solar-only `sg-demo.h5` grid** (3500–49000 K, no `[Fe/H]` axis: the CAP18
+  grids-page host `user.astro.wisc.edu` was **unreachable** (ECONNREFUSED) at build time, so per
+  the advisor's fallback the MVP de-risked the slice), **now swapped to the 3-D CAP18 grid** —
+  see the **CAP18 swap** sub-bullet below. The swap was possible with zero code because the bake +
+  runtime are **axis-generic** (read `sg.axis_labels`, store `axis_keys`/`axis_log`): the runtime
+  reads the axis list back, lights up the feh axis, and the panel caption keys on `feh_varies`
+  (it said "solar-metallicity grid" until the swap; now shows `[Fe/H]`). Bake choices
+  (advisor-guided): **log-spaced Teff** (cool-end
   line resolution; interpolated in `log10` via the `axis_log` flag), **void-fill along logg at
   fixed Teff** (the voids are a contiguous high-logg block — preserves the dominant Teff
   variation vs a Teff-swamped 2-D nearest-neighbour), **absolute flux stored** (normalized
   per-spectrum in the frontend draw). **The hot-end seam (advisor-caught, FIXED):** the hottest
-  *draggable* star is ~80000 K (60 M☉ metal-poor — far above the 49000 K grid ceiling), so the
-  `/spectrum` Query bounds were widened to `teff 1000–200000` / `logg −2…7` (wider than any real
-  star) and `spectrum_data` **clamps BOTH ends** to grid coverage — symmetric with the cool
-  floor, so dragging to a massive star shows the 49000 K spectrum instead of a silent 422 freeze
-  (422 reserved for genuinely absurd inputs). **Tests (the proof):** `requires_spectra_data`
-  conftest marker + `tests/test_spectra.py` (15 tests) — always-on route contract (422 on absurd
-  inputs; the hot-star NO-422 case; 503 when not baked), plus data-gated **line physics MEASURED
-  through the runtime path** (NOT the recipe's raw-pymsg numbers — interpolation at a non-node
-  star differs a few %): Balmer Hα/Hβ deepest at A (~9500 K) vs Sun vs hot O; Ca II K strong in
-  the Sun, gone when hot; cool clamp to the 3500 K floor; void-region query stays finite.
-  **116 tests pass** (was 102). **Frontend:** `spectrum.js` draws flux-vs-λ with the visible
+  *draggable* star is ~80000 K (60 M☉ metal-poor — far above the grid ceiling, **49000 K on the
+  solar MVP, 30000 K on CAP18**), so the `/spectrum` Query bounds were widened to `teff
+  1000–200000` / `logg −2…7` (wider than any real star) and `spectrum_data` **clamps BOTH ends**
+  to grid coverage — symmetric with the cool floor, so dragging to a massive star shows the
+  ceiling spectrum instead of a silent 422 freeze (422 reserved for genuinely absurd inputs; this
+  generic clamp is exactly why CAP18's *lower* ceiling needed no code change). **Tests (the
+  proof):** `requires_spectra_data` conftest marker + `tests/test_spectra.py` (16 tests) —
+  always-on route contract (422 on absurd inputs; the hot-star NO-422 case; 503 when not baked),
+  plus data-gated **line physics MEASURED through the runtime path** (NOT the recipe's raw-pymsg
+  numbers — interpolation at a non-node star differs a few %): Balmer Hα/Hβ deepest at A (~9500 K)
+  vs Sun vs hot; Ca II K strong in the Sun, gone when hot; cool clamp to the 3500 K floor;
+  void-region query stays finite; **+ the CAP18 payoff `test_feh_axis_deepens_metal_lines`** (at a
+  fixed cool Teff, ↑`[Fe/H]` deepens Na D/Ca K while Balmer stays ~flat as the control — proves
+  the axis carves real metal features, not a global rescale; self-skips on a solar cube).
+  **118 tests pass** (was 116). **Frontend:** `spectrum.js` draws flux-vs-λ with the visible
   band (3800–7800 Å) painted in true per-wavelength spectral colour (`color.js` gained
   `wavelengthToCSS`, reusing the CIE fit), a Wien-peak marker + Balmer/Ca/Na line guides with
   **collision-skipped labels** (the Ca K/Ca H/Hδ cluster at the Balmer jump), per-spectrum
@@ -608,13 +613,37 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   wired into `main.js` `refresh()`. **Graceful failure:** a never-loaded panel (fresh checkout,
   unbaked grid → 503) shows "spectrum unavailable" rather than a blank box (the first data-
   dependent sibling — lane.js never had this case). **Verified** via Playwright (bundled
-  Chromium — `chrome --headless` hijacks the user's running Chrome) across the spectral sequence:
-  hot O blue continuum / A deep Balmer + Balmer jump / Sun balanced + Ca K + Wien peak / M red
-  molecular-rich, plus the ~80000 K→49000 K clamp (no freeze), no JS errors (the screenshot pass
-  is the frontend regression check, as in Phases 2–4). Full design + resume: `docs/plans/graceful-
-  toasting-thimble.md`; MSG build + bake recipe: `backend/docs/msg_spectra_build_recipe.md`;
-  reusable build container `msg_spike`. **Next:** swap in CAP18 (3-D `[Fe/H]`) once the grids-page
-  host is reachable (fetch it, re-run `bake_spectra.py --grid <cap18>.h5`, drop the `.npz` in).
+  Chromium — `chrome --headless` hijacks the user's running Chrome) across the spectral sequence
+  (the screenshot pass is the frontend regression check, as in Phases 2–4): on the solar MVP, hot
+  O blue continuum / A deep Balmer + Balmer jump / Sun balanced + Ca K + Wien peak / M red
+  molecular-rich; post-CAP18, a metal-poor vs metal-rich K/M-dwarf pair with the `[Fe/H]` caption
+  live; plus the ~80000 K→ceiling clamp (no freeze), no JS errors. Full design + resume:
+  `docs/plans/graceful-toasting-thimble.md`; MSG build + bake recipe (incl. CAP18 fetch §5 + bake
+  §6): `backend/docs/msg_spectra_build_recipe.md`; reusable build container `msg_spike`.
+- **Done (Phase 5, CAP18 swap — the real `[Fe/H]` axis, a zero-code re-bake):** the grids-page host
+  came back up, so the spectrum panel was swapped from the solar `sg-demo` MVP to the **3-D CAP18
+  grid**. Fetched **`sg-CAP18-coarse.h5`** (~339 MB; the right variant — the smallest CAP18 with
+  **exactly the 3 axes `Teff/[Fe/H]/log(g)`**; `large` adds α/ξ at 73 GB, `high`/`ultra` are
+  3-axis at higher spectral res we resample away), re-baked in `msg_spike` → a **4-D `96 Teff × 12
+  [Fe/H] × 11 log g × 2400 λ` cube, ~69 MB** (was the solar 2-D `96×11×2400`, 4.7 MB), `feh` nodes
+  −5…+0.5 @ 0.5; dropped into `data/spectra/`. **Zero runtime/frontend code change** — the
+  axis-generic bake/runtime read `axis_keys`, lit up `feh`, and the `feh_varies` caption flipped
+  automatically; **NO `BAKE_VERSION` bump** (on-disk schema unchanged — only axis count +
+  `grid_name` differ). The work was the *honest framing*: a new payoff test
+  `test_feh_axis_deepens_metal_lines` (cool Teff: ↑`[Fe/H]` deepens Na D ~+0.24/Ca K while Balmer
+  is the ~flat control) + fixing stale `49000`-K refs (the recipe's "~50000 K" CAP18 claim was
+  **WRONG** — verified `Teff∈[3500, 30000]`). **The one real trade-off:** CAP18 caps at **30000 K**
+  (vs the solar MVP's 49000 K), so hot O/B stars clamp lower — **accepted** (the metallicity axis
+  was the goal; the symmetric clamp keeps it honest, never a freeze). Void-fill on the bake was
+  **4560 along log g, 0 fallback** (advisor's flagged risk — no reachable-box void got a wrong-Teff/
+  feh spectrum), 8840 negative-flux bins clamped to 0 (cubic undershoot in deep cores — far more
+  than the solar bake's 1 bin, since CAP18's R=10000 lines ring harder, but only 0.029% of bins and
+  the reachable corner's depths are sane: Na D 0.48, Ca K 0.85, not pinned to black). MESA-style provenance:
+  the `.h5` is gitignored under `data/spectra/grids/` (kept so a re-bake doesn't re-download); the
+  reproducibility recipe is `backend/docs/msg_spectra_build_recipe.md` §5–§6. **118 tests pass** (was
+  116). Verified via curl (Na D depth 0.24→0.48 as `[Fe/H]` −1→+0.5) + Playwright. **Next (optional):**
+  re-bake from `sg-CAP18-high.h5`/`ultra` for finer line detail, or splice OSTAR2002/BSTAR2006 for
+  >30000 K — both pure data work, the runtime stays axis-generic.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

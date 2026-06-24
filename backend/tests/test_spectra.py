@@ -29,9 +29,9 @@ from .conftest import requires_spectra_data
 
 client = TestClient(app)
 
-# Principal lines (Å). Balmer Hα/Hβ peak at A stars; Ca II K is strong in cool
-# stars and gone when hot.
-HA, HB, CA_K = 6563.0, 4861.0, 3933.0
+# Principal lines (Å). Balmer Hα/Hβ peak at A stars; Ca II K and Na D are strong
+# in cool stars (Ca K vanishes when hot; Na D deepens with metallicity).
+HA, HB, CA_K, NA_D = 6563.0, 4861.0, 3933.0, 5893.0
 
 
 def _line_depth(d: dict, center: float, core_hw: float = 5.0,
@@ -64,11 +64,12 @@ def test_spectrum_out_of_range_is_422(params):
 
 
 def test_spectrum_hot_star_does_not_422_and_clamps():
-    """A massive O star reaches ~80000 K — above the solar grid's 49000 K ceiling.
-    The bounds must be wide enough that dragging there never 422s; the hot end
-    clamps to the grid max, symmetric with the cool floor (so the panel never
-    silently freezes on a hot star). Always-on: never a 422 (200 if baked, 503 if
-    not)."""
+    """A massive O star reaches ~80000 K — far above the CAP18 grid's 30000 K
+    ceiling (the solar sg-demo MVP reached 49000 K; CAP18 trades hot-end coverage
+    for the [Fe/H] axis). The bounds must be wide enough that dragging there never
+    422s; the hot end clamps to the grid max, symmetric with the cool floor (so the
+    panel never silently freezes on a hot star). Always-on: never a 422 (200 if
+    baked, 503 if not)."""
     r = client.get("/spectrum", params={"teff": 80000, "logg": 4.0})
     assert r.status_code in (200, 503)
 
@@ -128,19 +129,21 @@ def test_void_region_query_is_filled():
 @requires_spectra_data
 def test_balmer_lines_peak_at_a_stars():
     """Hydrogen Balmer absorption (Hα, Hβ) is deepest around A stars (~9500 K) and
-    shallower in both the cooler Sun and a hot O star — the classic spectral
-    sequence, measured here on the baked+interpolated spectra."""
+    shallower in both the cooler Sun and a hot star — the classic spectral sequence,
+    measured here on the baked+interpolated spectra. The hot query (40000 K) clamps
+    to the CAP18 grid's 30000 K ceiling, but Balmer is already well past its peak
+    there, so the ordering holds."""
     a = spectrum_data(9500, 4.0, 0.0)
     sun = spectrum_data(5772, 4.44, 0.0)
-    hot = spectrum_data(40000, 4.5, 0.0)
+    hot = spectrum_data(40000, 4.5, 0.0)           # clamps to the 30000 K ceiling
 
     for line in (HA, HB):
         d_a = _line_depth(a, line)
         d_sun = _line_depth(sun, line)
         d_hot = _line_depth(hot, line)
-        assert d_a > 0.2                           # a real, deep line at A (~0.4–0.6)
+        assert d_a > 0.2                           # a real, deep line at A (~0.5–0.7)
         assert d_a > d_sun + 0.1                    # deeper than the Sun, with margin
-        assert d_a > d_hot + 0.1                     # deeper than the hot O star
+        assert d_a > d_hot + 0.1                     # deeper than the hot star
 
 
 @requires_spectra_data
@@ -149,22 +152,58 @@ def test_ca_k_strong_in_cool_stars_gone_when_hot():
     essentially absent in hot stars (Ca is too ionized)."""
     sun = spectrum_data(5772, 4.44, 0.0)
     a = spectrum_data(9500, 4.0, 0.0)
-    hot = spectrum_data(40000, 4.5, 0.0)
+    hot = spectrum_data(40000, 4.5, 0.0)           # clamps to the 30000 K ceiling
 
     d_sun = _line_depth(sun, CA_K)
     d_a = _line_depth(a, CA_K)
     d_hot = _line_depth(hot, CA_K)
-    assert d_sun > 0.3                              # deep in the Sun (~0.7)
+    assert d_sun > 0.3                              # deep in the Sun (~0.8)
     assert d_sun > d_a + 0.2                        # far deeper than at A
-    assert d_sun > d_hot + 0.2                       # far deeper than in the hot O star
+    assert d_sun > d_hot + 0.2                       # far deeper than in the hot star (Ca ionized)
 
 
 @requires_spectra_data
 def test_solar_grid_ignores_feh():
     """On a solar-only grid the [Fe/H] argument changes nothing and the response
     says so (feh_varies=False) — the panel labels it honestly rather than faking a
-    metallicity response."""
+    metallicity response. The complement is test_feh_axis_deepens_metal_lines; one
+    of the two runs depending on which cube is baked (solar sg-demo vs 3-D CAP18),
+    and the suite stays green either way."""
     d0 = spectrum_data(5772, 4.44, 0.0)
     d1 = spectrum_data(5772, 4.44, -0.5)
     if not d0["feh_varies"]:
         assert d0["flux"] == d1["flux"]
+
+
+@requires_spectra_data
+def test_feh_axis_deepens_metal_lines():
+    """The CAP18 swap's payoff (the whole point of a 3-D grid): at a fixed COOL Teff,
+    raising [Fe/H] deepens the METAL lines (Na D, Ca II K — more metals, more
+    absorption), while the hydrogen Balmer lines barely move.
+
+    Balmer is the CONTROL: it is set by temperature/density and is ~insensitive to
+    metallicity, so its near-constancy proves the [Fe/H] axis carves *real metal
+    features* rather than globally rescaling the spectrum (which a weaker "the flux
+    array changed" assertion would not catch). Measured through the runtime path
+    with margin, in the same spirit as the spectral-sequence tests.
+
+    Self-skips on a solar-only grid (feh_varies=False) — the mirror of
+    test_solar_grid_ignores_feh."""
+    poor = spectrum_data(5000, 4.5, -1.0)          # metal-poor
+    rich = spectrum_data(5000, 4.5, +0.5)          # metal-rich (the grid's [Fe/H] max)
+    if not poor["feh_varies"]:
+        pytest.skip("solar-only grid has no [Fe/H] axis")
+
+    # Na D swings strongly with metallicity (measured ~+0.24 on the CAP18 cube); Ca
+    # II K is already near-saturated at 5000 K so it deepens more modestly (~+0.05)
+    # but unambiguously. Both are well clear of their margins.
+    na_swing = _line_depth(rich, NA_D) - _line_depth(poor, NA_D)
+    assert na_swing > 0.1
+    assert _line_depth(rich, CA_K) > _line_depth(poor, CA_K) + 0.02
+
+    # The control: Balmer barely moves (|Δ| measured ≤0.055) AND moves far less than
+    # Na D — the contrast, not the absolute, is the metallicity signal.
+    for line in (HA, HB):
+        balmer_shift = abs(_line_depth(rich, line) - _line_depth(poor, line))
+        assert balmer_shift < 0.12
+        assert balmer_shift < na_swing

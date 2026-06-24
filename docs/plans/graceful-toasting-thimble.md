@@ -168,39 +168,52 @@ dimensionality-agnostic (2-D solar or 3-D); start on whichever the grid offers.
 
 ## Status & how to resume (session handoff)
 
-**IMPLEMENTED (the solar `sg-demo` MVP — full vertical slice shipped).** Everything
-in this plan is built and verified end-to-end on the solar grid; CAP18 (the `[Fe/H]`
-axis) is the documented future swap (a pure re-bake — the bake + runtime are
-axis-generic, zero code change). What landed:
+**IMPLEMENTED + CAP18 SWAP DONE (3-D `[Fe/H]` axis live).** Everything in this plan
+was first built and verified end-to-end on the solar `sg-demo` MVP; the **CAP18 swap
+is now done** — a pure data re-bake (the bake + runtime are axis-generic, **zero code
+change**) that lit up a real metallicity axis. What landed:
 - **Bake:** `backend/scripts/bake_spectra.py` (axis-generic, void-fill along log g,
   log-spaced Teff, `axis_log` flag, atomic `.npz` + `BAKE_VERSION`) → ran in
-  `msg_spike` → `data/spectra/spectra_grid.npz` (96×11×2400, 4.7 MB, gitignored).
-  Bake procedure now in the recipe doc §6.
+  `msg_spike` → `data/spectra/spectra_grid.npz`. Now baked from **`sg-CAP18-coarse.h5`**
+  → a **4-D `96 Teff × 12 [Fe/H] × 11 log g × 2400 λ` cube, ~69 MB** (was the solar
+  2-D `96×11×2400`, 4.7 MB), gitignored. Void-fill: all 4560 voids along log g, 0
+  fallback. Bake procedure + the CAP18 download in the recipe doc §5–§6.
 - **Backend:** `backend/star_sim/spectra.py` (pure numpy/scipy sibling — `_load`,
   `RegularGridInterpolator`, `spectrum_data`, `SpectraDataMissing`) + the `/spectrum`
   route in `api.py` (bypasses `PROVIDER` like `/polytrope`). Query bounds widened to
   `teff 1000–200000` / `logg −2…7` (wider than any real star — the hottest draggable
-  star is ~80000 K, well above the 49000 K grid ceiling) so dragging **never** 422s:
-  `spectrum_data` clamps BOTH ends to grid coverage (symmetric hot floor/ceiling —
-  the advisor-caught seam; was a silent freeze above 60000 K).
+  star is ~80000 K, well above the CAP18 grid's **30000 K** ceiling — the solar MVP
+  reached 49000 K; CAP18 trades hot-end coverage for the `[Fe/H]` axis) so dragging
+  **never** 422s: `spectrum_data` clamps BOTH ends to grid coverage (symmetric hot
+  floor/ceiling — the advisor-caught seam; was a silent freeze above 60000 K).
 - **Frontend:** `frontend/src/spectrum.js` (debounced latest-wins `update(state)`,
   flux-vs-λ with the visible band painted in true per-wavelength spectral colour,
   Wien-peak + Balmer/Ca/Na line guides with collision-skipped labels, per-spectrum
   normalization, honest `feh_varies` caption); `color.js` gained `wavelengthToCSS`;
   wired into `main.js` `refresh()`; markup in `index.html` (full-width panel) + CSS.
 - **Tests:** `conftest.py` `requires_spectra_data` marker + `tests/test_spectra.py`
-  (15 tests — always-on 422/503 contract incl. the hot-star no-freeze case; data-gated
+  (16 tests — always-on 422/503 contract incl. the hot-star no-freeze case; data-gated
   line physics MEASURED through the runtime path: Balmer peaks at A, Ca K strong-cool/
-  gone-hot, clamp, void-fill). **116 tests pass** (was 102).
-- **Verified:** Playwright (bundled Chromium) screenshots across the spectral sequence
-  (hot O blue continuum / A deep Balmer + Balmer jump / Sun balanced + Ca K / M red
-  molecular-rich), the ~80000 K clamp (shows 49000 K, no freeze), no JS errors.
+  gone-hot, clamp, void-fill; **+ the CAP18 payoff `test_feh_axis_deepens_metal_lines`**
+  — at a fixed cool Teff, higher `[Fe/H]` deepens Na D / Ca K while Balmer stays ~flat
+  as the control; self-skips on a solar cube). **118 tests pass** (was 116).
+- **Verified:** Playwright (bundled Chromium) screenshots — the solar MVP across the
+  spectral sequence, and post-CAP18 a metal-poor vs metal-rich K/M dwarf pair showing
+  the `[Fe/H]` caption live + line response; the ~80000 K clamp (now shows the 30000 K
+  spectrum, no freeze), no JS errors.
 
-**Next (future):** swap in **CAP18** (3-D `[Fe/H]`) once the grids-page host is
-reachable — fetch it, re-run `bake_spectra.py --grid <cap18>.h5` (the bake reads its
-axes and produces a 4-D cube; the runtime reads `axis_keys` and lights up the feh
-axis automatically), drop the `.npz` into `data/spectra/`, flip the caption (it keys
-on `feh_varies`). Optionally raise wavelength/Teff density.
+**CAP18 swap — DONE (this session).** The grids-page host (`user.astro.wisc.edu`)
+came back up. Fetched `sg-CAP18-coarse.h5` (~339 MB, 3 axes `Teff/[Fe/H]/log(g)`),
+re-baked in `msg_spike` → a 4-D `.npz`, dropped it into `data/spectra/`; the runtime
+read `axis_keys` and lit up the `feh` axis, the caption flipped automatically. **Zero
+code change** to runtime/frontend — only a new `[Fe/H]`-physics test + stale-`49000`-ref
+fixes. The one real trade-off: CAP18 caps at **30000 K** (vs the solar MVP's 49000 K),
+so hot O/B stars clamp lower — accepted, the clamp is honest and the metallicity axis
+was the goal.
+
+**Next (future, optional):** raise wavelength/Teff/[Fe/H] density (the `coarse` grid is
+the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); or splice a
+hot grid (OSTAR2002/BSTAR2006) for >30000 K coverage if the hot-end clamp ever matters.
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

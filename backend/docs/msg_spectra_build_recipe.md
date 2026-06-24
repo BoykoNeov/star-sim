@@ -144,30 +144,52 @@ Balmer Hα/Hβ absorption depth peaks at A stars (Hα 42%, Hβ 62% at 9500 K), C
 (3933 Å) is strong in cool stars (73% in M, 70% in the Sun) and vanishes when hot
 (0.1% at A) — textbook spectral-sequence behaviour. Flux scales ~3000× from M to O.
 
-## 5. For the real bake: the grid
+## 5. For the real bake: the grid (CAP18 — now baked)
 
 `sg-demo.h5` proves the pipeline but is **solar-only** (no `[Fe/H]` axis). For the
 `(Teff, log g, [Fe/H])` bake, fetch a `[Fe/H]`-varying grid from the
 [MSG grid-files page](http://user.astro.wisc.edu/~townsend/static.php?ref=msg-grids)
-— **CAP18** (Allende Prieto 2018) reaches ~50000 K and varies metallicity. Grids
-are large HDF5 downloads, gitignored like `data/mist` and `data/mesa`.
+— **CAP18** (Allende Prieto 2018), the metallicity-varying grid. The page lists four
+CAP18 variants; the right one is **`sg-CAP18-coarse.h5`** — it is the smallest with
+**exactly the three axes we want** (`Teff, log(g), [Fe/H]`; the `large` 73 GB variant
+adds `[α/Fe]` + `log(ξ)`, and `high`/`ultra` are the same 3 axes at 2.9/5.2 GB just
+higher spectral resolution we resample away anyway). Current download (~339 MB, v2):
+
+```bash
+curl -fL -o data/spectra/grids/sg-CAP18-coarse.h5 \
+  http://user.astro.wisc.edu/~townsend/resource/download/msg/grids/CAP18/coarse/sg-CAP18-coarse.h5
+```
+
+Grids are large HDF5 downloads, gitignored like `data/mist` and `data/mesa` (keep the
+`.h5` so a future re-bake doesn't re-download).
+
+**Heads-up — CAP18's Teff ceiling is 30000 K, not ~50000.** (The earlier note here
+claiming ~50000 K was wrong — verified against the grid: `Teff∈[3500, 30000]`,
+`log(g)∈[0, 5]`, `[Fe/H]∈[−5, 0.5]`.) So swapping CAP18 in for the solar `sg-demo`
+(which reached 49000 K) **trades hot-end coverage for the metallicity axis**: the
+hottest draggable star (~80000 K) now clamps to 30000 K instead of 49000 K. The clamp
+is symmetric with the cool floor and handled honestly in `spectrum_data` — a hot O/B
+star shows the 30000 K spectrum, never a 422/freeze.
 
 ## 6. Running the bake (`scripts/bake_spectra.py` → `data/spectra/spectra_grid.npz`)
 
-The Phase 5 panel ships the **solar-only `sg-demo.h5` MVP** (the CAP18 grids-page
-host was unreachable at build time, and the MVP de-risks the whole vertical slice;
-the bake is **axis-generic**, so a 3-D CAP18 re-bake later is a pure data swap with
-**zero code change** — it just produces a 4-D cube the runtime reads back out of
-the `.npz`). The baked `.npz` is **gitignored** (like all of `data/`), so this is
-the only reproducibility path — re-run it after any `BAKE_VERSION` bump or grid
-change.
+The Phase 5 panel now ships the **3-D CAP18 cube** (`sg-CAP18-coarse.h5` → a real
+`[Fe/H]` axis). It originally shipped a **solar-only `sg-demo.h5` MVP** (the CAP18
+grids-page host was unreachable at build time, and the MVP de-risked the whole
+vertical slice); the swap to CAP18 was a **pure data re-bake, zero code change** —
+the bake is **axis-generic**, so it just produced a 4-D cube (`teff × feh × logg ×
+λ`) that the runtime reads back out of the `.npz` and the panel's `feh_varies`
+caption lights up automatically. The baked `.npz` is **gitignored** (like all of
+`data/`), so this is the only reproducibility path — re-run it after any
+`BAKE_VERSION` bump or grid change.
 
-Inside the `msg_spike` container (env per §3), with `scripts/bake_spectra.py`
-copied in:
+Inside the `msg_spike` container (env per §3), with `scripts/bake_spectra.py` and
+the grid copied in:
 
 ```bash
-# (host) copy the script into the reusable build container
+# (host) copy the script + the CAP18 grid into the reusable build container
 docker cp backend/scripts/bake_spectra.py msg_spike:/tmp/bake_spectra.py
+docker cp data/spectra/grids/sg-CAP18-coarse.h5 msg_spike:/tmp/sg-CAP18-coarse.h5
 
 # (container) bake — set the MSG runtime env first
 docker exec msg_spike bash -c '
@@ -175,26 +197,39 @@ docker exec msg_spike bash -c '
   export MSG_DIR=/tmp/msg-2.2 MESASDK_ROOT="$CONDA_PREFIX"
   export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$MSG_DIR/lib"
   python /tmp/bake_spectra.py \
-    --grid /tmp/msg-2.2/data/grids/sg-demo.h5 \
+    --grid /tmp/sg-CAP18-coarse.h5 \
     --out  /tmp/spectra_grid.npz'
+# (for the original solar MVP, --grid /tmp/msg-2.2/data/grids/sg-demo.h5 instead)
 
 # (host) copy the cube out to where the runtime looks for it
 docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz
 ```
 
-The default bake is a `(96 Teff × 11 log g × 2400 λ)` cube, ~4.7 MB:
+The CAP18 bake is a `(96 Teff × 12 [Fe/H] × 11 log g × 2400 λ)` cube, **~69 MB**
+(the solar `sg-demo` bake was a 2-D `96 × 11 × 2400`, ~4.7 MB):
 
-- **Teff** 3500–49000 K, **log-spaced** (cool-end resolution where lines change
+- **Teff** 3500–30000 K, **log-spaced** (cool-end resolution where lines change
   fast); the runtime interpolates in `log10(Teff)` via the `axis_log` flag.
+- **[Fe/H]** −5…+0.5 in 0.5 steps (12 nodes; grid-driven — real stars only reach
+  ~−0.85…+0.5, the rest just clamp).
 - **log g** 0–5 in 0.5 steps.
 - **λ** 3000–9000 Å in 2.5 Å bins (bin *centres* stored).
-- **Voids** (hot + low-gravity corners with no model → `LookupError`, ~38% of
-  nodes for sg-demo) are filled **along log g at fixed Teff** (the voids are a
-  contiguous high-log g block, so this preserves the dominant Teff variation
-  exactly), making the stored cube fully regular for `RegularGridInterpolator`.
+- **Voids** (hot + low-gravity corners with no model → `LookupError`, **36%** of
+  nodes for CAP18) are filled **along log g at fixed Teff *and* [Fe/H]** (the voids
+  are a contiguous high-log g block, so this preserves the dominant Teff/[Fe/H]
+  variation exactly). On the CAP18 bake **all 4560 voids filled along log g, 0
+  fell to the fallback nearest-neighbour** — i.e. no void in the reachable box got
+  a wrong-Teff/wrong-[Fe/H] spectrum. The stored cube is fully regular for
+  `RegularGridInterpolator`. (The bake also clamps **8840** negative-flux bins — cubic
+  spline undershoot in deep line cores — to 0; min was −2.19e4. That's far more than
+  the solar `sg-demo` bake's **1** bin — CAP18's higher R=10000 lines ring harder under
+  cubic interp — but still only 0.029% of bins, and the reachable cool/metal-rich corner
+  gives sane line depths, NOT cores pinned to black: Na D 0.48, Ca K 0.85 at
+  [Fe/H]=+0.5. So it's a resolution artefact in deep cores, not a broken cube.)
 - Knobs: `--n-teff`, `--lam-min/--lam-max/--lam-step`, `--grid`, `--out`.
 - `BAKE_VERSION` must match `star_sim/spectra.py`'s; the runtime rejects a stale
-  cube (re-bake to fix).
+  cube (re-bake to fix). The CAP18 swap did **not** bump it — the on-disk schema is
+  axis-generic and unchanged; only the axis count + `grid_name` differ.
 
 Then the pure-Python runtime (`star_sim/spectra.py`, `scipy` only — no pymsg)
 serves `/spectrum`; `pytest backend/tests/test_spectra.py` gates the line physics
