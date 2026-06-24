@@ -58,11 +58,15 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   MESA sample Z).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
-  panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
-  (Li·C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
-  with independent core/surface scales **and a linear/log y-axis toggle (`setScale`)** —
-  log is what makes the trace elements visible (Li at ~1e-10 is sub-pixel on linear;
-  on log its surface depletion plunges off the bottom); `lane.js` is the
+  panel — **three** views toggled by `setMode`: a **bulk H/He/metals** view, a Phase 4
+  **per-element detail** view (fourteen metals Li·C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe;
+  `mode="cno"` id kept) with independent core/surface scales **and a linear/log y-axis
+  toggle (`setScale`)**, and a **light-element** view (`mode="light"` — Li·Be·F, log
+  forced, scale toggle hidden). Log is what makes the trace elements visible (Li at
+  ~1e-10 is sub-pixel on linear; on log its surface depletion plunges off the bottom);
+  the light view is the *panel* (not floor-hugger lines in the cno view) where the
+  fragile light elements' depletion shows. `region()` is shared by both line views,
+  parameterized by element list + a `useLog` flag; `lane.js` is the
   Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
   but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
@@ -477,19 +481,61 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   RGB, core Li pinned at the floor**, all fourteen elements legible across the decades, no
   JS errors. (Frontend has no JS test harness — the screenshot pass *is* the regression
   check, as in Phases 2–4.)
+- **Done (Phase 4, Li/Be/F light-element panel):** a **third** composition view
+  (`mode="light"`) — the fragile light elements **Li, Be, F** on a forced-log scale,
+  the *panel* the prior bullets pointed at (not three more floor-hugger lines in the
+  fourteen-element cno view, which is the whole point). **The requested set was Be/B/F,
+  but boron was DROPPED — measured, not assumed** (advisor + a throwaway probe before
+  coding): MIST v2.5's *only* boron isotope is **`b8`, which is radioactive** (β⁺ decay,
+  t½≈0.77 s — the pp-III branch that makes the high-energy solar neutrinos), so
+  `surface_b8` sits at a numerical-zero **~1e-83** floor, not stable boron (no b10/b11 in
+  the network). A flat 1e-83 line is exactly the invisible floor-hugger the panel exists
+  to avoid. This is subtler than the Cr/Mn/Ni finding (there the columns didn't exist;
+  here the column exists but its one isotope is radioactive). **Be and F are real and
+  tell the lesson — fragility tracks burning temperature:** measured surface depletion at
+  3 M☉ ZAMS→first-ascent RGB tip — **Li ×0.0135** (~2.5 MK, plunges), **Be ×0.35**
+  (~3.5 MK, depletes modestly — *more robust* than Li), **F ×0.91** (preserved this side
+  of the AGB — the stable backdrop, the role Fe plays in the cno view; its enrichment
+  story is on the excluded TPAGB). be9 dominates Be / f19 dominates F (be7 EC-decays ~53 d,
+  f17/f18 short-lived), so the all-isotope sum (project convention) equals the stable
+  value. Provider threading mirrors the Li add: `_Track.Bes/Fs` + `Bec/Fc`
+  (Be=be7+be9+be10, F=f17+f18+f19), `_TRACK_COLS` (Be after Li, F after O — atomic order)
+  + **`CACHE_VERSION` 7→8** (old `.npz` rejected → one ~60 s/grid reparse), linear mixing
+  in `_grid_window`/`_blend_windows`, two entries each in `_state_from_row`'s dicts; field
+  convention `Fs`/`Fc`=fluorine vs `Fes`/`Fec`=iron (commented). The stub's `METALS_OF_Z`
+  added Be 1.0e-8 / F 2.4e-5 (flat floors — only MIST shows Li/Be depleting, F holding).
+  Element set → **sixteen** (sum still ~0.99 Z — Be ~1e-8, F ~2e-5; the bound is physically
+  guaranteed by disjointness). New/updated §10 tests: `test_metal_breakdown_present_and_bounded`
+  (set→sixteen, boron-absence documented), `test_light_elements_deplete_in_burning_temperature_order`
+  (the payoff: Be `0.1<r<0.6` AND `be_r>li_r`, F `0.8<r<1.1` — Be/F deliberately NOT in the
+  inert loop), stub set→sixteen. **92 tests pass** (was 91 — the new light test). **Verified
+  the [Fe/H] blend path** (the recurring feh=0 short-circuit gap) via a direct probe: off-grid
+  2.7 M☉ / [Fe/H]=0.25 → 606 blended rows, all sixteen bounded keys, depletion ordering holds
+  (Li 0.016, Be 0.40, F 0.93). Frontend: `comp.js` gained `LIGHT_ELEMS=[Li,Be,F]` + a
+  `drawLight()` reusing a parameterized `region(...,elems,useLog)`; `setMode` accepts "light";
+  third mode button + `legend-light` (with the per-element fragility hover stories) + CSS
+  `mode-light` rules (scale toggle stays cno-only — light is log-only); `main.js` toggles
+  `mode-cno`/`mode-light` mutually. Panel `<h2>` tooltip notes boron's absence in plain
+  language. **Verified via Playwright (bundled Chromium — the user's running Chrome hijacks
+  `chrome --headless --screenshot`)** driving the *real* served UI: light button → `mode-light`
+  class, legend swap, scale-toggle hidden, no JS errors; screenshot shows surface Li plunging
+  on the lower RGB, Be dipping modestly, F flat — and the cno-log view still renders its
+  fourteen elements intact after the `region()` refactor. (No JS test harness — the screenshot
+  pass *is* the regression check, as in Phases 2–4.)
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is now a *data* task, not a code task — a one-off MESA-Web
   solar run drops into `data/mesa/` with zero code (the public-grid route is exhausted:
-  circular or surface-less, see the MESA Done bullet); the per-element view is now
-  **done through Li** (the only *visible* single-element win — see the Li Done bullet),
-  and the lesson is that *adding more individual metals is a dead end for payoff* (Na/Al/P
-  are invisible floor-huggers; Cr/Mn/Ni aren't even in MIST v2.5's network). If more
-  composition pedagogy is wanted, the next coherent step is a **Be/B/F light-element
-  panel** (all three are in the network like Li, and share Li's log-scale framing — a
-  *panel*, not a one-off element) rather than more heavy elements; the **TPAGB thermal
-  pulses** (still deferred — §6's genuinely messy phase; would need explicit per-grid
-  handling, *not* cross-mass interpolation), eventually a `LiveSolverProvider` or reduced
-  nuclear network (large, explicitly out of scope for now — see spec §9).
+  circular or surface-less, see the MESA Done bullet); the per-element view is **done
+  through Li** and the light-element panel is **done (Li/Be/F)**, and the lesson holds
+  that *adding more individual metals is a dead end for payoff* (Na/Al/P are invisible
+  floor-huggers; Cr/Mn/Ni aren't even in MIST v2.5's network; **boron's only isotope is
+  radioactive** — so the panel is Li/Be/F, not the originally-imagined Be/B/F). The light
+  view is now the home for any further fragile-light-element pedagogy, but the network
+  has no other clean candidate (the next nuclides up are the C/N/O the cno view already
+  covers). Remaining bigger arcs: the **TPAGB thermal pulses** (still deferred — §6's
+  genuinely messy phase; would need explicit per-grid handling, *not* cross-mass
+  interpolation), eventually a `LiveSolverProvider` or reduced nuclear network (large,
+  explicitly out of scope for now — see spec §9).
 
 ## Conventions
 

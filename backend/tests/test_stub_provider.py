@@ -49,13 +49,15 @@ def test_composition_sums_to_one(provider):
 
 def test_stub_metal_breakdown_bounded(provider):
     """The stub still fills metals_surf/core with a per-element breakdown of Z (Li,
-    C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe), so the §5.4 detail view renders
-    data-free. It's a fixed solar-ratio split (no nuclear processing or diffusion),
-    so surface == core and it sums to less than Z — bounded, honest, flat. (Lithium
-    is included as a flat ~4e-9-of-Z floor; only MISTProvider shows it depleting.)"""
+    Be, C, N, O, F, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe), so the §5.4 detail/light
+    views render data-free. It's a fixed solar-ratio split (no nuclear processing or
+    diffusion), so surface == core and it sums to less than Z — bounded, honest, flat.
+    (The fragile light elements Li/Be/F are flat tiny floors here; only MISTProvider
+    shows Li and Be depleting and F holding steady. Boron is excluded — its only MIST
+    isotope, radioactive b8, is a numerical-zero transient, not stable boron.)"""
     st = provider.state_at(1.0, 0.0, SUN_AGE_YR)
     assert set(st.metals_surf) == {
-        "Li", "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"
+        "Li", "Be", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"
     }
     assert st.metals_surf == st.metals_core          # stub has no processing
     assert 0.0 < sum(st.metals_surf.values()) < st.Z_surf

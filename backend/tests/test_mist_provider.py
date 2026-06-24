@@ -201,23 +201,25 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
 
 # --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
 def test_metal_breakdown_present_and_bounded(provider):
-    """metals_surf/metals_core carry Li, C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe
-    — each a sub-fraction of Z.
+    """metals_surf/metals_core carry Li, Be, C, N, O, F, Ne, Na, Mg, Al, Si, P, S, Ca,
+    Ti, Fe — each a sub-fraction of Z.
 
     The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
     their sum can't exceed Z (only the exposed elements, not every metal — Cl/Ar/K/
     Cr/Ni/… stay folded into Z, and MIST's network doesn't even track those). This is
-    the invariant that keeps the §5.4 detail view honest — the lines can never out-sum
-    the Z sliver they subdivide. The fourteen sum to ~0.99 of solar Z (measured:
-    surface 0.988, core 0.989 — lithium adds only ~1e-10, far below the headroom), so
-    the headroom is still ~2e-4 but comfortably above the 1e-9 slack. (The bound is
+    the invariant that keeps the §5.4 detail/light views honest — the lines can never
+    out-sum the Z sliver they subdivide. The sixteen sum to ~0.99 of solar Z (measured:
+    surface 0.988, core 0.989 — Be adds only ~1e-8 and F ~2e-5, far below the headroom),
+    so the headroom is still ~2e-4 but comfortably above the 1e-9 slack. (The bound is
     physically guaranteed — the named elements are a disjoint subset of the metals —
     so a sum *over* Z would mean a double-counted isotope, not a tolerance issue;
     re-measuring the real sum/Z, not the green assert, is the actual correctness check
-    as the headroom keeps shrinking.)
+    as the headroom keeps shrinking.) Boron is deliberately NOT in the set: MIST v2.5's
+    only B isotope is the radioactive b8 (~1e-83, a numerical-zero transient), not
+    stable boron — so a "B" key would carry meaningless ~0 data.
     """
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
-    expected = {"Li", "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"}
+    expected = {"Li", "Be", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"}
     for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
         assert set(metals) == expected
         for frac in metals.values():
@@ -280,6 +282,33 @@ def test_surface_lithium_depletes(provider):
     assert tip.metals_surf["Li"] / zams.metals_surf["Li"] < 0.05   # measured 0.0135 (74x down)
     # the core burns Li instantly -> negligible vs the (already tiny) surface store
     assert zams.metals_core["Li"] < 1e-4 * zams.metals_surf["Li"]  # measured ~1.5e-8 ratio
+
+
+def test_light_elements_deplete_in_burning_temperature_order(provider):
+    """The §5.4 *light-element* view payoff: fragility tracks burning temperature.
+
+    The fragile light elements are destroyed by proton capture, each at a higher
+    temperature than the last — Li (~2.5 MK), Be (~3.5 MK) — so as the deepening RGB
+    convective envelope reaches successively hotter gas it destroys them *in that
+    order*: surface Li plunges hardest, Be less, and fluorine (whose destruction needs
+    hotter still, and whose enrichment story is on the TPAGB we don't expose) barely
+    moves — it's the stable backdrop the light view reads the depletion against (the
+    role Fe plays in the per-element view). That Li > Be depletion ordering IS the
+    teaching moment. Measured at 3 M_sun (grid point, raw MIST) ZAMS -> first-ascent
+    RGB tip (max R among RGB rows): Li ×0.0135, Be ×0.35, F ×0.91.
+
+    Boron is absent on purpose — MIST v2.5's only B isotope is the radioactive b8
+    (~1e-83), not stable boron — so the requested "Be/B/F" panel is honestly Li/Be/F.
+    """
+    t = provider.track(3.0, 0.0)
+    zams = t[0].metals_surf
+    tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
+    li_r = tip["Li"] / zams["Li"]
+    be_r = tip["Be"] / zams["Be"]
+    f_r = tip["F"] / zams["F"]
+    assert 0.1 < be_r < 0.6      # beryllium depletes, but modestly (measured 0.35)
+    assert be_r > li_r           # ...and it's more robust than lithium (burns hotter)
+    assert 0.8 < f_r < 1.1       # fluorine ~preserved this side of the AGB (measured 0.91)
 
 
 def test_core_cno_equilibrium_signature(provider):

@@ -35,16 +35,19 @@ DYDZ = 1.78             # galactic helium enrichment slope (Y = Yp + dY/dZ * Z)
 # processing, so it just splits its Z by these fixed ratios — flat in age and
 # identical surface vs core. That is the honest stub stance (§ conventions): a
 # static, *flavored* breakdown, not the CNO-cycle / dredge-up / diffusion /
-# Li-depletion evolution that only MISTProvider can show. The fourteen match
+# Li-depletion evolution that only MISTProvider can show. The sixteen match
 # MISTProvider's element set; they sum to ~0.90 of Z (the rest is Cl/Ar/K/Cr/Mn/
 # Ni/... that MIST's network doesn't track either), so the per-element sum stays
-# safely under Z. Lithium is a special case: at A(Li)=1.05 the present-day
-# photosphere is already heavily depleted, so its fraction is a vanishing ~4e-9 of
-# Z — the stub renders it as a flat floor, and only MISTProvider shows it actually
-# *depleting* (surface Li burns as the convective envelope deepens).
+# safely under Z. The fragile light elements (Li, Be, and the §5.4 "light" view's F)
+# are special: their present-day photospheric fractions are tiny (Li ~4e-9, Be ~1e-8,
+# F ~2e-5 of Z), and the stub renders them as flat floors — only MISTProvider shows Li
+# and Be actually *depleting* as the convective envelope deepens, and F holding steady.
+# (Boron is absent on purpose, like in MIST: its only network isotope, the radioactive
+# `b8`, is a numerical-zero transient, not stable boron — see mist.py CACHE_VERSION v8.)
 METALS_OF_Z = {
-    "Li": 3.8e-9,                          # lithium (depleted photospheric floor)
+    "Li": 3.8e-9, "Be": 1.0e-8,            # lithium / beryllium (fragile-light floors)
     "C": 0.155, "N": 0.046, "O": 0.377,    # the CNO trio
+    "F": 2.4e-5,                           # fluorine (the light-view's stable backdrop)
     "Ne": 0.112, "Na": 0.0020,             # neon, sodium
     "Mg": 0.047, "Al": 0.0038,             # magnesium, aluminium
     "Si": 0.044, "P": 0.0004,              # silicon, phosphorus

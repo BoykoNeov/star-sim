@@ -98,9 +98,10 @@ main {
 }
 
 /* Composition view toggle (Phase 4): bulk H/He/metals vs the per-element detail
-   (fourteen metals, Li…Fe). The two legends swap with the active view so the color
-   key always matches the chart; .legend is flex-wrap with no height cap, so the
-   14-span per-element legend just grows the panel (panels stay overflow:visible). */
+   (fourteen metals, Li…Fe) vs the light-element view (Li/Be/F). The three legends
+   swap with the active view so the color key always matches the chart; .legend is
+   flex-wrap with no height cap, so the per-element legend just grows the panel
+   (panels stay overflow:visible). */
 .comp-modes { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
 .mode-btn {
   font: inherit; font-size: 12px; color: var(--muted);
@@ -113,9 +114,11 @@ main {
   border-color: var(--accent); font-weight: 600;
 }
 .comp-modes .help { margin-left: auto; }
-.legend-cno { display: none; }
-.comp-panel.mode-cno .legend-bulk { display: none; }
+.legend-cno, .legend-light { display: none; }
+.comp-panel.mode-cno .legend-bulk,
+.comp-panel.mode-light .legend-bulk { display: none; }
 .comp-panel.mode-cno .legend-cno { display: flex; }
+.comp-panel.mode-light .legend-light { display: flex; }
 
 /* The linear/log scale toggle for the per-element view (the log scale is what makes
    the trace elements — lithium especially — visible). Only meaningful in that view,

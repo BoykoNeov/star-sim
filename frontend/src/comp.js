@@ -21,6 +21,16 @@
 //              plunging ~2400x by the RGB tip) and Na's Ne-Na-cycle enrichment (~1.4x)
 //              actually show. Li's plunge runs off the bottom of the log axis once it
 //              burns to ~0 — that "off the bottom" read is the payoff, not a gap.
+//  * "light" — the fragile light elements Li, Be, F together, on a LOG scale (forced;
+//              linear is useless when everything is ≤4e-7 of mass). The lesson is that
+//              fragility tracks burning temperature: proton capture destroys Li (~2.5
+//              MK) hardest as the RGB convective envelope deepens, Be (~3.5 MK) less,
+//              while F survives this side of the AGB — the stable backdrop here, the
+//              role Fe plays in the cno view. Boron is absent: MIST's only B isotope is
+//              the radioactive b8 (~1e-83), not stable boron — so this is a Li/Be/F
+//              panel, the achievable part of the requested "Be/B/F". A *panel*, not a
+//              one-off element: Be/F would be invisible floor-huggers among the big
+//              cno metals, so they get their own log view with Li (the bridge element).
 //
 // Why EEP and not linear age on the x-axis (§6): the teaching payoffs — core H→He
 // near TAMS, and the dredge-up on the lower RGB — are slivers on a linear-age
@@ -51,16 +61,27 @@ const COL = { X: "#5b8def", Y: "#ffce6b", Z: "#b083e0" };
 // ~1e-10, the rest ~1e-5 of mass) — on the linear scale they cluster on the axis,
 // so they need only differ from each other and from Fe/Ca/Ti.
 const ELEM_COL = {
-  Li: "#ff2d6f",                                // lithium crimson (flame-test red)
+  Li: "#ff2d6f", Be: "#2ee6c0",                 // lithium crimson / beryllium teal
   C: "#ff9f43", N: "#26de81", O: "#54a0ff",     // the CNO trio (orange/green/blue)
+  F: "#cfe85a",                                 // fluorine yellow-green
   Ne: "#ff6b9d", Na: "#ffe14d",                 // neon rose / sodium D-line yellow
   Mg: "#feca57", Al: "#cdd6e0",                 // magnesium amber / aluminium silver
   Si: "#a55eea", P: "#c77dff",                  // silicon violet / phosphorus orchid
   S: "#c4e538", Ca: "#ee5253", Ti: "#00d2d3",   // sulfur lime / calcium red / titanium cyan
   Fe: "#a4b0be",                                // iron grey
 };
-// Atomic-number order, so the legend reads Li→Fe left to right.
+// The per-element ("cno") detail view: fourteen metals in atomic-number order, legend
+// reads Li→Fe left to right. (Be & F are NOT here — they're floor-huggers among the
+// big metals; they get their own light-element view below, the whole "panel not a
+// one-off element" point.)
 const ELEMS = ["Li", "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"];
+// The "light" view: the fragile light elements that proton-capture burning destroys,
+// shown together on a LOG scale (they're all ≤4e-7 of mass — flat on the axis in
+// linear, so this view is log-only). The lesson is that fragility tracks burning
+// temperature: Li (~2.5 MK) plunges hardest, Be (~3.5 MK) less, and F survives this
+// side of the AGB (the stable backdrop, like Fe in the cno view). Boron is absent —
+// MIST's only B isotope is the radioactive b8 (~1e-83), not stable boron.
+const LIGHT_ELEMS = ["Li", "Be", "F"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
@@ -68,12 +89,12 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   let track = null;    // array of StellarState (age-independent, set per mass/feh)
   let marker = null;   // current StellarState (moves as age scrubs)
-  let mode = "bulk";   // "bulk" (X/Y/Z bands) | "cno" (per-element lines)
-  let scale = "lin";   // "lin" | "log" — per-element y-axis (log reveals Li/Na)
+  let mode = "bulk";   // "bulk" (X/Y/Z bands) | "cno" (14-element lines) | "light" (Li/Be/F)
+  let scale = "lin";   // "lin" | "log" — the cno view's y-axis (log reveals Li/Na)
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
-  function setMode(m) { mode = m === "cno" ? "cno" : "bulk"; draw(); }
+  function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
 
   // Shared geometry both views build on: the EEP→x map and the two sub-chart
@@ -90,7 +111,9 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   function draw() {
     ctx.clearRect(0, 0, W, H);
     if (!track) return;
-    mode === "cno" ? drawCno() : drawBulk();
+    if (mode === "cno") drawCno();
+    else if (mode === "light") drawLight();
+    else drawBulk();
   }
 
   // -- bulk view: stacked X/Y/Z bands ---------------------------------------
@@ -137,27 +160,44 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     drawAxis();
   }
 
-  // -- per-element view: element mass-fraction lines, core & surface independently
-  // scaled, linear or log (the log toggle is what makes the trace elements visible).
+  // -- per-element view: fourteen element mass-fraction lines, core & surface
+  // independently scaled, linear or log (the log toggle is what makes the trace
+  // elements visible).
   function drawCno() {
     const { e0, e1, xOf, chartH, coreTop, surfTop } = layout();
-    region(coreTop, chartH, xOf, "core", (s) => s.metals_core);
-    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf);
+    const useLog = scale === "log";
+    region(coreTop, chartH, xOf, "core", (s) => s.metals_core, ELEMS, useLog);
+    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf, ELEMS, useLog);
     drawPhaseDividers(xOf);
     drawMarker(xOf, e0, e1);
     drawAxis();
   }
 
-  // One sub-chart of per-element lines, scaled to ITS OWN range (the core/surface
-  // decoupling that keeps the surface dredge-up visible against the huge core). The
-  // active scale ("lin"|"log") sets the value→y map: linear reads the big elements
-  // and their dredge-up directly; log opens up the ~10 decades the trace elements
-  // (Li, Na…) live in, so Li's depletion plunge and Na's enrichment finally show.
-  function region(top, h, xOf, label, pick) {
+  // -- light-element view: the fragile light elements (Li, Be, F) on a LOG scale.
+  // Same machinery as the cno view, but a different (tiny) element set and log forced
+  // on — linear is useless here (everything is ≤4e-7 of mass). The payoff is watching
+  // surface Li plunge and Be dip on the lower RGB while F holds steady (fragility
+  // tracks burning temperature). Reuses region()'s log path, so the decade gridlines,
+  // floor-clamping and independent core/surface scales all come for free.
+  function drawLight() {
+    const { e0, e1, xOf, chartH, coreTop, surfTop } = layout();
+    region(coreTop, chartH, xOf, "core", (s) => s.metals_core, LIGHT_ELEMS, true);
+    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf, LIGHT_ELEMS, true);
+    drawPhaseDividers(xOf);
+    drawMarker(xOf, e0, e1);
+    drawAxis();
+  }
+
+  // One sub-chart of element lines for `elems`, scaled to ITS OWN range (the
+  // core/surface decoupling that keeps the surface dredge-up visible against the huge
+  // core). `useLog` sets the value→y map: linear reads the big elements and their
+  // dredge-up directly; log opens up the ~10 decades the trace elements (Li, Be, Na…)
+  // live in, so their depletion plunges and enrichments finally show.
+  function region(top, h, xOf, label, pick, elems, useLog) {
     // Range over every element & row in this sub-chart (core or surface).
     let max = 0, minPos = Infinity;
     for (const s of track)
-      for (const el of ELEMS) {
+      for (const el of elems) {
         const v = pick(s)?.[el] ?? 0;
         if (v > max) max = v;
         if (v > 0 && v < minPos) minPos = v;
@@ -166,7 +206,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
     // Build the value→y map and the two axis-cap labels for the active scale.
     let yOf, topLabel, botLabel, dec = null;
-    if (scale === "log") {
+    if (useLog) {
       // Decade-rounded window, span capped to [MINDEC, MAXDEC] decades so a single
       // ~1e-16 core-Li sample can't stretch the axis to 15 decades, and a near-flat
       // region isn't absurdly zoomed. Values at/below the floor — Li once it burns to
@@ -204,7 +244,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
     ctx.strokeRect(PAD_L, top, W - PAD_L - PAD_R, h);
 
-    for (const el of ELEMS) {
+    for (const el of elems) {
       ctx.strokeStyle = ELEM_COL[el]; ctx.lineWidth = 1.6;
       ctx.beginPath();
       track.forEach((s, i) => {

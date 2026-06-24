@@ -36,17 +36,21 @@ const els = {
 const star = createStar(document.getElementById("star-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
 const comp = createComp(document.getElementById("comp-canvas"));
-// Composition view toggle: flip comp.js between the bulk H/He/metals bands and the
-// per-element detail lines, and mirror the choice onto the panel (so the right legend
-// shows) — purely a view switch, no refetch (the track already carries the metals).
+// Composition view toggle: flip comp.js between the bulk H/He/metals bands, the
+// per-element detail lines, and the light-element (Li/Be/F) view, and mirror the
+// choice onto the panel (so the right legend shows, and the scale toggle shows only
+// in the cno view) — purely a view switch, no refetch (the track already carries the
+// metals). The mode-cno/mode-light classes are mutually exclusive; bulk has neither.
 {
   const panel = document.querySelector(".comp-panel");
   const btns = panel.querySelectorAll(".comp-modes .mode-btn");
   btns.forEach((btn) =>
     btn.addEventListener("click", () => {
+      const m = btn.dataset.mode;
       btns.forEach((b) => b.classList.toggle("active", b === btn));
-      panel.classList.toggle("mode-cno", btn.dataset.mode === "cno");
-      comp.setMode(btn.dataset.mode);
+      panel.classList.toggle("mode-cno", m === "cno");
+      panel.classList.toggle("mode-light", m === "light");
+      comp.setMode(m);
     }),
   );
   // Linear/log scale toggle for the per-element view (only shown in cno mode via

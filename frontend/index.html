@@ -36,10 +36,11 @@
     </section>
 
     <section class="panel comp-panel">
-      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals). The detail view has a linear/log scale toggle — switch to log to see the trace elements, lithium especially.">?</span></h2>
+      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Three views: H/He/metals (the bulk make-up); a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals), with a linear/log toggle; and a light-element view (lithium, beryllium, fluorine) on a log scale, where you watch the fragile light elements burn away as the star evolves. (Boron is absent: the only boron isotope in this stellar model is radioactive and present at essentially zero — there is no stable boron to show.)">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">
         <button type="button" class="mode-btn active" data-mode="bulk">H · He · metals</button>
         <button type="button" class="mode-btn" data-mode="cno">per-element detail</button>
+        <button type="button" class="mode-btn" data-mode="light">light: Li · Be · F</button>
         <span class="scale-toggle" role="group" aria-label="per-element scale">
           <button type="button" class="scale-btn active" data-scale="lin">linear</button>
           <button type="button" class="scale-btn" data-scale="log">log</button>
@@ -68,6 +69,11 @@
         <span><i style="background:#ee5253"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — inert here; a steady backdrop at the input composition.">Ca — calcium</span></span>
         <span><i style="background:#00d2d3"></i><span class="tip" tabindex="0" data-tip="An iron-peak tracer — essentially inert this side of the AGB; it marks the input composition.">Ti — titanium</span></span>
         <span><i style="background:#a4b0be"></i><span class="tip" tabindex="0" data-tip="Essentially inert here, so it just marks the input [Fe/H] — a steady backdrop that makes the lighter elements' motion legible. (At low mass, gravitational settling drags the surface value down ~10% over the main sequence.)">Fe — iron</span></span>
+      </div>
+      <div class="legend legend-light">
+        <span><i style="background:#ff2d6f"></i><span class="tip" tabindex="0" data-tip="The most fragile light element: it burns by proton capture at only ~2.5 million K, so it survives just in the thin, cool outer envelope. As the red-giant convective envelope deepens into hotter gas, surface lithium is dredged down and destroyed first and hardest — the surface line plunges off the bottom (~2400× by the tip). The headline of this view.">Li — lithium</span></span>
+        <span><i style="background:#2ee6c0"></i><span class="tip" tabindex="0" data-tip="More robust than lithium: beryllium burns at a higher temperature (~3.5 million K), so the same deepening envelope depletes it only modestly (~3× by the red-giant tip), not catastrophically. It sits in the middle of the fragility sequence — destroyed, but later and less than lithium. This ordering (Li burns before Be) is the lesson.">Be — beryllium</span></span>
+        <span><i style="background:#cfe85a"></i><span class="tip" tabindex="0" data-tip="Survives this side of the asymptotic-giant branch: its destruction needs hotter gas than the convective envelope reaches, so it holds roughly steady — the stable backdrop you read the lithium and beryllium depletion against (the role iron plays in the per-element view). Fluorine's real enrichment story is on the thermally-pulsing AGB, which this simulator stops short of.">F — fluorine</span></span>
       </div>
     </section>
 
