@@ -59,8 +59,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
   `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
   panel — a **bulk H/He/metals** view and a Phase 4 **per-element detail** view
-  (C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
-  with independent core/surface scales; `lane.js` is the
+  (Li·C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe; `mode="cno"` id kept), toggled by `setMode`, the latter
+  with independent core/surface scales **and a linear/log y-axis toggle (`setScale`)** —
+  log is what makes the trace elements visible (Li at ~1e-10 is sub-pixel on linear;
+  on log its surface depletion plunges off the bottom); `lane.js` is the
   Phase 3 §8 Lane–Emden interior panel — a self-contained
   sibling, driven by the polytropic index `n` alone, that `main.js` instantiates
   but never wires into `refresh()`/`refreshTrack()`; `canvas.js` is the shared
@@ -430,21 +432,64 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   clean solar Sun anchor is a one-off MESA-Web solar run** (clean full-column standard
   format → fits the existing parser, zero surgery) — now a pure drop-in thanks to this
   generalization. Deferred at the user's call.
+- **Done (Phase 4, Li lithium + the log-scale per-element view):** the per-element view
+  now exposes **fourteen** elements — the thirteen above **+ Li** (li7, single isotope
+  like Ca/Ti/Fe; placed *first* in `ELEMS`, atomic order Z=3). The provider threading is
+  the same mechanical mirror of the Na/Al/P add: `_Track.Lis/Lic`, `_TRACK_COLS` +
+  **`CACHE_VERSION` 6→7** (old `.npz` rejected → one ~60 s reparse — measured 227 s for
+  the full suite cold), linear mixing in `_grid_window`/`_blend_windows`, one entry each
+  in `_state_from_row`'s dicts; stub `METALS_OF_Z` Li 3.8e-9 (depleted-photospheric flat
+  floor — only MIST shows depletion). **But the headline is that this was NOT a one-line
+  dict add** (the spec/Next bullet undersold it — caught by advisor + measurement before
+  coding): surface Li is **~1e-10 of mass** (a *million×* smaller than Na, which was
+  already "a sub-pixel wiggle"), so on `comp.js`'s shared **linear** per-region scale it
+  renders flat on the zero axis — a data-only add would have shipped an invisible 14th
+  line, the exact "dishonest green check" the project guards against, defeating the whole
+  reason Li was chosen over more heavy elements. The visible payoff *required a rendering
+  change*; the **user chose a linear/log toggle** (advisor's lean; linear stays default).
+  So `comp.js` gained `setScale("lin"|"log")` and `region()` a log path: a **decade-
+  rounded window capped to [4,10] decades** (so a lone ~1e-16 core-Li sample can't stretch
+  the axis to 15 decades), values at/below the floor — Li once it burns to ~0 — **clamp to
+  the bottom** so the plunge reads as "off the bottom", not a NaN gap, plus faint decade
+  gridlines + exponent tick labels. The lin/log buttons live in `.comp-modes` (shown only
+  in cno mode via CSS), wired in `main.js` like the existing mode toggle. **Measured Li
+  physics grounds the tests** (not assumed): surface Li at 3 M☉ ZAMS 1.0e-8 → RGB tip
+  1.35e-10 (a **74× plunge**, tip/zams 0.0135); the Sun is the famous mild case (×0.87
+  over the MS, then ×~2400 by the RGB tip); core Li ~1e-16 (burned instantly the whole
+  MS). **So Li is NOT inert** — carved out of `test_heavy_tracers_inert_while_cno_processes`
+  with its own assertion (like Na), plus a dedicated `test_surface_lithium_depletes` (the
+  payoff test: tip/zams<0.05 + core Li ≪ surface Li). Bound test set → fourteen (sum still
+  ~0.99 Z — Li adds only ~1e-10); stub set → fourteen. **91 tests pass** (was 90 — the new
+  Li test). **Verified the [Fe/H] blend path** (the recurring gap — every feh=0 test
+  short-circuits `_blend_windows`) via a direct probe: off-grid 2.7 M☉ / [Fe/H]=0.25 →
+  606 blended rows, all fourteen bounded keys incl Li, surface Li depletes (1.93e-8 →
+  2.67e-10). **Pedagogy (the user's explicit second ask — "why this happens, where to
+  look"):** hover stories on every per-element legend entry (Li: burns low-T, dredged down
+  & destroyed, *switch to log to watch it plunge*; C/N/O the dredge-up; Na the Ne-Na
+  enrichment; Fe inert + low-mass diffusion dip; Ne/Mg/Al/Si/P/S/Ca/Ti a per-element
+  inert-tracer gloss), a `?` on the scale toggle explaining the log rationale + where to
+  look, and the panel `<h2>` + mode-help prose updated with Li + the log hint. **Verified
+  the visible payoff** via a Playwright screenshot (the user's running Chrome hijacks the
+  `chrome --headless --screenshot` CLI — "Opening in existing browser session" — so the
+  reliable headless path here is **Playwright's bundled Chromium**, installed in the
+  scratchpad; the throwaway `frontend/_li_probe.html` was deleted after): **linear → Li
+  flat on the axis (invisible); log → the surface Li line plunges off the bottom at the
+  RGB, core Li pinned at the floor**, all fourteen elements legible across the decades, no
+  JS errors. (Frontend has no JS test harness — the screenshot pass *is* the regression
+  check, as in Phases 2–4.)
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is now a *data* task, not a code task — a one-off MESA-Web
   solar run drops into `data/mesa/` with zero code (the public-grid route is exhausted:
-  circular or surface-less, see the Done bullet above); the **Na/Al/P add is done** (see
-  the Done bullet) — and it taught that **Cr/Mn/Ni are NOT addable** (not in MIST v2.5's
-  network, verified against the header) and that Na/Al/P are nearly all invisible
-  floor-huggers, so *more heavy elements is a dead end for payoff*; the genuinely
-  *visible* next element is **Li (lithium depletion)** — Li burns at low temperature, so
-  the surface Li drops sharply as the convective envelope deepens (a famous, observable
-  story that would actually *move* on the chart, unlike Na/Al/P), one more one-line dict
-  add (Li=li7; Be/B/F are also in the network if a light-element panel is ever wanted);
-  the **TPAGB thermal pulses** (still deferred — §6's genuinely messy phase; would need
-  explicit per-grid handling, *not* cross-mass interpolation), eventually a
-  `LiveSolverProvider` or reduced nuclear network (large, explicitly out of scope for
-  now — see spec §9).
+  circular or surface-less, see the MESA Done bullet); the per-element view is now
+  **done through Li** (the only *visible* single-element win — see the Li Done bullet),
+  and the lesson is that *adding more individual metals is a dead end for payoff* (Na/Al/P
+  are invisible floor-huggers; Cr/Mn/Ni aren't even in MIST v2.5's network). If more
+  composition pedagogy is wanted, the next coherent step is a **Be/B/F light-element
+  panel** (all three are in the network like Li, and share Li's log-scale framing — a
+  *panel*, not a one-off element) rather than more heavy elements; the **TPAGB thermal
+  pulses** (still deferred — §6's genuinely messy phase; would need explicit per-grid
+  handling, *not* cross-mass interpolation), eventually a `LiveSolverProvider` or reduced
+  nuclear network (large, explicitly out of scope for now — see spec §9).
 
 ## Conventions
 

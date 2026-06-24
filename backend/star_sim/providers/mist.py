@@ -164,7 +164,13 @@ DEFAULT_MASSES = (
 # MIST *does* track; Cr/Mn/Ni were requested too but are NOT in MIST v2.5's network,
 # verified against the real track header — so they can't be added). Same reason as
 # v2/v3/v5: old caches lack the six new columns, so the bump forces one reparse.
-CACHE_VERSION = 6
+# v7 added lithium (li7) surface+core — the one *visible-story* element left: at
+# ~1e-10 of mass it's far below everything else, but its surface fraction depletes
+# dramatically (Sun ×0.87 over the MS, then ×~2400 at the RGB tip as the convective
+# envelope reaches Li-burning depths — the famous lithium-depletion story). Single
+# isotope like Ca/Ti/Fe. Same reason as v2/v3/v5/v6: old caches lack the two new
+# columns, so the bump forces one reparse.
+CACHE_VERSION = 7
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
@@ -172,8 +178,8 @@ CACHE_FILENAME = "_parsed_tracks.npz"
 _TRACK_COLS = (
     "age", "logL", "logT", "logR", "logg",
     "Xs", "Ys", "Xc", "Yc",
-    "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
-    "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
+    "Lis", "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
+    "Lic", "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
     "phase",
 )
 
@@ -203,15 +209,18 @@ class _Track:
     Ys: np.ndarray         # surface He mass fraction (he4 + he3)
     Xc: np.ndarray         # center H mass fraction
     Yc: np.ndarray         # center He mass fraction
-    # Per-element metals (a breakdown of Z), each the sum of its isotopes. The CNO
-    # trio carries the burning story: the surface ones the first-dredge-up signature
-    # (N up, C down), the core ones the CNO-cycle / He-burning products. Ne/Mg/Al/Si/
-    # P/S/Ca/Ti are α / odd-Z / iron-peak tracers (mostly along for the ride this side
-    # of the AGB — except Na, which the Ne-Na cycle dredges up at the surface of
-    # intermediate-mass giants, measured ×1.4 at 3 M_sun); Fe is the inert tracer that
-    # just marks the input [Fe/H] (modulo MIST's surface diffusion). All feed the §5.4
-    # detail view. Field names carry a trailing `s` (surface) / `c` (core) — so `Sc` is
-    # sulfur-core (not scandium) and `Pc` is phosphorus-core.
+    # Per-element metals (a breakdown of Z), each the sum of its isotopes. Li carries
+    # the *depletion* story: surface lithium burns at modest temperature, so it drops
+    # as the convective envelope deepens (Sun ×0.87 over the MS, ×~2400 at the RGB tip).
+    # The CNO trio carries the burning story: the surface ones the first-dredge-up
+    # signature (N up, C down), the core ones the CNO-cycle / He-burning products.
+    # Ne/Mg/Al/Si/P/S/Ca/Ti are α / odd-Z / iron-peak tracers (mostly along for the
+    # ride this side of the AGB — except Na, which the Ne-Na cycle dredges up at the
+    # surface of intermediate-mass giants, measured ×1.4 at 3 M_sun); Fe is the inert
+    # tracer that just marks the input [Fe/H] (modulo MIST's surface diffusion). All
+    # feed the §5.4 detail view. Field names carry a trailing `s` (surface) / `c`
+    # (core) — so `Sc` is sulfur-core (not scandium) and `Pc` is phosphorus-core.
+    Lis: np.ndarray        # surface lithium   (li7)
     Cs: np.ndarray         # surface carbon    (c12 + c13)
     Ns: np.ndarray         # surface nitrogen  (n13 + n14 + n15)
     Os: np.ndarray         # surface oxygen    (o14 + o15 + o16 + o17 + o18)
@@ -225,6 +234,7 @@ class _Track:
     Cas: np.ndarray        # surface calcium   (ca40)
     Tis: np.ndarray        # surface titanium  (ti48)
     Fes: np.ndarray        # surface iron      (fe56)
+    Lic: np.ndarray        # center lithium    (li7 — ~0; the core burns it instantly)
     Cc: np.ndarray         # center carbon
     Nc: np.ndarray         # center nitrogen
     Oc: np.ndarray         # center oxygen
@@ -357,6 +367,7 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         Xc=np.asarray(e["center_h1"], dtype=float),
         Yc=np.asarray(e["center_he4"], dtype=float)
         + np.asarray(e["center_he3"], dtype=float),
+        Lis=elem("surface_", "li7"),
         Cs=elem("surface_", "c12", "c13"),
         Ns=elem("surface_", "n13", "n14", "n15"),
         Os=elem("surface_", "o14", "o15", "o16", "o17", "o18"),
@@ -370,6 +381,7 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         Cas=elem("surface_", "ca40"),
         Tis=elem("surface_", "ti48"),
         Fes=elem("surface_", "fe56"),
+        Lic=elem("center_", "li7"),
         Cc=elem("center_", "c12", "c13"),
         Nc=elem("center_", "n13", "n14", "n15"),
         Oc=elem("center_", "o14", "o15", "o16", "o17", "o18"),
@@ -733,6 +745,7 @@ class MISTProvider:
         # Per-element metals (a breakdown of Z). float() each — raw np.float64 in the
         # dict would survive asdict() but trip JSON serialization at the API edge.
         metals_surf = {
+            "Li": float(np.interp(frac, rows, win["Lis"])),
             "C": float(np.interp(frac, rows, win["Cs"])),
             "N": float(np.interp(frac, rows, win["Ns"])),
             "O": float(np.interp(frac, rows, win["Os"])),
@@ -748,6 +761,7 @@ class MISTProvider:
             "Fe": float(np.interp(frac, rows, win["Fes"])),
         }
         metals_core = {
+            "Li": float(np.interp(frac, rows, win["Lic"])),
             "C": float(np.interp(frac, rows, win["Cc"])),
             "N": float(np.interp(frac, rows, win["Nc"])),
             "O": float(np.interp(frac, rows, win["Oc"])),
@@ -836,6 +850,7 @@ class MISTProvider:
             "Ys": mix(lo.Ys, hi.Ys),
             "Xc": mix(lo.Xc, hi.Xc),
             "Yc": mix(lo.Yc, hi.Yc),
+            "Lis": mix(lo.Lis, hi.Lis),
             "Cs": mix(lo.Cs, hi.Cs),
             "Ns": mix(lo.Ns, hi.Ns),
             "Os": mix(lo.Os, hi.Os),
@@ -849,6 +864,7 @@ class MISTProvider:
             "Cas": mix(lo.Cas, hi.Cas),
             "Tis": mix(lo.Tis, hi.Tis),
             "Fes": mix(lo.Fes, hi.Fes),
+            "Lic": mix(lo.Lic, hi.Lic),
             "Cc": mix(lo.Cc, hi.Cc),
             "Nc": mix(lo.Nc, hi.Nc),
             "Oc": mix(lo.Oc, hi.Oc),
@@ -955,7 +971,7 @@ def _blend_windows(a: dict, b: dict, w: float) -> dict:
     }
     for k in ("logL", "logT", "logR", "logg",
               "Xs", "Ys", "Xc", "Yc",
-              "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
-              "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec"):
+              "Lis", "Cs", "Ns", "Os", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
+              "Lic", "Cc", "Nc", "Oc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec"):
         out[k] = (1.0 - w) * a[k][:n] + w * b[k][:n]
     return out

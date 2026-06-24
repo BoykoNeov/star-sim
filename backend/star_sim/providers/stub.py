@@ -34,11 +34,16 @@ DYDZ = 1.78             # galactic helium enrichment slope (Y = Yp + dY/dZ * Z)
 # (Asplund+ 2009 photospheric mass fractions / Z_sun). The stub has no nuclear
 # processing, so it just splits its Z by these fixed ratios — flat in age and
 # identical surface vs core. That is the honest stub stance (§ conventions): a
-# static, *flavored* breakdown, not the CNO-cycle / dredge-up / diffusion
-# evolution that only MISTProvider can show. The thirteen match MISTProvider's
-# element set; they sum to ~0.90 of Z (the rest is Cl/Ar/K/Cr/Mn/Ni/... that MIST's
-# network doesn't track either), so the per-element sum stays safely under Z.
+# static, *flavored* breakdown, not the CNO-cycle / dredge-up / diffusion /
+# Li-depletion evolution that only MISTProvider can show. The fourteen match
+# MISTProvider's element set; they sum to ~0.90 of Z (the rest is Cl/Ar/K/Cr/Mn/
+# Ni/... that MIST's network doesn't track either), so the per-element sum stays
+# safely under Z. Lithium is a special case: at A(Li)=1.05 the present-day
+# photosphere is already heavily depleted, so its fraction is a vanishing ~4e-9 of
+# Z — the stub renders it as a flat floor, and only MISTProvider shows it actually
+# *depleting* (surface Li burns as the convective envelope deepens).
 METALS_OF_Z = {
+    "Li": 3.8e-9,                          # lithium (depleted photospheric floor)
     "C": 0.155, "N": 0.046, "O": 0.377,    # the CNO trio
     "Ne": 0.112, "Na": 0.0020,             # neon, sodium
     "Mg": 0.047, "Al": 0.0038,             # magnesium, aluminium

@@ -36,11 +36,16 @@
     </section>
 
     <section class="panel comp-panel">
-      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and a per-element detail (carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals).">?</span></h2>
+      <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Two views: H/He/metals (the bulk make-up) and a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals). The detail view has a linear/log scale toggle — switch to log to see the trace elements, lithium especially.">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">
         <button type="button" class="mode-btn active" data-mode="bulk">H · He · metals</button>
         <button type="button" class="mode-btn" data-mode="cno">per-element detail</button>
-        <span class="help" tabindex="0" data-tip="The per-element breakdown of the metals (Z), as lines: carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron. The core and surface have INDEPENDENT vertical scales (read the number at each top-left): during helium burning the core's C and O climb to tens of percent, while the surface stays ~1% — a shared scale would hide the surface story. Watch the surface on the lower red-giant branch: nitrogen rises and carbon falls as the deepening convective envelope dredges CNO-cycle-processed material up from below (the 'first dredge-up'). Oxygen barely moves. The core, meanwhile, shows the CNO cycle itself: ¹⁴N piles up and ¹²C is consumed, then He-burning fills the core with C and O. Ne, Mg, Al, Si, P, S, Ca and Ti are near-flat α / odd-Z / iron-peak tracers this side of the AGB; iron is inert — it just marks the input [Fe/H] (a steady backdrop that makes the CNO motion legible), though at low mass surface diffusion drags it down slightly over the main sequence. (Sodium is enriched a little by the Ne-Na cycle in intermediate-mass giants, but it's far too scarce to see at this scale.)">?</span>
+        <span class="scale-toggle" role="group" aria-label="per-element scale">
+          <button type="button" class="scale-btn active" data-scale="lin">linear</button>
+          <button type="button" class="scale-btn" data-scale="log">log</button>
+          <span class="help" tabindex="0" data-tip="Vertical scale for the per-element view. LINEAR reads the abundant elements (O, C, N) and their dredge-up directly. LOG spreads every element across its own orders of magnitude — the only way to see the trace elements. Lithium (~1e-10 of mass) and sodium (~3e-5) sit flat on the axis in linear; switch to log and lithium's surface depletion plunges visibly off the bottom (watch the surface sub-chart on the lower red-giant branch). The faint horizontal lines are decades (powers of ten).">?</span>
+        </span>
+        <span class="help" tabindex="0" data-tip="The per-element breakdown of the metals (Z), as lines: lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron. The core and surface have INDEPENDENT vertical scales (read the number at each top-left): during helium burning the core's C and O climb to tens of percent, while the surface stays ~1% — a shared scale would hide the surface story. Watch the surface on the lower red-giant branch: nitrogen rises and carbon falls as the deepening convective envelope dredges CNO-cycle-processed material up from below (the 'first dredge-up'). Oxygen barely moves. The same deepening envelope reaches lithium-burning depths, so surface lithium is destroyed — switch to the log scale to see it plunge. The core, meanwhile, shows the CNO cycle itself: ¹⁴N piles up and ¹²C is consumed, then He-burning fills the core with C and O. Ne, Mg, Al, Si, P, S, Ca and Ti are near-flat α / odd-Z / iron-peak tracers this side of the AGB; iron is inert — it just marks the input [Fe/H] (a steady backdrop that makes the CNO motion legible), though at low mass surface diffusion drags it down slightly over the main sequence. (Sodium is enriched a little by the Ne-Na cycle in intermediate-mass giants — less buried on the log scale, though at ~3e-5 of mass still a sub-pixel signal.)">?</span>
       </div>
       <canvas id="comp-canvas"></canvas>
       <div class="legend legend-bulk">
@@ -49,19 +54,20 @@
         <span><i style="background:#b083e0"></i>metals (Z)</span>
       </div>
       <div class="legend legend-cno">
-        <span><i style="background:#ff9f43"></i>C — carbon</span>
-        <span><i style="background:#26de81"></i>N — nitrogen</span>
-        <span><i style="background:#54a0ff"></i>O — oxygen</span>
-        <span><i style="background:#ff6b9d"></i>Ne — neon</span>
-        <span><i style="background:#ffe14d"></i>Na — sodium</span>
-        <span><i style="background:#feca57"></i>Mg — magnesium</span>
-        <span><i style="background:#cdd6e0"></i>Al — aluminium</span>
-        <span><i style="background:#a55eea"></i>Si — silicon</span>
-        <span><i style="background:#c77dff"></i>P — phosphorus</span>
-        <span><i style="background:#c4e538"></i>S — sulfur</span>
-        <span><i style="background:#ee5253"></i>Ca — calcium</span>
-        <span><i style="background:#00d2d3"></i>Ti — titanium</span>
-        <span><i style="background:#a4b0be"></i>Fe — iron</span>
+        <span><i style="background:#ff2d6f"></i><span class="tip" tabindex="0" data-tip="Burns at a low temperature, so it survives only in the cool outer layers. As the convective envelope deepens into hotter gas, surface lithium is dredged down and destroyed (~2400× by the red-giant tip). Too scarce (~1e-10 of mass) to see on the linear scale — switch to log to watch the surface line plunge off the bottom.">Li — lithium</span></span>
+        <span><i style="background:#ff9f43"></i><span class="tip" tabindex="0" data-tip="Surface ¹²C falls on the lower red-giant branch as the first dredge-up mixes CN-cycle-processed gas up from below. In the core it is first consumed by the CNO cycle, then rebuilt by helium burning.">C — carbon</span></span>
+        <span><i style="background:#26de81"></i><span class="tip" tabindex="0" data-tip="The clearest dredge-up signal: surface ¹⁴N rises ~3× as CN-processed material is mixed up. ¹⁴N is the slow step of the CNO cycle, so it piles up — strongest of all in the core.">N — nitrogen</span></span>
+        <span><i style="background:#54a0ff"></i><span class="tip" tabindex="0" data-tip="The most abundant metal, and a near-steady reference: the ON cycle is slow, so surface oxygen barely moves during dredge-up. In the core, helium burning builds it up to tens of percent.">O — oxygen</span></span>
+        <span><i style="background:#ff6b9d"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — essentially inert this side of the AGB. A little of it feeds the Ne-Na cycle that enriches sodium, but neon itself stays near-flat.">Ne — neon</span></span>
+        <span><i style="background:#ffe14d"></i><span class="tip" tabindex="0" data-tip="Enriched ~1.4× at the surface of intermediate-mass giants by the Ne-Na cycle running alongside CN burning (the sodium-rich-giant story). At ~3e-5 of mass it's a sub-pixel signal even on the log scale — a data-only wrinkle, less buried than on linear but never as legible as lithium's plunge.">Na — sodium</span></span>
+        <span><i style="background:#feca57"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — neither made nor destroyed this side of the AGB, so it holds steady at the input composition.">Mg — magnesium</span></span>
+        <span><i style="background:#cdd6e0"></i><span class="tip" tabindex="0" data-tip="An odd-Z light-metal tracer — essentially inert here; it just marks the input composition (a tiny ~1e-5 floor-hugger).">Al — aluminium</span></span>
+        <span><i style="background:#a55eea"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — inert this side of the AGB; a steady backdrop at the input composition.">Si — silicon</span></span>
+        <span><i style="background:#c77dff"></i><span class="tip" tabindex="0" data-tip="An odd-Z tracer — essentially inert here; one of the tiny floor-huggers that mark the input composition.">P — phosphorus</span></span>
+        <span><i style="background:#c4e538"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — neither made nor destroyed this side of the AGB; holds at the input composition.">S — sulfur</span></span>
+        <span><i style="background:#ee5253"></i><span class="tip" tabindex="0" data-tip="An α-element tracer — inert here; a steady backdrop at the input composition.">Ca — calcium</span></span>
+        <span><i style="background:#00d2d3"></i><span class="tip" tabindex="0" data-tip="An iron-peak tracer — essentially inert this side of the AGB; it marks the input composition.">Ti — titanium</span></span>
+        <span><i style="background:#a4b0be"></i><span class="tip" tabindex="0" data-tip="Essentially inert here, so it just marks the input [Fe/H] — a steady backdrop that makes the lighter elements' motion legible. (At low mass, gravitational settling drags the surface value down ~10% over the main sequence.)">Fe — iron</span></span>
       </div>
     </section>
 

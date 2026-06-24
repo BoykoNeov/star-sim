@@ -201,22 +201,23 @@ def test_track_core_hydrogen_depletes_monotonically(provider):
 
 # --- per-element composition (Phase 4: the §5.4 CNO-detail view) -------------
 def test_metal_breakdown_present_and_bounded(provider):
-    """metals_surf/metals_core carry C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe —
-    each a sub-fraction of Z.
+    """metals_surf/metals_core carry Li, C, N, O, Ne, Na, Mg, Al, Si, P, S, Ca, Ti, Fe
+    — each a sub-fraction of Z.
 
     The dict is a *breakdown* of the lumped metals: every element is in [0, Z] and
     their sum can't exceed Z (only the exposed elements, not every metal — Cl/Ar/K/
     Cr/Ni/… stay folded into Z, and MIST's network doesn't even track those). This is
     the invariant that keeps the §5.4 detail view honest — the lines can never out-sum
-    the Z sliver they subdivide. The thirteen sum to ~0.99 of solar Z (measured:
-    surface 0.988, core 0.989), so the headroom is only ~2e-4 but still comfortably
-    above the 1e-9 slack. (The bound is physically guaranteed — the named elements are
-    a disjoint subset of the metals — so a sum *over* Z would mean a double-counted
-    isotope, not a tolerance issue; re-measuring the real sum/Z, not the green assert,
-    is the actual correctness check as the headroom keeps shrinking.)
+    the Z sliver they subdivide. The fourteen sum to ~0.99 of solar Z (measured:
+    surface 0.988, core 0.989 — lithium adds only ~1e-10, far below the headroom), so
+    the headroom is still ~2e-4 but comfortably above the 1e-9 slack. (The bound is
+    physically guaranteed — the named elements are a disjoint subset of the metals —
+    so a sum *over* Z would mean a double-counted isotope, not a tolerance issue;
+    re-measuring the real sum/Z, not the green assert, is the actual correctness check
+    as the headroom keeps shrinking.)
     """
     s = provider.state_at(1.0, 0.0, SUN_AGE_YR)
-    expected = {"C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"}
+    expected = {"Li", "C", "N", "O", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Ca", "Ti", "Fe"}
     for metals, z in ((s.metals_surf, s.Z_surf), (s.metals_core, s.Z_core)):
         assert set(metals) == expected
         for frac in metals.values():
@@ -260,6 +261,27 @@ def test_first_dredge_up_surface_signature(provider):
     assert tip["C"] / zams["C"] < 0.8    # measured 0.63x — carbon depletion
 
 
+def test_surface_lithium_depletes(provider):
+    """The Phase 4 visible payoff: surface lithium is *destroyed* as the star evolves.
+
+    Lithium burns at a low temperature (~2.5e6 K), so it survives only in the thin,
+    cool outer envelope. As an intermediate-mass star ascends the RGB, the deepening
+    convective envelope reaches Li-burning depths and mixes surface lithium down to be
+    destroyed — the famous lithium-depletion story (and the reason the §5.4 detail
+    view has a log scale: at ~1e-10 of mass Li is sub-pixel on a linear axis, but its
+    *relative* plunge is dramatic). We check a grid-point mass (3.0 M_sun, raw MIST)
+    from ZAMS to the first-ascent RGB tip (max R among RGB rows). Measured: surface Li
+    1.0e-8 -> 1.35e-10, a 74x drop. The core, meanwhile, burns Li essentially to zero
+    from the start (central T is far above the Li threshold the whole main sequence),
+    so core Li is negligible against surface Li at ZAMS (measured ~1e-8 of it).
+    """
+    t = provider.track(3.0, 0.0)
+    zams, tip = t[0], max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun)
+    assert tip.metals_surf["Li"] / zams.metals_surf["Li"] < 0.05   # measured 0.0135 (74x down)
+    # the core burns Li instantly -> negligible vs the (already tiny) surface store
+    assert zams.metals_core["Li"] < 1e-4 * zams.metals_surf["Li"]  # measured ~1.5e-8 ratio
+
+
 def test_core_cno_equilibrium_signature(provider):
     """The Sun's *core* shows CNO-cycle equilibrium: ¹⁴N built up, ¹²C burned away.
 
@@ -287,11 +309,14 @@ def test_heavy_tracers_inert_while_cno_processes(provider):
     so we use the diffusion-quiet 3 M_sun grid point, where these tracers all measure
     ~x1.00 (Fe/Al/Si/P/S/Ca/Ti x1.00, Ne x0.99).
 
-    **Na is the deliberate exception** and gets its own assertion: the Ne-Na cycle
-    runs alongside CN burning, so first dredge-up enriches surface sodium too —
-    measured ×1.41 at the 3 M_sun RGB tip (the real Na-O / Na-rich-giant physics). It
-    is a data-only signal here, far too small (3e-5 vs O's 7e-3) to be visible on the
-    §5.4 chart's shared per-region scale, but it must not be mislabeled "inert."
+    **Na and Li are the deliberate exceptions** and get their own assertions. Na: the
+    Ne-Na cycle runs alongside CN burning, so first dredge-up enriches surface sodium
+    too — measured ×1.41 at the 3 M_sun RGB tip (the real Na-O / Na-rich-giant
+    physics). Li: it burns at a low temperature, so the deepening convective envelope
+    *destroys* surface lithium — measured ×0.0135 (a 74x plunge) at the same tip (the
+    famous lithium-depletion story). Both are data-only signals far too small to see
+    on the §5.4 chart's *linear* per-region scale (Na ~3e-5, Li ~1e-10 vs O's 7e-3) —
+    the log scale is what reveals them — but neither may be mislabeled "inert."
     Measured at the first-ascent RGB tip (max R among RGB rows — not the global max,
     which now lands on the early-AGB after the window was widened).
     """
@@ -300,6 +325,7 @@ def test_heavy_tracers_inert_while_cno_processes(provider):
     tip = max((s for s in t if s.phase == "RGB"), key=lambda s: s.R_rsun).metals_surf
     assert tip["N"] / zams["N"] > 2.0          # CNO processes hard (measured 3.14x)
     assert tip["Na"] / zams["Na"] > 1.2        # Ne-Na cycle dredge-up (measured 1.41x)
+    assert tip["Li"] / zams["Li"] < 0.1        # lithium destroyed (measured 0.0135 — 74x down)
     for el in ("Fe", "Ne", "Mg", "Al", "Si", "P", "S", "Ca", "Ti"):
         assert abs(tip[el] / zams[el] - 1.0) < 0.05   # inert tracer (measured <1%)
 

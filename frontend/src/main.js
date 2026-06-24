@@ -49,6 +49,15 @@ const comp = createComp(document.getElementById("comp-canvas"));
       comp.setMode(btn.dataset.mode);
     }),
   );
+  // Linear/log scale toggle for the per-element view (only shown in cno mode via
+  // CSS). Log is what makes the trace elements — lithium especially — visible.
+  const scaleBtns = panel.querySelectorAll(".scale-toggle .scale-btn");
+  scaleBtns.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      scaleBtns.forEach((b) => b.classList.toggle("active", b === btn));
+      comp.setScale(btn.dataset.scale);
+    }),
+  );
 }
 // The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
 // not a consumer of it — it's driven by the polytropic index n alone and owns its
