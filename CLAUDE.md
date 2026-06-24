@@ -412,9 +412,10 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   5 new **always-on** multi-Z tests on a programmatic two-bucket synthetic fixture
   (deliberately non-rectangular: solar 1.0+2.0 M☉ / metal-poor −0.5 1.0 M☉) exercise
   snap-feh-then-mass, per-feh `mass_range`, true-value reporting, and out-of-grid raises.
-  90 tests pass (was 85). The capability is **latent / multi-Z-ready**: a future grid
-  with a second metallicity drops into `data/mesa/` with **zero code** — today the
-  provider still loads only the metal-poor bearums bucket. **Drop-in caveat:** buckets
+  90 tests pass (was 85). The capability was **latent / multi-Z-ready** when written: a
+  future grid with a second metallicity drops into `data/mesa/` with **zero code** — at
+  the time the provider still loaded only the metal-poor bearums bucket (**now realized**
+  — a solar bucket was added; see the solar-grid bullet below). **Drop-in caveat:** buckets
   are keyed by *per-track* `round(derived_feh, 2)`, so when a real second-Z grid lands,
   confirm each physical grid collapses to **exactly one** bucket key (a grid whose
   per-mass derived feh straddles a 2-dp rounding boundary would fragment into two —
@@ -435,7 +436,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   1-line-header format and 1 M☉-only-at-solar. Not worth ingesting. **The real path to a
   clean solar Sun anchor is a one-off MESA-Web solar run** (clean full-column standard
   format → fits the existing parser, zero surgery) — now a pure drop-in thanks to this
-  generalization. Deferred at the user's call.
+  generalization. **Now done — see the next bullet** (run locally in Docker rather than
+  via the MESA-Web web form, which never delivered its result email; same idea: a clean
+  full-column solar `history.data` straight into the parser).
+- **Done (Phase 4, solar MESA grid — the multi-Z capability realized, zero provider code):**
+  the latent multi-metallicity-by-snapping is now **real data**: a near-solar
+  `[Fe/H]≈0.00` bucket sits alongside bearums (`−0.84`), so `MESAProvider` exposes two Z
+  buckets. Made by running **MESA r24.03.1 locally in Docker** (`evbauer/mesa_lean:r24.03.1.01`,
+  driven by `docker exec` — no SSH helper, no local MESA build): a 1 M☉ run at
+  **`initial_z=0.0152`** (= the project `Z_sun`, so derived `[Fe/H]` rounds to **+0.00**),
+  pre-MS→TAMS, `pgstar` off (headless), **`history_interval=1`** for a dense track (297
+  models → **129 exposed rows**). **This was a *data* task — no `state.py`/`mesa.py`/
+  `CACHE_VERSION` change** (MESA has no parse cache; the provider reads mass/feh from the
+  file, not the dir name, so `data/mesa/solar/1Msun/` doesn't collide with bearums
+  `data/mesa/1Msun/`). The output is gitignored like all of `data/`, so the **reproducibility
+  recipe lives at `backend/docs/mesa_solar_recipe.md`** (image, exact inlist, the
+  `history_columns.list` surface-`h1`/`he4` uncomment, placement, measured anchor) — the
+  *how* survives even though the file can't be committed. **One test broke as predicted
+  (advisor):** `test_real_grid_loads_with_expected_masses` pinned single-Z
+  (`assert feh min==max`); adding the solar bucket is exactly what makes the provider
+  multi-Z, so the assertion was updated to verify the **bearums bucket** is present +
+  metal-poor + carries its 7 masses, *without* assuming it's the only Z (robust whether or
+  not the optional solar drop-in is present). **The payoff — measured, the actual reason
+  for a solar bucket:** `test_mesa_vs_mist_solar.py` (+ conftest gates `requires_mesa_solar`,
+  `requires_mist_solar_bracket`) cross-validates solar MESA vs MIST through the public
+  `track()` API, matched on **Z** (the solar ZAMS `Z_surf=0.01523` is **below** MIST p000's
+  `0.01635`, so p000 alone can't bracket it — the straddling grids are **m050 + p000**,
+  matched MIST `[Fe/H]≈−0.05`; Yinit agrees ~0.269) and compared at shared **Xc=0.6/0.4/0.2**.
+  **Measured |ΔlogL|≤0.014, |ΔTeff|≤0.04%, |ΔR|≤1.5%** — an **order of magnitude tighter**
+  than the metal-poor bearums bracket (late-MS |ΔlogL|≤0.13, |ΔR|≤20%): at solar Z, matched
+  on Z+Y+Xc, the two independent codes are nearly indistinguishable on the MS (MESA stays
+  marginally brighter, the documented direction, but ~0.01 dex not ~0.13). **Sun anchor
+  (4.6 Gyr): L=1.18, Teff=5894 K, R=1.04, mid-MS** — *not* solar-calibrated (no α_MLT/Y
+  tuning to force L=1; the offset is real and honest, on the MESA-brighter trend). MESA
+  stays **opt-in** (`PROVIDER` in `api.py` is still `MISTProvider`). **94 tests pass** (was
+  92; +2 solar cross-val). Gotchas worth keeping (all in the recipe doc): `pkill -x star`
+  not `pkill -f .../star` (the `-f` pattern matches its own argv and the kill suicides);
+  `docker exec -d` to detach the run from the client; `pgstar_flag=.false.` removes the
+  whole Xming/X11 prerequisite. **Remaining solar follow-on:** add **2 & 6 M☉** solar runs
+  (quick with the warm container) to parametrize the solar cross-val over the same masses
+  as the metal-poor one — currently solar tests only 1 M☉.
 - **Done (Phase 4, Li lithium + the log-scale per-element view):** the per-element view
   now exposes **fourteen** elements — the thirteen above **+ Li** (li7, single isotope
   like Ca/Ti/Fe; placed *first* in `ELEMS`, atomic order Z=3). The provider threading is
@@ -523,9 +563,11 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   fourteen elements intact after the `region()` refactor. (No JS test harness — the screenshot
   pass *is* the regression check, as in Phases 2–4.)
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
-  the **solar MESA grid** is now a *data* task, not a code task — a one-off MESA-Web
-  solar run drops into `data/mesa/` with zero code (the public-grid route is exhausted:
-  circular or surface-less, see the MESA Done bullet); the per-element view is **done
+  the **solar MESA grid** is **done** (1 M☉ at Z=0.0152 via a local Docker MESA run →
+  a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val; see the solar-grid
+  Done bullet + `backend/docs/mesa_solar_recipe.md`). The cheap follow-on is **2 & 6 M☉
+  solar runs** (warm container) so the solar cross-val parametrizes over the same masses as
+  the metal-poor one (it currently tests 1 M☉ only). The per-element view is **done
   through Li** and the light-element panel is **done (Li/Be/F)**, and the lesson holds
   that *adding more individual metals is a dead end for payoff* (Na/Al/P are invisible
   floor-huggers; Cr/Mn/Ni aren't even in MIST v2.5's network; **boron's only isotope is

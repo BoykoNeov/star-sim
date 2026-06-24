@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from star_sim.providers.mesa import MESA_DATA_DIR, _find_history_files
+from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
 from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
 
 
@@ -21,6 +21,18 @@ def mist_data_available() -> bool:
 
 def mesa_data_available() -> bool:
     return len(_find_history_files(MESA_DATA_DIR)) > 0
+
+
+def mesa_solar_available() -> bool:
+    """True if the MESA data includes a near-solar [Fe/H] bucket. The fetched
+    bearums grid is metal-poor only ([Fe/H]~-0.84); the solar bucket is a manual
+    drop-in (see backend/docs/mesa_solar_recipe.md), so this skips until it's added."""
+    if not mesa_data_available():
+        return False
+    try:
+        return MESAProvider().parameter_ranges()["feh"]["max"] >= -0.2
+    except Exception:
+        return False
 
 
 def mist_fehs_available() -> set[float]:
@@ -62,4 +74,18 @@ _MESA_BRACKET_FEHS = {-1.0, -0.75}
 requires_mist_lowz = pytest.mark.skipif(
     not _MESA_BRACKET_FEHS.issubset(mist_fehs_available()),
     reason="needs the m100/m075 MIST grids — fetch with `--feh m075,m100`",
+)
+
+# The solar MESA-vs-MIST cross-validation needs the near-solar MESA bucket and
+# the two MIST grids that bracket its ZAMS Z=0.01523: m050 (Z~0.005) and p000
+# (Z~0.0164). p000 alone is *above* the MESA Z, so it cannot bracket it.
+requires_mesa_solar = pytest.mark.skipif(
+    not mesa_solar_available(),
+    reason="no near-solar MESA bucket — see backend/docs/mesa_solar_recipe.md",
+)
+
+_SOLAR_BRACKET_FEHS = {-0.5, 0.0}
+requires_mist_solar_bracket = pytest.mark.skipif(
+    not _SOLAR_BRACKET_FEHS.issubset(mist_fehs_available()),
+    reason="needs the m050/p000 MIST grids to bracket the solar MESA Z — fetch with `--feh m050`",
 )

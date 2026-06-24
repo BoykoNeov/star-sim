@@ -231,9 +231,13 @@ def test_real_grid_loads_with_expected_masses(provider):
     r = provider.parameter_ranges()
     assert r["mass_msun"]["min"] == pytest.approx(1.0)
     assert r["mass_msun"]["max"] == pytest.approx(20.0)
-    # the tutorial grid is metal-poor (~[Fe/H] -0.84), a single metallicity
-    assert -1.0 < r["feh"]["min"] < -0.6
-    assert r["feh"]["min"] == r["feh"]["max"]
+    # The metal-poor bearums tutorial grid (~[Fe/H] -0.84) is always the lowest
+    # bucket. A solar grid may be dropped in alongside it (multi-Z by snapping),
+    # so we do NOT assume it's the only metallicity -- only that the bearums
+    # bucket is present, metal-poor, and carries all 7 of its sample masses.
+    bearums_feh = r["feh"]["min"]
+    assert -1.0 < bearums_feh < -0.6
+    assert provider.mass_range(bearums_feh) == (1.0, 20.0)
 
 
 @requires_mesa_data
