@@ -824,7 +824,11 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   O star / 0.2 M☉ M-dwarf + full-page layout: Wien peak sweeps correctly, both tails floor honestly, no
   JS errors. No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); the
   pytest suite is **unchanged** (137) since this is frontend-only.
-- **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
+- **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
+  **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
+  atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
+  when scope changes. The Phase-4 detail below is kept for the element-set history:
+  more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three
   masses; see the solar-grid Done bullet + `backend/docs/mesa_solar_recipe.md`). The per-element
