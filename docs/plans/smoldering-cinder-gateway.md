@@ -86,7 +86,21 @@ on-hand-data vertical → data-gated spectra last. Chunk 0 is pure research and
 runs in parallel. Every chunk leaves `main` green with tests (backend) or a
 Playwright screenshot pass (frontend), per house style.
 
-### Chunk 0 — Spectrum-grid scoping (research, parallel, no code)
+### Chunk 0 — Spectrum-grid scoping (research, parallel, no code) — ✅ DONE
+**Outcome (full notes in `backend/docs/msg_spectra_build_recipe.md` §7):** **WD
+before WR confirmed — for axis-compatibility.** **Koester DA = GO** (SVO `koester2`,
+2-col ASCII, Teff×log g, ~30–60 LOC, cite Koester 2010) — but a **separate WD cube**
+(log g 6.5–9.5 disjoint from the main cube, [Fe/H] degenerate), not a splice.
+**TMAP hot WD/CSPN = conditional GO** (SVO `tmap` SSAP bulk only, NOT TheoSSA
+on-demand; Teff 50–190 kK; flux ×π×10⁸; LTE↔NLTE seam with Koester ~50–80 kK).
+**Koester DB = NO-GO** (restricted, non-redistributable — drop; cover hot-He DO via
+TMAP instead). **PoWR WR = conditional GO at best** (public tarballs, but axis is the
+wind quantity Rt not log g → its own (T\*, Rt) cube, and the star must be
+**assumption-mapped**: v∞ and clumping D assumed, Teff↔T\* approximate). All
+gitignore-and-cite. So Chunk 6 (Koester+TMAP) is tractable; Chunk 7 (PoWR) carries
+the real design cost. Naming trap: "Reindl 2020" pure-H grid is actually Bohlin/
+Hubeny/Rauch 2020 = the TLUSTY twin (95 kK cap), not TMAP.
+
 **Goal:** de-risk "full spectra" *before* promising it (the advisor's insistence;
 the same discipline that caught the WR/WD assumptions).
 **Do:** verify the candidate grids — **PoWR** (WR emission grids: WNL/WNE/WC),
@@ -100,7 +114,16 @@ supply what its transformed-radius/mass-loss axis needs.
 `backend/docs/msg_spectra_build_recipe.md`; updates this plan's risk register.
 **Blocks:** nothing in Chunks 1–5; gates Chunks 6–7.
 
-### Chunk 1 — Backend: endgame accessor + classifier (foundation)
+### Chunk 1 — Backend: endgame accessor + classifier (foundation) — ✅ DONE
+**Status:** shipped (137 tests, was 121). `endgame()` is on the `StellarStateProvider`
+Protocol returning `EndgameResult` (`provider.py`); `/endgame` routes through `PROVIDER`
+and stays §3-agnostic (MESA/Stub return `type="none"`). `MISTProvider.endgame` snaps
+**both** mass and feh to the nearest real grid track, classifies WD/WR/SN/none from the
+snapped track's phases, scans the WR threshold per grid (+0.5→35, 0.0→48, −0.5→56 M☉),
+and exposes the post-`track_end` rows as StellarStates. `star_mass`/`star_mdot` added to
+`_Track` + cache (v8→9), not to the mixing functions; `StellarState` untouched. See the
+CLAUDE.md Done bullet + `tests/test_endgame.py` for the full record.
+
 **Goal:** expose the post-window track, snapped, with the metadata the gateway needs.
 **Do:** new `MISTProvider` method (e.g. `endgame(mass, feh)`) that **snaps to the
 nearest grid mass** (no cross-mass interp) and returns the rows *past* the normal

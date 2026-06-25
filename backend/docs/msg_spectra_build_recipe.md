@@ -341,3 +341,76 @@ Then the pure-Python runtime (`star_sim/spectra.py`, `scipy` only — no pymsg)
 serves `/spectrum`; `pytest backend/tests/test_spectra.py` gates the line physics
 (measured through the runtime path), and the `requires_spectra_data` marker skips
 those if the cube is absent.
+
+## 7. Endgame spectral grids (Chunk 0 scoping — WR/WD, go/no-go + format notes)
+
+For the stellar-endgame gateway (`docs/plans/smoldering-cinder-gateway.md`, Chunks
+6–7) the endgame *spectra* are the one piece NOT already on disk and NOT MSG `.h5`
+— pymsg will **not** open any of these, so each needs a **custom reader** (not a
+splice onto the existing cube). Scoped before promising "full spectra." **Headline:
+WD before WR is confirmed — for axis-compatibility, not just "log g is cleaner."**
+All three keep the gitignore-and-cite precedent (download locally, never commit).
+
+**Koester DA white dwarfs — GO (do first).** Public on the **SVO Theoretical
+Spectra Server** as `koester2` (LTE, hydrostatic, plane-parallel; Tremblay &
+Bergeron 2009 H Stark profiles). No one-click tarball, but the **SSAP service**
+(`ssap.php?model=koester2`) returns a VOTable index — loop `fid` to bulk-fetch
+~1000–1300 models, ~tens of MB. Format: plain **2-col ASCII** (λ Å [air — verify],
+F_λ erg/cm²/s/Å), ~900–30000 Å non-uniform → resample onto the 2400-λ grid. License:
+SVO "author's permission" (cite **Koester 2010, Mem.S.A.It. 81, 921**). Axes: **Teff
+5000–80000 K, log g 6.5–9.5/0.25** — and **WDs have NO [Fe/H] axis** (pure-H → that
+cube axis is degenerate). ~30–60 LOC reader. **Does NOT splice onto the main cube:**
+log g 6.5–9.5 is essentially disjoint from the current ~0–6 cube (thin 6.5–7 overlap),
+so build a **separate WD cube keyed (Teff, log g)** with [Fe/H] collapsed to a dummy
+node — a *sibling* like `/spectrum` itself.
+[koester2](https://svo2.cab.inta-csic.es/theory/newov2/index.php?models=koester2) ·
+[koester2 SSAP](https://svo2.cab.inta-csic.es/theory/newov2/ssap.php?model=koester2)
+
+**Koester DB (He-atmosphere WD) — NO-GO.** Not on SVO, not on Koester's homepage;
+holders are told it is "restricted access, private communication," **non-redistributable**.
+Drop it from planning (revisit only by direct request, local-only). Mitigation: cover
+hot *He* atmospheres (DO) via TMAP's He composition instead; accept no cool-DB branch.
+
+**TMAP hot WD / CSPN — CONDITIONAL GO (do second).** The CSPN / hottest-WD regime
+(~100–200 kK) lives **only** in TMAP. Crux: bulk-fetch the **SVO `tmap` collection**
+(pre-baked H+He NLTE grids, **Teff 50000–190000 K, log g 5–9, He 0–1**, SSAP `fid`
+enumeration is scriptable) — **NOT** the native **TheoSSA/GAVO** service, which is
+per-model / compute-on-demand (an off-grid request *queues a TMAP run*, minutes→days;
+do not hammer it). Format: ASCII/VOTable, **vacuum** λ, EUV-heavy (resample only the
+optical window). **Units gotcha: TMAP2019 astrophysical flux is 4×10⁸× physical —
+multiply by π×10⁸** for erg/cm²/s/Å. License: GAVO/SVO acknowledge-and-cite (Werner+
+2003; Rauch+ 2013). ~80–150 LOC SSAP-enumeration baker. Splices as the **hot, high-log g
+slab** of the *same separate WD cube* as Koester, overlapping ~50000–80000 K (an
+**LTE↔NLTE seam** there needs the OSTAR/CAP18-style measured-seam care). **Naming trap:**
+the brief's "Reindl 2020 pure-H grid" is actually **Bohlin, Hubeny & Rauch 2020** and
+its clean MAST tarball is the **TLUSTY** twin (caps at 95 kK), **not** TMAP — don't plan
+the TMAP ingest around it. [tmap](https://svo2.cab.inta-csic.es/theory/newov2/index.php?models=tmap)
+
+**PoWR Wolf-Rayet (WN/WC) — CONDITIONAL GO at best (do last, highest design cost).**
+Spectra download cleanly: **public, no registration**, bulk per-grid tarballs at
+[~htodt/powr-sed/](https://www.astro.physik.uni-potsdam.de/~htodt/powr-sed/) (12 grids
+WNE/WNL/WNL-H50/WC × Galactic/LMC/SMC/sub-SMC, 61–129 MB each; each model a
+`flux_calib.dat` = 2-col ASCII, 200–80000 Å, R≈10⁴). License: cite the paper (Hamann &
+Gräfener 2004; Sander+ 2012 WC; Todt+ 2015 WN). **But the axis is the crux:** grids are
+**2-D in (T\*, transformed radius Rt)** at *fixed* L (log L=5.3), v∞, clumping D, and
+composition (one grid per subtype×metallicity), where
+`Rt = R*·[(v∞/2500) / (Ṁ√D/1e-4)]^(2/3)`. **Placing a track star needs THREE things the
+track does not supply:** (a) v∞ must be *assumed* (∝ v_esc, constant is a choice), (b)
+clumping D *assumed* (adopt the grid's), (c) Teff↔T\* is approximate (grid T\* at τ=20 vs
+track Teff at τ=2/3, diverge in thick winds). The track **L is NOT discarded** — it sets
+R\* (L=4πR\*²σT\*⁴) → Rt, and scales the absolute flux. So PoWR cannot share the (Teff,
+[Fe/H], log g) cube; it needs its **own (T\*, Rt) cube + subtype×metallicity selector**,
+with the star **snapped/assumption-mapped** on — exactly the separate-WR-panel the plan
+already sketches. ~50–100 LOC + a ragged-grid void-fill + an opacity-edge band to mask.
+([Todt+ 2015, A&A 579 A75](https://www.aanda.org/articles/aa/pdf/2015/07/aa26253-15.pdf) ·
+[PoWR tarballs](https://www.astro.physik.uni-potsdam.de/~htodt/powr-sed/) — SVO has **no**
+WR collection. *Aside:* PoWR's **OB** grids ARE Teff×log g and would slot onto the main
+cube — but they're MS hot stars, not the WR endgame.)
+
+**Top risks:** (1) **PoWR wind-axis mapping (HIGH)** — no track-only placement; v∞/D
+assumed, Teff↔T\* approximate; the star is *snapped with assumptions*, accept honestly
+or WR is a no-go. (2) **TMAP bulk = SVO-only (MED)** — validate the SVO node coverage at
+log g 7–9 before committing (TheoSSA on-demand is no polite bulk fallback). (3) **The WD
+cube is disjoint** from the existing cube (separate cube + endgame branch, not a Teff
+splice — a design choice, not a blocker). (4) **unit/λ gotchas (LOW)** — TMAP ×π×10⁸,
+air-vs-vacuum per grid, PoWR opacity-edge mask — confirm from one real header each.

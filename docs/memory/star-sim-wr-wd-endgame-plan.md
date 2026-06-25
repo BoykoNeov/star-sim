@@ -49,8 +49,25 @@ plan written & committed; Chunk 1 (backend) BUILT.** Plan:
   `[track_end+1 .. last-real]` into the same keys `_grid_window` emits, fed straight to
   `_state_from_row`. `/endgame` returns `asdict(EndgameResult)` (states = exact StellarState shape).
 
-**Remaining: Chunks 0 (spectrum scoping, re-launched as a bg research agent), 2–7** (frontend
-gateway + WD/WR mode shells + 3D shaders, then data-gated WR/WD spectra). See the chunk list below.
+**CHUNK 0 DONE (spectrum-grid scoping, research — notes appended to
+`backend/docs/msg_spectra_build_recipe.md` §7):** WD-before-WR confirmed for *axis-compatibility*.
+**Koester DA = GO** (SVO `koester2`, 2-col ASCII, Teff×log g, ~30–60 LOC) but a **separate WD cube**
+(log g 6.5–9.5 disjoint from the main cube, [Fe/H] degenerate), not a splice. **TMAP hot WD/CSPN =
+conditional GO** (bulk via SVO `tmap` SSAP only, NOT TheoSSA on-demand; 50–190 kK; **flux ×π×10⁸**;
+LTE↔NLTE seam ~50–80 kK). **Koester DB = NO-GO** (restricted/non-redistributable — drop; cover hot-He
+DO via TMAP). **PoWR WR = conditional GO at best** (public tarballs, but axis is wind Rt not log g →
+own (T\*, Rt) cube; star must be **assumption-mapped**: v∞ + clumping D assumed, Teff↔T\* approximate;
+L is *not* discarded — sets R\*→Rt). Naming trap: "Reindl 2020" pure-H grid is actually Bohlin/Hubeny/
+Rauch 2020 = TLUSTY twin (95 kK cap), NOT TMAP. So Chunk 6 (Koester+TMAP) tractable, Chunk 7 (PoWR)
+carries the real design cost.
+
+**Remaining: Chunks 2–7** (frontend gateway + WD/WR mode shells + 3D shaders, then the data-gated WR/WD
+spectra above). **Chunk 2 forward notes (advisor, capture while fresh):** (1) the **log cooling-age axis
+needs RELATIVE cooling age, not `age_yr`** — total age is only 11.67→27.55 Gyr (0.37 dex, log does
+nothing); cooling age *since WD formation* spans ~5 decades → Chunk 2 must subtract a formation
+zero-point (forces the "cooling age vs time-since-AGB" open question); the 601 TPAGB pulse rows sit in
+a thin young-end sliver. (2) `final_mass_msun` is populated for SN/none too (harmless pre-collapse
+`Mcur[r_last]`) — don't surface it as a "remnant mass" on the SN card. See the chunk list below.
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is
