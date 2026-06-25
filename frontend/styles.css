@@ -18,9 +18,19 @@ body {
 }
 
 header {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px;
   padding: 18px 24px 6px;
 }
 header h1 { margin: 0; font-size: 23px; font-weight: 650; }
+/* Restore the default panel arrangement (clears the saved layout). */
+.reset-layout {
+  font: inherit; font-size: 12px; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 10px; cursor: pointer;
+}
+.reset-layout:hover { color: var(--ink); border-color: var(--accent); }
+.layout-hint { color: var(--muted); font-size: 12px; }
+@media (max-width: 560px) { .layout-hint { display: none; } }
 header .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 .tag {
   font-size: 12px; font-weight: 600; color: var(--bg);
@@ -30,56 +40,73 @@ header .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 code { color: var(--accent); }
 
 main {
-  display: grid;
-  /* 2×2: star | HR  /  composition | controls. The two evolution plots (HR and
-     composition) share the marker; keeping them on the same row reads as a pair.
-     FIXED-px columns on purpose: the verbose descriptions must wrap to a bounded
-     width — a content-sized (max-content) column would stretch to fit the longest
-     description on one line and blow the layout out. */
-  grid-template-columns: 360px 380px;
-  justify-content: start;
+  /* A reorder-in-flow dashboard (see layout.js): a flex-wrap container is what
+     makes the panels "auto-stack to screen width" for free — it packs as many
+     panels per row as fit and wraps the rest, so a wide monitor shows several
+     columns and a phone a single vertical stack, with no media queries and no
+     stored pixel positions. Dragging only reorders the panels; flow layout then
+     re-packs around the drop and can never overlap. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 16px;
   padding: 16px 24px 32px;
-  align-items: start;
 }
-@media (max-width: 800px) { main { grid-template-columns: 1fr; } }
 
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
+  /* Compact panels grow to share a row but are capped so the verbose descriptions
+     still wrap to a bounded, readable measure (the old fixed-px columns existed for
+     exactly this reason — a content-sized panel would stretch its longest line out).
+     flex-basis 320 means ~1 panel per ~340px of width → phone = 1 column. */
+  flex: 1 1 320px;
+  max-width: 384px;
 }
+/* Full-width bands (spectrum, SED, Lane–Emden): a wavelength/EM/structure axis
+   wants width and they aren't part of the compact 2×2, so each takes a whole row.
+   Reorderable like any other panel — they just always wrap to their own line. */
+.panel.wide { flex-basis: 100%; max-width: 100%; }
 .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--muted); }
 
-/* The 3D star: a fixed, modest square (was a column-filling, oversized canvas). */
+/* The 3D star: a modest square that shrinks to fit a narrow (phone) panel. star.js
+   resizes its WebGL renderer from the canvas's clientWidth/clientHeight every frame,
+   so a responsive CSS box is all it needs — no JS wiring here. */
 #star-canvas {
-  width: 320px; height: 320px; display: block; margin: 0 auto;
+  width: min(320px, 100%); aspect-ratio: 1 / 1; height: auto;
+  display: block; margin: 0 auto;
   background: #05070d; border-radius: 8px;
 }
 
-/* HR & composition: sized by JS (fitCanvas) to a crisp, smaller display box —
-   the stylesheet only handles framing and centering. */
+/* HR & composition: display size driven from JS (fitCanvas / a ResizeObserver →
+   hr.resize / comp.resize); the stylesheet only frames, centers, and guards against
+   overflow between observer ticks. */
 #hr-canvas,
-#comp-canvas { display: block; margin: 0 auto; background: #0b0f1c; border-radius: 8px; }
+#comp-canvas { display: block; margin: 0 auto; max-width: 100%; background: #0b0f1c; border-radius: 8px; }
 .note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
 .note b { color: #cbd2e0; font-weight: 600; }
 
-/* Lane–Emden interior panel (spec §8): a full-width third row — it's a static
-   structure piece independent of the StellarState spine, so it gets its own band
-   under the 2×2 of evolution panels rather than sharing their marker/row. */
-.lane-panel { grid-column: 1 / -1; }
+/* Lane–Emden interior panel (spec §8): a static structure piece independent of the
+   StellarState spine, so it gets its own full-width band (the `.wide` class) rather
+   than sharing the evolution panels' row. */
 /* The always-visible novice framing line under the §8 heading. The panel spans
    the full grid width, so cap the prose at a readable measure (it would stretch
    edge-to-edge otherwise) and give it room before the canvas/legend row. */
 .lane-intro { max-width: 72ch; margin: 4px 0 14px; }
 .lane-intro b { color: #cbd2e0; font-weight: 600; }
 .lane-body {
-  display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: start;
+  display: grid; grid-template-columns: 1fr minmax(220px, 320px); gap: 22px;
+  align-items: start;
 }
+/* Let the canvas column shrink below the canvas's intrinsic width (min-width:0)
+   so the JS-driven responsive resize can size the canvas to the column, not the
+   other way round (avoids a feedback loop). */
+.lane-body > div { min-width: 0; }
 @media (max-width: 800px) { .lane-body { grid-template-columns: 1fr; } }
-#lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; }
+#lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; max-width: 100%; }
 .lane-controls { min-width: 0; }   /* let the readout values wrap, not overflow */
 /* The updating "what does this n mean physically" line under the n slider. */
 .lane-caption {
@@ -87,12 +114,13 @@ main {
   margin: 2px 0 12px; min-height: 1.4em;
 }
 
-/* Spectrum panel (spec §5): a full-width band like the Lane–Emden panel — the
-   wavelength axis wants width, and it's a derived view (of Teff/log g/[Fe/H]),
-   not part of the 2×2 evolution grid. */
-.spectrum-panel { grid-column: 1 / -1; }
+/* Spectrum panel (spec §5): a full-width band (the `.wide` class) — the wavelength
+   axis wants width, and it's a derived view (of Teff/log g/[Fe/H]), not part of the
+   compact evolution panels. The canvas display size is driven from JS (a
+   ResizeObserver → spectrum.resize), since fitCanvas sets an inline width that
+   would override a stylesheet width:100%; max-width is just an overflow guard. */
 #spectrum-canvas {
-  display: block; width: 100%; max-width: 720px; margin: 0 auto;
+  display: block; margin: 0 auto; max-width: 100%;
   background: #05070d; border-radius: 8px;
 }
 /* The honest parameter line under the spectrum (and the no-[Fe/H]-axis note). */
@@ -105,10 +133,9 @@ main {
 .spectrum-panel .legend i { width: 22px; }
 
 /* Broadband SED panel (spec §5): the full-EM zoom-out of the spectrum — also a
-   full-width band, same canvas/caption/legend treatment as the spectrum panel. */
-.sed-panel { grid-column: 1 / -1; }
+   full-width band, same JS-driven responsive canvas as the spectrum panel. */
 #sed-canvas {
-  display: block; width: 100%; max-width: 720px; margin: 0 auto;
+  display: block; margin: 0 auto; max-width: 100%;
   background: #05070d; border-radius: 8px;
 }
 .sed-panel .legend { justify-content: center; }
@@ -289,3 +316,39 @@ main {
   color: var(--muted); white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Draggable panels (layout.js) ------------------------------------------
+   The grip injected into each panel's <h2> is the ONLY drag handle, so the
+   sliders/buttons/“?” glyphs inside a panel stay interactive. touch-action:none
+   is essential on touch: without it a touch-drag scrolls the page instead of
+   moving the panel (phones are the headline device). */
+.drag-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; margin: -2px 6px -2px -4px;
+  font-size: 15px; line-height: 1; color: var(--muted);
+  border-radius: 6px; vertical-align: middle;
+  cursor: grab; touch-action: none; user-select: none;
+  -webkit-user-select: none;
+}
+.drag-grip:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+.drag-grip:active { cursor: grabbing; }
+
+/* The panel being dragged: lifted out of flow and floated under the pointer.
+   pointer-events:none so it never intercepts the hit-test used to choose the drop
+   slot. left/top/width/height are set inline by layout.js. */
+.panel.dragging {
+  position: fixed; z-index: 1000; margin: 0;
+  pointer-events: none;
+  border-color: var(--accent);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
+  opacity: 0.97;
+}
+/* The gap the dragged panel leaves behind — holds its slot in the flow (and shows
+   where it will land) so the other panels don't jump until the drop point moves. */
+.panel-placeholder {
+  border: 2px dashed var(--line); border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+/* While any panel is in flight, kill text selection and show the grab cursor
+   everywhere so a fast drag doesn't select surrounding prose. */
+body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-select: none; }

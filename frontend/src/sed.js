@@ -88,13 +88,16 @@ const COL_CURVE = "#eef2f9";
 const COL_GRID = "#283149";
 
 export function createSED(canvas) {
-  if (!canvas) return { update() {} };
+  if (!canvas) return { update() {}, resize() {} };
   const caption = document.getElementById("sed-caption");
-  const { ctx, W, H } = fitCanvas(canvas, 720, 300);
+  // W/H/plotW are `let` so resize() can re-fit to a new display width; xOf/yOf
+  // capture the plotW/W/H bindings, so they track the new size on the next draw().
+  let ctx, W, H, plotW;
+  ({ ctx, W, H } = fitCanvas(canvas, 720, 300));
+  plotW = W - PAD_L - PAD_R;
 
   let teff = null;
 
-  const plotW = W - PAD_L - PAD_R;
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
   // y maps decades-below-peak: 0 dex (peak) at the top, −FLOOR_DECADES at the axis.
@@ -107,6 +110,14 @@ export function createSED(canvas) {
     teff = state.Teff_K;
     draw();
     renderCaption();
+  }
+
+  // Re-fit to a new display size (responsive layout) and redraw from the last Teff.
+  function resize(cssW2, cssH2) {
+    if (cssW2 === W && cssH2 === H) return;
+    ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
+    plotW = W - PAD_L - PAD_R;
+    draw();
   }
 
   function draw() {
@@ -269,5 +280,5 @@ export function createSED(canvas) {
       `is a floor too (real stellar radio sits far above it). Evocative at the edges.`;
   }
 
-  return { update };
+  return { update, resize };
 }

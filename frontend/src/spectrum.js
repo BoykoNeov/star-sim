@@ -76,9 +76,12 @@ const COL_GRID = "#283149";
 export function createSpectrum({ api }) {
   const canvas = document.getElementById("spectrum-canvas");
   const caption = document.getElementById("spectrum-caption");
-  if (!canvas) return { update() {} };
+  if (!canvas) return { update() {}, resize() {} };
 
-  const { ctx, W, H } = fitCanvas(canvas, 720, 260);
+  // W/H are `let` so resize() can re-fit to a new display width; draw() rebuilds
+  // its xOf/yOf from the current W/H each call, so a resize just needs a redraw.
+  let ctx, W, H;
+  ({ ctx, W, H } = fitCanvas(canvas, 720, 260));
 
   let data = null;        // last /spectrum result
   let lastKey = null;     // dedup: skip a refetch if (Teff,logg,feh) didn't move
@@ -311,5 +314,14 @@ export function createSpectrum({ api }) {
     caption.textContent = txt;
   }
 
-  return { update };
+  // Re-fit to a new display size (responsive layout); redraw + re-caption from the
+  // last /spectrum result (kept in `data`). No refetch — same star, new pixels.
+  function resize(cssW2, cssH2) {
+    if (cssW2 === W && cssH2 === H) return;
+    ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
+    draw();
+    renderCaption();
+  }
+
+  return { update, resize };
 }

@@ -10,6 +10,7 @@ import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
+import { makeSortable } from "./layout.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -68,8 +69,9 @@ const comp = createComp(document.getElementById("comp-canvas"));
 // The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
 // not a consumer of it — it's driven by the polytropic index n alone and owns its
 // own control + fetch. It's instantiated here but deliberately never wired into
-// refresh()/refreshTrack(): it does not move with mass/[Fe/H]/age.
-createLane({ api: API });
+// refresh()/refreshTrack(): it does not move with mass/[Fe/H]/age. (Kept as a ref
+// only so the responsive-layout code below can call lane.resize().)
+const lane = createLane({ api: API });
 
 // The spectrum panel (spec §5) is a live consumer of the StellarState — it reads
 // the marker's (Teff, log g, [Fe/H]) and fetches the matching synthetic spectrum.
@@ -85,6 +87,43 @@ const spectrum = createSpectrum({ api: API });
 // owns no fetch and just redraws from the live state inside refresh(). It is the
 // zoomed-all-the-way-out companion to the synthetic-spectrum panel.
 const sed = createSED(document.getElementById("sed-canvas"));
+
+// --- draggable, responsive panel layout --------------------------------------
+// The panels live in a flex-wrap container (styles.css) that auto-stacks them to
+// the viewport width — several columns on a desktop, a single vertical column on a
+// phone. makeSortable lets the user drag a panel by its grip to reorder; flow
+// layout re-packs around the drop so panels never overlap, and the order persists.
+const sortable = makeSortable(document.querySelector("main"));
+const resetLayoutBtn = document.getElementById("reset-layout");
+if (resetLayoutBtn) resetLayoutBtn.addEventListener("click", () => sortable.reset());
+
+// Make the plot canvases track their panel's width. fitCanvas sets an INLINE width
+// that overrides any stylesheet width, so the canvases cannot be made responsive in
+// CSS alone — each plot module exposes resize(w,h), and a ResizeObserver on the
+// canvas's parent calls it with the available width (capped at the panel's design
+// max, floored so a phone still gets a usable plot). Without this the 720px-wide
+// spectrum/SED canvases overflow a ~360px phone panel. The 3D star is exempt:
+// star.js already resizes its WebGL renderer from the canvas box every frame.
+const RESPONSIVE = [
+  { id: "hr-canvas", mod: hr, maxW: 360, h: 260 },
+  { id: "comp-canvas", mod: comp, maxW: 360, h: 280 },
+  { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 260 },
+  { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
+  { id: "lane-canvas", mod: lane, maxW: 380, h: 300 },
+];
+for (const r of RESPONSIVE) {
+  const canvas = document.getElementById(r.id);
+  if (!canvas || !r.mod || typeof r.mod.resize !== "function") continue;
+  const parent = canvas.parentElement;
+  const ro = new ResizeObserver((entries) => {
+    // Don't fight a panel that's locked to a fixed size mid-drag.
+    const panel = canvas.closest(".panel");
+    if (panel && panel.classList.contains("dragging")) return;
+    const avail = Math.floor(entries[0].contentRect.width);
+    r.mod.resize(Math.max(140, Math.min(r.maxW, avail)), r.h);
+  });
+  ro.observe(parent);
+}
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges

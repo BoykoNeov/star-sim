@@ -61,9 +61,12 @@ export function createLane({ api }) {
   const marksEl = document.getElementById("lane-n-marks");
   const caption = document.getElementById("lane-caption");
   const readout = document.getElementById("lane-readout");
-  if (!canvas) return { };
+  if (!canvas) return { resize() {} };
 
-  const { ctx, W, H } = fitCanvas(canvas, 380, 300);
+  // W/H are `let` so resize() can re-fit to a new display width; draw() rebuilds
+  // its xOf/yOf from the current W/H each call, so a resize just needs a redraw.
+  let ctx, W, H;
+  ({ ctx, W, H } = fitCanvas(canvas, 380, 300));
 
   let profile = null;   // last /polytrope result
 
@@ -247,9 +250,16 @@ export function createLane({ api }) {
     request(n, true);
   });
 
+  // Re-fit to a new display size (responsive layout) and redraw the last profile.
+  function resize(cssW2, cssH2) {
+    if (cssW2 === W && cssH2 === H) return;
+    ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
+    draw();
+  }
+
   // first paint
   caption.textContent = meaningOf(N_DEFAULT);
   request(N_DEFAULT, true);
 
-  return { };
+  return { resize };
 }

@@ -22,20 +22,23 @@
     <h1>Star Simulator <span class="tag">Phase 5 · spectra</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
     </h1>
+    <button id="reset-layout" class="reset-layout" type="button"
+      title="Restore the original panel arrangement">Reset layout</button>
+    <span class="layout-hint" aria-hidden="true">Tip: drag a panel by its ⠿ handle to rearrange.</span>
   </header>
 
   <main>
-    <section class="panel star-panel">
+    <section class="panel star-panel" data-panel-id="star">
       <h2>3D star <span class="help" tabindex="0" data-tip="A live, physically-motivated 3D star — every visual driven by a real StellarState number (spec §7). COLOR: the true blackbody color at Teff (Planck spectrum → CIE → sRGB), so the Sun is warm near-white, cool stars orange-red, hot stars blue-white. GRANULATION: convective cells whose size comes from the pressure scale height H_p ∝ Teff/g — a compact dwarf shows fine granules, a low-gravity giant only a handful of enormous cells. LIMB DARKENING dims the disk toward its edge; the surface slowly rotates (a plausible visual rate — the v/vcrit=0 grid carries no real rotation). CORONA: the additive outer glow tracks the activity proxy — bright and far-reaching for cool active stars, near-absent for hot ones. It is EVOCATIVE, NOT PREDICTIVE: real coronae and winds are magnetic or radiative structure we are not modeling. On-screen SIZE scales with radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout).">?</span></h2>
       <canvas id="star-canvas"></canvas>
     </section>
 
-    <section class="panel hr-panel">
+    <section class="panel hr-panel" data-panel-id="hr">
       <h2>HR diagram <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age.">?</span></h2>
       <canvas id="hr-canvas"></canvas>
     </section>
 
-    <section class="panel comp-panel">
+    <section class="panel comp-panel" data-panel-id="comp">
       <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Three views: H/He/metals (the bulk make-up); a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals), with a linear/log toggle; and a light-element view (lithium, beryllium, fluorine) on a log scale, where you watch the fragile light elements burn away as the star evolves. (Boron is absent: the only boron isotope in this stellar model is radioactive and present at essentially zero — there is no stable boron to show.)">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">
         <button type="button" class="mode-btn active" data-mode="bulk">H · He · metals</button>
@@ -77,7 +80,7 @@
       </div>
     </section>
 
-    <section class="panel controls-panel">
+    <section class="panel controls-panel" data-panel-id="controls">
       <h2>Controls</h2>
 
       <label for="mass">Mass
@@ -117,7 +120,7 @@
       <p class="note" id="status"></p>
     </section>
 
-    <section class="panel spectrum-panel">
+    <section class="panel spectrum-panel wide" data-panel-id="spectrum">
       <h2>Spectrum <span class="help" tabindex="0" data-tip="The star's synthetic spectrum — flux versus wavelength, with real absorption lines — for the current effective temperature, surface gravity and metallicity. This is the spectrum the 3D star's single colour is the eye's average of: integrate this curve against the eye's response and you get that one pixel. Interpolated from a grid of model-atmosphere spectra (MSG / Townsend) baked once into the backend. The visible band (3800–7800 Å) is painted in its true per-wavelength colour, so you see a spectrograph's rainbow with dark absorption lines notched into it; the ultraviolet and near-infrared flanks are shown muted grey. Flux is normalized to each spectrum's own peak — the absolute brightness (which varies thousands-fold from cool to hot stars) lives in the 3D star and the luminosity readout; here the story is the CONTINUUM SLOPE (hot stars rise toward the blue, cool stars toward the red) and the LINES. Watch the hydrogen Balmer lines (Hα, Hβ, …) deepen to a maximum around A-type stars (~9500 K) and fade in both hotter and cooler stars, while the Ca II H&K and Na D lines are strong in cool stars and vanish when hot. In the hottest stars the helium lines take over — neutral He I (4471 Å) in B and A stars, and singly-ionized He II (4686 Å) only in O stars (above ~30000 K, where the spectra come from the OSTAR2002 hot-star grid spliced onto the high-temperature end); their cool-blue guides appear only once the star is hot enough to show them. At the cool end the reverse happens: below ~4000 K the gas is cool enough for molecules, and titanium-oxide (TiO) bands carve broad troughs across the optical spectrum, with vanadium oxide (VO) joining in the coolest M stars — these bands deepen fast as the star cools, so the spectra below 3500 K come from the Göttingen/PHOENIX grid spliced onto the LOW-temperature end (the coolest M-dwarfs and red-giant tips, ~2800 K, then show real molecular bands rather than a frozen 3500 K spectrum); their warm-tinted guides appear only once the star is cool enough. The dashed gold line is the Wien peak (the blackbody's brightest wavelength), shown when it falls in range.">?</span></h2>
       <canvas id="spectrum-canvas"></canvas>
       <p class="note spectrum-caption" id="spectrum-caption"></p>
@@ -131,7 +134,7 @@
       </div>
     </section>
 
-    <section class="panel sed-panel">
+    <section class="panel sed-panel wide" data-panel-id="sed">
       <h2>Broadband SED · gamma → radio <span class="help" tabindex="0" data-tip="The whole electromagnetic spectrum, zoomed all the way out — the star's spectral energy distribution (SED) from gamma rays to radio, across about fourteen decades of wavelength on a log–log scale. The curve is the Planck blackbody at the star's effective temperature, normalized to its own peak; the seven EM bands are shaded (γ-ray · X-ray · ultraviolet · visible · infrared · microwave · radio). Notice how thin the visible band is — the slice your eye sees, and the slice the detailed spectrum panel above covers (marked by the gold bracket), is a sliver of the whole. The dashed gold line is the Wien peak: drag the mass slider and watch it sweep from the ultraviolet (hot O stars) through the visible (the Sun) into the infrared (cool M stars). HONEST ABOUT THE EDGES (like the corona layer): a real star is NOT a blackbody at the extremes. Thermal emission is negligible in X-rays and gamma rays, so the curve simply floors there — real stellar high-energy light comes from the magnetic corona and flares (activity), which this simulator does not model. And the blackbody's gently sloping radio tail is a floor, not the real radio flux: actual stellar radio emission (from the optically-thick chromosphere and corona) sits orders of magnitude above it. The honest, model-free object here is the photospheric blackbody; the detailed synthetic-spectrum panel above is its optical close-up.">?</span></h2>
       <canvas id="sed-canvas"></canvas>
       <p class="note spectrum-caption" id="sed-caption"></p>
@@ -143,7 +146,7 @@
       </div>
     </section>
 
-    <section class="panel lane-panel">
+    <section class="panel lane-panel wide" data-panel-id="lane">
       <h2>Interior structure · Lane–Emden <span class="help" tabindex="0" data-tip="A live-computed STATIC polytrope (spec §8) — not evolution, and deliberately NOT the actual interior of the star above. It solves the dimensionless Lane–Emden equation θ″ + (2/ξ)θ′ = −θⁿ outward from the centre to the first zero ξ₁ (the surface), for a polytrope P = K·ρ^(1+1/n). The density profile ρ/ρc = θⁿ is the payoff: raise the index n and the star becomes far more centrally concentrated. n is yours to set — it is independent of the mass/[Fe/H]/age controls. Closed forms (n=0,1,5) and Chandrasekhar's tabulated ξ₁ validate the integrator in the backend tests.">?</span></h2>
       <p class="hint lane-intro">
         The simplest possible model of a star: gravity pulling inward, gas

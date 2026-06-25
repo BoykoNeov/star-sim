@@ -19,7 +19,11 @@ const PAD_L = 50;
 
 export function createHR(canvas, cssW = 300, cssH = 260) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
-  const { ctx, W, H } = fitCanvas(canvas, cssW, cssH);
+  // W/H are `let` (not destructured const) so resize() can re-fit the canvas to
+  // a new display size and the xOf/yOf closures below — which capture the W/H
+  // *bindings* — pick up the new values on the next draw().
+  let ctx, W, H;
+  ({ ctx, W, H } = fitCanvas(canvas, cssW, cssH));
 
   // Teff reversed: hot (high logT) on the LEFT.
   const xOf = (logT) =>
@@ -100,5 +104,13 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
 
-  return { setTrack, update };
+  // Re-fit to a new display size (the responsive layout calls this when the
+  // panel's width changes) and redraw from the retained track + marker.
+  function resize(cssW2, cssH2) {
+    if (cssW2 === W && cssH2 === H) return;
+    ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
+    draw();
+  }
+
+  return { setTrack, update, resize };
 }

@@ -85,7 +85,11 @@ const LIGHT_ELEMS = ["Li", "Be", "F"];
 
 export function createComp(canvas, cssW = 300, cssH = 280) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
-  const { ctx, W, H } = fitCanvas(canvas, cssW, cssH);
+  // W/H are `let` (not destructured const) so resize() can re-fit to a new
+  // display size; layout()/region()/drawAxis() all read W/H at draw time, so
+  // they pick up the new size on the next draw().
+  let ctx, W, H;
+  ({ ctx, W, H } = fitCanvas(canvas, cssW, cssH));
 
   let track = null;    // array of StellarState (age-independent, set per mass/feh)
   let marker = null;   // current StellarState (moves as age scrubs)
@@ -96,6 +100,12 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   function update(state) { marker = state; draw(); }
   function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
+  // Re-fit to a new display size (responsive layout) and redraw from retained state.
+  function resize(cssW2, cssH2) {
+    if (cssW2 === W && cssH2 === H) return;
+    ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
+    draw();
+  }
 
   // Shared geometry both views build on: the EEP→x map and the two sub-chart
   // bands (core on top, surface below).
@@ -336,5 +346,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update, setMode, setScale };
+  return { setTrack, update, setMode, setScale, resize };
 }

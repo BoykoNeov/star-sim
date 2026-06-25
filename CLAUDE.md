@@ -57,7 +57,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   (≥1 MESA run), and `requires_mist_lowz` (the m100/m075 grids bracketing the
   MESA sample Z).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,color,canvas}.js` (`comp.js` is the §5.4 composition
+  `src/{main,star,hr,comp,lane,spectrum,sed,color,canvas,layout}.js` (`layout.js` is the
+  draggable/responsive **dashboard** layer — a reorder-in-flow sortable over the flex-wrap
+  panel container; see the "draggable panels" Done bullet) (`comp.js` is the §5.4 composition
   panel — **three** views toggled by `setMode`: a **bulk H/He/metals** view, a Phase 4
   **per-element detail** view (fourteen metals Li·C·N·O·Ne·Na·Mg·Al·Si·P·S·Ca·Ti·Fe;
   `mode="cno"` id kept) with independent core/surface scales **and a linear/log y-axis
@@ -824,6 +826,45 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   O star / 0.2 M☉ M-dwarf + full-page layout: Wien peak sweeps correctly, both tails floor honestly, no
   JS errors. No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); the
   pytest suite is **unchanged** (137) since this is frontend-only.
+- **Done (UX, draggable + responsive panel dashboard — frontend-only):** the user asked to make the
+  panels **movable, auto-stack to screen width (phone → vertical, desktop → several columns), and never
+  overlap when moved.** The advisor confirmed the only model that satisfies all three at once is a
+  **reorder-in-RESPONSIVE-FLOW sortable, NOT free-floating windows**: flow layout can never overlap, and
+  the column count is a pure function of viewport width (CSS flex-wrap), so "vertical on a phone" is free
+  — persisting absolute x/y would have to be discarded and re-packed on every resize, which *is* a flow
+  layout the long way round. So `main` went grid→**flex-wrap** (compact panels `flex:1 1 320px;
+  max-width:384px` → ~1 per ~340px = phone single column; the three full-width bands keep a `.wide`
+  100%-basis row), and new **`layout.js`** is the sortable: a drag **grip** (⠿) injected into each panel's
+  `<h2>` is the ONLY handle (so the sliders/buttons/`?` glyphs stay interactive — a whole-panel handle
+  would swallow them), **Pointer Events** (not flaky HTML5 DnD), a placeholder holding the slot while the
+  panel floats `position:fixed`, **2-D nearest-center** drop detection, and order **persisted to
+  localStorage** keyed by a new `data-panel-id` (restore applies the saved order then **appends any panel
+  NOT in it** so a future phase's panel never silently vanishes; a header **Reset layout** button clears
+  it). **The advisor flagged that the canvases were the real work, and the phone callout pulled them
+  in-scope:** `fitCanvas` sets `canvas.style.width` *inline*, which **overrides** the stylesheet
+  `width:100%` (those rules were dead) — so CSS alone can't make the 720 px spectrum/SED canvases
+  responsive; on a phone they overflowed a ~360 px panel. Fix: each 2-D plot module (`hr/comp/spectrum/
+  sed/lane`) made its `W/H` (and sed's `plotW`) **`let` not `const`** and gained a **`resize(w,h)`** that
+  re-runs `fitCanvas` + redraws **from retained state** (track/data/teff — no refetch); `main.js` drives
+  them with a **`ResizeObserver`** per canvas → `resize(min(maxW, availWidth), h)`, **skipping a panel
+  that's `.dragging`** (its box is locked mid-drag). The **3D star needed no JS** — `star.js` already
+  re-fits its WebGL renderer from `clientWidth/Height` every frame, so just a responsive CSS box
+  (`width:min(320px,100%); aspect-ratio:1`). **Touch is the headline device, and verifying it caught a
+  real bug** (advisor insisted — my first pass tested drag with a *mouse* only): edge **auto-scroll**
+  during a drag (so a phone user can reach an off-screen panel in the tall single column — without it
+  `touch-action:none`+pointer-capture freeze the page mid-drag) used `window.innerHeight`, which under
+  mobile emulation / a pinch-zoomed visual viewport is a **different coordinate space than the pointer's
+  `clientY`** (measured 1321 vs the 844 CSS-px layout viewport) → the bottom-edge test could never fire;
+  fixed to **`document.documentElement.clientHeight`** (same space as `clientY`). Verified via **Playwright
+  bundled Chromium** (the `chrome --headless` hijack caveat) on the **real served UI**: desktop mouse
+  (4-across, drag-reorder, persist, reset, zero overlaps, no canvas overflow) **and a real CDP touch
+  drag** at 390 px (`Input.dispatchTouchEvent`, `hasTouch`) — touch reorder works, and auto-scroll reaches
+  `scrollY≈1035`, carrying a panel past 3 off-screen panels; phone = clean 7-row single column, no canvas
+  overflow, no console errors. **Two known limitations (advisor, accepted):** other panels' canvases can
+  re-fit mid-drag when a row's fill changes (cosmetic jank, no error); ultra-wide monitors leave dead
+  space right of the 4 capped compact panels (the deliberate text-readability cap, not a bug). No JS test
+  harness → the Playwright pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** —
+  frontend-only, no backend/API/spine touch.
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
