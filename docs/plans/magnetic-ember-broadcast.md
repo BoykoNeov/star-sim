@@ -1,0 +1,194 @@
+# Plan: Non-thermal SED layer — coronal soft-X-ray + radio (Phase 5)
+
+## Status: PLANNED (not started). Approved scope, design locked, no code written.
+
+## Context
+
+The broadband SED panel (`frontend/src/sed.js`, the "gamma → radio" view) is
+done and shipped: it draws the **Planck blackbody** Fλ across ~14 decades and is
+honest that the photosphere floors at the EM extremes — the caption already says
+*"real X-ray/γ-ray comes from the magnetic corona and flares, not modeled here,
+and its radio tail is a floor too (real stellar radio sits far above it)."*
+
+The user then asked: **"can we also model this, is there an accepted scientific
+model for that?"** — i.e. model the non-thermal emission the blackbody floors out.
+
+**Answer: yes, but it is a fundamentally different KIND of model**, and that
+distinction is the whole story. The photosphere is a clean function of
+`(Teff, logg, [Fe/H])`. The X-ray/radio emission is **magnetic-activity-driven**
+— governed by *rotation and age* (the dynamo), not by the SED's inputs — and the
+accepted models are empirical scaling relations with large scatter that split by
+stellar type. Verified-correct science (advisor-checked the load-bearing claims):
+
+- **Cool stars (F/G/K/M, convective dynamo, "solar-like"):**
+  - **Rotation–activity** (Pizzolato 2003; Wright 2011): `L_X/L_bol` set by the
+    Rossby number `Ro = P_rot/τ_conv`. Fast rotators **saturate** at
+    `L_X/L_bol ≈ 10⁻³` (Wright 2011: log ≈ −3.1); slower rotators fall as `~Ro⁻²`.
+    Coupled with **gyrochronology** (Skumanich, `~t^−1/2`) → an age→activity→L_X chain.
+  - **Coronal spectrum:** optically-thin thermal plasma at 1–10 MK (APEC/MEKAL) —
+    a soft-X-ray bump, line-dominated, *not* a blackbody.
+  - **Güdel–Benz** (Güdel & Benz 1993; Benz & Güdel 1994): `L_X/L_R ≈ 10¹⁵·⁵ Hz`
+    — a tight radio↔X-ray correlation that maps an X-ray level into the radio.
+- **Hot stars (O/B, no dynamo — different physics entirely):**
+  - X-rays from **embedded wind shocks:** `L_X ≈ 10⁻⁷ L_bol` (Berghöfer 1997;
+    Nazé 2009). A near-constant, narrow value, NOT the activity envelope.
+  - **Thermal wind radio** (free–free): `S_ν ∝ ν^+0.6` (Panagia–Felli 1975;
+    Wright–Barlow 1975), set by the **mass-loss rate Ṁ**.
+- **Flares & γ-rays:** stochastic — flare energies follow `dN/dE ∝ E⁻²`, so they
+  do NOT belong on a *static* SED. True stellar γ is flare-only / exotic; for a
+  normal star the γ band has no steady-state value.
+
+## The deciding finding (the honesty gate)
+
+Before drawing anything, we checked **what the sim's `activity` proxy is actually
+computed from.** In all three providers (`mist.py:943`, `stub.py:137`,
+`mesa.py:440`) it is, identically:
+
+```python
+# visual proxy (§7), explicitly evocative: cool stars more chromospherically
+# active than hot ones. v/vcrit=0.0 grid -> no modeled rotation.
+activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
+```
+
+A **pure linear ramp in Teff** — no rotation, no age, no Rossby number. So feeding
+`activity` into Pizzolato/Wright would produce a **fake `L_X`** — `(6500−Teff)/3500`
+wearing a lab coat. That is exactly the project's recurring "label a non-feature"
+trap (boron-b8, VO 7400, invisible-Na). **Conclusion: we cannot honestly draw a
+single X-ray VALUE for a given star.** What we *can* draw honestly:
+
+- ✅ a **shaded BAND** — the saturated→quiet envelope (`L_X/L_bol` from ~10⁻³ to
+  ~10⁻⁷) — which shows *the range the science permits* without claiming a value
+  we don't have. (Güdel–Benz maps the same band into the radio.)
+- ✅ the **hot-star wind radio**, the ONE genuinely *predictive* piece, from the
+  real on-disk mass-loss rate `star_mdot` (free–free `S_ν ∝ ν^+0.6`).
+- ❌ a single X-ray curve placed by `activity` → dishonest.
+- ❌ γ-rays — stay floored & labeled in every version.
+
+This yields **two epistemic tiers** in one panel, which is itself the teaching
+point: an *evocative band* (cool-star corona, because we lack rotation/age) vs a
+*data-grounded prediction* (hot-star wind radio, from real Ṁ). Render them
+distinctly (e.g. hatched/translucent ribbon for the band; a solid line for the
+wind tail).
+
+## Approved scope (the user chose "Band + real wind radio")
+
+Draw, on the existing SED panel:
+1. a cool-star coronal **soft-X-ray activity band** + its Güdel–Benz **radio band**
+   (the evocative envelope tier), and
+2. the hot-star **wind free–free radio** rising above the blackbody floor (the
+   real-Ṁ predictive tier),
+with γ staying floored and explicitly labeled as out of scope. Everything carries
+the "evocative / activity-driven, not predictive" framing already used for the
+3D corona layer (spec §7, §11 open question).
+
+## Architecture — still a sibling, mostly frontend
+
+`sed.js` stays a **sibling to the §3 spine** (driven by the marker's state, owns
+no fetch). The cool-star band needs only `L_lsun` + `Teff_K`, both already in
+`StellarState` → **frontend-only**. The hot-star wind radio needs **Ṁ**, which is
+NOT in `StellarState` today (it lives in `_Track` + the `.npz` cache as
+`star_mdot`, added at `CACHE_VERSION 9` for the endgame work but deliberately not
+threaded into the blend path or the spine). So the feature splits cleanly:
+
+### Chunk 1 — cool-star coronal X-ray + radio BAND (frontend-only)
+
+- In `sed.js`, draw a shaded ribbon across the **soft-X-ray band** (~0.1–10 nm)
+  whose vertical extent is the `L_X/L_bol` envelope **10⁻⁷ … 10⁻³** (~4 decades),
+  expressed on the existing per-peak Fλ axis (see "Normalization" below).
+- Map that ribbon into the **radio band** via Güdel–Benz (`L_R = L_X / 10¹⁵·⁵ Hz`)
+  — a second shaded ribbon at the long-λ end.
+- **Type-dependence (must be honest):** the dynamo corona is a *cool-star* (F/G/K/M)
+  phenomenon. For hot stars (O/B) the X-ray collapses to the narrow wind-shock value
+  `~10⁻⁷ L_bol`; there is also a known **A-star / early-F X-ray gap** (no dynamo, no
+  strong wind) and a cool-giant **corona–wind dividing line** (Linsky–Haisch) where
+  coronal X-rays fade. v1 can: (a) show the full 10⁻⁷…10⁻³ band for cool dwarfs,
+  (b) collapse it toward 10⁻⁷ for hot stars, and (c) caption the A-gap / giant
+  caveats rather than draw them. Decide the exact Teff/logg gating in the build;
+  do NOT pretend a value where the physics is a gap.
+- Label the ribbon with the dimensionless `L_X/L_bol` range directly (annotation),
+  so it reads as "an order-of-magnitude range," not pixel-precise flux.
+- Pedagogy: legend entry + `?` tooltip — rotation–activity, saturation, why a band
+  not a line ("we don't model rotation/age"), Güdel–Benz, γ still empty.
+
+### Chunk 2 — hot-star wind free–free radio from real Ṁ (backend + frontend)
+
+The one data-grounded, predictive piece. **Requires exposing Ṁ on the spine.**
+
+- **Backend (§3 spine touch — the heavier part):**
+  - Add `mdot_msun_yr: float | None = None` to `StellarState` (an *optional* visual
+    field like `activity`/`v_rot_kms`, so providers without it degrade gracefully;
+    keeps `EXPECTED_KEYS` additive — update the API/test key sets).
+  - Thread `star_mdot` from `_Track` through `_grid_window` / `_blend_windows`
+    (linear mix — current mass-loss is smooth along a single track; the endgame
+    deliberately did NOT mix it, but the SED needs the *blended* value at the
+    marker, so this is a new, intentional mix) into `_state_from_row`. **No
+    `CACHE_VERSION` bump** — `star_mdot` is already in the cache (v9); only the
+    in-memory blend + emit changes.
+  - Stub/MESA: `mdot_msun_yr=None` (stub has no mass loss; MESA tutorial runs may
+    have `star_mdot` — optional follow-up, not required for v1).
+  - Tests: `mdot` present & ≤0 (MIST logs mass *loss* as negative `star_mdot`),
+    grows by orders of magnitude into the RGB/AGB/WR regimes; the feh-blend path
+    carries it (the recurring feh=0 short-circuit gap — verify off-grid).
+- **Frontend:** in `sed.js`, when |Ṁ| is significant, draw the free–free tail
+  `L_ν ∝ (Ṁ/v∞)^(4/3) · ν^+0.6`. In Fλ terms `Fλ ∝ λ^−2.6` (since `Fν ∝ ν^0.6`
+  and `Fλ = Fν·c/λ²`) — a **shallower** slope than the blackbody R–J floor
+  (`λ^−4`), so the wind tail visibly **rises above the floor** at radio/mm
+  wavelengths. That is the payoff made concrete: "real radio sits above the
+  blackbody floor," now drawn from real data for a mass-losing star. Draw it as a
+  **solid** line (the data-grounded tier) vs the hatched evocative band.
+- **The v∞ assumption (flag, like the PoWR WR work in `smoldering-cinder-gateway`):**
+  free–free flux needs the terminal wind velocity v∞, which MIST does not provide.
+  Assume `v∞ ∝ v_esc` (Lamers & Cassinelli: ~2.6 v_esc for hot stars) computed from
+  `M`/`R`, or a fixed typical 2000 km/s for OB. Document the assumption in code +
+  caption; absolute distance cancels under per-peak normalization (we plot `L_ν`,
+  not a flux at a distance).
+
+## Normalization (the trickiest design point — solve it before drawing)
+
+The panel's y-axis is **decades below the blackbody Fλ peak**. To place an
+*integrated* luminosity ratio (`L_X/L_bol`) or a *spectral* luminosity (`L_ν`) on
+that axis honestly:
+
+- Relate `F_peak` to `L_bol = ∫Fλ dλ`. For a blackbody there is a fixed ratio
+  between `B_λ,peak` and `∫B_λ dλ` (`σT⁴/π` per sr), so `L_bol ≈ F_peak · Δλ_eff`
+  with a known `Δλ_eff(T)`. This converts a dimensionless `L_X/L_bol` into an Fλ
+  level (a flux spread over the emitting band's Δλ): `log10(Fλ_X/F_peak) =
+  log10(f_X) + log10(L_bol/F_peak) − log10(Δλ_band)`.
+- **Risk:** this depends on a band-width assumption and can read as arbitrary pixel
+  precision. **Mitigation (decide in build):** prefer annotating the band with the
+  dimensionless `L_X/L_bol` ratio + Güdel–Benz `L_R` directly, using the Fλ
+  placement only for rough vertical positioning, and keep the ribbon visibly an
+  *order-of-magnitude range* (hatched, wide) — never a crisp line.
+
+## Open questions / risks (resolve during build)
+
+1. **Visual clutter.** The panel already carries 7 bands + Wien peak + the detail
+   bracket. Two ribbons + a wind tail risk overload. Consider: only draw the
+   cool-band when cool/convective, only draw the wind tail when |Ṁ| is significant,
+   and/or a small toggle. Keep the blackbody the visual protagonist.
+2. **Type gating done honestly** (cool dynamo vs hot wind-shock vs A-gap vs giant
+   dividing line) — see Chunk 1. Better to caption a gap than to draw a fake value.
+3. **γ stays empty — keep it explicit.** The feature answers *radio + soft X-ray*;
+   it must not quietly imply it filled the γ end.
+4. **Two-tier rendering must read as two tiers** — distinct styling for the
+   evocative band vs the data-grounded wind line, mirrored in the legend/caption.
+5. **No JS test harness** — the cool-band Chunk 1 is frontend-only, so a Playwright
+   screenshot pass across the spectral sequence is its regression check (as in
+   Phases 2–5). Chunk 2's backend (Ṁ threading) gets real pytest §10 tests.
+6. **Caption rewrite.** The current SED caption *promises* this is unmodeled; once
+   drawn, the caption must flip to describe what the ribbon/wind tail mean and what
+   they still cannot say (the activity value, γ, flares).
+
+## Suggested order
+
+Chunk 1 first (frontend-only, immediate visible payoff, zero spine risk), then
+Chunk 2 (the spine touch + the genuinely predictive wind radio). Each is
+independently shippable and independently honest.
+
+## References (all advisor-verified)
+
+Pizzolato et al. 2003; Wright et al. 2011 (rotation–activity, saturation ≈ 10⁻³·¹);
+Güdel & Benz 1993, Benz & Güdel 1994 (L_X/L_R ≈ 10¹⁵·⁵ Hz); Berghöfer et al. 1997,
+Nazé 2009 (O-star L_X ≈ 10⁻⁷ L_bol); Panagia & Felli 1975, Wright & Barlow 1975
+(thermal wind free–free, S_ν ∝ ν^+0.6); Güdel 2004 (review). Flare distribution
+`dN/dE ∝ E⁻²`. Lamers & Cassinelli 1999 (v∞ ≈ 2.6 v_esc, hot stars).
