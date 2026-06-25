@@ -752,6 +752,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   clamped to 3500 K before); Sun → no TiO guides; no JS errors. Göttingen `.h5` gitignored under
   `data/spectra/grids/` (kept for re-bake); recipe §5b (fetch + grid-choice rationale + findings) + §6 (3-grid
   bake cmd + 142-node cube). Spectrum stays a sibling (`/spectrum` bypasses `PROVIDER` like `/polytrope`).
+- **Done (Phase 5, WR/WD endgame — Chunk 1, backend accessor + classifier):** the first slice of the
+  stellar-endgame gateway (full plan: `docs/plans/smoldering-cinder-gateway.md`). Both endgames are
+  **already on disk** in the MIST tracks — the Wolf–Rayet (FSPS phase 9) and white-dwarf (TPAGB φ5 →
+  post-AGB φ6 cooling) rows are simply clipped by the `phase >= 5` window cutoff — so this is **no new
+  provider**: `endgame(mass, feh)` is a new method on the **`StellarStateProvider` Protocol** returning a
+  new `EndgameResult` dataclass (`provider.py`) `{type, mass_init_msun, feh_init, final_mass_msun,
+  wr_threshold_msun, states: list[StellarState]}`. The route `/endgame` goes **through `PROVIDER`** (an
+  endgame state *is* a `StellarState`) and stays §3-agnostic: MESA/Stub implement `endgame()` returning
+  `type="none"` (NOT a route `hasattr`-sniff — advisor: that's a §3 violation). The result's scalars are
+  gateway *routing metadata* (which renderer, what label), its `states` the §3-clean scrubbable sequence.
+  **`MISTProvider.endgame` snaps BOTH mass AND feh** to the nearest real grid track (no interpolation —
+  §6; advisor: snapping feh is *necessary*, since interpolating it near the WR threshold hits the "phase
+  present on one bracket grid, absent on the other" hazard the plan's risk register flags) and reports the
+  **true snapped** values (verified: req(60,+0.2)→feh +0.0; req(2.7,−0.6)→feh −0.5). **Classification is
+  data-derived** from the snapped track's FSPS phases (never a hardcoded mass cut): φ9 present → **WR**;
+  φ6 present OR final-row `logg > _WD_LOGG`(7.0) → **WD**; ends at the lone φ5 TPAGB-onset row → **SN**
+  (the core-collapse / uncertain-fate dead end — `states=[]`, the pre-collapse supergiant row is a logg≈0
+  artifact); else → **none** (low-mass still-living). **The WR threshold is *scanned* per grid**
+  (`_wr_threshold`): the real fine grid gives onset **+0.5→35, 0.0→48, −0.5→56 M☉** (finer than the
+  coarse 40/50/60 first measured; *slightly non-monotonic at low Z* — m100=56 < m075=58 — so the test
+  asserts the metal-rich trend + brackets, not global monotonicity). **Data plumbing:** `star_mass`
+  (current mass) + `star_mdot` (mass-loss rate) added to `_Track` + `_TRACK_COLS` + the `.npz` cache
+  (**`CACHE_VERSION` 8→9**, one ~107 s reparse) but **deliberately NOT to `_grid_window`/`_blend_windows`**
+  (advisor: the endgame snaps to one track, nothing reads a *blended* current mass). **`StellarState`
+  untouched** (Option B → no `EXPECTED_KEYS` change). `final_mass < initial` confirmed (1 M☉→0.544 WD;
+  2.7@−0.5→0.672 WD; 60 M☉→23.6 stripped WR). **The advisor's "cooling-track monotonic" TRAP** (blocker,
+  Locked decision #4): the WD endgame is NOT monotonic as a whole — the TPAGB pulses (φ5, 601 rows)
+  oscillate everything (*why* we snap), and post-AGB first *contracts to a ~107 kK central star* (Teff
+  RISES) before cooling to 2393 K — so **only `logg` is monotonic over all post-AGB rows**; `Teff`/`L`
+  are monotonic only **past the CSPN Teff peak (the "knee")**, and the test splits on the knee. Age IS
+  strictly increasing over the whole endgame (Chunk 2's log-cooling-age scrub won't fold). Solar WD↔SN
+  boundary measured between **6.5 (WD, logg 8.70) and 7.0 (SN)** — the super-AGB / electron-capture regime.
+  **`_state_from_row` generalized with `eep_origin`** (default ZAMS row; endgame passes its first
+  post-window row) so endgame states report their *continuing* EEP and **reuse the 16-element metals-dict
+  construction** (no drift): the endgame `win` dict is the single snapped track sliced
+  `[track_end+1 .. last-real]` into the same keys `_grid_window` emits, fed straight to `_state_from_row`.
+  New `tests/test_endgame.py` (14 §10 tests: classify across mass×feh, WD phase coverage + cooling-knee
+  monotonicity + age-monotonic + final-mass, WR stripping, SN dead-end, snap-to-true-mass, EEP continues,
+  WR-threshold-by-feh gated `requires_mist_heldout_feh`, off-grid raises, `/endgame` route shape + 422) +
+  always-on stub/MESA "none" tests. **137 tests pass** (was 121). Frontend untouched (Chunks 2–5).
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

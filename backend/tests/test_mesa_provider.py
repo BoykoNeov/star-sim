@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from star_sim.provider import ParameterOutOfRange, StellarStateProvider
+from star_sim.provider import EndgameResult, ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import MESAProvider
 from star_sim.providers.mesa import (
     _build_track,
@@ -126,6 +126,16 @@ def synth_provider(tmp_path) -> MESAProvider:
 def test_satisfies_provider_protocol():
     # runtime_checkable Protocol: structural conformance to the §3 boundary (no data).
     assert isinstance(MESAProvider(), StellarStateProvider)
+
+
+def test_mesa_has_no_endgame():
+    """MESA tutorial runs stop on/near the MS, so MESAProvider exposes no stellar
+    endgame: type='none' for any input (no data load, no snap, no raise). This keeps
+    the /endgame route provider-agnostic (§3) — only MISTProvider has endgame data."""
+    res = MESAProvider().endgame(1.0, 0.0)
+    assert isinstance(res, EndgameResult)
+    assert res.type == "none"
+    assert res.states == []
 
 
 def test_synth_ranges_and_feh(synth_provider):

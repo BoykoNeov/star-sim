@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from star_sim.api import app
-from star_sim.provider import ParameterOutOfRange, StellarStateProvider
+from star_sim.provider import EndgameResult, ParameterOutOfRange, StellarStateProvider
 from star_sim.providers import StubProvider
 from star_sim.state import StellarState
 
@@ -30,6 +30,17 @@ def provider() -> StubProvider:
 def test_stub_satisfies_provider_protocol(provider):
     # runtime_checkable Protocol: structural conformance to the §3 boundary.
     assert isinstance(provider, StellarStateProvider)
+
+
+def test_stub_has_no_endgame(provider):
+    """The stub knows only the main sequence, so it exposes no stellar endgame:
+    type='none', no states. This is what keeps the /endgame route provider-agnostic
+    (§3) — a data-less provider answers honestly instead of the route sniffing which
+    provider it is."""
+    res = provider.endgame(1.0, 0.0)
+    assert isinstance(res, EndgameResult)
+    assert res.type == "none"
+    assert res.states == []
 
 
 def test_sun_anchor(provider):

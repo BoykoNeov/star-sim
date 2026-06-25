@@ -140,6 +140,31 @@ def track(
     return [asdict(st) for st in states]
 
 
+@app.get("/endgame")
+def endgame(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+) -> dict:
+    """(mass, [Fe/H]) -> the stellar endgame past the normal track window: the WR/WD
+    gateway (STAR_SIM_SPEC §6+; docs/plans/smoldering-cinder-gateway.md).
+
+    This DOES go through `PROVIDER` — unlike `/polytrope` and `/spectrum`, an endgame
+    state *is* a `StellarState` (a white dwarf / Wolf-Rayet has a defined Teff, L, R,
+    log g, composition). The route stays provider-agnostic: a provider with no endgame
+    data answers `type="none"` (the §3 boundary holds — the route never asks which
+    provider it is). The response is the `EndgameResult` dataclass with its `states`
+    serialized exactly as the §3 `StellarState` shape (the API adds no fields). The
+    gateway reads `type` (WD / WR / SN / none) to pick the renderer; `states` is the
+    scrubbable endgame sequence (empty for SN / none)."""
+    try:
+        result = PROVIDER.endgame(mass, feh)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+    return asdict(result)
+
+
 @app.get("/polytrope")
 def polytrope(
     n: float = Query(

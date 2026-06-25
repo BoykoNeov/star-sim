@@ -100,7 +100,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..provider import ParameterOutOfRange, ProviderDataMissing
+from ..provider import EndgameResult, ParameterOutOfRange, ProviderDataMissing
 from ..state import StellarState
 from ._vendor import read_mist_models as rmm
 
@@ -182,13 +182,21 @@ DEFAULT_MASSES = (
 # be10 is long-lived) and f19 dominates F (f17/f18 are short-lived) — so summing all
 # isotopes (the project convention) equals the stable value. Same cache reason as the
 # prior bumps: old caches lack the four new columns.
-CACHE_VERSION = 8
+# v9 (Phase 5, WR/WD endgame) added the per-row **current mass** (`star_mass`) and
+# **mass-loss rate** (`star_mdot`) columns — the inputs the stellar-endgame gateway
+# needs: a white dwarf's final mass (initial->final mass relation) and a Wolf-Rayet's
+# wind strength. They are carried on every row (so the cache holds them once), but
+# deliberately NOT mixed in `_grid_window`/`_blend_windows`: the endgame snaps to a
+# single real track and never interpolates across mass/[Fe/H] (§6), so nothing reads
+# a *blended* current mass. Same cache reason as the prior bumps: old v8 caches lack
+# the two new columns, so the bump forces one reparse.
+CACHE_VERSION = 9
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
 # so the format is pure numeric arrays — no pickle.
 _TRACK_COLS = (
-    "age", "logL", "logT", "logR", "logg",
+    "age", "logL", "logT", "logR", "logg", "Mcur", "Mdot",
     "Xs", "Ys", "Xc", "Yc",
     "Lis", "Bes", "Cs", "Ns", "Os", "Fs", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
     "Lic", "Bec", "Cc", "Nc", "Oc", "Fc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
@@ -199,6 +207,12 @@ _TRACK_COLS = (
 # collapses a true grid point to a no-blend short-circuit (the Sun must hit the
 # solar grid exactly, not blend across it).
 _FEH_TOL = 1e-3
+
+# Surface gravity (cgs dex) above which the endgame's last row counts as a
+# degenerate white dwarf. A real WD sits at log g ~7-9; normal/AGB stars never
+# exceed ~5, so 7.0 is a wide, unambiguous floor. Used only to classify a track
+# whose cooling ran but whose FSPS phase code we don't want to over-trust.
+_WD_LOGG = 7.0
 
 
 @dataclass
@@ -217,6 +231,10 @@ class _Track:
     logT: np.ndarray       # log10(Teff / K)
     logR: np.ndarray       # log10(R / R_sun)
     logg: np.ndarray       # log10 surface gravity [cgs dex]
+    # Current mass + mass-loss rate (the endgame's inputs — see CACHE_VERSION v9). Not
+    # blended across mass/[Fe/H]: the endgame snaps to one real track, never interpolates.
+    Mcur: np.ndarray       # current mass [M_sun] (star_mass) — < minit once winds strip
+    Mdot: np.ndarray       # mass-loss rate [M_sun/yr] (star_mdot; signed, <= 0)
     Xs: np.ndarray         # surface H mass fraction
     Ys: np.ndarray         # surface He mass fraction (he4 + he3)
     Xc: np.ndarray         # center H mass fraction
@@ -382,6 +400,8 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         logT=np.asarray(e["log_Teff"], dtype=float),
         logR=np.asarray(e["log_R"], dtype=float),
         logg=np.asarray(e["log_g"], dtype=float),
+        Mcur=np.asarray(e["star_mass"], dtype=float),
+        Mdot=np.asarray(e["star_mdot"], dtype=float),
         Xs=np.asarray(e["surface_h1"], dtype=float),
         Ys=np.asarray(e["surface_he4"], dtype=float)
         + np.asarray(e["surface_he3"], dtype=float),
@@ -742,15 +762,118 @@ class MISTProvider:
         n = int(win["age"].size)
         return [self._state_from_row(win, float(i), mass, feh) for i in range(n)]
 
+    # -- the stellar endgame (WR/WD gateway) — snap-to-track, never interpolate (§6) --
+    def endgame(self, mass: float, feh: float) -> EndgameResult:
+        """The post-window endgame at (mass, [Fe/H]) — see the Protocol docstring.
+
+        Snaps to the nearest real grid track (no cross-mass/[Fe/H] interpolation),
+        classifies it from its FSPS phase content, and exposes the rows *past* the
+        normal `track()` window (everything after `track_end`) as StellarStates:
+
+          * WR  — the track reaches the Wolf-Rayet phase (FSPS 9). states = the WR
+                  wind sub-track (the stripped, ~10^5 K rows).
+          * WD  — the track reaches post-AGB (FSPS 6) or a degenerate endpoint
+                  (final log g > _WD_LOGG). states = thermal pulses (TPAGB, FSPS 5)
+                  -> the ~100 kK central star -> cold-cinder cooling (post-AGB,
+                  FSPS 6), the full scrubbable sequence (the pulses are coherent
+                  because we snapped to one real star, never blended — §6).
+          * SN  — the track just ends at TPAGB onset (one FSPS-5 row, no cooling and
+                  no WR): the core-collapse / uncertain-fate dead end we do NOT
+                  render (states = []; the lone pre-collapse supergiant row is a
+                  low-gravity artifact, not a renderable endgame). At solar this is
+                  ~7 M_sun and up — just above where MIST stops modeling cooling, in
+                  the genuinely-uncertain super-AGB / electron-capture regime.
+          * none — no exposed endgame at all (e.g. a low-mass star still alive at the
+                  grid's end, whose `track_end` is already its last row). states = [].
+        """
+        self._ensure_loaded()
+        j = self._snap_feh_index(feh)               # raises if [Fe/H] is off-grid (§6)
+        grid = self._grids[j]
+        masses = grid.masses
+        if not (masses[0] <= mass <= masses[-1]):
+            raise ParameterOutOfRange(
+                f"mass {mass} M_sun outside the MIST grid "
+                f"[{masses[0]}, {masses[-1]}] at [Fe/H]={grid.feh}"
+            )
+        track = grid.tracks[int(np.argmin(np.abs(masses - mass)))]
+        snapped_mass, snapped_feh = float(track.minit), float(grid.feh)
+
+        phase = track.phase
+        r_last = int(np.where(phase >= 0)[0][-1])   # last real row (drop the -9 sentinel)
+        r0 = track.track_end + 1                    # first row past the normal window
+        final_mass = float(track.Mcur[r_last])
+        wr_threshold = self._wr_threshold(grid)
+
+        if bool(np.any(phase == 9)):
+            etype = "WR"
+        elif bool(np.any(phase == 6)) or float(track.logg[r_last]) > _WD_LOGG:
+            etype = "WD"
+        elif r0 <= r_last:                          # ends at TPAGB onset, no cooling
+            etype = "SN"
+        else:                                       # track_end is already the last row
+            etype = "none"
+
+        states: list[StellarState] = []
+        if etype in ("WR", "WD") and r0 <= r_last:
+            win = {col: getattr(track, col)[r0 : r_last + 1] for col in _TRACK_COLS}
+            states = [
+                self._state_from_row(
+                    win, float(i), snapped_mass, snapped_feh, eep_origin=r0
+                )
+                for i in range(int(win["age"].size))
+            ]
+
+        return EndgameResult(
+            type=etype,
+            mass_init_msun=snapped_mass,
+            feh_init=snapped_feh,
+            final_mass_msun=final_mass,
+            wr_threshold_msun=wr_threshold,
+            states=states,
+        )
+
+    def _snap_feh_index(self, feh: float) -> int:
+        """Index of the grid [Fe/H] nearest `feh` (the endgame snaps, never blends).
+
+        Raises if `feh` is outside the grid's [Fe/H] span — no extrapolation (§6) —
+        then snaps in-range to the nearest grid metallicity (its true value is what
+        the result reports, mirroring the snapped-mass honesty)."""
+        self._check_feh(feh)
+        assert self._fehs is not None
+        return int(np.argmin(np.abs(self._fehs - feh)))
+
+    @staticmethod
+    def _wr_threshold(grid: _Grid) -> float | None:
+        """Lowest mass in `grid` whose track reaches the WR phase (FSPS 9), or None.
+
+        Derived by scanning the grid — never a hardcoded mass cut: the WR onset
+        shifts with metallicity (more metals -> stronger winds -> strips at lower
+        mass) and is even slightly non-monotonic at low Z, so the gateway must read
+        it off the data. `grid.tracks` is ascending by mass, so the first hit is the
+        threshold."""
+        for t in grid.tracks:
+            if bool(np.any(t.phase == 9)):
+                return float(t.minit)
+        return None
+
     def _state_from_row(
-        self, win: dict, frac: float, mass: float, feh: float
+        self,
+        win: dict,
+        frac: float,
+        mass: float,
+        feh: float,
+        eep_origin: int | None = None,
     ) -> StellarState:
         """Read a StellarState off the interpolated window at fractional row `frac`.
 
         The single place a window becomes a StellarState — shared by `state_at`
-        (frac from the age inversion) and `track` (frac = each integer row) so the
-        two can never drift, and so `win`'s provider-internal keys never escape
-        past this boundary (§3).
+        (frac from the age inversion), `track` (frac = each integer row), and
+        `endgame` (an unblended single-track slice past the window), so they can
+        never drift, and so `win`'s provider-internal keys never escape past this
+        boundary (§3). `eep_origin` is the absolute MIST row of `win`'s first row:
+        the normal window starts at the ZAMS row (the default); the endgame passes
+        its own origin (the first post-window row) so its states report their true,
+        continuing EEP rather than restarting at ZAMS.
         """
         rows = np.arange(win["age"].size, dtype=float)
         age = float(np.interp(frac, rows, win["age"]))
@@ -810,8 +933,10 @@ class MISTProvider:
         phase_code = int(round(float(win["phase"][int(round(frac))])))
         phase = _PHASE_NAMES.get(phase_code, f"phase{phase_code}")
 
-        # EEP is the (1-based) row number; row r == EEP r+1 across all masses.
-        eep = float(self._zams_row + frac + 1.0)
+        # EEP is the (1-based) row number; row r == EEP r+1 across all masses. The
+        # normal window's origin is the ZAMS row; the endgame passes its own.
+        origin = self._zams_row if eep_origin is None else eep_origin
+        eep = float(origin + frac + 1.0)
 
         # visual proxy (§7), explicitly evocative: cool stars more chromospherically
         # active than hot ones. v/vcrit=0.0 grid -> no modeled rotation.

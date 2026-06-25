@@ -68,7 +68,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..provider import ParameterOutOfRange, ProviderDataMissing
+from ..provider import EndgameResult, ParameterOutOfRange, ProviderDataMissing
 from ..state import StellarState
 from .mist import DATA_DIR
 
@@ -387,6 +387,14 @@ class MESAProvider:
         self._ensure_loaded()
         t = self._snap(mass, feh)
         return [self._state_from_track(t, float(i)) for i in range(t.age.size)]
+
+    def endgame(self, mass: float, feh: float) -> EndgameResult:
+        """MESA tutorial runs stop on/near the MS, so there is no exposed stellar
+        endgame: return type="none" (the §3-agnostic route then shows no gateway).
+        The capability lives on the provider boundary; only MISTProvider has data for
+        it today. We don't snap or validate here — "no endgame" is the honest answer
+        for any input, and the snap would needlessly raise on an out-of-grid mass."""
+        return EndgameResult(type="none", mass_init_msun=mass, feh_init=feh)
 
     # -- internals -------------------------------------------------------------
     def _snap(self, mass: float, feh: float) -> _MesaTrack:

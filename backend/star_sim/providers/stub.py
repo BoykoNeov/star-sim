@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 
-from ..provider import ParameterOutOfRange
+from ..provider import EndgameResult, ParameterOutOfRange
 from ..state import StellarState
 
 # --- Solar / reference anchors ------------------------------------------------
@@ -163,6 +163,12 @@ class StubProvider:
         _, t_ms = self.age_range(mass, feh)
         n = 60
         return [self.state_at(mass, feh, t_ms * i / (n - 1)) for i in range(n)]
+
+    def endgame(self, mass: float, feh: float) -> EndgameResult:
+        """The stub knows only the main sequence, so it exposes no endgame
+        (type="none"); the gateway shows nothing. Keeps the stub a complete
+        StellarStateProvider behind the §3 boundary."""
+        return EndgameResult(type="none", mass_init_msun=mass, feh_init=feh)
 
     # -- validation ------------------------------------------------------------
     def _check_mass_feh(self, mass: float, feh: float) -> None:

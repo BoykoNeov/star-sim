@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Planned (not yet built) full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; plus the hot-end-can't-extend spectrum finding.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNK 1 (backend accessor+classifier) BUILT; plus the hot-end-can't-extend spectrum finding.
 metadata:
   type: project
 ---
@@ -8,8 +8,49 @@ metadata:
 The user wants **full** Wolf–Rayet (WR) and white-dwarf (WD) support — at the
 slider limits a button appears ("→ Continue: White Dwarf" / "→ Continue:
 Wolf–Rayet") that jumps into a dedicated endgame renderer. **Design agreed,
-plan written & committed, NO code started** (user said "just write a plan").
-Plan: `docs/plans/smoldering-cinder-gateway.md`.
+plan written & committed; Chunk 1 (backend) BUILT.** Plan:
+`docs/plans/smoldering-cinder-gateway.md`.
+
+**CHUNK 1 DONE (backend endgame accessor + classifier; 137 tests, was 121 — +14
+`test_endgame.py` + stub/mesa "none").** What landed:
+- **`endgame()` is on the `StellarStateProvider` Protocol** (NOT a route hasattr-sniff —
+  advisor: that's a §3 violation). MESA/Stub return `EndgameResult(type="none")` so the
+  `/endgame` route stays provider-agnostic. `EndgameResult` dataclass lives in
+  `provider.py` `{type, mass_init_msun, feh_init, final_mass_msun, wr_threshold_msun,
+  states:list[StellarState]}`; its `states` are §3-clean StellarStates, the scalars are
+  gateway *routing metadata*.
+- **`MISTProvider.endgame` SNAPS both mass AND feh** (advisor: snapping feh is *necessary*
+  — interpolating feh near the WR threshold hits the "phase present on one bracket grid,
+  absent on the other" hazard the plan's own risk register flags). Reports the **true
+  snapped** mass/feh (honest, §6 — verified: req(60,+0.2)→feh +0.0; req(2.7,−0.6)→feh −0.5).
+- **Classification is data-derived** from the snapped track's FSPS phases: φ9→**WR**;
+  φ6-present OR final-logg>7 (`_WD_LOGG`)→**WD**; ends-at-φ5-onset→**SN** (dead end,
+  `states=[]` — the lone pre-collapse supergiant row is a logg≈0 artifact, dropped);
+  else→**none** (low-mass still-living). **WR threshold scanned per grid, never hardcoded**
+  (`_wr_threshold`): the real fine grid gives onset **+0.5→35, 0.0→48, −0.5→56** (finer than
+  the coarse 40/50/60 first measured; slightly non-monotonic at low Z — m100=56<m075=58 —
+  so the test asserts the metal-rich *trend* + brackets, not global monotonicity).
+- **Data plumbing:** `star_mass`(current mass)+`star_mdot`(mass-loss) added to `_Track` +
+  `_TRACK_COLS` + cache (**CACHE_VERSION 8→9**, one ~107 s reparse) but **deliberately NOT to
+  `_grid_window`/`_blend_windows`** (advisor: the endgame snaps to one track, nothing reads a
+  *blended* current mass). **StellarState UNTOUCHED** (Option B) → no `EXPECTED_KEYS` change.
+  `final_mass<initial` confirmed (1 M☉→0.544 WD; 2.7@−0.5→0.672 WD; 60 M☉→23.6 stripped WR).
+- **The advisor's "cooling-track monotonic" TRAP** (blocker, Locked #4): the WD endgame is
+  NOT monotonic as a whole — the TPAGB pulses (φ5, 601 rows) oscillate everything (*why* we
+  snap), and φ6 *contracts to a ~107 kK central star* (Teff RISES) before cooling to 2393 K.
+  So **only logg is monotonic over all post-AGB rows**; Teff & L are monotonic only **past the
+  CSPN Teff peak (the "knee")**. The test (`test_wd_cooling_track_is_monotonic_past_the_cspn_knee`)
+  splits on the knee accordingly. Age IS strictly increasing over the whole endgame (Chunk 2's
+  log-cooling-age scrub won't fold). Solar WD↔SN boundary measured between **6.5 (WD, logg 8.70)
+  and 7.0 (SN)** — the super-AGB / electron-capture regime.
+- **`_state_from_row` generalized with `eep_origin`** (default ZAMS row; endgame passes its
+  first post-window row) so endgame states report their **continuing** EEP and **reuse the
+  16-element metals-dict construction** (no drift). Endgame `win` dict = single track sliced
+  `[track_end+1 .. last-real]` into the same keys `_grid_window` emits, fed straight to
+  `_state_from_row`. `/endgame` returns `asdict(EndgameResult)` (states = exact StellarState shape).
+
+**Remaining: Chunks 0 (spectrum scoping, re-launched as a bg research agent), 2–7** (frontend
+gateway + WD/WR mode shells + 3D shaders, then data-gated WR/WD spectra). See the chunk list below.
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is
