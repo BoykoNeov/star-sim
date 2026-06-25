@@ -81,6 +81,13 @@ with γ staying floored and explicitly labeled as out of scope. Everything carri
 the "evocative / activity-driven, not predictive" framing already used for the
 3D corona layer (spec §7, §11 open question).
 
+**Subsequently approved (the synthesis, Chunk 3):** turn the X-ray *band* into a
+concrete *line* by supplying the missing rotation dimension two ways — derive a
+default from the age the sim already has (gyrochronology, MS cool stars only) AND
+expose an activity/rotation slider the user drives — with honest gating that grays
+out where neither applies. See Chunk 3. This is an *upgrade ladder* on top of the
+band, not a replacement: band → age-derived line → slider, each rung more concrete.
+
 ## Architecture — still a sibling, mostly frontend
 
 `sed.js` stays a **sibling to the §3 spine** (driven by the marker's state, owns
@@ -143,6 +150,76 @@ The one data-grounded, predictive piece. **Requires exposing Ṁ on the spine.**
   caption; absolute distance cancels under per-peak normalization (we plot `L_ν`,
   not a flux at a distance).
 
+### Chunk 3 — collapse the band to a line: age-derived default + an activity/rotation slider (the synthesis)
+
+The X-ray band is wide only because **one dimension is missing — rotation.** There
+are two honest ways to supply it, and the synthesis uses **both, in a ladder**.
+
+**(a) Derive a default from age — the sim already has it.** The earlier framing
+("the sim has no rotation/age input") was true of the *current `activity` proxy*
+(the Teff ramp throws age away) but MISLEADING: `age_yr` is a core `StellarState`
+field and the central scrubber of the whole sim. The established chain is
+
+```
+age --gyrochronology(age, color)--> P_rot --> Ro = P_rot/τ_conv --> L_X/L_bol
+```
+
+(Barnes 2007; Mamajek & Hillenbrand 2008 — `P_rot = f(age, B−V)`). Both inputs the
+gyro relation needs — **age AND color/Teff** — are already onboard, so for a
+**main-sequence cool star** the band can collapse to a *line* with **no new
+control**, using data the sim already has. This directly answers the
+two-stars-same-Teff-different-age point: they ARE distinguishable by age; the
+current proxy simply ignores it.
+
+**(b) An activity/rotation slider — the user supplies the dimension.** A slider —
+on `P_rot` (fundamental: → `Ro` directly via τ_conv) or on age (intuitive) — lets
+the user PIN the missing dimension. This is exactly the pattern the project already
+blessed with the **Lane–Emden `n` slider**: the codebase *rejected* auto-deriving
+`n` as dishonest and made it the user's to set. A rotation slider is the same move
+— pinning it collapses the band to a line legitimately, because the **user**
+supplied the input; the sim didn't fabricate it.
+
+**The synthesis = both, with honest gating:**
+- Where gyrochronology is valid (MS cool stars), derive a **default** activity from
+  the existing age → draw the line there; the band becomes the *scatter envelope*
+  around it.
+- Expose a **slider** to override / explore ("what if a young fast rotator?") and to
+  cover regimes age-derivation can't reach.
+- **Gray out** where neither applies — the line/slider must NOT appear for stars that
+  physically can't host the relation.
+
+**The validity domain (gate on these — outside it, deriving a value is the
+fake-precision trap again):**
+- ✅ Main-sequence, cool (F/G/K, ~0.5–1.3 M☉): gyrochronology calibrated, clean.
+- ❌ Hot stars (no dynamo, no magnetic braking → no spin-down law): age says nothing
+  about their rotation; keep the Chunk-2 wind-shock model, not the band.
+- ❌ Very young (≲ few hundred Myr): rotation hasn't converged — a *spread* at fixed
+  age (the fast/slow "C and I" sequences), so age doesn't pin `P_rot`.
+- ⚠️ M dwarfs: stay saturated for Gyr (weak braking) — a long plateau, gyro clock mushy.
+- ⚠️ Evolved (post-MS): envelope restructures → gyrochronology no longer applies; the
+  sim runs to RGB/AGB, so the line must **stop at the MS turnoff**, not follow the giant.
+- ⚠️ Old (≳ solar age): **weakened magnetic braking / stalled spin-down** (van Saders
+  2016) — gyrochronology may BREAK past the Sun's age; flag the growing uncertainty
+  exactly where the sim still lets you scrub to old ages.
+
+Even pinned, the value keeps a **~0.5–1 dex scatter + the ~10× activity-cycle
+wobble** — so the honest rendering is "a line with a fuzz," never a razor.
+
+**Implementation sketch (still a sibling, mostly frontend):**
+- The **age path is frontend-only** (`age_yr`, `Teff_K`, `L_lsun`, `logg`, `phase`
+  all already in state): compute `τ_conv` from Teff (an empirical relation, e.g.
+  Wright 2011 / Cranmer & Saar 2011), `P_rot` from gyrochronology(age, color) reusing
+  `color.js`'s Teff→color, then `Ro` → `L_X/L_bol` — collapsing the Chunk-1 band to a
+  line *within its validity gate*.
+- The **slider** is a new `sed.js`-local control (like `lane.js`'s n-slider) — its own
+  state, no spine touch; it just overrides the derived `P_rot`/age.
+- Gating reads `phase` (MS vs evolved) + Teff/mass — all in state, no backend change.
+
+This is the upgrade ladder the discussion converged on: **band** (no extra input,
+Chunk 1) → **age-derived line** (uses what's already onboard, MS cool stars) →
+**slider** (the user drives it, covers the gaps). Each rung is more concrete; none
+fakes a number the physics can't support.
+
 ## Normalization (the trickiest design point — solve it before drawing)
 
 The panel's y-axis is **decades below the blackbody Fλ peak**. To place an
@@ -182,8 +259,10 @@ that axis honestly:
 ## Suggested order
 
 Chunk 1 first (frontend-only, immediate visible payoff, zero spine risk), then
-Chunk 2 (the spine touch + the genuinely predictive wind radio). Each is
-independently shippable and independently honest.
+Chunk 2 (the spine touch + the genuinely predictive wind radio), then Chunk 3 (the
+synthesis — age-derived line + slider, frontend-only on top of Chunk 1's band).
+Each is independently shippable and independently honest. Chunk 3 depends on
+Chunk 1 (it collapses Chunk 1's band) but not on Chunk 2.
 
 ## References (all advisor-verified)
 
@@ -192,3 +271,7 @@ Güdel & Benz 1993, Benz & Güdel 1994 (L_X/L_R ≈ 10¹⁵·⁵ Hz); Berghöfer
 Nazé 2009 (O-star L_X ≈ 10⁻⁷ L_bol); Panagia & Felli 1975, Wright & Barlow 1975
 (thermal wind free–free, S_ν ∝ ν^+0.6); Güdel 2004 (review). Flare distribution
 `dN/dE ∝ E⁻²`. Lamers & Cassinelli 1999 (v∞ ≈ 2.6 v_esc, hot stars).
+**Gyrochronology / age→rotation (Chunk 3):** Skumanich 1972 (`v ∝ t^−1/2`); Barnes
+2007, Mamajek & Hillenbrand 2008 (`P_rot = f(age, color)`); Cranmer & Saar 2011 /
+Wright et al. 2011 (convective turnover time τ_conv); van Saders et al. 2016
+(weakened magnetic braking / stalled spin-down past ~solar age).

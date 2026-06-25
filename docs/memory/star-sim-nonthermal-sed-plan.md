@@ -53,3 +53,25 @@ visibly an order-of-magnitude range. Other risks: visual clutter (panel already
 dense), type-gating honestly (A-star X-ray gap, cool-giant corona–wind dividing
 line → caption gaps, don't draw fake values), caption must flip from "not modeled
 here" to describing the ribbon.
+
+**CHUNK 3 ADDED — the synthesis (user-approved, the upgrade ladder):** collapse the
+X-ray BAND to a LINE by supplying the missing rotation dimension two ways.
+**(a) Age-derived default — the sim ALREADY has age.** My earlier "the sim has no
+rotation/age input" was true of the *current activity proxy* (Teff ramp ignores age)
+but MISLEADING: `age_yr` is a core StellarState field + the central scrubber. Chain:
+`age --gyrochronology(age,color)--> P_rot --> Ro=P_rot/τ_conv --> L_X/L_bol` (Barnes
+2007, Mamajek-Hillenbrand 2008) — both inputs (age AND color/Teff) are onboard, so for
+a **MS cool star** the band collapses to a line with NO new control (answers the
+two-same-Teff-different-age stars: distinguishable by age). **(b) Activity/rotation
+slider** — user pins the dimension; exact precedent = the **Lane-Emden `n` slider**
+(project rejected auto-deriving n as dishonest → user's to set). Synthesis = BOTH +
+honest gating. **Validity domain (gate on these):** ✅ MS cool F/G/K ~0.5-1.3 M☉; ❌
+hot stars (no dynamo/braking → keep wind-shock); ❌ very young ≲few-hundred-Myr (rotation
+not converged, C/I-sequence spread); ⚠️ M dwarfs (saturated plateau, gyro mushy); ⚠️
+evolved post-MS (line must STOP at MS turnoff — sim runs to RGB/AGB); ⚠️ old ≳solar
+(weakened braking / stalled spin-down, van Saders 2016 — gyro may BREAK past Sun's age).
+Even pinned: ~0.5-1 dex scatter + ~10× cycle wobble → "line with a fuzz", never a razor.
+**Frontend-only** (age path uses age/Teff/L/logg/phase already in state; τ_conv from
+Wright2011/Cranmer-Saar2011; slider = sed.js-local like lane.js n-slider; gating reads
+phase). Ladder: **band (Chunk 1) → age-derived line → slider**, each rung more concrete,
+none faking a number. Chunk 3 depends on Chunk 1 (collapses its band), NOT on Chunk 2.
