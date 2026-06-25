@@ -1,6 +1,6 @@
 ---
 name: star-sim-phase5-spectra
-description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP (3-D [Fe/H]) + OSTAR2002 HOT SPLICE (→55000 K, He lines) + HOT-END NO-MODEL NOTICE + GÖTTINGEN COOL SPLICE (<3500 K, TiO bands) DONE: MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime unchanged through CAP18 swap AND both splices (NO BAKE_VERSION bump) — real new code is the bake going single-grid→multi-grid (--hot-grid / --cool-grid). He I/He II guides (minTeff-gated, hot) + TiO bandhead guides (maxTeff-gated, cool). Cool splice = Göttingen/PHOENIX sg-Goettingen-MedRes-A.h5 (Husser+2013, 1.7GB, EXACTLY 3-axis Teff/[Fe/H]/logg, log [Fe/H] like CAP18 → no Z/Zo conv, log g 0-6 covers dwarfs+giants → floor 3500→2300 K, the 2809 K coolest star now a REAL spectrum). Above the 55000 K ceiling (hottest draggable ≈78500 K) the panel BLANKS + shows 'no spectral model … reach {teff_max} K'; HOT end only (cool now real-data-covered to 2300). 121 tests."
+description: "Phase 5 synthetic-spectrum panel — DONE + CAP18 SWAP (3-D [Fe/H]) + OSTAR2002 HOT SPLICE (→55000 K, He lines) + HOT-END NO-MODEL NOTICE + GÖTTINGEN COOL SPLICE (<3500 K, TiO bands) DONE: MSG/pymsg build-time bake (no MESA SDK) → void-filled flux cube .npz → pure-Python scipy runtime serving /spectrum (bypasses PROVIDER like /polytrope). Axis-generic runtime unchanged through CAP18 swap AND both splices (NO BAKE_VERSION bump) — real new code is the bake going single-grid→multi-grid (--hot-grid / --cool-grid). He I/He II guides (minTeff-gated, hot) + TiO bandhead guides (maxTeff-gated, cool). Cool splice = Göttingen/PHOENIX sg-Goettingen-MedRes-A.h5 (Husser+2013, 1.7GB, EXACTLY 3-axis Teff/[Fe/H]/logg, log [Fe/H] like CAP18 → no Z/Zo conv, log g 0-6 covers dwarfs+giants → floor 3500→2300 K, the 2809 K coolest star now a REAL spectrum). Above the 55000 K ceiling (hottest draggable ≈78500 K) the panel BLANKS + shows 'no spectral model … reach {teff_max} K'; HOT end only (cool now real-data-covered to 2300). 121 tests. PLUS a separate BROADBAND SED PANEL (gamma→radio) — FRONTEND-ONLY Planck blackbody SED (sed.js, sibling like lane.js, Teff-only, no fetch/backend/re-bake): user wanted 'wider range, gamma and radio' but real gamma/X-ray+radio is non-thermal coronal emission with NO model grid → only honest object is the blackbody; log-log Fλ over 14 decades, 7 EM bands, Wien peak sweeps UV→vis→IR, gamma/radio floor honestly (clamp-to-floor like Li). Exported color.js planck. Verified Playwright, no JS errors, pytest unchanged."
 metadata:
   node_type: memory
   type: project
@@ -183,6 +183,35 @@ feh ±0.5 bounded — the recurring feh=0 short-circuit gap; self-skips on a no-
 floor" rationale fixed** (`teffAboveGrid()`'s "3300 K red dwarf as 3500 K" was now false). **121 tests.**
 Playwright: 3145 K M-dwarf → 3 TiO guides on deep troughs (real Göttingen spectrum, would've clamped to 3500
 before); Sun → no TiO guides; no JS errors. Recipe §5b (fetch + rationale + findings) + §6 (3-grid bake).
+
+**BROADBAND SED PANEL (gamma → radio) — DONE (this session, FRONTEND-ONLY, the "wider range" view).**
+User asked to see the spectrum "not only near visible" → clarified **"extend to gamma and radio."** The
+honest answer (advisor-confirmed) is **NOT more grid data**: (1) the baked MSG cube is only ~3000–9000 Å
+(the three grids barely reach ~10000 Å — Göttingen MedRes-A is the binding limit), and (2) **gamma/X-ray +
+radio emission of a real star is NOT photospheric** — it's coronal/chromospheric/flare/wind emission
+(activity-driven), which has **no model grid** and which the project already treats as "evocative, not
+predictive." So the only physically honest object spanning the whole EM spectrum is the **Planck blackbody
+SED** (defined at all λ; the textbook idealization of the photospheric continuum). New `frontend/src/sed.js`
++ panel in `index.html` + `.sed-panel` full-width CSS + wired into `main.js refresh()` — a **sibling like
+`lane.js`** but driven by **Teff ALONE** (a blackbody ignores log g & [Fe/H]) → **no fetch, no backend, no
+re-bake, pure frontend.** Plots **log–log Fλ over ~14 decades** (1e-4 nm γ → 1e10 nm radio), normalized to
+the blackbody peak, **seven EM bands shaded** (γ-ray·X-ray·UV·visible·IR·microwave·radio; visible painted
+the true rainbow via `wavelengthToCSS`, reads as the **thin sliver it is**), a **Wien-peak marker** (sweeps
+UV→visible→IR as Teff drops — verified O-star 64.6 nm / Sun 497 nm / M-dwarf 871 nm), and a **gold bracket**
+on the 300–900 nm window the detail panel covers ("this detail view is this slice of the whole SED").
+**Advisor's key points, both addressed:** (a) **the gamma half is empty by physics** — at X-ray/γ λ the
+exponent overflows → `planck()→0` → `log10(0)=−∞`; handled **exactly like Li in [[star-sim-phase4-cno]]'s
+`comp.js`** (decade-capped axis `FLOOR_DECADES=14` + clamp-to-floor → curve runs flat along the bottom, no
+NaN gaps), labeled coronal/flare (activity), not photospheric; (b) **symmetric on radio** — the
+Rayleigh–Jeans λ⁻⁴ tail is a **floor, NOT** the real radio flux (chromosphere/corona sit orders of magnitude
+above). Both caveats in the caption + a legend "non-thermal edges" tooltip. **Representation = Fλ
+deliberately** (advisor) — same quantity as the detail panel (genuinely "the same curve zoomed out") +
+reuses the Fλ Wien constant `2.8977719e7 Å·K` (λFλ/νFν would move the peak, need 3.67e7 — not used).
+`color.js`'s private `planck`/`HC_OVER_K_NM` **exported** (only code touch outside the new file). **NO
+AskUserQuestion** (advisor: "blackbody vs data" is a choice that doesn't exist — gave a one-line
+reality-check, then built). Verified via Playwright (bundled Chromium) across Sun/60 M☉ O/0.2 M☉ M-dwarf +
+full-page layout: Wien peak sweeps right, both tails floor honestly, no JS errors. **pytest unchanged (137
+— [[star-sim-wr-wd-endgame-plan]] count) since frontend-only.** The screenshot pass IS the regression check.
 
 **Why:** records a shipped phase + the non-obvious decisions (axis-generic for the CAP18 swap,
 runtime-measured test anchors, void-fill along logg, the 80000 K hot-end clamp NOW a "no model"

@@ -9,6 +9,7 @@ import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
 import { createSpectrum } from "./spectrum.js";
+import { createSED } from "./sed.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -77,6 +78,13 @@ createLane({ api: API });
 // refresh() alongside the other panels — but owns its own debounced latest-wins
 // fetch (it doesn't need the track, just the current state).
 const spectrum = createSpectrum({ api: API });
+
+// The broadband SED panel (spec §5) is a SIBLING like lane.js — but, unlike lane,
+// it DOES move with the star: it's the Planck blackbody across the whole EM
+// spectrum, driven by Teff alone (a blackbody ignores log g and [Fe/H]), so it
+// owns no fetch and just redraws from the live state inside refresh(). It is the
+// zoomed-all-the-way-out companion to the synthetic-spectrum panel.
+const sed = createSED(document.getElementById("sed-canvas"));
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
@@ -412,6 +420,7 @@ async function refresh() {
     hr.update(s);
     comp.update(s);
     spectrum.update(s);
+    sed.update(s);
     renderReadout(s);
     els.status.style.color = teffToCSS(s.Teff_K);
     // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the

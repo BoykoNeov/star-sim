@@ -104,6 +104,16 @@ main {
 .spectrum-panel .legend { justify-content: center; }
 .spectrum-panel .legend i { width: 22px; }
 
+/* Broadband SED panel (spec §5): the full-EM zoom-out of the spectrum — also a
+   full-width band, same canvas/caption/legend treatment as the spectrum panel. */
+.sed-panel { grid-column: 1 / -1; }
+#sed-canvas {
+  display: block; width: 100%; max-width: 720px; margin: 0 auto;
+  background: #05070d; border-radius: 8px;
+}
+.sed-panel .legend { justify-content: center; }
+.sed-panel .legend i { width: 22px; }
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

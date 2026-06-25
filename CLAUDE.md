@@ -792,6 +792,38 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   monotonicity + age-monotonic + final-mass, WR stripping, SN dead-end, snap-to-true-mass, EEP continues,
   WR-threshold-by-feh gated `requires_mist_heldout_feh`, off-grid raises, `/endgame` route shape + 422) +
   always-on stub/MESA "none" tests. **137 tests pass** (was 121). Frontend untouched (Chunks 2–5).
+- **Done (Phase 5, broadband SED panel — gamma → radio, the "wider range" view, frontend-only):**
+  the user asked to see the spectrum "not only near visible" → then clarified **"extend to gamma and
+  radio."** The honest answer (advisor-confirmed) is **NOT more synthetic-grid data**: the baked cube is
+  ~3000–9000 Å (the three model-atmosphere grids barely reach ~10000 Å — Göttingen MedRes-A is the
+  binding limit), and **gamma/X-ray + radio emission of a real star is not photospheric at all** — it is
+  coronal/chromospheric/flare/wind emission (activity-driven), which has **no model grid** and which this
+  project already treats as "evocative, not predictive." So the only physically honest object spanning
+  the whole EM spectrum is the **Planck blackbody SED** — defined at all λ, the textbook idealization of
+  the photospheric continuum. New `frontend/src/sed.js` (+ panel in `index.html`, `.sed-panel` full-width
+  CSS, wired into `main.js refresh()`): a **sibling like `lane.js`** but driven by **Teff alone** (a
+  blackbody ignores log g & [Fe/H]) → **no fetch, no backend, no re-bake, pure frontend**. Plots
+  log–log **Fλ over ~14 decades** (1e-4 nm gamma → 1e10 nm radio), normalized to the blackbody peak,
+  with the **seven EM bands shaded** (γ-ray·X-ray·UV·visible·IR·microwave·radio; visible painted as the
+  true rainbow via `wavelengthToCSS`, and it reads as the **thin sliver it is** — ~0.3 of 14 decades),
+  a **Wien-peak marker** (the centerpiece — sweeps UV→visible→IR as Teff drops; verified O-star 64.6 nm /
+  Sun 497 nm / M-dwarf 871 nm), and a **gold bracket** marking the 300–900 nm optical window the detailed
+  spectrum panel covers ("this detail view is this slice of the whole SED"). **Honesty (the advisor's
+  key points, both ends):** (a) **the gamma half is empty by physics** — at X-ray/γ λ the exponent
+  `hc/λkT` overflows so `planck()→0` → `log10(0)=−∞`; handled **exactly like Li in `comp.js`** (decade-
+  capped axis `FLOOR_DECADES=14` + clamp-to-floor → the curve runs flat along the bottom, no NaN gaps),
+  labeled as coronal/flare (activity), not photospheric; (b) **symmetric on radio** — the Rayleigh–Jeans
+  λ⁻⁴ tail is a **floor, not** the real radio flux (chromosphere/corona sit orders of magnitude above);
+  both caveats in the caption + a legend "non-thermal edges" tooltip. **Representation: Fλ, deliberately**
+  (advisor) — same quantity as the detail panel (so it's genuinely "the same curve, zoomed out") and
+  reuses the Fλ Wien constant `2.8977719e7 Å·K` (λFλ/νFν would move the peak, need 3.67e7 — not used).
+  `color.js`'s private `planck`/`HC_OVER_K_NM` were **exported** (the one code touch outside the new
+  file). **NO AskUserQuestion** (advisor: "blackbody vs data" is a choice that doesn't exist — gave a
+  one-line reality-check that gamma/radio read flat-on-floor by physics, then built). Verified via
+  Playwright (bundled Chromium — `chrome --headless` hijacks the user's running Chrome) across Sun / 60 M☉
+  O star / 0.2 M☉ M-dwarf + full-page layout: Wien peak sweeps correctly, both tails floor honestly, no
+  JS errors. No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); the
+  pytest suite is **unchanged** (137) since this is frontend-only.
 - **Next:** more Phase 4 paths, each behind the existing §3 provider interface:
   the **solar MESA grid** is **done** (1/2/6 M☉ at Z=0.0152 via local Docker MESA runs →
   a real `[Fe/H]≈0.00` bucket + a measured solar MESA-vs-MIST cross-val over all three

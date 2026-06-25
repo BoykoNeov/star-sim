@@ -44,8 +44,14 @@ function cieZ(l) {
 // Planck spectral radiance vs wavelength, up to a constant (we normalize later,
 // so the 2hc² prefactor drops out): B(λ,T) ∝ λ⁻⁵ / (exp(hc/λkT) − 1).
 // hc/k = 1.438776877e7 nm·K, so the exponent is that constant / (λ_nm · T).
-const HC_OVER_K_NM = 1.438776877e7;
-function planck(lambdaNm, tempK) {
+//
+// Exported (used by sed.js for the broadband SED panel, which plots this curve
+// across the whole EM spectrum). It is numerically robust at the extremes the SED
+// reaches: at gamma/X-ray λ the exponent overflows so expm1 → +∞ and B → 0 (a star
+// is not a thermal gamma source — physically correct, never NaN/∞); at radio λ it
+// tends to the Rayleigh–Jeans λ⁻⁴ tail. The caller clamps log10(0) to a floor.
+export const HC_OVER_K_NM = 1.438776877e7;
+export function planck(lambdaNm, tempK) {
   const x = HC_OVER_K_NM / (lambdaNm * tempK);
   return Math.pow(lambdaNm, -5) / (Math.expm1(x)); // expm1 keeps precision for large λT
 }
