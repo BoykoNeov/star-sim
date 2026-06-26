@@ -1126,6 +1126,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   5834 K); phone bounding-box overlap = 0. No JS test harness → the screenshot/overlap pass *is* the
   regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/API/
   spine touch).
+- **Done (UX, age display honors exact entry + SED X-ray morphs not snaps — frontend-only):** the user
+  (1.44 M☉, [Fe/H]=0) reported that entering **2.14 or 2.16 Gyr both displayed "2.15"**, yet 2.14 showed
+  the SED **X-ray gap** and 2.16 the **coronal X-ray band** — so the displayed age was lying about the
+  state the rest of the UI used; and asked that *any in-range value be accepted as typed*. They also
+  asked whether the X-ray gap's **sudden** appear/disappear is physically real or whether **fading**
+  would be truer. Both frontend-only, advisor-reviewed. **(1) Age display rounding (`main.js gyrNum`):**
+  root cause = the age number box rounded its DISPLAY onto the **coarse spinner step** (0.05 Gyr for this
+  star → 2.14 and 2.16 both round to 2.15), while the change handler set `ageFraction` from the EXACT
+  typed value and the readout already showed the truth via `gyr()` — so display and reality disagreed.
+  Fix = **decouple display precision from the spinner step**: show the true value at **≥3 significant
+  figures**, with the window's adaptive `niceAgeStep` decimals only as a **FLOOR** (so a short-lived
+  massive star can't collapse to "0.00"). The advisor caught that plain `toFixed(decimals)` re-collides
+  on coarse-step (long-lived) stars — a ~12 Gyr 0.9 M☉ window has decimals=1, so 2.14/2.16 → both "2.1"
+  again; value-tied sig-figs fixes it. Spinner `step`/`min`/`max` untouched (arrows still snap to the
+  nice grid; an off-grid typed value is just honored — no form to validate, no `:invalid` styling).
+  **The bug only surfaces on the BLUR path** (advisor): `setNum`'s `activeElement` guard suppresses the
+  overwrite while the field is focused, so typing+Enter looked fine — it's clicking away (blur fires
+  `change` with focus already gone) that triggered the rounding overwrite; verified via blur. **(2) SED
+  X-ray regime hard switch → morph (`sed.js`):** the answer to the user's physics question is **yes, the
+  transition IS gradual** — the convective-dynamo X-ray decline across the **Kraft break (~6200 K)** is a
+  ramp, not a cliff at 6500 K, and wind shocks switch on over a range near 10⁴ K — so the hard
+  `regimeOf` switch *overstated* the sharpness and a fade is **more** honest (fits the panel's "evocative
+  range, not predictive" framing — the boundaries were always nominal). `drawActivity` rewritten to MORPH
+  across the now-fuzzy boundaries via `smoothstep` weights: across the cool↔gap (6500 K) edge the cool
+  band's **saturated ceiling descends 10⁻³→10⁻⁶ as it fades**, so the ribbon **shrinks into** the faint
+  dashed "X-ray gap" sliver right where it lands — **one object morphing, not two ghosts crossfading**
+  (the advisor's steer; the gap dashed line fades IN only in the *second half* of the transition, by
+  which point the band has collapsed onto its level, so no double image — verified by screenshotting
+  6300/6500/6700/6900 K). The secondary gap↔hot (10000 K) edge is a plain alpha crossfade (acceptable —
+  the user's case is the 6500 K edge). Implementation: inline band-draw extracted to a reusable
+  `drawXrayBand(decFromLog, {logHi,logLo,dim,tag,labels,alpha})`; `drawXrayGap`/`drawGudelBenzRadio`
+  gained an `alpha` param (group `globalAlpha`); edge labels ride the band alpha (text can't interpolate
+  → it dissolves). **Caption kept DISCRETE + length-matched** (advisor: don't fade text — that's the
+  panel-resize jank this panel guards against; `regimeOf` switches at the transition midpoints 6500/10000
+  so caption≈visual, the brief mid-fade mismatch is negligible). Verified via Playwright bundled Chromium
+  (the `chrome --headless` hijack caveat): age display honors 2.14/2.16 (distinct) + the 0.9 M☉ 0.02-Gyr
+  discriminating case + 20 M☉ "0.00850" (no collapse); the X-ray morph reads gradual end-to-end across the
+  Teff sweep; only the pre-existing favicon 404, no JS errors. No JS test harness → the screenshot pass
+  *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/
+  API/spine touch).
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

@@ -198,80 +198,120 @@ export function createSED(canvas) {
     return "cool";                         // F/G/K/M dwarf/subgiant: full envelope
   }
 
-  // The coronal soft-X-ray ACTIVITY band (+ its Güdel–Benz radio marker). Drawn as a
-  // hatched, translucent RANGE — never a crisp line — so a later data-grounded curve
-  // (the hot-star wind tail, Chunk 2) will read as a visibly distinct tier. lamPeak is
-  // the Fλ peak wavelength in nm.
-  function drawActivity(lamPeak) {
-    const reg = regimeOf(teff, logg);
-    if (reg === "gap") { drawXrayGap(lamPeak); return; } // A/early-F: a labeled gap
+  const smoothstep = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const lerp = (a, b, t) => a + (b - a) * t;
 
-    // The L_X/L_bol envelope per regime. Cool dwarfs span the full saturated→quiet
-    // band; hot stars collapse to the narrow wind-shock value; cool giants are dimmed
-    // and capped below saturation (corona suppressed — see Linsky–Haisch).
-    let fxLo, fxHi, topLabel, botLabel, tag, dim;
-    if (reg === "hot") {
-      fxLo = 10 ** -7.5; fxHi = 10 ** -6.5;
-      topLabel = ""; botLabel = ""; tag = "wind X-ray ~10⁻⁷"; dim = false;
-    } else if (reg === "coolgiant") {
-      fxLo = 1e-8; fxHi = 1e-5;
-      topLabel = "10⁻⁵"; botLabel = "10⁻⁸"; tag = "coronal X-ray"; dim = true;
-    } else {
-      fxLo = 1e-7; fxHi = 1e-3;
-      topLabel = "10⁻³"; botLabel = "10⁻⁷"; tag = "coronal X-ray"; dim = false;
+  // The coronal soft-X-ray ACTIVITY overlay (+ its Güdel–Benz radio marker). The
+  // regime boundaries are physically FUZZY — the convective-dynamo X-ray decline
+  // across the Kraft break (~6200 K) is gradual, not a cliff at 6500 K, and wind
+  // shocks switch on over a range near ~10⁴ K — so the overlay MORPHS as you scrub
+  // Teff instead of snapping on/off at a hard edge. Across the cool↔gap edge the
+  // band's saturated ceiling descends until the ribbon collapses into the faint
+  // dashed "X-ray gap" sliver right where it lands (one object shrinking, not two
+  // ghosts crossfading); the secondary gap↔hot edge is a plain alpha crossfade.
+  // Drawn hatched/translucent throughout — a RANGE we can't pin, never a crisp line
+  // (see the header note). lamPeak is the Fλ peak wavelength in nm.
+  function drawActivity(lamPeak) {
+    const logW = Math.log10(BB_EFF_WIDTH * lamPeak / XRAY_DLAM);
+    const decFromLog = (logFx) => logFx + logW;             // dec below the BB peak Fλ
+
+    // A cool LUMINOUS giant's corona is suppressed past the Linsky–Haisch dividing
+    // line — a dimmed, capped band. It lives far below the warm-edge transitions
+    // (Teff < 5000 K), so it stays a discrete branch, no morph.
+    if (logg != null && logg < 3.0 && teff < 5000) {
+      drawXrayBand(decFromLog, { logHi: -5, logLo: -8, dim: true,
+        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: 1 });
+      drawGudelBenzRadio(lamPeak, 1e-5, 1);
+      return;
     }
 
-    const w = BB_EFF_WIDTH * lamPeak / XRAY_DLAM;
-    const decOf = (fx) => Math.log10(fx) + Math.log10(w);   // dec below the BB peak Fλ
-    const decTop = Math.min(0, decOf(fxHi));
-    const decBot = Math.max(-FLOOR_DECADES, decOf(fxLo));
-    if (decTop <= decBot) return;
+    // Transition weights across the nominal (fuzzy) boundaries.
+    const gapW = smoothstep(6100, 6900, teff);   // 0 cool dynamo → 1 A/early-F gap
+    const hotW = smoothstep(9500, 10500, teff);  // 0 gap        → 1 O/B wind shocks
 
+    // (1) The cool convective-dynamo band: its saturated ceiling descends from 10⁻³
+    //     toward the quiet level as gapW→1, the whole ribbon fading out as it
+    //     collapses — so it SHRINKS into the gap rather than vanishing abruptly.
+    const coolA = 1 - gapW;
+    if (coolA > 0.01) {
+      drawXrayBand(decFromLog, { logHi: lerp(-3, -6, gapW), logLo: -7, dim: false,
+        tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA });
+      drawGudelBenzRadio(lamPeak, 1e-3, coolA);
+    }
+
+    // (2) The A/early-F X-ray gap: a faint dashed marker that fades IN only in the
+    //     second half of the cool→gap transition — by then the band has collapsed
+    //     onto its level, so the two read as ONE morph, not a double image — then
+    //     back OUT as wind shocks take over toward the hot edge.
+    const gapA = smoothstep(6500, 6900, teff) * (1 - hotW);
+    if (gapA > 0.01) drawXrayGap(lamPeak, gapA);
+
+    // (3) The O/B wind-shock band (~10⁻⁷): a plain crossfade in across the hot edge.
+    if (hotW > 0.01) {
+      drawXrayBand(decFromLog, { logHi: -6.5, logLo: -7.5, dim: false,
+        tag: "wind X-ray ~10⁻⁷", topLabel: "", botLabel: "", alpha: hotW });
+    }
+  }
+
+  // Draw one hatched, translucent L_X/L_bol band between two decade levels
+  // (o.logLo/o.logHi = log10 L_X/L_bol). o.alpha drives the whole group so a band can
+  // fade across a regime transition. Edge labels are the explicit guard against
+  // reading a pixel-precise flux; they ride the same alpha (text can't interpolate, so
+  // it dissolves with the band rather than popping). decFromLog maps log fx → dec.
+  function drawXrayBand(decFromLog, o) {
+    const decTop = Math.min(0, decFromLog(o.logHi));
+    const decBot = Math.max(-FLOOR_DECADES, decFromLog(o.logLo));
+    if (decTop <= decBot) return;
     const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI);
     const yTop = yOf(decTop), yBot = yOf(decBot), hh = yBot - yTop;
 
     // translucent fill + diagonal hatch = the "evocative range" styling.
-    ctx.fillStyle = `rgba(255,140,110,${dim ? 0.10 : 0.18})`;
-    ctx.fillRect(x0, yTop, x1 - x0, hh);
     ctx.save();
+    ctx.globalAlpha = o.alpha;
+    ctx.fillStyle = `rgba(255,140,110,${o.dim ? 0.10 : 0.18})`;
+    ctx.fillRect(x0, yTop, x1 - x0, hh);
     ctx.beginPath(); ctx.rect(x0, yTop, x1 - x0, hh); ctx.clip();
-    ctx.strokeStyle = `rgba(255,170,135,${dim ? 0.22 : 0.4})`; ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(255,170,135,${o.dim ? 0.22 : 0.4})`; ctx.lineWidth = 1;
     for (let p = x0 - hh; p < x1; p += 7) {
       ctx.beginPath(); ctx.moveTo(p, yBot); ctx.lineTo(p + hh, yTop); ctx.stroke();
     }
     ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = o.alpha;
     // solid top/bottom edges
-    ctx.strokeStyle = `rgba(255,175,145,${dim ? 0.55 : 0.85})`; ctx.lineWidth = 1.2;
+    ctx.strokeStyle = `rgba(255,175,145,${o.dim ? 0.55 : 0.85})`; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(x0, yTop); ctx.lineTo(x1, yTop); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x0, yBot); ctx.lineTo(x1, yBot); ctx.stroke();
-
-    // The dimensionless L_X/L_bol edge labels — the explicit guard against reading the
-    // band as a pixel-precise flux. The tag names the mechanism.
+    // The dimensionless L_X/L_bol edge labels + the mechanism tag.
     ctx.fillStyle = "#ff9e85"; ctx.font = "9px system-ui, sans-serif";
     ctx.textAlign = "right";
-    if (topLabel && decOf(fxHi) <= 0) ctx.fillText(topLabel, x1 - 2, yTop + 10);
-    if (botLabel && decOf(fxLo) >= -FLOOR_DECADES) ctx.fillText(botLabel, x1 - 2, yBot - 3);
+    if (o.topLabel && decFromLog(o.logHi) <= 0) ctx.fillText(o.topLabel, x1 - 2, yTop + 10);
+    if (o.botLabel && decFromLog(o.logLo) >= -FLOOR_DECADES) ctx.fillText(o.botLabel, x1 - 2, yBot - 3);
     ctx.textAlign = "center";
-    ctx.fillText(tag, (x0 + x1) / 2, yTop - 4);
+    ctx.fillText(o.tag, (x0 + x1) / 2, yTop - 4);
     ctx.textAlign = "left";
-
-    // Güdel–Benz radio correlate — a cool-star phenomenon only; compact marker.
-    if (reg === "cool" || reg === "coolgiant") drawGudelBenzRadio(lamPeak, fxHi);
+    ctx.restore();
   }
 
-  // The A / early-F X-ray gap: instead of drawing NOTHING (which reads as the band
-  // having vanished / the panel being broken as you scrub across the 6500 K boundary),
-  // draw a faint, dashed, clearly-LABELLED "X-ray gap" marker in the soft-X-ray band.
-  // The feature transforms rather than disappears — honest (no fake flux band), and
-  // the placement level is nominal (the point is the label, not a value: A/early-F
-  // stars are X-ray-faint — no convective dynamo, no strong wind shocks). Caption-free
-  // on purpose: the "gap" caption branch is already length-matched (lengthening it
-  // would resize the panel as you scrub — the jank this whole panel guards against).
-  function drawXrayGap(lamPeak) {
+  // The A / early-F X-ray gap: a faint, dashed, clearly-LABELLED "X-ray gap" marker in
+  // the soft-X-ray band — the steady-state representation the collapsing cool band
+  // morphs INTO (and which fades, via alpha, across both edges so nothing pops). It is
+  // honest (no fake flux band) and the placement level is nominal (the point is the
+  // label, not a value: A/early-F stars are X-ray-faint — no convective dynamo, no
+  // strong wind shocks). Caption-free on purpose: the "gap" caption branch is already
+  // length-matched (lengthening it would resize the panel as you scrub — the jank this
+  // whole panel guards against).
+  function drawXrayGap(lamPeak, alpha = 1) {
     const w = BB_EFF_WIDTH * lamPeak / XRAY_DLAM;
     let dec = Math.log10(1e-6) + Math.log10(w);          // nominal quiet level
     dec = Math.max(-FLOOR_DECADES + 2, Math.min(-2, dec)); // keep it clearly in-frame
     const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI), y = yOf(dec);
+    ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = "rgba(150,160,180,0.55)"; ctx.lineWidth = 1.2;
     ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
@@ -280,18 +320,21 @@ export function createSED(canvas) {
     ctx.textAlign = "center";
     ctx.fillText("X-ray gap", (x0 + x1) / 2, y - 4);
     ctx.textAlign = "left";
+    ctx.restore();
   }
 
   // The Güdel–Benz radio counterpart of the X-ray band, anchored at the cm-wave (GHz)
   // position. On this per-wavelength axis it sits below the window for normal stars —
   // drawn as a short tick rising from the floor (clamped) to its highest (saturated)
   // level, a compact footnote to the X-ray band rather than a competing ribbon.
-  function drawGudelBenzRadio(lamPeak, fxHi) {
+  function drawGudelBenzRadio(lamPeak, fxHi, alpha = 1) {
     const xr = xOf(LAM_RADIO);
     const decR = Math.log10(fxHi) + Math.log10(BB_EFF_WIDTH * lamPeak)
       + Math.log10(C_NM_S) - GB_LOG_HZ - 2 * Math.log10(LAM_RADIO);
     const yFloor = yOf(-FLOOR_DECADES);
     const yTop = yOf(Math.min(0, Math.max(decR, -FLOOR_DECADES)));   // clamped to window
+    ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.strokeStyle = "rgba(255,160,130,0.55)"; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(xr, yFloor); ctx.lineTo(xr, yTop); ctx.stroke();
     ctx.fillStyle = "rgba(255,160,130,0.85)";
@@ -302,6 +345,7 @@ export function createSED(canvas) {
     ctx.textAlign = "center";
     ctx.fillText("Güdel–Benz radio", xr, yFloor - 5);
     ctx.textAlign = "left";
+    ctx.restore();
   }
 
   // Faint translucent EM-band columns; the visible band is the true rainbow.

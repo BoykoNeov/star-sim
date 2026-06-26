@@ -24,8 +24,22 @@ reported fixes)" bullet — this captures the **reusable gotchas**.
    its floor; (b) you CANNOT just snap `massFromSlider`'s *output* to round masses —
    that breaks the number-box escape hatch (typing 0.99 would jump to 1.0). The
    escape-hatch (arbitrary precision, bypasses snapping) is a deliberate design feature.
-   The age slider has the same latent quantization but `gyrNum` already rounds it to a
-   clean grid — left alone (don't expand scope).
+   **Follow-up (later session) — the age number box had the SAME class of bug, now
+   fixed.** `gyrNum` rounded the DISPLAY onto the coarse spinner step (0.05 Gyr for a
+   1.44 M☉ star), so typing 2.14 vs 2.16 Gyr both showed "2.15" while the change
+   handler set `ageFraction` from the EXACT value and the SED/readout used it (display
+   *lied* about reality — 2.14 → SED X-ray gap, 2.16 → coronal band, both "2.15").
+   **Fix = decouple display precision from the spinner step**: show the true value at
+   **≥3 significant figures**, with `niceAgeStep`'s decimals only as a FLOOR (so a
+   short-lived massive star doesn't collapse to "0.00"). Plain `toFixed(decimals)`
+   RE-collides on coarse-step long-lived stars (a 12 Gyr 0.9 M☉ window → decimals=1 →
+   2.14/2.16 both "2.1"); value-tied sig-figs is the actual fix (advisor caught this).
+   Spinner `step`/`min`/`max` untouched (arrows still snap; an off-grid typed value is
+   just honored — no form, no `:invalid` styling). **Surfaces ONLY on the BLUR path**:
+   `setNum`'s `activeElement` guard suppresses the overwrite while focused, so
+   typing+Enter looked fine — clicking away (blur fires `change` with focus gone) is
+   what triggered the rounding. Generalizes the rule: the displayed value must equal
+   the value actually in use.
 
 2. **SED coronal/wind X-ray band appeared/disappeared dragging mass/age = NOT a bug,
    real physics.** `regimeOf()` in `sed.js` gates at Teff 6500 K (cool→A/early-F **X-ray
@@ -36,6 +50,22 @@ reported fixes)" bullet — this captures the **reusable gotchas**.
    caption branch is deliberately length-matched across regimes to stop the panel
    resizing as you scrub (lengthening it re-creates the HR-resize bug). Cool/hot regimes
    unchanged.
+   **Follow-up (later session) — the user asked whether the *sudden* gap switch is
+   physically real; it is NOT a cliff, so the hard switch became a gradual MORPH.** The
+   convective-dynamo X-ray decline across the **Kraft break (~6200 K)** is a ramp, not a
+   step at 6500 K — so the hard `regimeOf` boundary overstated the sharpness and a fade
+   is *more* honest (the boundaries were always nominal; fits "evocative range, not
+   predictive"). `drawActivity` rewritten to morph via `smoothstep` weights: across
+   cool↔gap the band's saturated ceiling descends 10⁻³→10⁻⁶ as it fades, **shrinking
+   INTO** the dashed gap sliver right where it lands = **one object morphing, NOT two
+   ghosts crossfading** (advisor's steer — the dashed line fades IN only in the 2nd half
+   of the transition, by which point the band has collapsed onto its level → no double
+   image; verified by screenshotting 6300/6500/6700/6900 K). Secondary gap↔hot (10000 K)
+   edge = plain alpha crossfade (the user's case is the 6500 K edge). Band-draw
+   extracted to a reusable `drawXrayBand(decFromLog,{logHi,logLo,dim,tag,labels,alpha})`;
+   `drawXrayGap`/`drawGudelBenzRadio` gained an `alpha` param; edge labels ride the band
+   alpha (text can't interpolate → it dissolves). **Caption stays DISCRETE +
+   length-matched** (don't fade text = the resize jank).
 
 3. **HR variable-star-zones toggle resized the panel.** `.legend-vars` was `display:none`
    → revealed on toggle, adding height. **Fix = `visibility:hidden`→`visible`** (NOT

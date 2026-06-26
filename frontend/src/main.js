@@ -553,10 +553,21 @@ function configureAgeNum(minYr, maxYr) {
   els.ageNum.max = (Math.ceil(maxG / step) * step).toFixed(decimals);
 }
 
-// Format an age (yr) for the number input, rounded onto the current step grid so
-// it displays aligned (no `:invalid`) and the spinner steps from a clean value.
-const gyrNum = (yr) =>
-  (Math.round(yr / 1e9 / ageNumStep) * ageNumStep).toFixed(ageNumDecimals);
+// Format an age (yr) for the number input. Show the TRUE value — NOT snapped onto
+// the coarse spinner step. That snapping made two distinct entries collide: a 1.44 M☉
+// star at 2.14 Gyr (X-ray gap) and 2.16 Gyr (coronal X-ray) both rendered "2.15" even
+// though the star — and the SED — used the exact entered age (the readout already
+// shows the truth via gyr()). Precision is tied to the VALUE (≥3 significant figures)
+// so two nearby ages always read distinctly, with the window's adaptive `decimals`
+// only as a FLOOR so a short-lived massive star can't collapse to "0.00". The spinner
+// step/min/max (niceAgeStep) are untouched — the up/down arrows still snap to the nice
+// grid; a hand-typed off-grid value is simply honored (there is no form to validate).
+const gyrNum = (yr) => {
+  const g = yr / 1e9;
+  if (!(g > 0)) return g.toFixed(ageNumDecimals);
+  const sig = Math.max(0, 2 - Math.floor(Math.log10(g)));   // decimals for 3 sig figs
+  return g.toFixed(Math.max(ageNumDecimals, sig));
+};
 
 // --- latest-request-wins -----------------------------------------------------
 // Two independent token streams: the per-change state fetch, and the track fetch
@@ -694,9 +705,10 @@ async function refreshTrack() {
     if (t.length) {
       ageMin = t[0].age_yr;
       ageMax = t[t.length - 1].age_yr;
-      // Re-grid the spinner to this window's span (sets step/min/max) BEFORE the
-      // refresh() below re-displays the age, so the shown value is aligned to the
-      // new step in the same cycle (no stale-misalignment frame).
+      // Re-grid the SPINNER to this window's span (step/min/max, so arrow clicks move
+      // ~1% of the lifetime) BEFORE the refresh() below — its decimals become the
+      // display-precision FLOOR. The displayed value itself is the true age, not
+      // step-aligned (see gyrNum), so a hand-typed value is honored across the cycle.
       configureAgeNum(ageMin, ageMax);
       // First track only: place the default star at its headline age (the Sun's
       // ~4.6 Gyr) rather than at a raw fraction — the window no longer starts at
