@@ -943,6 +943,24 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   stay legible), captions all correct, **no console errors**. No JS test harness → the screenshot pass
   *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no
   backend/API/spine touch).
+- **Done (UX, Lane–Emden caption no longer resizes the panel — frontend-only):** the user reported
+  that scrubbing the n-slider to **n=1.5** (whose physics caption is the longest of the five
+  landmarks) grew the panel height. Root cause: `.lane-caption` reserved only `min-height: 1.4em`
+  (~1 line), so a caption that wrapped to 2 lines pushed the (always-4-row) readout down and changed
+  the whole panel height. Fix is **CSS-only** (no JS / `lane.js` touch): reserve the tallest caption's
+  height so the panel is fixed regardless of n. **Measured** the value rather than guessed (Playwright,
+  swapping each caption string at six panel widths): the landmark captions (~100–135 chars) **all wrap
+  to exactly 2 lines at every desktop width ≥460px** and to 3 lines only once the panel is phone-narrow
+  — so `min-height: 2.9em` (2 lines) is desktop-stable **with no added gap** (every caption is already
+  2 lines there), plus `@media (max-width:480px){min-height:4.35em}` (3 lines) for the single-column
+  phone layout. Verified by driving the real number input across n=0/1/1.5/2.5/3/5 at viewport
+  1440/900/390: **panel height SPREAD = 0.0px** at all three (was the resize). The advisor's "reserve
+  for the worst supported width" held, but the **measured** per-width line counts let me avoid a flat
+  3-line reserve that would have left a permanent ~18px desktop gap (fighting the prior density pass).
+  Known twin (out of scope, noted): `.spectrum-caption` has the identical latent `min-height: 1.4em`.
+  No JS test harness → the Playwright pass *is* the regression check (as in Phases 2–5); **pytest
+  unchanged (137)** — frontend-only. The "more precise interior models?" question is captured as a new
+  ROADMAP idea (real MESA `profile.data` radial structure — the honest successor to this panel).
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

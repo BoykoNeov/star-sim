@@ -124,11 +124,20 @@ main {
 .lane-body > div { min-width: 0; }
 #lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; max-width: 100%; }
 .lane-controls { min-width: 0; }   /* let the readout values wrap, not overflow */
-/* The updating "what does this n mean physically" line under the n slider. */
+/* The updating "what does this n mean physically" line under the n slider.
+   Reserve the tallest caption's height so scrubbing n never resizes the panel
+   (the readout below is always 4 rows and the canvas height is fixed, so a stable
+   caption fully stabilizes the panel). MEASURED: the landmark captions (~100-135
+   chars) all wrap to exactly 2 lines at the panel's normal desktop width (>=460px)
+   and to 3 lines only once the panel is phone-narrow. So 2 lines is the desktop
+   reserve (gap-free — every caption is already 2 lines there); the phone bump below
+   covers the single-column layout. */
 .lane-caption {
   color: var(--accent); font-size: 12.5px; line-height: 1.45;
-  margin: 2px 0 12px; min-height: 1.4em;
+  margin: 2px 0 12px; min-height: 2.9em;   /* 2 lines @ line-height 1.45 */
 }
+/* Phone / single-column: the narrow panel wraps the longest captions to 3 lines. */
+@media (max-width: 480px) { .lane-caption { min-height: 4.35em; } }
 
 /* Spectrum panel (spec §5): a full-width band (the `.wide` class) — the wavelength
    axis wants width, and it's a derived view (of Teff/log g/[Fe/H]), not part of the
