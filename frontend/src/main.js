@@ -176,6 +176,14 @@ for (const r of RESPONSIVE) {
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
+// `ageValue` (absolute years, below) is the SOURCE OF TRUTH for the age — analogous
+// to `massValue`. `ageFraction` is a *display* derived from it: each track has its
+// own age window, so when mass/[Fe/H] changes (and the window moves) we KEEP the
+// absolute age and recompute the fraction, clamped to the new window — so moving the
+// mass slider doesn't change the age value when it stays in range. ageValue is kept
+// UNCLAMPED (the desired age); only the fetch/display clamp it, so dragging mass up
+// through short-lived stars and back springs the age back instead of ratcheting it
+// to zero.
 let ageFraction = 0.46;   // slider position 0..1, mapped into [ageMin, ageMax]
 // The age window is read off the TRACK itself (first/last row's age_yr) — one
 // source of truth, so the slider domain and the composition panel's EEP span can
@@ -188,8 +196,8 @@ let ageMin = 0, ageMax = 1e10;
 // The age number input's spinner grid, set per-window by configureAgeNum(): a
 // fixed step would be useless for short-lived massive stars (see configureAgeNum).
 let ageNumStep = 0.01, ageNumDecimals = 2;
-let firstTrackLoaded = false;
 const DEFAULT_AGE_YR = 4.6e9;   // land the default star (the Sun) at ~4.6 Gyr
+let ageValue = DEFAULT_AGE_YR;  // desired absolute age (yr); see ageFraction above
 // The valid mass span tightens with [Fe/H] (the backend has a dead low-mass
 // corner at high metallicity — super-solar M-dwarfs have no evolved tracks).
 // Refetched from /mass_range whenever [Fe/H] changes; used to clamp the slider
@@ -652,7 +660,12 @@ async function refresh() {
   const mass = massValue;
   els.mass.value = clamp01(sliderFromMass(mass));
   const feh = Number(els.feh.value);
-  const age = ageMin + ageFraction * (ageMax - ageMin);
+  // Fetch + display at the desired age, CLAMPED to the current window. ageValue is
+  // the unclamped source of truth; the thumb is set from it in refreshTrack() and the
+  // age handlers — refresh() must NOT re-read els.age.value (that re-quantizes to the
+  // 0.0005 step and reintroduces the razor-sharp-phase off-by-one). Display == fetch
+  // == readout (all the clamped age), so the unclamped desired value is never shown.
+  const age = Math.min(Math.max(ageValue, ageMin), ageMax);
 
   setNum(els.massNum, fmt(mass));
   setNum(els.fehNum, feh.toFixed(2));
@@ -710,12 +723,15 @@ async function refreshTrack() {
       // display-precision FLOOR. The displayed value itself is the true age, not
       // step-aligned (see gyrNum), so a hand-typed value is honored across the cycle.
       configureAgeNum(ageMin, ageMax);
-      // First track only: place the default star at its headline age (the Sun's
-      // ~4.6 Gyr) rather than at a raw fraction — the window no longer starts at
-      // age 0, so 0.46 would no longer mean "4.6 Gyr".
-      if (!firstTrackLoaded && ageMax > ageMin) {
-        firstTrackLoaded = true;
-        ageFraction = clamp01((DEFAULT_AGE_YR - ageMin) / (ageMax - ageMin));
+      // The age WINDOW moved with the new track, but the desired absolute age
+      // (ageValue) is preserved — recompute the slider fraction from it, clamped to
+      // the new window, and sync the thumb. So changing mass/[Fe/H] keeps the age
+      // fixed when it stays in range, and pins it to the nearest end when it doesn't
+      // (ageValue itself stays unclamped, so dragging back springs it out again). On
+      // the very first track ageValue is still the Sun's DEFAULT_AGE_YR, so this also
+      // places the default star at ~4.6 Gyr — no first-track special case needed.
+      if (ageMax > ageMin) {
+        ageFraction = clamp01((ageValue - ageMin) / (ageMax - ageMin));
         els.age.value = ageFraction;
       }
       rebuildAgeTicks();
@@ -806,6 +822,11 @@ async function init() {
     // from the exact value purely as a display (the browser may re-quantize *that*).
     ageFraction = snapAge(Number(els.age.value));
     els.age.value = ageFraction;
+    // ageValue (the source of truth) is the EXACT absolute age this fraction maps to
+    // — keep the exact float so refresh() fetches at it (preserving the off-by-one
+    // fix) and so a later mass/[Fe/H] change preserves *this* age, not a re-quantized
+    // one.
+    ageValue = ageMin + ageFraction * (ageMax - ageMin);
     refresh();
   });
 
@@ -830,7 +851,8 @@ async function init() {
     if (els.ageNum.value.trim() === "" || !(ageMax > ageMin)) return;
     const gy = Number(els.ageNum.value);
     if (!isFinite(gy)) return;
-    ageFraction = clamp01((gy * 1e9 - ageMin) / (ageMax - ageMin));
+    ageValue = gy * 1e9;   // the typed absolute age is the new desired value
+    ageFraction = clamp01((ageValue - ageMin) / (ageMax - ageMin));
     els.age.value = ageFraction;
     refresh();
   });

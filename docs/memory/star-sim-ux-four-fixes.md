@@ -1,6 +1,6 @@
 ---
 name: star-sim-ux-four-fixes
-description: "Four user-reported frontend fixes — mass-slider 0.999 (source-of-truth), SED X-ray-gap visible marker, HR-toggle no-resize (visibility:hidden), and the spectral-classification line."
+description: "Frontend slider/UX fixes — mass-slider 0.999 (source-of-truth), age-display honors exact entry, SED X-ray-gap marker + morph, HR-toggle no-resize (visibility:hidden), classification line, and moving mass/feh preserves the absolute age value (ageValue source of truth, Option-2 clamp-only-for-display)."
 metadata: 
   node_type: memory
   type: project
@@ -88,5 +88,40 @@ reported fixes)" bullet — this captures the **reusable gotchas**.
    it schematic (from Teff/log g/phase, not real spectral lines). Verified: Sun=G2 V
    yellow dwarf, hot ZAMS=O4 V blue main-sequence, evolved 1 M☉=K3 III orange giant.
 
+5. **Moving the mass (or [Fe/H]) slider no longer changes the age value** (user ask:
+   "don't change one slider's value when moving another — specifically mass vs age").
+   Root cause = the age source of truth was the slider **fraction** (0..1), not the
+   absolute age: each track has its own `[ageMin, ageMax]` window read off the track, so
+   keeping the fraction across a mass change made the absolute age (`ageMin + frac·span`)
+   jump — a short-lived star at "fraction 0.46" is a wildly different Gyr value than a
+   long-lived one. **Fix = make absolute years `ageValue` the source of truth** (the same
+   pattern as `massValue` / the age-display fix): on a mass/feh change, `refreshTrack`
+   recomputes the slider *fraction* from the preserved `ageValue`, clamped to the new
+   window. **Option 2 (advisor-confirmed): keep `ageValue` UNCLAMPED** (the desired age) —
+   only the fetch/display clamp it. The mass slider fires `refreshTrack` on **every input
+   event**, so clamping `ageValue` itself (Option 1) would *ratchet* the age to ~0 as you
+   drag up through Myr-lifetime massive stars; Option 2 makes the age ride along and
+   **spring back** when you drag back into a long-lived regime. **NOT the lying-display
+   antipattern** (the discriminator that separates it from the 2.14/2.16 bug above):
+   everything shown — number box, readout `s.age_yr`, thumb — uses the **clamped** age;
+   only the hidden `ageValue` is unclamped and never shown, so display == fetch == readout
+   always. **Three rules to preserve:** (a) `refresh()` computes
+   `age = clamp(ageValue, ageMin, ageMax)` for BOTH the fetch and `setNum`, and must
+   **not** re-read/recompute the thumb from `els.age.value` (that re-quantizes to the
+   0.0005 step and reintroduces the razor-sharp-phase off-by-one — see
+   [[star-sim-ux-age-tick-fixes]]); thumb-setting stays in the handlers + `refreshTrack`.
+   (b) the age-scrub handler sets `ageValue = ageMin + snappedFraction·span` (the EXACT
+   float, so a landmark snap still fetches the landmark age → phase readout correct).
+   (c) the age-num handler sets `ageValue = typedGyr·1e9`. **feh comes along for free**
+   (both go through `refreshTrack`). `firstTrackLoaded` removed — initializing
+   `ageValue = DEFAULT_AGE_YR` makes the general path place the default Sun at 4.6 Gyr, no
+   special case. **Consequence (intended):** dragging mass *up* from the 4.6 Gyr Sun now
+   clamps massive stars to their **end-state** (4.6 Gyr exceeds their Myr life) instead of
+   the old fraction-0.46 mid-MS — the literal correct reading of the request. Verified via
+   Playwright (5 Gyr preserved on a 1→0.9 nudge; clamps to the EAGB end at 8 M☉, thumb
+   pinned 1.0; springs back to 5 Gyr; feh −0.25 preserves age; CHeB snap reads CHeB; §10
+   Sun anchor intact). Frontend-only, pytest unchanged (137).
+
 See [[star-sim-frontend-ux]], [[star-sim-draggable-responsive-panels]],
-[[star-sim-instability-strip-overlay]], [[star-sim-phase5-spectra]].
+[[star-sim-instability-strip-overlay]], [[star-sim-phase5-spectra]],
+[[star-sim-ux-age-tick-fixes]].

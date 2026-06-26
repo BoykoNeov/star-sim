@@ -1166,6 +1166,39 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   Teff sweep; only the pre-existing favicon 404, no JS errors. No JS test harness → the screenshot pass
   *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/
   API/spine touch).
+- **Done (UX, moving mass/[Fe/H] preserves the age value — frontend-only):** the user asked that moving
+  one slider not change another's value "when this would not put the other slider out of limits —
+  specifically mass vs age." Root cause: the age source of truth was the slider **fraction** (0..1), not
+  the absolute age — each track has its own `[ageMin, ageMax]` window (read off the track), so keeping the
+  fraction across a mass change made the absolute age (`ageMin + frac·span`) jump (a short-lived star at
+  "fraction 0.46" is a wildly different Gyr value than a long-lived one). **Fix = make absolute years
+  `ageValue` the source of truth** — the same source-of-truth pattern as `massValue` and the age-display
+  fix above: on a mass/feh change, `refreshTrack` recomputes the slider *fraction* from the preserved
+  `ageValue`, clamped to the new window, so the age stays put when it's still reachable. **Option 2
+  (advisor-confirmed): keep `ageValue` UNCLAMPED** (the desired age); only the fetch/display clamp it. The
+  mass slider fires `refreshTrack` on **every input event**, so clamping `ageValue` itself (Option 1)
+  would *ratchet* the age toward 0 as you drag up through Myr-lifetime massive stars — Option 2 makes the
+  age ride along and **spring back** when you drag into a longer-lived regime. **Not the lying-display
+  antipattern** (the discriminator vs the 2.14/2.16 bug): everything *shown* — number box, readout
+  `s.age_yr`, thumb — uses the **clamped** age; only the hidden `ageValue` is unclamped and never shown
+  (display == fetch == readout, always). Three rules locked in: (a) `refresh()` computes
+  `age = clamp(ageValue, ageMin, ageMax)` for BOTH the fetch and `setNum`, and must **not** re-read the
+  thumb from `els.age.value` (that re-quantizes to the 0.0005 step → the razor-sharp-phase off-by-one);
+  thumb-setting stays in the handlers + `refreshTrack`. (b) the age-scrub handler sets
+  `ageValue = ageMin + snappedFraction·span` (the EXACT float, so a landmark snap still fetches the
+  landmark age → phase readout correct). (c) the age-num handler sets `ageValue = typedGyr·1e9`. **feh
+  comes along for free** (both go through `refreshTrack`) — consistent with the user's "in the future, the
+  general principle." `firstTrackLoaded` removed: initializing `ageValue = DEFAULT_AGE_YR` makes the
+  general path place the default Sun at 4.6 Gyr, no special case. **Consequence (intended, advisor-flagged):**
+  dragging mass *up* from the 4.6 Gyr Sun now clamps massive stars to their **end-state** (4.6 Gyr exceeds
+  their Myr life) rather than showing them at the old fraction-0.46 mid-MS — the literal correct reading of
+  the request. Verified via Playwright bundled Chromium (the `chrome --headless` hijack caveat) on the
+  **real served UI**: §10 Sun anchor intact (4.6 Gyr / 5834 K / mass 1); set 5 Gyr then nudge mass 1→0.9 →
+  age stays 5.000 Gyr; drag to 8 M☉ → clamps to the EAGB end-state (40.2 Myr), thumb pinned 1.0, display
+  honest; drag back to 0.9 → 5 Gyr springs back; feh 0→−0.25 preserves the age; snap to CHeB still reads
+  CHeB; only the pre-existing favicon 404, no JS errors. No JS test harness → the screenshot/assertion pass
+  *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/
+  API/spine touch). See the memory note [[star-sim-ux-four-fixes]] (item 5).
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
