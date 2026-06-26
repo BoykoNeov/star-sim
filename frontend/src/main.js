@@ -211,6 +211,30 @@ let currentTrack = null;           // last /track result; the source for age tic
 let massTickPos = [], massTickVals = [], fehTickPos = [], ageTickPos = [];
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
+// Trailing debounce for the EXPENSIVE backend fetch behind a slider drag. Each
+// /track (and the /state inside refresh()) rebuilds the full (mass,[Fe/H]) EEP
+// interpolation window on the backend, so a fast slider fling firing dozens of
+// `input` events would spin the CPU computing intermediate stars whose results the
+// latest-wins token then just throws away. We defer only the fetch — the cheap UI
+// (thumb, number box, snap) stays synchronous so the slider never feels laggy.
+// `wrapped()` collapses a burst to ONE trailing call; `wrapped.flush()` cancels the
+// pending timer and runs it immediately (used on the slider's `change`, which fires
+// once on release / on a single click) so *clicking* and *letting go* are instant
+// while only *sliding* defers. Both read the latest globals/DOM at exec time.
+const SLIDER_FETCH_DELAY_MS = 140;
+function debounce(fn, delay) {
+  let timer = null;
+  const run = () => { timer = null; fn(); };
+  const wrapped = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(run, delay);
+  };
+  // No-op when nothing is pending: if the timer already fired, the latest value was
+  // fetched and the slider hasn't moved since, so there's nothing left to flush.
+  wrapped.flush = () => { if (timer !== null) { clearTimeout(timer); run(); } };
+  return wrapped;
+}
+
 // `massValue` is the SOURCE OF TRUTH for the mass in use (fetch + display). The range
 // slider can't represent a round mass exactly — its `step` quantizes the thumb
 // position, so re-deriving the mass from els.mass.value yields 0.999 for "1". So the
@@ -801,20 +825,35 @@ async function init() {
 
   // Sliders snap to landmarks on drag. The editable number field is kept live
   // during the drag (cheap, no fetch) so it tracks the thumb instead of lagging a
-  // fetch behind.
+  // fetch behind. The EXPENSIVE part — the /track (+/state) backend window build —
+  // is debounced: mass/[Fe/H] intermediates during a fling are *waste* (the user
+  // wants the endpoint, not every star in between), so we suppress them and fetch
+  // once when the drag settles. `change` (fires on release, and on a single click)
+  // flushes immediately, so clicking and letting go stay instant. (Age is the
+  // deliberate exception — its scrub intermediates are *wanted*; see below.)
+  const debouncedTrack = debounce(refreshTrack, SLIDER_FETCH_DELAY_MS);
+  const debouncedMassRangeTrack = debounce(
+    refreshMassRangeThenTrack, SLIDER_FETCH_DELAY_MS);
   els.mass.addEventListener("input", () => {
     const r = massFromSliderInput(Number(els.mass.value));
     els.mass.value = r.pos;
     massValue = r.mass;
     setNum(els.massNum, fmt(massValue));
-    refreshTrack();
+    debouncedTrack();
   });
+  els.mass.addEventListener("change", () => debouncedTrack.flush());
   els.feh.addEventListener("input", () => {
     els.feh.value = snap(Number(els.feh.value), fehTickPos, fehMin, fehMax);
     setNum(els.fehNum, Number(els.feh.value).toFixed(2));
-    refreshMassRangeThenTrack();
+    debouncedMassRangeTrack();
   });
+  els.feh.addEventListener("change", () => debouncedMassRangeTrack.flush());
   els.age.addEventListener("input", () => {
+    // NOT debounced, on purpose. The /state it fetches costs the same backend window
+    // build as a /track (state_at also rebuilds _interp_window), so age-fling CPU is
+    // real — but age intermediates are *wanted*: scrubbing age is the "watch the star
+    // evolve" experience, where every in-between frame is the point. Mass/[Fe/H]
+    // intermediates are waste (only the endpoint is wanted), which is why those defer.
     // ageFraction is the SOURCE OF TRUTH (like massValue): keep the EXACT snapped
     // float, never the range input's step-quantized value. Re-reading els.age.value
     // would round to the 0.0005 step and land just below a razor-sharp phase
