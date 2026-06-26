@@ -167,12 +167,24 @@ at their respective fidelities; see "Cross-cutting design" below.
 - **Live solver / reduced nuclear network** (spec §9). The ultimate "any star"
   capability; large, and only worth it if the grid approach hits a real wall.
 
-### Bonus — a subpopulation view with zero new data
+### Bonus — a subpopulation view with zero new data — **DONE**
 
-- **Instability-strip / variable-class overlay on the HR diagram.** Shade the
-  **Cepheid / RR Lyrae / δ Scuti** instability strip (and the WR/LBV regions) as
-  labeled zones. A *region*, not a slider — but it answers "show me a subpopulation"
-  with pure frontend and no new data. Cheapest honest win on this list.
+- **Instability-strip / variable-class overlay on the HR diagram.** **Shipped.** An
+  opt-in "Variable-star zones" toggle on the HR panel shades the **classical
+  instability strip** — one tilted band (κ-mechanism, He II ionization zone), drawn
+  cooler-at-higher-L from piecewise-linear (logL, Teff_blue, Teff_red) control points
+  so each class lands near its real temperature — carrying **δ Scuti / RR Lyrae /
+  Cepheids** at rising luminosity, plus two clearly-separate labeled zones (**LBV /
+  S Dor** near the Humphreys–Davidson limit, and **Miras / LPV** on the cool AGB).
+  Frontend-only: `hr.js` gained `setOverlay(on)` (zones drawn behind the track so the
+  live star stays on top, clipped to the plot frame); `index.html`/`styles.css` add
+  the toggle + a per-class legend with hover pedagogy; `main.js` wires the button.
+  Labeled **schematic** throughout (illustrative class positions, not a calibrated
+  strip) and "where such stars sit, not a claim this star is variable." Verified via
+  Playwright (default-off clean; toggle-on overlay+legend; an in-strip 1.8 M☉ star
+  lands on the strip; phone re-fits, legend wraps; no JS errors). pytest unchanged
+  (137 — frontend-only). WR was deliberately **not** added as a variable-class zone
+  (it belongs to the endgame work; its variability is a different, messier story).
 
 ## The rotation axis in depth (the headline Tier-A candidate)
 
@@ -228,8 +240,9 @@ axis**. Sketch (to be turned into a chunked plan if chosen):
 
 ## Suggested sequencing (if/when we pick from this atlas)
 
-1. **Instability-strip overlay** — zero new data, immediate "subpopulations" payoff,
-   pure frontend. The cheapest honest win.
+1. ~~**Instability-strip overlay**~~ — **DONE** (zero new data, immediate
+   "subpopulations" payoff, pure frontend). The cheapest honest win — see the Bonus
+   section above for what shipped.
 2. **Rotation `vvcrit` toggle** — the substantive answer to the user's actual
    question; gated on the one-time mass-ramp diff. Real data, real WR relevance.
 3. **v sin i broadening** — small frontend follow-on that *shows* the rotation the

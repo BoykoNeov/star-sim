@@ -84,6 +84,26 @@ const comp = createComp(document.getElementById("comp-canvas"));
     });
   }
 }
+// HR diagram variable-star overlay: a single on/off toggle that shades the
+// instability strip (δ Scuti / RR Lyrae / Cepheids) plus the LBV and Mira zones as
+// a labeled, schematic map of where variable stars live on the diagram. Pure view —
+// no refetch; hr.js redraws the zones behind the retained track + marker. The button
+// is a non-radio toggle, so it flips its own active/aria-pressed state and a panel
+// class that reveals the legend.
+{
+  const panel = document.querySelector(".hr-panel");
+  const btn = panel?.querySelector('.hr-modes [data-overlay="vars"]');
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const on = !btn.classList.contains("active");
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+      panel.classList.toggle("show-vars", on);
+      hr.setOverlay(on);
+    });
+  }
+}
+
 // The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
 // not a consumer of it — it's driven by the polytropic index n alone and owns its
 // own control + fetch. It's instantiated here but deliberately never wired into

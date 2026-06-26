@@ -17,6 +17,44 @@ const LOGL_MAX = 6;
 const PAD = 30;
 const PAD_L = 50;
 
+// --- Variable-star zones for the optional overlay (setOverlay) ----------------
+// SCHEMATIC on purpose: these are illustrative CLASS POSITIONS on the HR diagram,
+// not a metallicity-calibrated instability strip — the panel help + legend say so,
+// in keeping with the project's honesty rule (label what the data backs). They map
+// "where on the HR diagram do stars of each variable class sit," NOT a claim that
+// the currently-selected star is variable (the marker just happens to fall in or
+// out of a zone). Drawn behind the track so the live star stays legible on top.
+//
+// The classical instability strip (one band, driven by the κ-mechanism in the He II
+// partial-ionization zone) is crossed by δ Scuti, RR Lyrae and Cepheids at rising
+// luminosity. Its edges genuinely CURVE (steeper near the main sequence, shallower
+// at Cepheid luminosities), so it's given as piecewise-linear (logL, Teff_blue,
+// Teff_red) control points rather than one straight line — that lets each class
+// land near its real temperature instead of forcing RR Lyrae ~500 K off.
+const STRIP = [
+  // logL,  blue/hot(K), red/cool(K)
+  [0.3, 8700, 7100],
+  [1.0, 8400, 6900],
+  [1.7, 7500, 6100],   // RR Lyrae sit here, on the horizontal branch
+  [2.5, 7000, 5600],
+  [4.0, 6500, 5100],
+  [5.3, 6000, 4700],   // luminous classical Cepheids
+];
+// Two other variable classes, as simple (logL, Teff_K) corner polygons:
+// LBV/S Dor near the empirical upper-luminosity (Humphreys–Davidson) limit, and the
+// cool luminous Miras / long-period variables on the AGB.
+const LBV_ZONE = [[5.3, 28000], [5.3, 8500], [5.95, 12000], [5.95, 28000]];
+const MIRA_ZONE = [[2.8, 3800], [2.8, 2700], [4.4, 2700], [4.4, 4000]];
+// Labels: [text, logL, Teff_K, color] placed near each zone's center.
+const STRIP_GOLD = "#ffd98a", LBV_BLUE = "#a9c6ff", MIRA_RED = "#ff9d9d";
+const ZONE_LABELS = [
+  ["δ Scuti", 0.8, 7600, STRIP_GOLD],
+  ["RR Lyrae", 1.7, 6700, STRIP_GOLD],
+  ["Cepheids", 4.0, 5650, STRIP_GOLD],
+  ["LBV / S Dor", 5.6, 15000, LBV_BLUE],
+  ["Miras / LPV", 3.6, 3150, MIRA_RED],
+];
+
 export function createHR(canvas, cssW = 300, cssH = 260) {
   // Crisp at an explicit (smaller) display size; draw in logical W×H units.
   // W/H are `let` (not destructured const) so resize() can re-fit the canvas to
@@ -71,8 +109,65 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.textAlign = "left";   // reset for any later text draws
   }
 
-  let track = null;    // array of StellarState (age-independent, set per mass/feh)
-  let marker = null;   // current StellarState (moves as age scrubs)
+  let track = null;        // array of StellarState (age-independent, set per mass/feh)
+  let marker = null;       // current StellarState (moves as age scrubs)
+  let showOverlay = false; // variable-star zones (off by default — opt-in view)
+
+  // Fill + dashed outline the current path with a zone's colors.
+  function fillZone(fill, stroke) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = stroke;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Draw a simple (logL, Teff_K) corner polygon as a translucent zone.
+  function drawPolyZone(corners, fill, stroke) {
+    ctx.beginPath();
+    corners.forEach(([logL, tK], i) => {
+      const x = xOf(Math.log10(tK)), y = yOf(logL);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.closePath();
+    fillZone(fill, stroke);
+  }
+
+  // The variable-star overlay: the classical instability strip (one filled band —
+  // blue edge down the control points, then red edge back up) plus the LBV and Mira
+  // zones, then the class labels on top. Clipped to the plot frame so nothing bleeds
+  // past the axes.
+  function drawOverlay() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+
+    ctx.beginPath();
+    STRIP.forEach(([logL, bK], i) => {
+      const x = xOf(Math.log10(bK)), y = yOf(logL);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    for (let i = STRIP.length - 1; i >= 0; i--) {
+      ctx.lineTo(xOf(Math.log10(STRIP[i][2])), yOf(STRIP[i][0]));
+    }
+    ctx.closePath();
+    fillZone("rgba(255,206,107,0.12)", "rgba(255,206,107,0.5)");
+
+    drawPolyZone(LBV_ZONE, "rgba(130,170,255,0.12)", "rgba(130,170,255,0.5)");
+    drawPolyZone(MIRA_ZONE, "rgba(255,120,120,0.12)", "rgba(255,120,120,0.5)");
+
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    for (const [text, logL, tK, color] of ZONE_LABELS) {
+      ctx.fillStyle = color;
+      ctx.fillText(text, xOf(Math.log10(tK)), yOf(logL));
+    }
+    ctx.textAlign = "left";
+    ctx.restore();
+  }
 
   function drawTrack() {
     if (!track || track.length < 2) return;
@@ -88,6 +183,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
 
   function draw() {
     drawAxes();
+    if (showOverlay) drawOverlay();   // behind the track, so the live star stays on top
     drawTrack();
     if (!marker) return;
     const x = xOf(Math.log10(marker.Teff_K));
@@ -103,6 +199,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
+  function setOverlay(on) { showOverlay = !!on; draw(); }
 
   // Re-fit to a new display size (the responsive layout calls this when the
   // panel's width changes) and redraw from the retained track + marker.
@@ -112,5 +209,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, resize };
+  return { setTrack, update, setOverlay, resize };
 }

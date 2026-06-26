@@ -176,6 +176,14 @@ main {
   width: 12px; height: 12px; border-radius: 2px; display: inline-block;
 }
 
+/* HR diagram variable-star overlay toggle: a single on/off button (reuses .mode-btn)
+   that reveals the instability strip + other variable-class zones, plus their legend.
+   Default off — an opt-in labeled view, so the default HR look is unchanged. */
+.hr-modes { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.hr-modes .help { margin-left: auto; }
+.legend-vars { display: none; }
+.hr-panel.show-vars .legend-vars { display: flex; }
+
 /* Composition view toggle (Phase 4): bulk H/He/metals vs the per-element detail
    (fourteen metals, Li…Fe) vs the light-element view (Li/Be/F). The three legends
    swap with the active view so the color key always matches the chart; .legend is

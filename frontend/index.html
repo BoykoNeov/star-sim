@@ -39,8 +39,19 @@
     </section>
 
     <section class="panel hr-panel" data-panel-id="hr">
-      <h2>HR diagram <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age.">?</span></h2>
+      <h2>HR diagram <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age. Toggle 'Variable-star zones' to overlay the instability strip and other variable-star classes as a labeled map.">?</span></h2>
+      <div class="hr-modes" role="group" aria-label="HR diagram overlays">
+        <button type="button" class="mode-btn" data-overlay="vars" aria-pressed="false">Variable-star zones</button>
+        <span class="help" tabindex="0" data-tip="Overlays the regions of the HR diagram where stars are known to pulsate or erupt — a labeled map of the major variable-star classes. The boundaries are SCHEMATIC (illustrative class positions, not a metallicity-calibrated instability strip): they show WHERE such stars sit, not a claim that this particular star is variable. The classical instability strip (gold) is one tilted band, driven by the same opacity (κ) mechanism in the helium-ionization zone, crossed by δ Scuti, RR Lyrae and Cepheids at rising luminosity. LBV and Mira are separate instabilities elsewhere on the diagram. Drag the star into a shaded zone to see when a star of this mass and age would be a pulsating (or eruptive) variable.">?</span>
+      </div>
       <canvas id="hr-canvas"></canvas>
+      <div class="legend legend-vars">
+        <span><i style="background:#ffce6b"></i><span class="tip" tabindex="0" data-tip="Short-period (hours) pulsators where the instability strip crosses the main sequence — A–F stars of ~1.5–2.5 M☉. The lowest-luminosity members of the classical strip.">δ Scuti</span></span>
+        <span><i style="background:#ffce6b"></i><span class="tip" tabindex="0" data-tip="Old, metal-poor (Population II) horizontal-branch stars (~0.5–0.7 M☉, periods ~0.2–1 day). Their near-uniform luminosity makes them standard candles for the Milky Way's halo and globular clusters.">RR Lyrae</span></span>
+        <span><i style="background:#ffce6b"></i><span class="tip" tabindex="0" data-tip="Classical (δ Cephei) Cepheids — luminous evolved stars (~3–20 M☉) looping back through the strip, pulsating over 1–100 days. Their period–luminosity relation is a rung of the extragalactic distance ladder.">Cepheids</span></span>
+        <span><i style="background:#a9c6ff"></i><span class="tip" tabindex="0" data-tip="Luminous Blue Variables near the empirical upper-luminosity (Humphreys–Davidson) limit — the most massive evolved stars (e.g. η Carinae), prone to giant eruptions. An eruptive instability, distinct from the strip's pulsation.">LBV / S Dor</span></span>
+        <span><i style="background:#ff7878"></i><span class="tip" tabindex="0" data-tip="Long-period variables — cool, luminous pulsating red giants on the asymptotic giant branch (periods ~100–1000 days). The most common variables by number, shedding mass through dusty winds.">Miras / LPV</span></span>
+      </div>
     </section>
 
     <section class="panel comp-panel" data-panel-id="comp">

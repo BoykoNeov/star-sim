@@ -961,6 +961,41 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   No JS test harness → the Playwright pass *is* the regression check (as in Phases 2–5); **pytest
   unchanged (137)** — frontend-only. The "more precise interior models?" question is captured as a new
   ROADMAP idea (real MESA `profile.data` radial structure — the honest successor to this panel).
+- **Done (UX, instability-strip / variable-star HR overlay — frontend-only):** the
+  ROADMAP's "cheapest honest win" — an opt-in **labeled map of where variable stars
+  live on the HR diagram**, the first "show a subpopulation" feature. A new
+  "Variable-star zones" toggle on the HR panel (default **off** — the default minimal
+  HR look is unchanged) shades the **classical instability strip** plus two other
+  variable classes. `hr.js` gained `setOverlay(on)`: zones are drawn **behind the
+  track + marker** (so the live star stays legible on top) and **clipped to the plot
+  frame**. The classical strip is **one tilted band** (κ-mechanism, He II
+  partial-ionization zone) carrying **δ Scuti / RR Lyrae / Cepheids** at rising
+  luminosity; its edges genuinely **curve** (steeper near the MS, shallower at Cepheid
+  L), so it's given as **piecewise-linear (logL, Teff_blue, Teff_red) control points**
+  rather than one straight line — that lets each class land near its real temperature
+  (a single straight band misfits RR Lyrae by ~500 K). Two more clearly-separate
+  labeled zones: **LBV / S Dor** (near the Humphreys–Davidson upper-luminosity limit)
+  and **Miras / LPV** (cool luminous AGB). **Honesty (the project rule):** labeled
+  **schematic** everywhere — "illustrative class positions, not a metallicity-
+  calibrated strip" and "WHERE such stars sit, **not** a claim that this star is
+  variable" (the marker just happens to fall in or out of a zone). **WR deliberately
+  NOT added** as a variable-class zone (it belongs to the endgame work; WR variability
+  is a different, messier story — adding a hot-left zone would over-claim). UI mirrors
+  the comp-panel toggle pattern: a single non-radio `.mode-btn` (flips its own
+  `active`/`aria-pressed` + a `.hr-panel.show-vars` class that reveals the legend), a
+  `?` help glyph with the schematic caveat, and a 5-entry `.legend-vars` with per-class
+  hover pedagogy (δ Sct/RR Lyr/Cepheid/LBV/Mira each get their physics + why-they-
+  matter gloss). `index.html` (toggle row + legend + extended panel `<h2>` tip),
+  `styles.css` (`.hr-modes` + `.legend-vars` reveal), `main.js` (the toggle wiring) —
+  no backend / API / spine touch. Verified via **Playwright bundled Chromium** (the
+  `chrome --headless` hijack caveat) on the **real served UI**: default-off clean;
+  toggle-on → overlay + legend (`aria-pressed=true`, legend visible), toggle-off →
+  legend hidden; the strip tilts cool-at-higher-L with the Sun sitting just cool of it
+  (correct — the Sun is not a strip variable); an **in-strip 1.8 M☉ star's marker
+  lands on the strip** (the payoff demo); phone (390) re-fits the canvas (ResizeObserver
+  → `hr.resize`) and the legend wraps to two rows, no overflow; only the pre-existing
+  favicon 404, no JS errors. No JS test harness → the screenshot pass *is* the
+  regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only.
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
