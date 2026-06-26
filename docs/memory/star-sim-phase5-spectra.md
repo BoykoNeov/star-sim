@@ -235,3 +235,25 @@ keep `/spectrum` off `PROVIDER`; never put pymsg in `pyproject.toml` (build-cont
 bounds wider than any real star so dragging never 422s; bake the cube into the build container
 (`msg_spike`) and `docker cp` the `.npz` out — never import pymsg at run time. **chrome --headless
 hijacks the user's running Chrome → use Playwright's bundled Chromium for headless shots.**
+
+**Done (UX, rainbow far-red fix + nm axis — frontend-only, pytest unchanged 137).** User: the
+spectrum panel's per-λ rainbow was true only to ~7000 Å, then swung back to **yellow→green** instead
+of staying red; also wanted the axis in **nm**. ROOT CAUSE (node-measured the CIE fit, not guessed):
+`color.js` `wavelengthToCSS` **normalizes every λ to full brightness**, and the Wyman CMF fit's
+chromaticity drifts in the far tails (its lobes decay at different rates → past ~690 nm `cieY`
+outlives `cieX`, so 740 nm rendered **pure (0,255,0) green**; below ~390 nm → cyan) — full-brightness
+norm then amplifies the wrong ratio into a vivid wrong hue. FIX = two tail corrections **confined to
+`wavelengthToCSS`** (advisor's key guard: leave the CMFs + `planckToXYZ` UNTOUCHED → star color + §10
+Sun anchor unchanged, since there the same tail error averages out in the integral): (1) **hue
+clamp** the wavelength feeding the CMFs to **[410, 680] nm** (645–680 nm are an identical saturated
+red; past it the hue no longer changes, only brightness does — also fixes the 690–700 orange drift);
+(2) **edge luminance falloff** to a 0.35 floor near violet (380→420) + red (700→780), multiplied in
+**LINEAR light BEFORE the sRGB gamma** (NOT Bruton's 0.8-gamma — the pipeline already has proper
+gamma). Net: far red deep-red→dark (720 nm 236,0,0 → 780 nm 160,0,0), violet deep, core unchanged.
+SHARED with `sed.js` (same fn) → fixes its visible-band edge too. **nm axis = display-only,
+spectrum.js only** (data stays Å, the existing `lam[i]/10` pattern; only x-tick labels via
+`xOf(nm*10)` + axis title + comments changed; line-feature λ's stay in Å). **VERIFY WITH A COOL STAR**
+(advisor): its flux peaks in the red so far-red columns are *tall* and actually exercise the fix — a
+hot star's near-zero far-red columns wouldn't. Verified Playwright bundled Chromium, 0.2 M☉ M-dwarf
+(3258 K): clean rainbow, far red solid-red-not-green, nm ticks, no JS errors. Cross-refs
+[[star-sim-frontend-ux]].

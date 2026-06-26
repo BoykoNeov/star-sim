@@ -15,9 +15,14 @@
 // and the ABSORPTION LINES cut into it — both preserved by per-spectrum
 // normalization, neither legible if a hot star pinned the cool ones to the floor.
 //
-// The visible band (3800–7800 Å) is shaded with the true per-wavelength spectral
+// The visible band (380–780 nm) is shaded with the true per-wavelength spectral
 // colour (color.js' CIE fit), so the panel reads as a spectrograph's rainbow with
 // dark lines carved out of it; UV/near-IR flanks are shown muted-grey.
+//
+// UNITS: the baked grid (and so every array here) is in Ångström — but the AXIS is
+// labelled in nm (1 nm = 10 Å), the friendlier unit. The internal Å values are
+// converted only at the display edges: /10 for the rainbow colour and for the x
+// ticks. The line-feature wavelengths below stay in Å to match the data domain.
 
 import { fitCanvas } from "./canvas.js";
 import { wavelengthToCSS } from "./color.js";
@@ -244,17 +249,19 @@ export function createSpectrum({ api }) {
 
     ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
 
-    // x ticks at round wavelengths.
+    // x ticks at round wavelengths. Data is in Å; the axis is labelled in nm, so
+    // we step in nm (every 100 nm = 1000 Å) and convert to Å for positioning.
     ctx.textAlign = "center";
-    for (let l = 4000; l <= lamHi; l += 1000) {
-      if (l <= lamLo) continue;
-      const x = xOf(l);
+    for (let nm = 400; nm * 10 <= lamHi; nm += 100) {
+      const lA = nm * 10;
+      if (lA <= lamLo) continue;
+      const x = xOf(lA);
       ctx.globalAlpha = 0.22;
       ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.fillText(String(l), x, H - PAD_B + 14);
+      ctx.fillText(String(nm), x, H - PAD_B + 14);
     }
-    ctx.fillText("wavelength (Å)", W / 2, H - 6);
+    ctx.fillText("wavelength (nm)", W / 2, H - 6);
 
     // y label (normalized flux — absolute scale lives in the L readout).
     ctx.save();

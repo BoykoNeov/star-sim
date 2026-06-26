@@ -114,15 +114,43 @@ export function teffToCSS(kelvin) {
 // that wavelength, for the spectrum panel's "rainbow" continuum shading. Same
 // CIE-fit machinery as the Teff color, but the XYZ tristimulus IS the CMF value
 // at this single λ (a delta-function spectrum). Clamp out-of-gamut negatives,
-// normalize to a vivid full-brightness hue (we're painting a spectral strip, not
-// matching a luminance), gamma last. Outside ~380–700 nm the CMFs fall to ~0, so
-// the deep violet/red ends darken naturally.
+// normalize to a vivid hue (we're painting a spectral strip, not matching a
+// luminance), gamma last.
+//
+// TWO TAIL CORRECTIONS (without them the strip lies past the band edges):
+//
+//  • Hue clamp. The Wyman CMF fit is faithful only across the band's core; in the
+//    far tails its lobes decay at different rates, so the X:Y:Z RATIO drifts —
+//    past ~690 nm cieY outlives cieX and the hue swings back toward GREEN (740 nm
+//    would render pure green!), below ~400 nm it drifts toward cyan. Normalizing
+//    to full brightness then amplifies that wrong ratio into a vivid wrong hue.
+//    So the wavelength feeding the CMFs is clamped to [410, 680], the range where
+//    the spectral-locus chromaticity is already saturated (645–680 nm are an
+//    identical pure red; ~400–410 nm a saturated violet). Past it the perceived
+//    hue no longer changes anyway — only the brightness does, which is:
+//
+//  • Edge luminance falloff. Eye response fades to zero past the band edges, so a
+//    750 nm photon is a DIM deep red, not a full-bright one. Ramp brightness down
+//    to a floor near the violet (380→420 nm) and red (700→780 nm) extremes, in
+//    LINEAR light (before the sRGB gamma); a floor (not black) keeps the edge
+//    visible. Net effect: the far red now reads as deep red fading to dark, and
+//    the far violet as deep violet — the real colours, not green/cyan.
+//
+// NB: confined to this function on purpose — the CMFs and planckToXYZ are left
+// untouched, so the star color and the §10 Sun anchor are unchanged (there the
+// same tail error averages out in the integral).
 export function wavelengthToCSS(nm) {
-  const X = cieX(nm), Y = cieY(nm), Z = cieZ(nm);
+  const hueNm = Math.max(410, Math.min(680, nm));
+  const X = cieX(hueNm), Y = cieY(hueNm), Z = cieZ(hueNm);
   let rgb = xyzToLinearSRGB(X, Y, Z).map((c) => Math.max(0, c));
   const max = Math.max(rgb[0], rgb[1], rgb[2]) || 1;
+
+  let lum = 1;
+  if (nm < 420) lum = 0.35 + 0.65 * Math.max(0, (nm - 380) / 40);
+  else if (nm > 700) lum = 0.35 + 0.65 * Math.max(0, (780 - nm) / 80);
+
   const [r, g, b] = rgb
-    .map((c) => linearToSRGB(c / max))
+    .map((c) => linearToSRGB((c / max) * lum))
     .map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
   return `rgb(${r}, ${g}, ${b})`;
 }

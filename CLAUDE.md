@@ -1199,6 +1199,38 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   CHeB; only the pre-existing favicon 404, no JS errors. No JS test harness → the screenshot/assertion pass
   *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/
   API/spine touch). See the memory note [[star-sim-ux-four-fixes]] (item 5).
+- **Done (UX, spectrum rainbow far-red fix + nm axis — frontend-only):** the user reported the
+  spectrum panel's per-wavelength rainbow was only true to ~7000 Å — past that it swung back to
+  **yellow then green** instead of staying **red** — and asked to **label the axis in nm**.
+  **Root cause (measured, not guessed — node-evaluated the CIE fit 600→780 nm):** `color.js`'s
+  `wavelengthToCSS` normalizes every wavelength to **full brightness**, and the Wyman CMF fit is
+  chromatically faithful only across the band core — in the far tails its lobes decay at different
+  rates so the **X:Y:Z ratio drifts**: past ~690 nm `cieY` outlives `cieX` (740 nm rendered **pure
+  (0,255,0) green!**), below ~390 nm it drifts toward cyan. Full-brightness normalization then
+  *amplifies* that wrong ratio into a vivid wrong hue. **Fix = TWO tail corrections, confined to
+  `wavelengthToCSS`** (advisor's key guard — the CMFs and `planckToXYZ` are **untouched**, so the
+  star color + §10 Sun anchor are guaranteed unchanged, since there the same tail error averages out
+  in the Riemann integral; only the two rainbow panels needed re-verifying): (1) **hue clamp** — the
+  wavelength feeding the CMFs is clamped to **[410, 680] nm**, the range where the spectral-locus
+  chromaticity is already saturated (645–680 nm are an identical pure red; this also *fixes* 690–700
+  nm, which were already drifting to orange, back to pure red), and past it the perceived hue no
+  longer changes anyway; (2) **edge luminance falloff** — eye response fades to zero past the band
+  edges, so a 750 nm photon is a **dim deep red**, not full-bright; ramp brightness to a 0.35 floor
+  near the violet (380→420) and red (700→780) extremes, multiplied in **LINEAR light before the sRGB
+  gamma** (advisor — not Bruton's 0.8-gamma; the pipeline already has proper gamma), a floor not
+  black so the edge stays visible. Net: far red now reads deep-red→dark (verified node output: 720
+  nm `236,0,0` → 780 nm `160,0,0`), far violet deep violet, rainbow core unchanged. **nm axis
+  (display-only, spectrum.js only):** the baked grid stays in Å (the existing `lam[i]/10` pattern);
+  only the x-tick **labels** (step in nm, `x=xOf(nm*10)`) + the axis title changed to nm, with the
+  header + `VIS_LO/HI` comments updated so the mixed-unit state isn't a future trap (the line-feature
+  λ's stay in Å to match the data domain). **The fix is shared with `sed.js`** (same
+  `wavelengthToCSS`), correctly fixing its visible-band rainbow edge too. **Verified with a COOL
+  star** (advisor — its flux peaks in the red so the far-red columns are *tall* and actually exercise
+  the fix; a hot star's near-zero far-red columns wouldn't): Playwright bundled Chromium on the real
+  served UI, 0.2 M☉ M-dwarf (3258 K) — spectrum shows a clean violet→red rainbow with the far red
+  **solid red fading to dark** (no green), nm axis (400/500/600/700/800), TiO guides lit; SED visible
+  sliver still a clean rainbow, not washed out; no JS errors. No JS test harness → the screenshot
+  pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only.
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
