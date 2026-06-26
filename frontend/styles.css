@@ -86,6 +86,17 @@ main {
   background: #05070d; border-radius: 8px;
 }
 
+/* Spectral-classification line under the 3D star: the schematic MK type (tinted with
+   the star's true color) + its common name. Centered, fixed-height so it never
+   resizes the panel as the label changes. */
+.star-class {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 10px; min-height: 1.5em;
+}
+.sc-type { font-weight: 700; font-size: 15px; letter-spacing: 0.4px; }
+.sc-name { color: var(--muted); font-size: 13px; }
+.sc-name::before { content: "·"; margin-right: 6px; color: var(--line); }
+
 /* True-size scale bar at the bottom of the star panel: the honest companion to the
    log-COMPRESSED 3D render above. Sized by JS (fitCanvas + the ResizeObserver →
    scale.resize); the stylesheet only frames, centers, and guards overflow. */
@@ -178,11 +189,15 @@ main {
 
 /* HR diagram variable-star overlay toggle: a single on/off button (reuses .mode-btn)
    that reveals the instability strip + other variable-class zones, plus their legend.
-   Default off — an opt-in labeled view, so the default HR look is unchanged. */
+   Default off — an opt-in labeled view, so the default HR look is unchanged.
+   The legend uses visibility (not display:none) so its layout box — and the panel's
+   height — stay reserved whether the overlay is on or off: toggling it must not
+   resize the panel. visibility auto-reserves the correctly-wrapped height at any
+   flex-wrap width with no measurement, and drops the hidden legend from tab order. */
 .hr-modes { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
 .hr-modes .help { margin-left: auto; }
-.legend-vars { display: none; }
-.hr-panel.show-vars .legend-vars { display: flex; }
+.legend-vars { visibility: hidden; }
+.hr-panel.show-vars .legend-vars { visibility: visible; }
 
 /* Composition view toggle (Phase 4): bulk H/He/metals vs the per-element detail
    (fourteen metals, Li…Fe) vs the light-element view (Li/Be/F). The three legends

@@ -1036,6 +1036,51 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   → `hr.resize`) and the legend wraps to two rows, no overflow; only the pre-existing
   favicon 404, no JS errors. No JS test harness → the screenshot pass *is* the
   regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only.
+- **Done (UX, four reported fixes — frontend-only):** the user reported (1) the coronal/wind
+  X-ray band in the SED panel **appearing/disappearing** while dragging mass/age, (2) the start
+  mass reading **0.999 instead of 1** (and reverting to 0.999 after editing it to 1), (3) the **HR
+  variable-star-zones toggle resizing the panel**, and (4) a request for a **star classification +
+  description**. All four are frontend-only (no backend/API/spine touch); advisor-reviewed before
+  building. **(1) Not a bug — correct physics, jarring UX:** `regimeOf()` in `sed.js` gates the
+  band at Teff 6500 K (cool→A/early-F **X-ray gap**) and 10000 K (gap→hot wind-shock band), so
+  dragging across those Teff thresholds flips the band on/off — and in the gap it drew **nothing**,
+  reading as broken. Fix: the gap regime now draws a faint dashed **"X-ray gap"** marker on the
+  canvas, so the feature *transforms* rather than vanishes — honest (no fake flux band) and
+  **canvas-only** (the "gap" caption branch is deliberately length-matched across regimes to avoid
+  resize jank, so its text was left untouched — advisor: lengthening it would re-create bug #3). The
+  cool (hatched band + Güdel–Benz radio) and hot (wind band) regimes are unchanged. **(2) Root cause
+  = `<input type=range>` step quantization:** the slider can't represent the exact 1.0 M☉ position
+  (step 0.0005), so re-deriving the mass from the thumb yields 0.99917, and typing 1 just re-set the
+  thumb → next refresh re-derived 0.999. Fix in `main.js`: a **source-of-truth `massValue`** — drags
+  snap to the *exact* round mass at a tick (new `massTickVals` + `massFromSliderInput`), the number
+  box stores the exact typed value, and `refresh()`/`refreshTrack()` read `massValue` (then sync the
+  thumb visual). The feh dead-corner clamp was ported to clamp `massValue` **and persist it back**
+  (advisor's flagged touch-point — clamping only the slider visual would let a metal-rich star sit
+  below its floor). The number-box **escape hatch is preserved** (typing 0.99 stays 0.99 — snapping
+  the slider's *output* instead would have broken it, the reason a source-of-truth var was needed).
+  **(3) `.legend-vars` `display:none`→reveal added height.** Fix: `visibility:hidden`→`visible` (NOT
+  `display`, not always-show, not a measured `min-height`+media-query — advisor): it keeps the
+  layout box so the panel height is identical on/off (measured **444=444 px**), auto-reserving the
+  correctly-wrapped legend height at any flex-wrap width with **no measurement**, and drops the
+  hidden legend from tab order. Costs a small permanent gap below the canvas when off (accepted — the
+  unavoidable price of the no-resize the user asked for; not filled with a hint line, which wouldn't
+  match the 2-row legend height and would re-introduce a partial resize). **(4) New `classify.js`**
+  (a **sibling text view like scale.js**, no fetch) → a schematic **Morgan–Keenan type** under the
+  3D star: Teff → temperature class O–M + a 0–9 subdivision; **phase first, log g fallback** for the
+  luminosity class — anchoring on `phase` (MS/PMS→V) so a 40 M☉ O-star reads as a main-sequence
+  **dwarf**, NOT mislabeled a giant by its giant-like logg≈3.9 (advisor). Avoided the **"white dwarf"
+  terminology trap** — an A V star is "white main-sequence star", not "white dwarf" (that names a
+  degenerate remnant); the "<color> dwarf" idiom is restricted to G/K/M (yellow/orange/red dwarf are
+  real terms). Tinted with `teffToCSS`; a `?` help calls it schematic (from the Teff/log g/phase the
+  panels already show, not real spectral lines — the spectrum has its own panel). Shown under the
+  star canvas (`index.html` `.star-class`, fixed `min-height` so a changing label can't resize the
+  panel). Verified via **Playwright bundled Chromium** (the `chrome --headless` hijack caveat) on the
+  **real served UI** — all functional assertions pass (only the pre-existing favicon 404): Sun=**G2 V
+  yellow dwarf**, hot ZAMS=**O4 V blue main-sequence**, evolved 1 M☉=**K3 III orange giant**, gap
+  star=**A2 V white main-sequence**; mass 1↔1 across edit+age-scrub; 0.99 escape hatch held;
+  drag-snap recovers exactly 1; HR height 444=444; SED cool/gap/hot render band/**"X-ray gap"**/wind.
+  No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); **pytest
+  unchanged (137)** — frontend-only.
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

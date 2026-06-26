@@ -1,0 +1,94 @@
+// Spectral classification — the "what kind of star is this?" line under the 3D star.
+//
+// A Morgan–Keenan-style label: the effective temperature gives the temperature class
+// (O B A F G K M, hot → cool, with a 0–9 subdivision) and the evolutionary phase
+// (with surface gravity as a fallback) gives the luminosity class (I supergiant … V
+// main-sequence dwarf). It is a SCHEMATIC mapping from the two numbers the panels
+// already show (Teff, log g) plus the phase — NOT a real spectral-line classification
+// (this simulator models the spectrum separately, in its own panel); the 3D-star
+// panel's ? help says so. A sibling TEXT view like scale.js: update(state) reads the
+// marker and rewrites the line, tinting the type with the star's true blackbody color.
+
+import { teffToCSS } from "./color.js";
+
+// Temperature classes: [letter, Tlo, Thi]. Subclass 0 = hot end of the class, 9 =
+// cool end (the usual convention — the Sun, ~5800 K, is G2, near the hot end of G).
+// Boundaries are standard teaching values. The O class top is open-ended (the hottest
+// stars here reach ~50000 K and beyond), so its subclass is clamped to the real
+// O2–O9 range rather than producing a nonexistent "O0".
+const CLASSES = [
+  ["O", 30000, 52000],
+  ["B", 10000, 30000],
+  ["A", 7500, 10000],
+  ["F", 6000, 7500],
+  ["G", 5200, 6000],
+  ["K", 3700, 5200],
+  ["M", 2400, 3700],
+];
+
+// Color words per temperature class — the eye's impression of the blackbody color.
+const COLOR_WORD = {
+  O: "blue", B: "blue-white", A: "white", F: "yellow-white",
+  G: "yellow", K: "orange", M: "red",
+};
+
+function tempClass(teff) {
+  for (const [letter, lo, hi] of CLASSES) {
+    if (teff >= lo) {
+      let sub = Math.round((9 * (hi - teff)) / (hi - lo));
+      sub = Math.max(0, Math.min(9, sub));
+      if (letter === "O") sub = Math.max(2, sub); // real O stars are O2–O9.5
+      return { letter, sub };
+    }
+  }
+  // Cooler than the M floor — clamp to the latest M (a very cool dwarf or giant tip).
+  return { letter: "M", sub: 9 };
+}
+
+// Luminosity class: PHASE first — it is the honest evolutionary truth. A 40 M☉ O-star
+// is a main-sequence DWARF (V) despite a giant-like luminosity and a log g ≈ 3.9 that
+// a pure gravity threshold would mislabel "III/IV". Only for the evolved phases do we
+// fall back to log g (giants/supergiants span a wide gravity range).
+function lumClass(state) {
+  const ph = state.phase;
+  if (ph === "MS" || ph === "PMS") return { roman: "V", word: "main-sequence star" };
+  if (ph === "SGB") return { roman: "IV", word: "subgiant" };
+  const g = state.logg;
+  if (g == null) return { roman: "III", word: "giant" };
+  if (g < 1.0) return { roman: "I", word: "supergiant" };
+  if (g < 2.0) return { roman: "II", word: "bright giant" };
+  return { roman: "III", word: "giant" };
+}
+
+// A familiar common name for the headline. "<color> dwarf" is idiomatic only for
+// G/K/M (yellow/orange/red dwarf); for hotter dwarfs it misleads — "white dwarf"
+// especially names a degenerate stellar REMNANT, not an A main-sequence star — so we
+// fall back to "<color> main-sequence star". Giants/supergiants get "<color> <word>".
+function commonName(cls, lum) {
+  const color = COLOR_WORD[cls.letter];
+  if (lum.roman === "V") {
+    if (cls.letter === "G" || cls.letter === "K" || cls.letter === "M")
+      return `${color} dwarf`;
+    return `${color} main-sequence star`;
+  }
+  return `${color} ${lum.word}`;
+}
+
+// Build the two child spans once; update() only rewrites their text + the type color.
+export function createClassification(el) {
+  if (!el) return { update() {} };
+  el.innerHTML = `<span class="sc-type"></span><span class="sc-name"></span>`;
+  const typeEl = el.querySelector(".sc-type");
+  const nameEl = el.querySelector(".sc-name");
+
+  return {
+    update(state) {
+      if (!state || state.Teff_K == null) return;
+      const t = tempClass(state.Teff_K);
+      const lum = lumClass(state);
+      typeEl.textContent = `${t.letter}${t.sub} ${lum.roman}`;
+      typeEl.style.color = teffToCSS(state.Teff_K);
+      nameEl.textContent = commonName(t, lum);
+    },
+  };
+}

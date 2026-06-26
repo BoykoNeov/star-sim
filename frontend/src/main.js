@@ -11,6 +11,7 @@ import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
+import { createClassification } from "./classify.js";
 import { makeSortable } from "./layout.js";
 import { teffToCSS } from "./color.js";
 
@@ -38,6 +39,10 @@ const els = {
 };
 
 const star = createStar(document.getElementById("star-canvas"));
+// The spectral-classification line under the 3D star is a SIBLING text view like
+// scale.js: it reads the marker's Teff/log g/phase and writes a schematic MK type
+// (e.g. "G2 V — yellow dwarf"). No fetch; updated in refresh().
+const classification = createClassification(document.getElementById("star-class-line"));
 // The true-size scale bar (under the 3D star) is a SIBLING like sed.js: it reads the
 // marker's radius and redraws the star's real size against the Solar System — the
 // honest counterpart to the log-compressed 3D render. No fetch; updated in refresh().
@@ -195,18 +200,41 @@ let providerName = "";    // filled from /health, shown in the status line
 let fehMin = -0.5, fehMax = 0.5;   // feh slider bounds (overwritten by /ranges)
 let currentTrack = null;           // last /track result; the source for age ticks
 // Snap-tick positions in each slider's own coordinate (mass/age: 0..1; feh: dex).
-let massTickPos = [], fehTickPos = [], ageTickPos = [];
+let massTickPos = [], massTickVals = [], fehTickPos = [], ageTickPos = [];
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 
-// The slider position spans the full bounding box; the physical mass is then
-// clamped to the span valid at the current [Fe/H] — a soft floor that moves with
-// metallicity.
-const massFromSlider = () =>
+// `massValue` is the SOURCE OF TRUTH for the mass in use (fetch + display). The range
+// slider can't represent a round mass exactly — its `step` quantizes the thumb
+// position, so re-deriving the mass from els.mass.value yields 0.999 for "1". So the
+// real mass lives here: drags snap to the exact round mass at a tick, the number box
+// stores the exact typed value, and refresh()/refreshTrack() read this (then sync the
+// thumb). The slider position stays a *display* of massValue, never its source.
+let massValue = 1.0;
+
+// The slider position spans the full bounding box; the physical mass is then clamped
+// to the span valid at the current [Fe/H] — a soft floor that moves with metallicity.
+const massFromSliderPos = (pos) =>
   Math.min(Math.max(
-    10 ** (logMassMin + Number(els.mass.value) * (logMassMax - logMassMin)),
+    10 ** (logMassMin + pos * (logMassMax - logMassMin)),
     validMassMin), validMassMax);
 const sliderFromMass = (m) =>
   (Math.log10(m) - logMassMin) / (logMassMax - logMassMin);
+
+// Map a raw (dragged) slider position to {pos, mass}. If it lands within the snap
+// threshold of a round-mass tick, return that tick's EXACT mass (so the slider can
+// represent 1.0, not the quantized 0.999); otherwise derive the mass from the
+// position. This is the slider's own snap — the number box deliberately bypasses it
+// (the arbitrary-precision escape hatch: typing 0.99 must stay 0.99, not snap to 1).
+function massFromSliderInput(rawPos) {
+  const thresh = 0.015;
+  let bestIdx = -1, bestD = thresh;
+  for (let i = 0; i < massTickPos.length; i++) {
+    const d = Math.abs(rawPos - massTickPos[i]);
+    if (d < bestD) { bestD = d; bestIdx = i; }
+  }
+  if (bestIdx >= 0) return { pos: massTickPos[bestIdx], mass: massTickVals[bestIdx] };
+  return { pos: rawPos, mass: massFromSliderPos(rawPos) };
+}
 
 // --- number formatting -------------------------------------------------------
 function fmt(x, sig = 3) {
@@ -332,14 +360,20 @@ const providerTip = (name) =>
       "interchangeable behind one interface — nothing downstream knows or cares " +
       "which provider is active.";
 
-// Round masses worth snapping to, filtered to the span valid at this [Fe/H].
+const ROUND_MASSES =
+  [0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 5, 8, 12, 20, 30, 40, 60, 100, 200, 300];
+
+// Round masses worth snapping to, filtered to the span valid at this [Fe/H]. The
+// masses are kept alongside their positions (massTickVals) so a snap can recover the
+// EXACT round mass — see massFromSliderInput.
 function rebuildMassTicks() {
   const opts = [];
-  for (const m of [0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.5, 2, 3, 5, 8, 12, 20, 30, 40, 60, 100, 200, 300]) {
+  for (const m of ROUND_MASSES) {
     if (m < validMassMin - 1e-9 || m > validMassMax + 1e-9) continue;
-    opts.push({ pos: clamp01(sliderFromMass(m)), label: `${m}` });
+    opts.push({ pos: clamp01(sliderFromMass(m)), label: `${m}`, mass: m });
   }
   massTickPos = opts.map((o) => o.pos);
+  massTickVals = opts.map((o) => o.mass);
   buildDatalist(els.massTicks, opts);
   buildTickStrip(els.massMarks, opts.map((o) => ({ pos01: o.pos, label: o.label })));
 }
@@ -521,14 +555,14 @@ function renderReadout(s) {
 
 async function refresh() {
   const token = ++reqToken;
-  const mass = massFromSlider();
+  // Clamp the source-of-truth mass to the span valid at this [Fe/H] (the dead
+  // low-mass corner moves with metallicity) and PERSIST the clamp, then sync the
+  // thumb so it can't visually sit in the disabled (dead-corner) region.
+  massValue = Math.min(Math.max(massValue, validMassMin), validMassMax);
+  const mass = massValue;
+  els.mass.value = clamp01(sliderFromMass(mass));
   const feh = Number(els.feh.value);
   const age = ageMin + ageFraction * (ageMax - ageMin);
-
-  // If [Fe/H] pushed the valid floor above the thumb, snap the thumb up to the
-  // floor so it can't visually sit in the disabled (dead-corner) region.
-  const clampedPos = sliderFromMass(mass);
-  if (Math.abs(Number(els.mass.value) - clampedPos) > 1e-6) els.mass.value = clampedPos;
 
   setNum(els.massNum, fmt(mass));
   setNum(els.fehNum, feh.toFixed(2));
@@ -540,6 +574,7 @@ async function refresh() {
     );
     if (token !== reqToken) return; // a newer request superseded this one
     star.update(s);
+    classification.update(s);
     scale.update(s);
     hr.update(s);
     comp.update(s);
@@ -568,7 +603,8 @@ async function refresh() {
 // track and the slider's domain — they can't disagree (the old /age_range race).
 async function refreshTrack() {
   const token = ++trackToken;
-  const mass = massFromSlider();
+  massValue = Math.min(Math.max(massValue, validMassMin), validMassMax);
+  const mass = massValue;
   const feh = Number(els.feh.value);
   try {
     const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}`);
@@ -628,6 +664,7 @@ async function init() {
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
+    massValue = 1.0;                       // source of truth (see massFromSliderPos)
 
     els.feh.min = ranges.feh.min; els.feh.max = ranges.feh.max;
     // 0.01 step (not 0.05): the provider interpolates [Fe/H] continuously, so a
@@ -659,8 +696,10 @@ async function init() {
   // during the drag (cheap, no fetch) so it tracks the thumb instead of lagging a
   // fetch behind.
   els.mass.addEventListener("input", () => {
-    els.mass.value = snap(Number(els.mass.value), massTickPos, 0, 1);
-    setNum(els.massNum, fmt(massFromSlider()));
+    const r = massFromSliderInput(Number(els.mass.value));
+    els.mass.value = r.pos;
+    massValue = r.mass;
+    setNum(els.massNum, fmt(massValue));
     refreshTrack();
   });
   els.feh.addEventListener("input", () => {
@@ -680,8 +719,8 @@ async function init() {
     if (els.massNum.value.trim() === "") return;
     const m = Number(els.massNum.value);
     if (!isFinite(m)) return;
-    const clamped = Math.min(Math.max(m, validMassMin), validMassMax);
-    els.mass.value = clamp01(sliderFromMass(clamped));
+    massValue = Math.min(Math.max(m, validMassMin), validMassMax);
+    els.mass.value = clamp01(sliderFromMass(massValue));
     refreshTrack();
   });
   els.fehNum.addEventListener("change", () => {

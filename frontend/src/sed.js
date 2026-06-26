@@ -204,7 +204,7 @@ export function createSED(canvas) {
   // the Fλ peak wavelength in nm.
   function drawActivity(lamPeak) {
     const reg = regimeOf(teff, logg);
-    if (reg === "gap") return;             // A/early-F: nothing to draw, caption only
+    if (reg === "gap") { drawXrayGap(lamPeak); return; } // A/early-F: a labeled gap
 
     // The L_X/L_bol envelope per regime. Cool dwarfs span the full saturated→quiet
     // band; hot stars collapse to the narrow wind-shock value; cool giants are dimmed
@@ -257,6 +257,29 @@ export function createSED(canvas) {
 
     // Güdel–Benz radio correlate — a cool-star phenomenon only; compact marker.
     if (reg === "cool" || reg === "coolgiant") drawGudelBenzRadio(lamPeak, fxHi);
+  }
+
+  // The A / early-F X-ray gap: instead of drawing NOTHING (which reads as the band
+  // having vanished / the panel being broken as you scrub across the 6500 K boundary),
+  // draw a faint, dashed, clearly-LABELLED "X-ray gap" marker in the soft-X-ray band.
+  // The feature transforms rather than disappears — honest (no fake flux band), and
+  // the placement level is nominal (the point is the label, not a value: A/early-F
+  // stars are X-ray-faint — no convective dynamo, no strong wind shocks). Caption-free
+  // on purpose: the "gap" caption branch is already length-matched (lengthening it
+  // would resize the panel as you scrub — the jank this whole panel guards against).
+  function drawXrayGap(lamPeak) {
+    const w = BB_EFF_WIDTH * lamPeak / XRAY_DLAM;
+    let dec = Math.log10(1e-6) + Math.log10(w);          // nominal quiet level
+    dec = Math.max(-FLOOR_DECADES + 2, Math.min(-2, dec)); // keep it clearly in-frame
+    const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI), y = yOf(dec);
+    ctx.strokeStyle = "rgba(150,160,180,0.55)"; ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#9aa6bd"; ctx.font = "9px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("X-ray gap", (x0 + x1) / 2, y - 4);
+    ctx.textAlign = "left";
   }
 
   // The Güdel–Benz radio counterpart of the X-ray band, anchored at the cm-wave (GHz)
