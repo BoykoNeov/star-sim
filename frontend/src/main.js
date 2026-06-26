@@ -65,6 +65,19 @@ const comp = createComp(document.getElementById("comp-canvas"));
       comp.setScale(btn.dataset.scale);
     }),
   );
+  // Per-element on/off: click a cno legend entry to hide/show that line. comp.js
+  // rescales the chart to the elements still shown (hiding O/C lets the trace
+  // elements fill the height), and we mirror the off state onto the legend entry.
+  // Delegated so it works for the inner ".tip" label too (closest finds data-el).
+  const legendCno = panel.querySelector(".legend-cno");
+  if (legendCno) {
+    legendCno.addEventListener("click", (e) => {
+      const entry = e.target.closest("span[data-el]");
+      if (!entry) return;
+      const visible = comp.toggleElem(entry.dataset.el);
+      entry.classList.toggle("off", !visible);
+    });
+  }
 }
 // The Lane–Emden interior panel (spec §8) is a SIBLING to the StellarState spine,
 // not a consumer of it — it's driven by the polytropic index n alone and owns its
@@ -104,12 +117,17 @@ if (resetLayoutBtn) resetLayoutBtn.addEventListener("click", () => sortable.rese
 // max, floored so a phone still gets a usable plot). Without this the 720px-wide
 // spectrum/SED canvases overflow a ~360px phone panel. The 3D star is exempt:
 // star.js already resizes its WebGL renderer from the canvas box every frame.
+// maxW is set above any real panel's inner width (~668px at the widest 2-col size),
+// so `avail` (the panel's content width) is what actually binds — each canvas fills
+// its panel at every breakpoint, leaving little dead space inside the panel. Heights
+// are fixed per panel, so the aspect ratio widens with the panel; the plots are
+// PAD-based and redraw from retained state, so any width/height is fine.
 const RESPONSIVE = [
-  { id: "hr-canvas", mod: hr, maxW: 360, h: 260 },
-  { id: "comp-canvas", mod: comp, maxW: 360, h: 280 },
-  { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 260 },
+  { id: "hr-canvas", mod: hr, maxW: 720, h: 320 },
+  { id: "comp-canvas", mod: comp, maxW: 720, h: 340 },
+  { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
-  { id: "lane-canvas", mod: lane, maxW: 380, h: 300 },
+  { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
 ];
 for (const r of RESPONSIVE) {
   const canvas = document.getElementById(r.id);

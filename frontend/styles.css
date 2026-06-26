@@ -58,16 +58,21 @@ main {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
-  /* Compact panels grow to share a row but are capped so the verbose descriptions
-     still wrap to a bounded, readable measure (the old fixed-px columns existed for
-     exactly this reason — a content-sized panel would stretch its longest line out).
-     flex-basis 320 means ~1 panel per ~340px of width → phone = 1 column. */
-  flex: 1 1 320px;
-  max-width: 384px;
+  /* Panels grow to share a row but are capped so the verbose descriptions still wrap
+     to a bounded, readable measure. Wider basis than the original 320 ON PURPOSE: a
+     320 basis packed 3–4 columns on a desktop, which gapped badly below the short
+     panels (star/HR) next to the tall ones (controls/composition). A ~460 basis packs
+     2 columns on a laptop and 3 only on a wide monitor, so short panels pair with
+     short — far less dead space — while a phone still gets a single column. Every
+     panel is now a normal column citizen (no full-width bands); the canvases fill the
+     panel width via a ResizeObserver (main.js), so there's little empty space inside
+     a panel either. */
+  flex: 1 1 460px;
+  max-width: 700px;
 }
-/* Full-width bands (spectrum, SED, Lane–Emden): a wavelength/EM/structure axis
-   wants width and they aren't part of the compact 2×2, so each takes a whole row.
-   Reorderable like any other panel — they just always wrap to their own line. */
+/* A reusable full-row utility (no panel uses it by default any more — spectrum, SED
+   and Lane–Emden became normal column citizens so they pair up and waste less space).
+   Kept for a future panel that genuinely needs the whole row. */
 .panel.wide { flex-basis: 100%; max-width: 100%; }
 .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--muted); }
@@ -76,7 +81,7 @@ main {
    resizes its WebGL renderer from the canvas's clientWidth/clientHeight every frame,
    so a responsive CSS box is all it needs — no JS wiring here. */
 #star-canvas {
-  width: min(320px, 100%); aspect-ratio: 1 / 1; height: auto;
+  width: min(420px, 100%); aspect-ratio: 1 / 1; height: auto;
   display: block; margin: 0 auto;
   background: #05070d; border-radius: 8px;
 }
@@ -97,15 +102,14 @@ main {
    edge-to-edge otherwise) and give it room before the canvas/legend row. */
 .lane-intro { max-width: 72ch; margin: 4px 0 14px; }
 .lane-intro b { color: #cbd2e0; font-weight: 600; }
-.lane-body {
-  display: grid; grid-template-columns: 1fr minmax(220px, 320px); gap: 22px;
-  align-items: start;
-}
-/* Let the canvas column shrink below the canvas's intrinsic width (min-width:0)
-   so the JS-driven responsive resize can size the canvas to the column, not the
-   other way round (avoids a feedback loop). */
+/* Single vertical column: the canvas (+ its legend) above the n-slider/readout.
+   The old side-by-side 1fr|320 grid left the canvas (capped at ~380px) stranded in a
+   much wider 1fr column, with a big dead gap between the graphic and the readout. As
+   a normal column citizen now, stacking is both denser and lower-risk. */
+.lane-body { display: flex; flex-direction: column; gap: 14px; }
+/* Let the canvas wrapper shrink below the canvas's intrinsic width (min-width:0) so
+   the JS-driven responsive resize sizes the canvas to the panel, not vice-versa. */
 .lane-body > div { min-width: 0; }
-@media (max-width: 800px) { .lane-body { grid-template-columns: 1fr; } }
 #lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; max-width: 100%; }
 .lane-controls { min-width: 0; }   /* let the readout values wrap, not overflow */
 /* The updating "what does this n mean physically" line under the n slider. */
@@ -174,6 +178,14 @@ main {
 .comp-panel.mode-cno .legend-cno { display: flex; }
 .comp-panel.mode-light .legend-light { display: flex; }
 
+/* Per-element legend entries double as on/off toggles (main.js wires the click):
+   click one to hide/show its line, and the chart's vertical scale rescales to
+   whatever is still shown. An "off" entry dims and its swatch goes hollow. The inner
+   ".tip" label keeps its own hover tooltip — clicking toggles, hovering explains. */
+.legend-cno span { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.legend-cno span.off { opacity: 0.35; }
+.legend-cno span.off i { box-shadow: inset 0 0 0 4px var(--panel); }
+
 /* The linear/log scale toggle for the per-element view (the log scale is what makes
    the trace elements — lithium especially — visible). Only meaningful in that view,
    so it's hidden until the detail view is active. Smaller/lighter than the mode
@@ -221,9 +233,16 @@ main {
 .hint code { font-size: inherit; }
 
 /* State readout: each row is term + one-line description on the left, value on
-   the right. */
+   the right. The rows flow into as many ~240px columns as the panel is wide enough
+   for (auto-fit) — so the 14-row controls readout becomes two columns on a wide
+   desktop panel (halving its height, which was the tallest panel and the source of
+   the big gap below its row-mate) and collapses to one column on a narrow phone
+   panel. Width-driven, not viewport-driven, so it stays correct as panels are
+   dragged/reflowed. */
 .readout {
-  display: flex; flex-direction: column; gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 22px;
   font-variant-numeric: tabular-nums; font-size: 14px; margin-top: 8px;
 }
 .readout .row {

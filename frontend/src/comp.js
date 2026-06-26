@@ -95,11 +95,23 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   let marker = null;   // current StellarState (moves as age scrubs)
   let mode = "bulk";   // "bulk" (X/Y/Z bands) | "cno" (14-element lines) | "light" (Li/Be/F)
   let scale = "lin";   // "lin" | "log" — the cno view's y-axis (log reveals Li/Na)
+  // Per-element visibility for the cno view (legend-click toggles). Session-only
+  // (not persisted). Scoped to the cno view — the light view is only three lines.
+  const hidden = new Set();
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
   function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
+  // Toggle one per-element line in the cno view on/off, returning its new
+  // visibility. Hiding doesn't just declutter: region() autoscales over only the
+  // elements it's handed, so hiding the abundant O/C/N rescales the axis to reveal
+  // the trace elements (Na, Al, P…) at full height — that rescale IS the payoff.
+  function toggleElem(el) {
+    if (hidden.has(el)) hidden.delete(el); else hidden.add(el);
+    draw();
+    return !hidden.has(el);
+  }
   // Re-fit to a new display size (responsive layout) and redraw from retained state.
   function resize(cssW2, cssH2) {
     if (cssW2 === W && cssH2 === H) return;
@@ -176,8 +188,11 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   function drawCno() {
     const { e0, e1, xOf, chartH, coreTop, surfTop } = layout();
     const useLog = scale === "log";
-    region(coreTop, chartH, xOf, "core", (s) => s.metals_core, ELEMS, useLog);
-    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf, ELEMS, useLog);
+    // Only the elements still toggled on — region() ranges (autoscales) over
+    // exactly this list, so the y-axis follows what's actually shown.
+    const shown = ELEMS.filter((el) => !hidden.has(el));
+    region(coreTop, chartH, xOf, "core", (s) => s.metals_core, shown, useLog);
+    region(surfTop, chartH, xOf, "surface", (s) => s.metals_surf, shown, useLog);
     drawPhaseDividers(xOf);
     drawMarker(xOf, e0, e1);
     drawAxis();
@@ -346,5 +361,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update, setMode, setScale, resize };
+  return { setTrack, update, setMode, setScale, toggleElem, resize };
 }

@@ -865,6 +865,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   space right of the 4 capped compact panels (the deliberate text-readability cap, not a bug). No JS test
   harness → the Playwright pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** —
   frontend-only, no backend/API/spine touch.
+- **Done (UX, panel-density pass + per-element legend toggle — frontend-only):** the user
+  followed up that the dashboard had "a lot of empty space" that "doesn't look good" — the
+  Lane–Emden graphic stranded far from its readout, big gaps below the controls/HR row, and
+  spectrum/SED each hogging a whole row — and asked for denser arrangement (columns, maybe
+  resizable), plus a way to **turn off individual elements** in the per-element composition view.
+  **The advisor split it into a low-risk Track 1 + a measured layout call, and explicitly steered
+  AWAY from a masonry rewrite this turn** (the verified touch-drag would have to be re-verified;
+  the user was brainstorming mechanisms, not specifying masonry; flex-wrap already *is* 2–3
+  columns). Shipped — all **CSS + comp.js only, the drag system (`layout.js`) untouched**, so the
+  prior touch/auto-scroll/persistence verification still holds and a **mouse-level re-check
+  sufficed**: (1) **Per-element on/off** — clicking a `legend-cno` entry hides/shows that line
+  (`comp.toggleElem`, session-only, scoped to the cno view; `main.js` delegates the click via
+  `closest("span[data-el]")` so the inner `.tip` hover label still works). **The non-obvious half
+  the advisor flagged:** hiding must drive `region()`'s autoscale — `drawCno` passes only
+  `ELEMS.filter(!hidden)`, so hiding the abundant O/C **rescales the y-axis** to the elements still
+  shown (the trace lines fill the height) — a toggle that only declutters but keeps O's scale is
+  half the feature. (2) **Lane–Emden un-`wide` + `lane-body` collapsed to a single vertical column**
+  (canvas above controls) — the old `1fr minmax(220,320)` grid stranded the ~380px-capped canvas in
+  a much wider column with a big dead gap; stacking is denser *and* lower-risk than trying to fill a
+  variable column. (3) **Spectrum + SED un-`wide`** → they pair side-by-side on one row at
+  column width (the user explicitly sanctioned "can fit on a single row"). (4) **Wider columns**
+  (`.panel` flex-basis 320→**460**, max-width 384→**700**) → 2 columns on a laptop / 3 on a wide
+  monitor / 1 on a phone, so short panels (star/HR) pair with short instead of gapping below the
+  tall ones; canvas `maxW` raised to 720 so `avail` always binds and each canvas fills its panel
+  (little internal dead space). (5) **The actual gap fix (advisor's key insight): the 317px gap was
+  ONE outlier — the 781px `controls` panel, almost all its 14-row readout.** Making `.readout` a
+  width-driven `grid-template-columns: repeat(auto-fit, minmax(240px,1fr))` → **two columns on a
+  wide panel, one on a phone** (no media/container query — robust to drag-reflowed panel widths) cut
+  controls **781→595px**, the worst gap **317→131px**, main height 2594→2346. **Masonry deliberately
+  NOT built** — offered as a one-line opt-in if the user comes back wanting truly gap-free columns
+  (design recorded: per-column drop zones, **no auto-rebalance on drop**, redistribute only on load
+  + column-count change); the residual ~60–131px gaps are draggable-away and the lane-alone last row
+  is "the least-offensive waste." **User-resizable panels rejected** (advisor: free pixel-resize
+  fights responsive-flow exactly like stored positions did). Verified via Playwright bundled Chromium
+  on the real served UI (the `chrome --headless` hijack caveat): desktop 1440 (2 cols, spectrum/SED
+  paired, 2-col readout, lane single-column, gap measured down), the comp toggle (O dims + axis
+  rescales + restores), phone 390 (single column, readout auto-collapsed to 1-col, no canvas
+  overflow), and a mouse drag-reorder/persist/reset in the new flow — no JS console errors. No JS
+  test harness → screenshot pass is the regression check (as in Phases 2–5); **pytest unchanged
+  (137)** — frontend-only.
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
