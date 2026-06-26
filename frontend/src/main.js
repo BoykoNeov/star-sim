@@ -5,6 +5,7 @@
 // object. No panel knows what produced it.
 
 import { createStar } from "./star.js";
+import { createScale } from "./scale.js";
 import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
@@ -37,6 +38,10 @@ const els = {
 };
 
 const star = createStar(document.getElementById("star-canvas"));
+// The true-size scale bar (under the 3D star) is a SIBLING like sed.js: it reads the
+// marker's radius and redraws the star's real size against the Solar System — the
+// honest counterpart to the log-compressed 3D render. No fetch; updated in refresh().
+const scale = createScale(document.getElementById("scale-canvas"));
 const hr = createHR(document.getElementById("hr-canvas"));
 const comp = createComp(document.getElementById("comp-canvas"));
 // Composition view toggle: flip comp.js between the bulk H/He/metals bands, the
@@ -123,6 +128,7 @@ if (resetLayoutBtn) resetLayoutBtn.addEventListener("click", () => sortable.rese
 // are fixed per panel, so the aspect ratio widens with the panel; the plots are
 // PAD-based and redraw from retained state, so any width/height is fine.
 const RESPONSIVE = [
+  { id: "scale-canvas", mod: scale, maxW: 480, h: 150 },
   { id: "hr-canvas", mod: hr, maxW: 720, h: 320 },
   { id: "comp-canvas", mod: comp, maxW: 720, h: 340 },
   { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
@@ -474,6 +480,7 @@ async function refresh() {
     );
     if (token !== reqToken) return; // a newer request superseded this one
     star.update(s);
+    scale.update(s);
     hr.update(s);
     comp.update(s);
     spectrum.update(s);

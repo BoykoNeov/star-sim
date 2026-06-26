@@ -32,7 +32,13 @@ import { teffToLinearRGB } from "./color.js";
 function displayRadius(rRsun) {
   const lr = Math.log10(Math.max(1e-3, rRsun)); // ~ -3 .. 3
   const t = (lr + 2) / 5; // normalize roughly [-2, 3] -> [0, 1]
-  return 0.45 + 2.0 * Math.max(0, Math.min(1, t));
+  const base = 0.45 + 2.0 * Math.max(0, Math.min(1, t));
+  // Render ~20% larger than the historical sizing (a UX ask). Clamped so the very
+  // largest giants still fit the frame: the camera (z=8, 40° vertical FOV) sees a
+  // sphere out to its tangent cone, where the disk edge clips at asin(R/8)=20° -> R≈
+  // 2.74. 2.65 keeps a small margin (+ antialiasing room); everything up to ~250 R☉
+  // gets the full 1.2×, only the biggest giants are gently compressed to fit.
+  return Math.min(2.65, 1.2 * base);
 }
 
 // Granule cell frequency across a stellar radius from the pressure scale height:

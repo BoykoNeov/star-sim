@@ -905,6 +905,44 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   overflow), and a mouse drag-reorder/persist/reset in the new flow — no JS console errors. No JS
   test harness → screenshot pass is the regression check (as in Phases 2–5); **pytest unchanged
   (137)** — frontend-only.
+- **Done (UX, 3D star +20% + true-size scale bar — frontend-only):** the user asked to make the
+  3D star ~20% bigger and add a **scale bar at the bottom** conveying the "vastly different sizes of
+  stars" via **Earth, the Sun, and the solar-system planet orbits**. (1) **Bigger star:** `star.js`
+  `displayRadius` now returns `min(2.65, 1.2 * base)` — the 1.2 is the 20%, the clamp keeps the very
+  largest giants inside the frame. **The advisor caught a real math bug** in my clip estimate: a
+  sphere's visible silhouette is the **tangent cone** `asin(R/d)`, **not** the pole angle `atan(R/d)`,
+  so the disk clips at `R = 8·sin(20°) ≈ 2.74` (camera z=8, 40° vertical FOV) — my first-pass clamp of
+  2.78 would *still* clip; **2.65** leaves margin. Everything up to ~250 R☉ gets the full 1.2×; only
+  the biggest giants are gently compressed to fit. The corona needed no change (`corona.scale =
+  rad·extent` keys off the same `rad`). **Verified by screenshotting the WORST case** (the advisor's
+  insistence — the failure is silent on the Sun): a 5 M☉ EAGB giant at R=327 (which clamps to the max
+  display size 2.65) renders as a **clean full circle, no flat top/bottom**. (2) **Scale bar:** a new
+  `scale.js` — a **sibling like sed.js** (reads ONE number, `R_rsun`, off the marker; tinted by
+  `teffToCSS(Teff)`; no fetch), placed under the star canvas. Its reason-for-being (the advisor's
+  framing, now the module's lead comment): the 3D render is **log-compressed / deliberately not to
+  scale** (dwarf and giant render nearly the same size on purpose), so a ruler calibrated to the
+  *rendered* star would be a lie — the honest device is an **independent logarithmic length axis** (R☉,
+  ~0.004–1500). Landmarks: **bodies** (Earth 0.0092, Jupiter 0.10, Sun 1.0 R☉) as warm filled dots
+  below the axis; **planet orbits** (Mercury 83, Venus 155, Earth 215, Mars 328, Jupiter 1119 R☉,
+  `AU·215.032`) as cool-blue open rings above, under a faint **"planet orbits" bracket** (the SED
+  "detailed spectrum" idiom — it groups the cluster AND disambiguates *Earth-orbit* 215 above from
+  *Earth-body* 0.009 below). The current star is a tinted "reach" fill (everything left of it is
+  smaller) + a `teffToCSS` marker line + an on-canvas readout pill ("this star · 154 R☉", clamped
+  on-canvas), and a **dynamic caption** names what it engulfs ("…surface would swallow Mercury, Venus
+  and Earth's orbits, reaching toward Mars's orbit"). **The orbit cluster is the layout risk** (Mercury→
+  Mars span only 0.6 decades → labels collide at panel width) — handled the advisor's way: **staggered
+  2-row text labels + collision-skip** (NO cryptic planet glyphs — wrong for a teaching tool), the
+  caption carrying the precise figures the skipped labels can't. Wiring: `index.html` (title + `?` help
+  + canvas + caption, reusing the `spectrum-caption` class), `styles.css` (`#scale-canvas`/`.scale-title`),
+  `main.js` (`scale.update(s)` in `refresh()`, a RESPONSIVE entry `maxW:480,h:150` so the
+  `ResizeObserver` re-fits it — the `fitCanvas` inline-width gotcha). **Verified via Playwright bundled
+  Chromium** (the `chrome --headless` hijacks the user's running Chrome — use playwright-core +
+  ms-playwright chromium) on the **real served UI** across the size sweep — dwarf 0.22 R☉ (marker
+  between Jupiter & Sun) / Sun 1 R☉ (marker on the Sun dot, reach tint over Earth+Jupiter) / 327 R☉
+  giant (engulfs to Mars's orbit) — desktop **and** phone 390 (pill clamps on-canvas, bracket+labels
+  stay legible), captions all correct, **no console errors**. No JS test harness → the screenshot pass
+  *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no
+  backend/API/spine touch).
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)
