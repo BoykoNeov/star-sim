@@ -160,6 +160,9 @@ let ageFraction = 0.46;   // slider position 0..1, mapped into [ageMin, ageMax]
 // before the age slider" mismatch. age_yr is a StellarState field, so reading the
 // window off the track is §3-clean (no provider internals leak).
 let ageMin = 0, ageMax = 1e10;
+// The age number input's spinner grid, set per-window by configureAgeNum(): a
+// fixed step would be useless for short-lived massive stars (see configureAgeNum).
+let ageNumStep = 0.01, ageNumDecimals = 2;
 let firstTrackLoaded = false;
 const DEFAULT_AGE_YR = 4.6e9;   // land the default star (the Sun) at ~4.6 Gyr
 // The valid mass span tightens with [Fe/H] (the backend has a dead low-mass
@@ -383,7 +386,44 @@ function setNum(el, value) {
   if (document.activeElement === el) return;
   el.value = value;
 }
-const gyrNum = (yr) => Number((yr / 1e9).toPrecision(4));
+// The age number input shows Gyr, but lifetimes span ~5 decades (a 0.1 M☉ dwarf
+// lives far longer than a 60 M☉ star, which reaches the early-AGB in ~3 Myr ≈
+// 0.0035 Gyr). A FIXED 0.01 Gyr spinner step is useless for short-lived massive
+// stars — their whole life is a sliver of one step, so the up/down buttons can
+// only ever land on 0, and the browser even flags every in-window age as
+// `:invalid`, offering 0 as the "nearest valid value". So the grid ADAPTS to the
+// current age window: a "nice" 1/2/5×10^k step giving ~100 spinner clicks across
+// the whole track (each click ≈ 1% of the lifetime — a clearly meaningful move),
+// with exactly enough display decimals to show each click.
+function niceAgeStep(spanGyr, targetSteps = 100) {
+  if (!(spanGyr > 0)) return { step: 0.01, decimals: 2 };
+  const raw = spanGyr / targetSteps;
+  const exp = Math.floor(Math.log10(raw));
+  const base = raw / 10 ** exp;                       // 1 ≤ base < 10
+  const mult = base <= 1 ? 1 : base <= 2 ? 2 : base <= 5 ? 5 : 10;
+  const step = mult * 10 ** exp;
+  const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  return { step, decimals };
+}
+
+// Snap the current age window onto the number input's min/max/step so every
+// spinner click is a clean, in-range, step-aligned move (and the value is never
+// `:invalid`). min/max are floored/ceiled to the step grid — aligning min is what
+// keeps (value − min)/step integral, which is what prevents the step-mismatch
+// validation bubble (setting min = ageMin unaligned would reintroduce it).
+function configureAgeNum(minYr, maxYr) {
+  const minG = minYr / 1e9, maxG = maxYr / 1e9;
+  const { step, decimals } = niceAgeStep(maxG - minG);
+  ageNumStep = step; ageNumDecimals = decimals;
+  els.ageNum.step = step;
+  els.ageNum.min = (Math.floor(minG / step) * step).toFixed(decimals);
+  els.ageNum.max = (Math.ceil(maxG / step) * step).toFixed(decimals);
+}
+
+// Format an age (yr) for the number input, rounded onto the current step grid so
+// it displays aligned (no `:invalid`) and the spinner steps from a clean value.
+const gyrNum = (yr) =>
+  (Math.round(yr / 1e9 / ageNumStep) * ageNumStep).toFixed(ageNumDecimals);
 
 // --- latest-request-wins -----------------------------------------------------
 // Two independent token streams: the per-change state fetch, and the track fetch
@@ -519,7 +559,10 @@ async function refreshTrack() {
     if (t.length) {
       ageMin = t[0].age_yr;
       ageMax = t[t.length - 1].age_yr;
-      els.ageNum.max = gyrNum(ageMax);
+      // Re-grid the spinner to this window's span (sets step/min/max) BEFORE the
+      // refresh() below re-displays the age, so the shown value is aligned to the
+      // new step in the same cycle (no stale-misalignment frame).
+      configureAgeNum(ageMin, ageMax);
       // First track only: place the default star at its headline age (the Sun's
       // ~4.6 Gyr) rather than at a raw fraction — the window no longer starts at
       // age 0, so 0.46 would no longer mean "4.6 Gyr".
