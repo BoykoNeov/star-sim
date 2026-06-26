@@ -1,6 +1,6 @@
 ---
 name: star-sim-nonthermal-sed-plan
-description: "PLANNED (not built) non-thermal SED layer — coronal soft-X-ray + radio band + hot-star wind radio; the accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate."
+description: "Non-thermal SED layer (CHUNK 1 BUILT, Chunks 2–3 planned) — coronal soft-X-ray + Güdel–Benz radio band + hot-star wind radio; the accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate."
 metadata: 
   node_type: memory
   type: project
@@ -9,9 +9,42 @@ metadata:
 
 After the broadband SED panel ([[star-sim-phase5-spectra]]'s blackbody, `sed.js`)
 shipped, the user asked: "can we also model" the non-thermal X-ray/γ/radio the
-blackbody floors out — "is there an accepted scientific model?" **Answer planned,
-NOT built.** Plan: `docs/plans/magnetic-ember-broadcast.md` (whimsical name like
+blackbody floors out — "is there an accepted scientific model?" Plan:
+`docs/plans/magnetic-ember-broadcast.md` (whimsical name like
 [[star-sim-wr-wd-endgame-plan]]'s smoldering-cinder-gateway).
+
+**CHUNK 1 BUILT (frontend-only, `sed.js` + index.html legend/caption, NO spine touch,
+pytest unchanged 137).** The cool-star coronal X-ray + Güdel–Benz radio BAND. Two
+findings made it cleaner than the plan feared: **(1) Normalization (the plan's
+"trickiest point") = Teff-only.** A blackbody ties its integral to its peak by a fixed
+effective width `L_bol/F_peak = (π⁴/15)·(e^xp−1)/xp⁴·λ_peak ≈ 1.521·λ_peak` (xp=4.9651);
+spreading L_X over the soft-X-ray band Δλ_X makes **L_bol CANCEL** → `Fλ_X/F_peak =
+(L_X/L_bol)·1.521·λ_peak/Δλ_X`, so band placement needs only Teff (the plan's listed
+`L_lsun` input is NOT needed for placement, only gating). Sun = −5.1…−1.1 dex, above the
+floored thermal X-ray = the headline. **(2) Radio buries on the Fλ axis (advisor-decisive):**
+GB radio (L_R=L_X/10^15.5 Hz) → ~−16.7 dex for the Sun, BELOW the −14 floor, because per-Hz
+radio becomes tiny per-nm flux (the λ² — the AXIS, not the physics). So **keep
+FLOOR_DECADES=14, do NOT rescale the shipped panel**; GB radio = a COMPACT MARKER near the
+floor (only a saturated cool star's edge ~−13.7 peeks in), correlation in legend/caption.
+**The genuine radio-above-floor payoff is Chunk 2's wind tail** (λ⁻²·⁶ vs BB λ⁻⁴) — let
+radio earn space there. **Gating = Teff + logg** (logg now in the redraw cache key — an
+advisor-caught bug: dwarf vs giant at equal Teff draw different bands): ≤6500 full band /
+≥10000 collapse to ~10⁻⁷ wind-shock / 6500–10000 A-gap NO band (caption a gap, never a fake
+value) / cool giant (logg<3 & Teff<5000) dimmed+capped 10⁻⁵…10⁻⁸ (Linsky–Haisch suppression).
+Band is hatched/translucent (the "evocative range" tier, so Chunk 2's solid line contrasts),
+dimensionless f_X edges annotated (10⁻³/10⁻⁷ — guard vs fake precision), γ explicitly empty in
+every caption; the two stale "not modeled here" claims in the h2 tip + "non-thermal edges"
+legend flipped. **Caption resize-on-scrub avoided (advisor-caught):** the regime-varying caption
+would resize the panel scrubbing cool→gap→hot (the [[star-sim-true-size-scale-bar]]/Lane–Emden
+caption jank); a px min-height reserve CAN'T fix it (the SED panel's flex-wrap width — so the
+caption line count — varies 432–700px even on desktop, MEASURED), so each regime's sentence is
+kept short + **~equal length** to wrap identically at any width → measured spread **0px** at
+desktop/phone/intermediate. (Reusable: when flex-wrap width varies, equalize text length, don't
+min-height-reserve.) Verified Playwright (bundled Chromium — chrome --headless hijacks the user's
+Chrome) on the real served UI across all 5 gating branches + phone 390; only the pre-existing
+favicon 404, no JS errors. **Chunks 2 (wind free–free radio from real Ṁ, the spine touch) + 3
+(collapse band→line via age-gyrochronology + activity slider) remain.** Below = the original
+plan record (still valid for Chunks 2–3):
 
 **The science is real & advisor-verified** but a DIFFERENT KIND of model than the
 photosphere: magnetic-**activity**-driven (rotation/age, not Teff/logg/[Fe/H]),

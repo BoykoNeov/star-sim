@@ -23,7 +23,7 @@ the plan and only the one-line hook here. CLAUDE.md's "what's next" points at th
 | Item | Status | Hook | Where |
 |---|---|---|---|
 | Instability-strip / variable-class HR overlay | **done** | Shipped: an opt-in toggle on the HR panel shades the classical instability strip (δ Scuti / RR Lyrae / Cepheids, one tilted κ-mechanism band) + LBV and Mira zones as a labeled, schematic *view*. Frontend-only (`hr.js` `setOverlay`). | `whirling-cohort-atlas.md` (bonus) |
-| SED Chunk 1 — cool-star coronal X-ray + radio **band** | planned | Shaded `L_X/L_bol` 10⁻⁷…10⁻³ envelope + Güdel–Benz radio band; frontend-only (needs only `L`, `Teff`). The honest band (no rotation ⇒ no single line). | `magnetic-ember-broadcast.md` §Chunk 1 |
+| SED Chunk 1 — cool-star coronal X-ray + radio **band** | ✅ done | Shaded `L_X/L_bol` 10⁻⁷…10⁻³ envelope in `sed.js`, frontend-only; **placement is Teff-only** (L_bol cancels via the blackbody effective width 1.521·λ_peak). Güdel–Benz radio = a compact floor marker (it buries on the Fλ axis — kept FLOOR_DECADES=14; the real radio-above-floor payoff is Chunk 2's wind tail). Gated Teff+logg (cool / hot-wind-shock / A-gap / cool-giant). | `magnetic-ember-broadcast.md` §Chunk 1 |
 | SED Chunk 3 — band → **line** (age-derived + slider) | planned | Collapse the band via gyrochronology (MS cool stars) + a user rotation/activity slider, honestly gated; frontend-only, depends on Chunk 1. | `magnetic-ember-broadcast.md` §Chunk 3 |
 | Endgame Chunk 2 — reversible WD gateway + WD mode shell | planned | The "→ Continue: White Dwarf" button, log cooling-age axis, live mass re-snap, WD cooling track on the HR diagram. Backend done (Chunk 1 ✅). | `smoldering-cinder-gateway.md` §Chunk 2 |
 | Endgame Chunk 3 — WD 3D shader + structure panel | planned | Degenerate-sphere shader (Earth-scale, cooling-color shift) + WD-semantics composition/cooling-curve panel. | `smoldering-cinder-gateway.md` §Chunk 3 |
@@ -66,7 +66,7 @@ the plan and only the one-line hook here. CLAUDE.md's "what's next" points at th
 The cheapest-honest-win-first order the individual docs already imply, merged:
 
 1. ~~**Instability-strip HR overlay**~~ — **done** (zero new data, immediate subpopulation payoff).
-2. **SED Chunk 1 → Chunk 3** — the coronal band, then its age/slider collapse (frontend-only).
+2. **SED Chunk 3** — collapse the (now-shipped) Chunk 1 coronal band to a line via age/slider (frontend-only). *(Chunk 1 ✅ done.)*
 3. **Endgame Chunks 2–5** — the full WR/WD gateway on data already on disk (backend Chunk 1 is done).
 4. **Rotation `vvcrit` toggle** — the substantive answer to the rotation question; do the mass-ramp diff first.
 5. **SED Chunk 2** (wind radio, spine touch) and **v sin i broadening** — the predictive/visible rotation follow-ons.

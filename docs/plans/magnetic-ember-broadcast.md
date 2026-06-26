@@ -1,6 +1,48 @@
 # Plan: Non-thermal SED layer — coronal soft-X-ray + radio (Phase 5)
 
-## Status: PLANNED (not started). Approved scope, design locked, no code written.
+## Status: Chunk 1 BUILT (frontend-only, shipped + verified). Chunks 2–3 PLANNED.
+
+**Chunk 1 as-built (the cool-star coronal X-ray + Güdel–Benz radio band):**
+all in `frontend/src/sed.js` + the `index.html`/legend, **no backend/spine touch**
+(pytest unaffected). The normalization the plan flagged as the trickiest point was
+solved cleanly and the radio finding turned out decisive:
+
+- **Normalization (advisor-verified):** the blackbody ties its integral to its peak by
+  a fixed effective width, `L_bol/F_peak = (π⁴/15)·(e^xp−1)/xp⁴·λ_peak ≈ 1.521·λ_peak`
+  (`xp=4.9651`). Spreading `L_X` over the soft-X-ray band Δλ_X makes **L_bol cancel**:
+  `Fλ_X/F_peak = (L_X/L_bol)·1.521·λ_peak/Δλ_X` → **the X-ray band placement is
+  Teff-only** (the plan's listed `L_lsun` input is *not* needed for placement, only
+  gating). Sun lands at −5.1…−1.1 dex — cleanly above the floored thermal X-ray.
+- **The radio buries — keep FLOOR_DECADES=14, do NOT rescale the shipped panel
+  (advisor).** On the Fλ axis the Güdel–Benz radio (`L_R = L_X/10^15.5 Hz`) maps to
+  ~−16.7 dex for the Sun (below the −14 window) because per-Hz radio → tiny per-nm flux
+  (the λ² makes radio intrinsically faint on Fλ — the AXIS, not the physics). So it is a
+  **compact marker** near the floor (only a *saturated* cool star's top edge ~−13.7
+  peeks in), with the `L_X/L_R≈10^15.5 Hz` correlation in the legend/caption. The genuine
+  radio-above-floor payoff is **Chunk 2's wind tail** (λ⁻²·⁶ vs λ⁻⁴), which earns the
+  long-λ space; the coronal GB radio is correctly a footnote here.
+- **Gating (Teff + logg, the cache key now includes logg):** Teff ≤6500 → full coronal
+  band `10⁻⁷…10⁻³`; ≥10000 → collapse to a narrow wind-shock band ~10⁻⁷; 6500–10000 →
+  the A/early-F **X-ray gap, no band drawn** (caption only); cool giants (logg<3 &
+  Teff<5000) → **dimmed + capped at 10⁻⁵…10⁻⁸** (suppressed coronae past the
+  Linsky–Haisch dividing line) + caption caveat. The band is hatched/translucent (the
+  "evocative range" tier) so Chunk 2's solid wind line will contrast; the dimensionless
+  `f_X` edges (10⁻³/10⁻⁷) are annotated on the ribbon (the guard against fake precision);
+  γ stays explicitly empty in every regime's caption.
+- **Caption resize-on-scrub avoided (advisor-caught):** the per-regime caption is the
+  longest-varying text in the panel, so a regime-dependent height would resize the SED
+  panel as you scrub across cool→gap→hot (the jank the Lane–Emden caption fix addressed).
+  A px `min-height` reserve can't fix it here — the panel's flex-wrap width varies
+  (432–700 px even on "desktop", so the caption's line count does too; measured). The fix
+  is to keep each regime's sentence SHORT and **~equal in length (~130–140 chars)** so all
+  four branches wrap to the same line count at any width (the depth lives in the legend
+  tooltip + `<h2>` tip). Measured caption/panel height **spread = 0 px** across all five
+  regimes at desktop, phone, and intermediate flex widths.
+- **Verified** via Playwright (bundled Chromium — `chrome --headless` hijacks the user's
+  running Chrome) on the **real served UI** across all five gating branches (cool dwarf
+  5832 K / M-dwarf 3257 K / A-gap 9034 K / hot O/B 27482 K / cool giant 3625 K→Linsky) +
+  phone 390 px; only the pre-existing favicon 404, no JS errors. (No JS test harness — the
+  screenshot pass is the regression check, as in Phases 2–5.)
 
 ## Context
 
@@ -97,7 +139,7 @@ NOT in `StellarState` today (it lives in `_Track` + the `.npz` cache as
 `star_mdot`, added at `CACHE_VERSION 9` for the endgame work but deliberately not
 threaded into the blend path or the spine). So the feature splits cleanly:
 
-### Chunk 1 — cool-star coronal X-ray + radio BAND (frontend-only)
+### Chunk 1 — cool-star coronal X-ray + radio BAND (frontend-only) — ✅ BUILT (see status block above)
 
 - In `sed.js`, draw a shaded ribbon across the **soft-X-ray band** (~0.1–10 nm)
   whose vertical extent is the `L_X/L_bol` envelope **10⁻⁷ … 10⁻³** (~4 decades),

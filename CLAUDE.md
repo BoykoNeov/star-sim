@@ -826,6 +826,46 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   O star / 0.2 M☉ M-dwarf + full-page layout: Wien peak sweeps correctly, both tails floor honestly, no
   JS errors. No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); the
   pytest suite is **unchanged** (137) since this is frontend-only.
+- **Done (Phase 5, non-thermal SED Chunk 1 — coronal X-ray + Güdel–Benz radio band, frontend-only):**
+  the accepted-science answer to "model the gamma/radio floor the blackbody SED leaves empty" — Chunk 1
+  of `docs/plans/magnetic-ember-broadcast.md`. The blackbody floors in X-rays because real stellar X-rays
+  are **coronal/magnetic-activity** emission, not photospheric; this overlays the order-of-magnitude band
+  the rotation–activity scaling permits. **The honesty gate (the whole reason it's a band, not a line):**
+  the sim's `activity` proxy is a pure Teff ramp (no rotation/age), so a single `L_X` from it would be a
+  fake value (the recurring boron-b8 / VO-7400 / invisible-Na trap) — so we draw the **saturated→quiet
+  envelope** `L_X/L_bol ≈ 10⁻⁷…10⁻³` as a hatched RANGE, never a value. **The normalization (the plan's
+  flagged "trickiest point") solved cleanly + advisor-verified:** a blackbody ties its integral to its peak
+  by a fixed effective width `L_bol/F_peak = (π⁴/15)·(e^xp−1)/xp⁴·λ_peak ≈ 1.521·λ_peak` (`xp=4.9651`);
+  spreading `L_X` over the soft-X-ray band Δλ_X makes **L_bol cancel** → `Fλ_X/F_peak =
+  (L_X/L_bol)·1.521·λ_peak/Δλ_X`, so the **X-ray band placement is Teff-only** (the plan's listed `L_lsun`
+  input isn't needed for placement, only gating). Sun lands at −5.1…−1.1 dex, cleanly above the floored
+  thermal X-ray (the headline). **The radio finding was decisive (advisor):** the Güdel–Benz radio
+  (`L_R = L_X/10^15.5 Hz`) maps to ~−16.7 dex for the Sun — **below** the panel's −14 floor — because on an
+  Fλ axis per-Hz radio becomes tiny per-nm flux (the λ² buries it: the AXIS, not the physics). So we **keep
+  `FLOOR_DECADES=14` and do NOT rescale the shipped panel** — render GB radio as a **compact marker** near
+  the floor (only a *saturated* cool star's top edge ~−13.7 peeks in) with the `L_X/L_R≈10^15.5 Hz`
+  correlation in the legend/caption; the genuine radio-above-floor payoff is **Chunk 2's wind tail** (λ⁻²·⁶
+  vs the BB λ⁻⁴), which earns the long-λ space. **Gating (Teff + logg — logg now in the redraw cache key, an
+  advisor-caught bug since a dwarf vs giant at equal Teff draw different bands):** Teff ≤6500 → full band;
+  ≥10000 → collapse to a narrow wind-shock band ~10⁻⁷ (no dynamo); 6500–10000 → the A/early-F **X-ray gap,
+  no band** (caption only — caption a gap, never a fake value); cool giants (logg<3 & Teff<5000) → **dimmed
+  + capped 10⁻⁵…10⁻⁸** (suppressed coronae past the Linsky–Haisch dividing line) + caveat. The band is
+  hatched/translucent (the "evocative range" tier, so Chunk 2's solid wind line will contrast), the
+  dimensionless `f_X` edges (10⁻³/10⁻⁷) are annotated on the ribbon (guard against fake precision), and **γ
+  stays explicitly empty in every regime's caption**. The two stale "not modeled here" claims in the panel
+  `<h2>` tip + the "non-thermal edges" legend entry were **flipped** to describe the overlay. **Caption
+  resize-on-scrub avoided (advisor-caught):** the regime-varying caption would resize the panel as you scrub
+  cool→gap→hot (the Lane–Emden caption jank); a px `min-height` reserve can't fix it (the panel's flex-wrap
+  width — and so the caption's line count — varies 432–700 px even on desktop, measured), so each regime's
+  sentence is kept short and **~equal in length** to wrap identically at any width (depth lives in the
+  tooltip/`<h2>` tip) → measured caption/panel height **spread = 0 px** at desktop, phone, and intermediate
+  flex widths. Verified via
+  Playwright (bundled Chromium — `chrome --headless` hijacks the user's running Chrome) on the **real served
+  UI** across all five gating branches (cool dwarf 5832 K / M-dwarf 3257 K / A-gap 9034 K / hot O/B 27482 K /
+  cool giant 3625 K→Linsky) + phone 390 px; only the pre-existing favicon 404, no JS errors. No JS test
+  harness → the screenshot pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** —
+  frontend-only, no backend/API/spine touch. Chunks 2 (wind free–free radio from real Ṁ, needs the spine
+  touch) + 3 (collapse the band to a line via age-gyrochronology + an activity slider) remain.
 - **Done (UX, draggable + responsive panel dashboard — frontend-only):** the user asked to make the
   panels **movable, auto-stack to screen width (phone → vertical, desktop → several columns), and never
   overlap when moved.** The advisor confirmed the only model that satisfies all three at once is a

@@ -55,6 +55,38 @@ const WIEN_NM_K = 2.8977719e6;
 // The peak of B_λ is at x = hc/λkT ≈ 4.9651, so λ_peak = (hc/k)/(4.9651·T).
 const WIEN_X = 4.965114231744276;
 
+// ─── Non-thermal coronal/activity overlay (Phase 5, "magnetic-ember" Chunk 1) ───
+// The blackbody floors in X-rays — but real stellar X-rays are CORONAL, driven by
+// magnetic activity, not photospheric. We overlay the order-of-magnitude band the
+// accepted rotation–activity scaling permits — honestly a RANGE, not a value,
+// because the sim models no rotation/age (the `activity` proxy is a pure Teff ramp,
+// so placing a single L_X from it would fake precision — the project's recurring
+// "label a non-feature" trap). See docs/plans/magnetic-ember-broadcast.md.
+//
+// Placement (the trick the plan flagged): the y-axis is decades below the blackbody's
+// OWN peak Fλ, so a luminosity ratio L_X/L_bol must be turned into an Fλ level. For a
+// blackbody the integral and the peak are tied by a fixed effective width,
+//     L_bol / F_peak = (π⁴/15)·(e^xp−1)/xp⁴ · λ_peak ≈ 1.521·λ_peak   (xp = 4.9651),
+// and spreading L_X over the soft-X-ray band Δλ_X gives that band's Fλ — with L_bol
+// CANCELLING out:
+//     Fλ_X / F_peak = (L_X/L_bol) · (1.521·λ_peak) / Δλ_X,
+// so the band placement depends on Teff alone (via λ_peak), no L_bol needed.
+const BB_XP = 4.965114231744276;                       // peak of B_λ in x = hc/λkT
+const BB_EFF_WIDTH = (Math.PI ** 4 / 15) * (Math.exp(BB_XP) - 1) / BB_XP ** 4; // ≈1.521
+const XRAY_LO = 0.1, XRAY_HI = 10;                     // soft-X-ray band, nm (coronal)
+const XRAY_DLAM = XRAY_HI - XRAY_LO;                    // Δλ_X ≈ 10 nm the L_X spreads over
+
+// Güdel–Benz (1993): a tight cool-star X-ray↔radio correlation, L_X / L_R ≈ 10^15.5 Hz
+// (L_R the radio spectral luminosity per Hz). Mapped onto the Fλ axis it lands at
+//     Fλ_R / F_peak = (L_X/L_bol) · (1.521·λ_peak) · c / (10^15.5 · λ_R²),
+// which for normal stars is BELOW this 14-decade window — per-Hz radio becomes tiny
+// per-nm flux (the λ² makes radio intrinsically faint on an Fλ axis: the AXIS, not the
+// physics). So it is a compact marker near the floor, not a ribbon; the genuine
+// radio-above-floor story is the hot-star wind tail, not this coronal correlate.
+const GB_LOG_HZ = 15.5;                                 // log10(L_X / L_R), Hz
+const C_NM_S = 2.99792458e17;                           // speed of light, nm/s
+const LAM_RADIO = 6e7;                                  // nm ≈ 6 cm ≈ 5 GHz (the GB band)
+
 // The seven EM bands, by wavelength in nm (standard teaching boundaries). The
 // visible band is painted as the true spectral rainbow (reusing color.js); the rest
 // get a muted tint. Note how THIN visible is — ~0.3 of a decade out of 14: the slice
@@ -96,7 +128,7 @@ export function createSED(canvas) {
   ({ ctx, W, H } = fitCanvas(canvas, 720, 300));
   plotW = W - PAD_L - PAD_R;
 
-  let teff = null;
+  let teff = null, logg = null;
 
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
@@ -106,8 +138,12 @@ export function createSED(canvas) {
 
   function update(state) {
     if (!state || state.Teff_K == null) return;
-    if (state.Teff_K === teff) return;
-    teff = state.Teff_K;
+    // logg gates the activity overlay (dwarf dynamo vs cool-giant suppressed corona),
+    // so it must be part of the redraw key: two stars at the same Teff but different
+    // logg (a dwarf vs a giant crossing the same temperature) draw different bands.
+    const g = state.logg ?? null;
+    if (state.Teff_K === teff && g === logg) return;
+    teff = state.Teff_K; logg = g;
     draw();
     renderCaption();
   }
@@ -147,8 +183,102 @@ export function createSED(canvas) {
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
 
+    drawActivity(lamPeak);
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
+  }
+
+  // Regime gates the activity overlay honestly: a cool convective dynamo (full band)
+  // vs a hot wind-shock collapse (~10⁻⁷) vs the A/early-F X-ray gap (no band) vs a
+  // cool giant's suppressed corona past the Linsky–Haisch corona–wind dividing line.
+  function regimeOf(t, g) {
+    if (t >= 10000) return "hot";          // O/B: embedded wind shocks, no dynamo
+    if (t > 6500) return "gap";            // A / early-F: X-ray-quiet gap
+    if (g != null && g < 3.0 && t < 5000) return "coolgiant"; // suppressed corona
+    return "cool";                         // F/G/K/M dwarf/subgiant: full envelope
+  }
+
+  // The coronal soft-X-ray ACTIVITY band (+ its Güdel–Benz radio marker). Drawn as a
+  // hatched, translucent RANGE — never a crisp line — so a later data-grounded curve
+  // (the hot-star wind tail, Chunk 2) will read as a visibly distinct tier. lamPeak is
+  // the Fλ peak wavelength in nm.
+  function drawActivity(lamPeak) {
+    const reg = regimeOf(teff, logg);
+    if (reg === "gap") return;             // A/early-F: nothing to draw, caption only
+
+    // The L_X/L_bol envelope per regime. Cool dwarfs span the full saturated→quiet
+    // band; hot stars collapse to the narrow wind-shock value; cool giants are dimmed
+    // and capped below saturation (corona suppressed — see Linsky–Haisch).
+    let fxLo, fxHi, topLabel, botLabel, tag, dim;
+    if (reg === "hot") {
+      fxLo = 10 ** -7.5; fxHi = 10 ** -6.5;
+      topLabel = ""; botLabel = ""; tag = "wind X-ray ~10⁻⁷"; dim = false;
+    } else if (reg === "coolgiant") {
+      fxLo = 1e-8; fxHi = 1e-5;
+      topLabel = "10⁻⁵"; botLabel = "10⁻⁸"; tag = "coronal X-ray"; dim = true;
+    } else {
+      fxLo = 1e-7; fxHi = 1e-3;
+      topLabel = "10⁻³"; botLabel = "10⁻⁷"; tag = "coronal X-ray"; dim = false;
+    }
+
+    const w = BB_EFF_WIDTH * lamPeak / XRAY_DLAM;
+    const decOf = (fx) => Math.log10(fx) + Math.log10(w);   // dec below the BB peak Fλ
+    const decTop = Math.min(0, decOf(fxHi));
+    const decBot = Math.max(-FLOOR_DECADES, decOf(fxLo));
+    if (decTop <= decBot) return;
+
+    const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI);
+    const yTop = yOf(decTop), yBot = yOf(decBot), hh = yBot - yTop;
+
+    // translucent fill + diagonal hatch = the "evocative range" styling.
+    ctx.fillStyle = `rgba(255,140,110,${dim ? 0.10 : 0.18})`;
+    ctx.fillRect(x0, yTop, x1 - x0, hh);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, yTop, x1 - x0, hh); ctx.clip();
+    ctx.strokeStyle = `rgba(255,170,135,${dim ? 0.22 : 0.4})`; ctx.lineWidth = 1;
+    for (let p = x0 - hh; p < x1; p += 7) {
+      ctx.beginPath(); ctx.moveTo(p, yBot); ctx.lineTo(p + hh, yTop); ctx.stroke();
+    }
+    ctx.restore();
+    // solid top/bottom edges
+    ctx.strokeStyle = `rgba(255,175,145,${dim ? 0.55 : 0.85})`; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x0, yTop); ctx.lineTo(x1, yTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, yBot); ctx.lineTo(x1, yBot); ctx.stroke();
+
+    // The dimensionless L_X/L_bol edge labels — the explicit guard against reading the
+    // band as a pixel-precise flux. The tag names the mechanism.
+    ctx.fillStyle = "#ff9e85"; ctx.font = "9px system-ui, sans-serif";
+    ctx.textAlign = "right";
+    if (topLabel && decOf(fxHi) <= 0) ctx.fillText(topLabel, x1 - 2, yTop + 10);
+    if (botLabel && decOf(fxLo) >= -FLOOR_DECADES) ctx.fillText(botLabel, x1 - 2, yBot - 3);
+    ctx.textAlign = "center";
+    ctx.fillText(tag, (x0 + x1) / 2, yTop - 4);
+    ctx.textAlign = "left";
+
+    // Güdel–Benz radio correlate — a cool-star phenomenon only; compact marker.
+    if (reg === "cool" || reg === "coolgiant") drawGudelBenzRadio(lamPeak, fxHi);
+  }
+
+  // The Güdel–Benz radio counterpart of the X-ray band, anchored at the cm-wave (GHz)
+  // position. On this per-wavelength axis it sits below the window for normal stars —
+  // drawn as a short tick rising from the floor (clamped) to its highest (saturated)
+  // level, a compact footnote to the X-ray band rather than a competing ribbon.
+  function drawGudelBenzRadio(lamPeak, fxHi) {
+    const xr = xOf(LAM_RADIO);
+    const decR = Math.log10(fxHi) + Math.log10(BB_EFF_WIDTH * lamPeak)
+      + Math.log10(C_NM_S) - GB_LOG_HZ - 2 * Math.log10(LAM_RADIO);
+    const yFloor = yOf(-FLOOR_DECADES);
+    const yTop = yOf(Math.min(0, Math.max(decR, -FLOOR_DECADES)));   // clamped to window
+    ctx.strokeStyle = "rgba(255,160,130,0.55)"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(xr, yFloor); ctx.lineTo(xr, yTop); ctx.stroke();
+    ctx.fillStyle = "rgba(255,160,130,0.85)";
+    ctx.beginPath();
+    ctx.moveTo(xr, yTop - 3); ctx.lineTo(xr + 3, yTop);
+    ctx.lineTo(xr, yTop + 3); ctx.lineTo(xr - 3, yTop); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ff9e85"; ctx.font = "9px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Güdel–Benz radio", xr, yFloor - 5);
+    ctx.textAlign = "left";
   }
 
   // Faint translucent EM-band columns; the visible band is the true rainbow.
@@ -257,8 +387,9 @@ export function createSED(canvas) {
   }
 
   // The honest "what am I looking at" caption: the parameter (Teff only), the peak
-  // wavelength + which band it lands in, and the two-ended caveat that the real star
-  // departs from this idealized blackbody at the high-energy and radio extremes.
+  // wavelength + which band it lands in, then the coronal-activity overlay described
+  // per regime — always as a RANGE we can't pin (no rotation/age), with γ kept
+  // explicitly empty. "Evocative, not predictive", as for the 3D corona.
   function renderCaption() {
     if (!caption || teff == null) return;
     const lamPeakNm = WIEN_NM_K / teff;
@@ -272,12 +403,32 @@ export function createSED(canvas) {
       : lamPeakNm < 1e3
         ? `${lamPeakNm.toPrecision(3)} nm`
         : `${(lamPeakNm / 1e3).toPrecision(3)} µm`;
+
+    // The per-regime sentence is kept SHORT and deliberately ~equal in length across
+    // regimes: a regime-dependent caption height resizes the panel as you scrub across
+    // the cool→gap→hot boundaries (the jank the Lane–Emden caption fix addressed). A px
+    // min-height reserve can't fix it here — the panel's flex-wrap width (and so the
+    // caption's line count) varies — so instead the four branches are matched in length
+    // (~130–140 chars) to wrap to the same number of lines at any width. The full story
+    // lives in the legend tooltip + the panel's ? tip, not here.
+    const reg = regimeOf(teff, logg);
+    let act;
+    if (reg === "hot")
+      act = `Overlaid (coral): the X-ray band collapses to the narrow wind-shock ` +
+            `value L_X/L_bol ≈ 10⁻⁷ — hot O/B stars have no convective dynamo.`;
+    else if (reg === "gap")
+      act = `No band drawn: A and early-F stars sit in an X-ray gap — too hot for a ` +
+            `convective dynamo, too cool for strong wind shocks to make X-rays.`;
+    else if (reg === "coolgiant")
+      act = `Overlaid (coral, dimmed): a coronal X-ray band, but suppressed and ` +
+            `uncertain past the Linsky–Haisch corona–wind dividing line — a guide only.`;
+    else
+      act = `Overlaid (coral, hatched): the coronal soft-X-ray activity band, ` +
+            `L_X/L_bol ≈ 10⁻⁷…10⁻³ — a RANGE, not a value (rotation and age unmodeled).`;
+
     caption.textContent =
       `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
-      `(${where}). The curve is the photosphere only: it floors in X-rays/γ-rays ` +
-      `(stars emit almost no thermal high-energy light — real X-ray/γ-ray comes ` +
-      `from the magnetic corona and flares, not modeled here), and its radio tail ` +
-      `is a floor too (real stellar radio sits far above it). Evocative at the edges.`;
+      `(${where}). ${act} γ-rays stay empty. Evocative, not predictive.`;
   }
 
   return { update, resize };
