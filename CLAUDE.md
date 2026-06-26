@@ -1081,6 +1081,51 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   drag-snap recovers exactly 1; HR height 444=444; SED cool/gap/hot render band/**"X-ray gap"**/wind.
   No JS test harness → the screenshot pass *is* the regression check (as in Phases 2–5); **pytest
   unchanged (137)** — frontend-only.
+- **Done (UX, age-slider landmark ticks — five fixes, frontend-only):** the user reported the age
+  axis's evolutionary-landmark ticks were broken in several ways: (1) for sub-solar stars CHeB sits
+  near the slider's end and its **label vanished**; (2) for M≈3.8 two ticks crowd near the RGB and
+  only one is labeled (the other "unclear"); (3) labels near the end **clip off-canvas**; (4) M≈0.66
+  the slider **can't reach the end** — it sticks to a tick and the readout **Phase shows RGB**; (5)
+  M≈5 snapping to the "RGB" tick shows **MS**, to "EAGB" shows **CHeB**, and CHeB isn't a tick at all.
+  All five are one cluster of root causes in `main.js`'s age-tick pipeline + `styles.css`, **diagnosed
+  empirically** (a curl harness over `/track`+`/state` for the named stars, not guessed). The
+  landmark structure is always **MS→RGB→CHeB→EAGB** (no SGB), and the **RGB-tip ≈ CHeB onset always**
+  (measured |Δpos| < 1.3e-4 — the He flash is AT the tip). Fixes: **(a) off-by-one phase** — the
+  slider handler re-read `els.age.value` *after* assigning it, but `<input type=range step=0.0005>`
+  quantizes it, landing the query just below a razor-sharp phase boundary → previous phase. Fixed by
+  keeping `ageFraction` as the EXACT snapped float (mirrors the `massValue` source-of-truth pattern;
+  verified the exact-float round-trip gives the right phase at every tick). **(b) can't reach the end**
+  — a late landmark within the 0.015 snap radius of pos 1.0 captured the whole right edge; new
+  `snapAge()` adds **{0,1} as snap targets** so dragging fully right always lands on the final EAGB
+  state (CHeB still hittable just before it). **(c) CHeB vanished as a tick** — the old global 0.01
+  dedup dropped it; now **phase transitions are never dropped**, and the **RGB-tip is the only
+  droppable point** — dropped when ANY phase tick is within 0.5% of it (checked against the full
+  phase set, NOT in sort order: the tip's pos is marginally *below* CHeB's, so an order-dependent
+  dedup kept the tip and then `snapAge` **stole the snap onto the tip's still-RGB row** → that WAS the
+  M=0.66 "snap to end, readout RGB" bug; the verification caught it). **(d) labels vanished / clipped**
+  — `buildTickStrip` gained an opt-in **no-drop stagger** (age only; mass/feh keep the simpler
+  single-row collision-skip) that **chain-stacks** crowded labels onto rows (each label close to its
+  predecessor drops ONE row below it, a real gap resets to row 0 — guarantees **chronological** top-to-
+  bottom order; a greedy "lowest free row" inverted it, e.g. EAGB above CHeB for the Sun), plus
+  **edge-anchoring** (labels near either end left-/right-align so they extend inward instead of
+  clipping — fixes mass's 0.1/300 and feh's edge labels too). The mark stays at the true pos; only the
+  label shifts. CSS grows the strip + slider-wrap margin via a `--tick-rows` var. **Layout-independent**
+  (normalized pos, no pixel measurement / resize hook); **MIN_GAP=0.11** is sized for phone-safety
+  (a label is ~0.10 of the strip width at 390px), so low-mass stars + ~20 M☉ render a clean 3-row
+  staircase — the cost of never overlapping, since the chain (not MIN_GAP) is what fixes the order.
+  **The advisor caught a phone-overlap gap** my first pass missed: at MIN_GAP=0.085 the Sun/0.9 M☉
+  (RGB→CHeB gap ~0.10) put CHeB on row 0 beside RGB → overlap at 390px (my phone test only covered the
+  3-row m=0.66, which never hit the same-row case); bumped to 0.11 and re-verified with a
+  bounding-box overlap check across the Sun/0.9/0.66/5/20 at 390px (**all clean**). **Deviation from
+  the user's literal "above the slider":** stacked *downward* (rows below) instead, because above
+  collides with the Age title/number-input row — same goal (every landmark visible), and chronological.
+  Verified via **Playwright bundled Chromium** (the `chrome --headless` hijack caveat) on the **real
+  served UI**: 16/16 logic checks (snap each tick → readout phase == label; end reachable → EAGB;
+  precision escape hatch) across M=0.66/−0.49, 5/0.15, 3.8/0, 20/0; extreme masses (0.1 → one RGB
+  tick, 300 → none, no errors); mass/feh unregressed; Sun §10 anchor intact (4.6 Gyr, L 1.07, Teff
+  5834 K); phone bounding-box overlap = 0. No JS test harness → the screenshot/overlap pass *is* the
+  regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only (no backend/API/
+  spine touch).
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

@@ -361,24 +361,39 @@ main {
    tick rendering is browser-roulette, so it's a bonus, not the source of truth).
    Inset left/right by ~the thumb radius so a mark at pos% sits under the thumb at
    that value (the few-px end drift from a non-exact radius is acceptable). */
-.slider-wrap { position: relative; margin-bottom: 22px; }
+/* --tick-rows (set by buildTickStrip on the wrap) grows the bottom margin so the
+   stacked label rows of a staggered strip — the age axis, whose landmarks crowd the
+   right edge — clear the panel content below. Default 1 = the original 22px. */
+.slider-wrap {
+  position: relative;
+  margin-bottom: calc(22px + max(0px, (var(--tick-rows, 1) - 1) * 14px));
+}
 .ticks {
   position: absolute; left: 8px; right: 8px; top: 100%;
   height: 20px; pointer-events: none;
 }
-.tick {
-  position: absolute; top: 0; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center;
-}
+.ticks.stagger { height: calc(20px + max(0px, (var(--tick-rows, 1) - 1) * 14px)); }
+/* The mark and label are decoupled: the mark stays at the true position, the label
+   is edge-anchored (so it shifts inward near the ends instead of clipping) and can
+   drop onto a stacked row (so close labels don't overprint). */
+.tick { position: absolute; top: 0; }
 .tick::before {
-  content: ""; width: 1px; height: 5px;
+  content: ""; position: absolute; left: 0; top: 0;
+  width: 1px; height: 5px; transform: translateX(-50%);
   background: var(--muted); opacity: 0.75;
 }
 .tick-label {
-  margin-top: 2px; font-size: 9.5px; line-height: 1;
-  color: var(--muted); white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  position: absolute; top: 7px; left: 0; transform: translateX(-50%);
+  font-size: 9.5px; line-height: 1; color: var(--muted);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
 }
+/* Near an end, anchor the label so it extends inward (mark stays put). */
+.tick-label[data-anchor="left"] { left: 0; transform: none; }
+.tick-label[data-anchor="right"] { left: auto; right: 0; transform: none; }
+/* Stacked rows for crowded (staggered) labels — each row drops ~13px. */
+.ticks.stagger .tick-label[data-row="1"] { top: 20px; }
+.ticks.stagger .tick-label[data-row="2"] { top: 33px; }
+.ticks.stagger .tick-label[data-row="3"] { top: 46px; }
 
 /* --- Draggable panels (layout.js) ------------------------------------------
    The grip injected into each panel's <h2> is the ONLY drag handle, so the

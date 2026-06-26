@@ -266,6 +266,23 @@ function snap(value, ticks, min, max) {
   return best;
 }
 
+// Snap an age FRACTION (0..1) to a landmark or to a track endpoint. The endpoints
+// (0 = ZAMS, 1 = the final EAGB state) are snap targets too, so dragging fully right
+// always reaches the true end of the track — even when a late landmark (CHeB/EAGB)
+// sits within the snap radius of 1.0, which used to capture the whole right edge and
+// trap the slider short of the end. Returns the EXACT float (never the range input's
+// step-quantized value): the phase boundaries are razor-sharp, so refresh() must
+// derive the age from this exact fraction or the readout shows the previous phase.
+function snapAge(raw) {
+  const thresh = 0.015;
+  let best = raw, bestD = thresh;
+  for (const t of [0, ...ageTickPos, 1]) {
+    const d = Math.abs(raw - t);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
+}
+
 // Populate a <datalist> (a native, browser-dependent tick hint) from {pos,label}.
 // Kept as a bonus; the visible, reliable marks are the custom strip below.
 function buildDatalist(el, opts) {
@@ -276,21 +293,64 @@ function buildDatalist(el, opts) {
 
 // Render the visible snap marks (a tick line + small label) under a slider. The
 // strip is inset by the thumb radius in CSS, so pos01 (0..1) lines up under the
-// thumb. Labels are collision-skipped (in normalized space, layout-independent)
-// so clustered landmarks — common on the age axis — don't overprint.
-function buildTickStrip(el, marks) {
+// thumb. Labels are EDGE-ANCHORED (centered in the middle, left-/right-aligned near
+// the ends) so a landmark near either end extends inward instead of off-canvas.
+// With { stagger:true } — the age strip, whose evolutionary landmarks crowd the
+// right edge on a linear-age axis — a label that would collide with one already
+// placed is pushed onto the next stacked ROW instead of being dropped, so every
+// landmark stays visible (the user's "move it above/aside when ticks are close").
+// mass/feh keep the simpler single-row collision-skip (those strips rarely crowd,
+// and a dropped round-mass label is low-stakes). Layout-independent (normalized
+// pos), so it survives responsive resizes with no relayout.
+function buildTickStrip(el, marks, opts = {}) {
   if (!el) return;
+  const stagger = opts.stagger === true;
   const sorted = marks.slice().sort((a, b) => a.pos01 - b.pos01);
-  let lastLabel = -1;
-  el.innerHTML = sorted
+  const anchor = (p) => (p < 0.1 ? "left" : p > 0.9 ? "right" : "");
+  // Big enough that two same-row labels never overlap even on a narrow phone strip
+  // (a label is ~0.10 of the strip width there) — close ones stack instead. Chosen
+  // for phone-safety, NOT to limit stacking: chronological order is guaranteed by the
+  // chain logic below regardless of this value, so the only cost of a generous gap is
+  // that low-mass stars (and ~20 M☉) stack the crowded late phases into a clean 3-row
+  // staircase. Layout-independent (no pixel measurement / resize hook).
+  const MIN_GAP = 0.11;
+  let maxRow = 0;
+  let prevPos = -1, prevRow = 0;   // chain state for the stagger
+  let lastShown = -1;              // last labeled pos (single-row / non-stagger case)
+
+  const html = sorted
     .map((m) => {
-      const showLabel = m.label != null && m.pos01 - lastLabel >= 0.08;
-      if (showLabel) lastLabel = m.pos01;
+      let showLabel = m.label != null;
+      let row = 0;
+      if (showLabel) {
+        if (stagger) {
+          // Chain stacking: a label close to its predecessor drops ONE row below it;
+          // a real gap resets to row 0. This keeps the rows in chronological order
+          // (earlier phase always above a later one — a greedy "lowest free row"
+          // would let a later label grab the freed top row and invert the order).
+          row = prevPos >= 0 && m.pos01 - prevPos < MIN_GAP ? prevRow + 1 : 0;
+          prevPos = m.pos01; prevRow = row;
+          if (row > maxRow) maxRow = row;
+        } else if (m.pos01 - lastShown < 0.08) {
+          showLabel = false;
+        } else {
+          lastShown = m.pos01;
+        }
+      }
+      const a = anchor(m.pos01);
       const lbl = showLabel
-        ? `<span class="tick-label">${escAttr(m.label)}</span>` : "";
+        ? `<span class="tick-label"${a ? ` data-anchor="${a}"` : ""}` +
+          `${row ? ` data-row="${row}"` : ""}>${escAttr(m.label)}</span>`
+        : "";
       return `<span class="tick" style="left:${(m.pos01 * 100).toFixed(2)}%">${lbl}</span>`;
     })
     .join("");
+
+  el.innerHTML = html;
+  el.classList.toggle("stagger", stagger);
+  // Grow the strip + its slider-wrap's bottom margin to fit the stacked rows (CSS
+  // reads --tick-rows). Non-staggered strips pin it to 1 (the default height).
+  el.parentElement.style.setProperty("--tick-rows", stagger ? String(maxRow + 1) : "1");
 }
 
 // Minimal escaping for text dropped into markup / attributes (tick labels, the
@@ -401,7 +461,9 @@ function criticalAges(track) {
   let prev = null;
   for (const s of track) {
     if (s.phase !== prev) {
-      if (prev !== null) pts.push({ age: s.age_yr, label: s.phase });
+      // Phase transitions are the real landmarks — kind:"phase" marks them as
+      // never-droppable (dropping CHeB was the "CHeB is nowhere as a tick" bug).
+      if (prev !== null) pts.push({ age: s.age_yr, label: s.phase, kind: "phase" });
       prev = s.phase;
     }
   }
@@ -409,10 +471,14 @@ function criticalAges(track) {
   // (not the global max) because the window now reaches the early-AGB, whose radius
   // can exceed the RGB tip for intermediate masses — the global max would mislabel
   // an EAGB state as the "RGB tip". Skipped if the star never has an RGB phase.
+  // Tagged kind:"tip": for every star that ignites helium the tip coincides with
+  // CHeB onset (the He flash happens AT the tip — measured |Δpos| < 1.3e-4 across all
+  // masses), so rebuildAgeTicks drops it as a redundant mark when CHeB sits on top of
+  // it, leaving it only for stars whose window ends mid-RGB (no CHeB).
   let tip = null;
   for (const s of track)
     if (s.phase === "RGB" && (tip === null || s.R_rsun > tip.R_rsun)) tip = s;
-  if (tip !== null) pts.push({ age: tip.age_yr, label: "RGB tip" });
+  if (tip !== null) pts.push({ age: tip.age_yr, label: "RGB tip", kind: "tip" });
   return pts;
 }
 
@@ -424,15 +490,28 @@ function criticalAges(track) {
 function rebuildAgeTicks() {
   if (!currentTrack || !(ageMax > ageMin)) return;
   const span = ageMax - ageMin;
-  const opts = [];
-  for (const p of criticalAges(currentTrack)) {
-    const pos = clamp01((p.age - ageMin) / span);
-    if (opts.some((o) => Math.abs(o.pos - pos) < 0.01)) continue; // dedup clustered
-    opts.push({ pos, label: p.label });
-  }
+  const all = criticalAges(currentTrack)
+    .map((p) => ({ ...p, pos: clamp01((p.age - ageMin) / span) }));
+  // Phase transitions are always kept (the old global 0.01 dedup dropped CHeB — the
+  // "CHeB is nowhere as a tick" bug). The RGB-tip is the only droppable point: it
+  // sits one row before CHeB onset (the He flash is AT the tip), so it's dropped
+  // whenever ANY phase tick is within 0.5% of it. Checked against the full phase set
+  // — NOT in sort order — because the tip's pos is marginally *below* CHeB's, so an
+  // order-dependent dedup would keep the tip (processed first, opts still empty) and
+  // then snapAge would steal the snap onto the tip's still-RGB row → "snap to CHeB,
+  // readout says RGB". The tip survives only for a star whose window ends mid-RGB.
+  const phasePts = all.filter((p) => p.kind === "phase");
+  const opts = [...phasePts,
+    ...all.filter((p) => p.kind === "tip" &&
+      !phasePts.some((q) => Math.abs(q.pos - p.pos) < 0.005)),
+  ].sort((a, b) => a.pos - b.pos).map((p) => ({ pos: p.pos, label: p.label }));
   ageTickPos = opts.map((o) => o.pos);
   buildDatalist(els.ageTicks, opts);
-  buildTickStrip(els.ageMarks, opts.map((o) => ({ pos01: o.pos, label: o.label })));
+  // The age axis is linear in age, so the evolutionary landmarks crowd the right edge
+  // for low/intermediate-mass stars — stagger their labels onto stacked rows (no-drop)
+  // so each one stays visible.
+  buildTickStrip(els.ageMarks,
+    opts.map((o) => ({ pos01: o.pos, label: o.label })), { stagger: true });
 }
 
 // Write a number input's display value without fighting the user mid-type.
@@ -708,8 +787,13 @@ async function init() {
     refreshMassRangeThenTrack();
   });
   els.age.addEventListener("input", () => {
-    els.age.value = snap(Number(els.age.value), ageTickPos, 0, 1);
-    ageFraction = Number(els.age.value);
+    // ageFraction is the SOURCE OF TRUTH (like massValue): keep the EXACT snapped
+    // float, never the range input's step-quantized value. Re-reading els.age.value
+    // would round to the 0.0005 step and land just below a razor-sharp phase
+    // boundary — the "snap to CHeB, readout says RGB" off-by-one. The thumb is set
+    // from the exact value purely as a display (the browser may re-quantize *that*).
+    ageFraction = snapAge(Number(els.age.value));
+    els.age.value = ageFraction;
     refresh();
   });
 
