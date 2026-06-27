@@ -11,6 +11,21 @@ const LOGT_MIN = 3.4;   // ~2500 K  (right edge, cool)
 const LOGT_MAX = 4.7;   // ~50000 K (left edge, hot)
 const LOGL_MIN = -4;
 const LOGL_MAX = 6;
+// Wider bounds for the WHITE-DWARF ENDGAME view (the smoldering-cinder gateway): the
+// cooling track runs from the cool-giant corner up to a ~100–400 kK central star
+// (log T ≈ 5.0–5.6) and all the way down to a cold cinder at logL ≈ −5.3. The normal
+// bounds would clip both the hot central star (off the left) and the faded WD (off the
+// bottom), so endgame mode swaps in these. setEndgame()/clearEndgame() toggle them.
+const LOGT_MIN_EG = 3.35;
+const LOGT_MAX_EG = 5.7;    // ~500 kK — fits the hottest central stars (394 kK at 6.5 M☉)
+const LOGL_MIN_EG = -5.6;
+const LOGL_MAX_EG = 4.5;
+// Per-mode gridline values (Teff in log10 K, L in log10 L☉) — the endgame view needs
+// hotter Teff and fainter L ticks than the living view.
+const GRID_T = [4.5, 4.0, 3.7, 3.5];
+const GRID_L = [-3, 0, 3, 6];
+const GRID_T_EG = [5.5, 5.0, 4.5, 4.0, 3.5];
+const GRID_L_EG = [-5, -2, 1, 4];
 // Asymmetric left pad: the y-axis needs two lanes side by side — the rotated
 // "L / L☉" title in the far-left lane, the 1e-3..1e6 tick numbers in the lane
 // just inside it — so they stop overlapping. Top/right/bottom stay at PAD.
@@ -63,11 +78,15 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let ctx, W, H;
   ({ ctx, W, H } = fitCanvas(canvas, cssW, cssH));
 
+  // Current plot bounds — swapped between the living-star and endgame views below.
+  // xOf/yOf capture these `let` bindings, so a mode switch + redraw rescales the plot.
+  let bT0 = LOGT_MIN, bT1 = LOGT_MAX, bL0 = LOGL_MIN, bL1 = LOGL_MAX;
+
   // Teff reversed: hot (high logT) on the LEFT.
   const xOf = (logT) =>
-    PAD_L + (LOGT_MAX - logT) / (LOGT_MAX - LOGT_MIN) * (W - PAD_L - PAD);
+    PAD_L + (bT1 - logT) / (bT1 - bT0) * (W - PAD_L - PAD);
   const yOf = (logL) =>
-    H - PAD - (logL - LOGL_MIN) / (LOGL_MAX - LOGL_MIN) * (H - 2 * PAD);
+    H - PAD - (logL - bL0) / (bL1 - bL0) * (H - 2 * PAD);
 
   function drawAxes() {
     ctx.clearRect(0, 0, W, H);
@@ -81,7 +100,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
 
     // Teff gridlines (label in kK), centered under each line.
     ctx.textAlign = "center";
-    for (const logT of [4.5, 4.0, 3.7, 3.5]) {
+    for (const logT of (endgameMode ? GRID_T_EG : GRID_T)) {
       const x = xOf(logT);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
@@ -92,7 +111,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // L gridlines — tick numbers right-aligned in the lane just left of the
     // frame, so they never collide with the rotated axis title further left.
     ctx.textAlign = "right";
-    for (const logL of [-3, 0, 3, 6]) {
+    for (const logL of (endgameMode ? GRID_L_EG : GRID_L)) {
       const y = yOf(logL);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD, y); ctx.stroke();
@@ -112,6 +131,8 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let track = null;        // array of StellarState (age-independent, set per mass/feh)
   let marker = null;       // current StellarState (moves as age scrubs)
   let showOverlay = false; // variable-star zones (off by default — opt-in view)
+  let endgameMode = false; // WD endgame view: wide axes + the cooling track
+  let endgameTrack = null; // the endgame StellarStates (the cooling sequence)
 
   // Fill + dashed outline the current path with a zone's colors.
   function fillZone(fill, stroke) {
@@ -181,10 +202,40 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.stroke();
   }
 
+  // The endgame cooling track, colored segment-by-segment by the local Teff so the
+  // sequence reads as a journey: cool-red giant → blazing blue-white central star →
+  // fading through white/yellow/red to a cold cinder. Drawn over a faint copy of the
+  // living track (kept for context — where the star came from).
+  function drawEndgameTrack() {
+    if (track && track.length > 1) {
+      ctx.beginPath();
+      track.forEach((s, i) => {
+        const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = "rgba(231,236,245,0.18)";
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (!endgameTrack || endgameTrack.length < 2) return;
+    ctx.lineWidth = 2;
+    for (let i = 1; i < endgameTrack.length; i++) {
+      const a = endgameTrack[i - 1], b = endgameTrack[i];
+      ctx.beginPath();
+      ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
+      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
+      ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+      ctx.stroke();
+    }
+  }
+
   function draw() {
     drawAxes();
-    if (showOverlay) drawOverlay();   // behind the track, so the live star stays on top
-    drawTrack();
+    if (endgameMode) {
+      drawEndgameTrack();
+    } else {
+      if (showOverlay) drawOverlay(); // behind the track, so the live star stays on top
+      drawTrack();
+    }
     if (!marker) return;
     const x = xOf(Math.log10(marker.Teff_K));
     const y = yOf(Math.log10(marker.L_lsun));
@@ -201,6 +252,21 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function update(state) { marker = state; draw(); }
   function setOverlay(on) { showOverlay = !!on; draw(); }
 
+  // Enter/leave the white-dwarf endgame view. setEndgame() swaps in the wide axes and
+  // the cooling track; clearEndgame() restores the living-star bounds + track.
+  function setEndgame(states) {
+    endgameMode = true;
+    endgameTrack = states && states.length ? states : null;
+    bT0 = LOGT_MIN_EG; bT1 = LOGT_MAX_EG; bL0 = LOGL_MIN_EG; bL1 = LOGL_MAX_EG;
+    draw();
+  }
+  function clearEndgame() {
+    endgameMode = false;
+    endgameTrack = null;
+    bT0 = LOGT_MIN; bT1 = LOGT_MAX; bL0 = LOGL_MIN; bL1 = LOGL_MAX;
+    draw();
+  }
+
   // Re-fit to a new display size (the responsive layout calls this when the
   // panel's width changes) and redraw from the retained track + marker.
   function resize(cssW2, cssH2) {
@@ -209,5 +275,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, resize };
+  return { setTrack, update, setOverlay, setEndgame, clearEndgame, resize };
 }

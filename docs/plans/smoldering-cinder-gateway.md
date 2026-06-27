@@ -139,7 +139,37 @@ but single-track (never interpolated); classifier correct across mass×feh
 WR-threshold matches the measured 40/50/60 by feh.
 **Depends:** nothing. **Foundation for 2–5.**
 
-### Chunk 2 — Frontend: reversible gateway + WD mode shell (HR + controls)
+### Chunk 2 — Frontend: reversible gateway + WD mode shell (HR + controls) — ✅ DONE
+**Status:** shipped (frontend-only; 137 tests unchanged). A "→ Continue: White Dwarf"
+button appears at the age-slider limit when the snapped star classifies WD (an honest
+"core collapse — not simulated" note for the SN masses; nothing for `none`; WR is
+Chunk 4). Clicking enters a **reversible** `wd-mode` (a "← Back to the living star"
+button restores the living star at its track end). Inside the mode the **age slider
+becomes a log-spaced cooling scrubber** and **mass/[Fe/H] stay live** (re-snap the
+progenitor → a different remnant; out-of-WD-range masses revert with a note). The HR
+diagram swaps to wide endgame axes and draws the **Teff-coloured cooling track**
+(cool-giant → ~100–400 kK central star → cold cinder); the 3D star, scale bar,
+composition and readout take the endgame `StellarState`; spectrum shows an honest
+placeholder; the SED keeps its blackbody but drops the (dynamo-less) X-ray overlay.
+**Key design (advisor-guided):** the cooling scrub is a **3-zone piecewise-index map**
+(pulses 12% → rise-to-central-star 16% → cooling 72%) — a naive single log-cooling-age
+axis lets the 601 chaotic pulse rows eat half the slider and crushes the dramatic
+central-star spike to a sliver; within the cooling zone MIST's rows are already ~even in
+log(cooling age), so plain index there gives each decade visible travel. The WD path is
+**separate from the live plumbing** (picks `states[i]` from the pre-fetched /endgame
+result — no /state fetch); consumers get **explicit mode signals** (not logg
+heuristics): `spectrum.showPlaceholder()`, `classify.update(s,"wd")`,
+`sed.update(s,{endgame})`. `/endgame` is fetched **lazily** (when the age nears the
+limit), and `refresh()`/`refreshTrack()` bail if the mode left "live" (a live fetch
+landing after `enterWD()` would otherwise clobber the WD render — the bug the
+verification caught). `exitWD` returns to `lastWDMass/Feh` (robust to the focus/blur
+race where a still-focused mass box re-commits a reverted value on the exit click).
+Verified via Playwright (22/22 checks: gateway → scrub pulses/107 kK central star/2393 K
+cold WD → re-snap to a different remnant → SN revert → reversible Back; living Sun
+anchor + variable-star overlay unregressed). The first-pass composition feeds the
+endgame track as-is (DA hydrogen surface shows correctly); WD-correct comp/3D come in
+Chunk 3.
+
 **Goal:** a crossable, reversible WD gateway with a correct cooling track.
 **Do:** the context button at the slider limit (driven by Chunk 1's classifier);
 enter/leave the WD endgame **reversibly** (slide back to the living star); the

@@ -90,6 +90,11 @@ export function createSpectrum({ api }) {
 
   let data = null;        // last /spectrum result
   let lastKey = null;     // dedup: skip a refetch if (Teff,logg,feh) didn't move
+  // A caller-supplied placeholder message (the WD endgame: log g 7–9 is off the
+  // main-sequence atmosphere grid, and the central-star rows would silently return a
+  // wrong lower-gravity spectrum, so we draw an honest "no model yet" frame instead of
+  // fetching). Set by showPlaceholder(); cleared by the next live update().
+  let placeholderMsg = null;
 
   // --- latest-wins + debounce (the lane.js idiom, on its OWN token) ----------
   let token = 0;
@@ -125,6 +130,7 @@ export function createSpectrum({ api }) {
   // actually move Teff/log g won't hammer the endpoint.
   function update(state) {
     if (!state) return;
+    placeholderMsg = null;   // a live star supersedes any endgame placeholder
     const teff = state.Teff_K, logg = state.logg, feh = state.feh_init;
     if (teff == null || logg == null) return;
     const key = `${Math.round(teff)}|${logg.toFixed(2)}|${(feh ?? 0).toFixed(2)}`;
@@ -132,6 +138,18 @@ export function createSpectrum({ api }) {
     lastKey = key;
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => fetchSpectrum(teff, logg, feh ?? 0), 90);
+  }
+
+  // Show an honest "no spectral model for this regime yet" frame instead of a
+  // spectrum (the WD endgame, until the Chunk 6 white-dwarf grid lands). Bumps the
+  // token + clears the dedup key so a pending live fetch can't overwrite it, and a
+  // later live update() re-enables fetching.
+  function showPlaceholder(msg) {
+    token++;
+    placeholderMsg = msg || "No spectral model for this regime yet.";
+    lastKey = null;
+    draw();
+    if (caption) caption.textContent = msg || "";
   }
 
   // True when the star is hotter than the HOTTEST spectrum any baked grid covers
@@ -152,6 +170,7 @@ export function createSpectrum({ api }) {
   // --- drawing ---------------------------------------------------------------
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    if (placeholderMsg) { drawPlaceholder(placeholderMsg); return; }
     if (!data) return;
     if (teffAboveGrid()) { drawNoModel(); return; }
 
@@ -299,6 +318,21 @@ export function createSpectrum({ api }) {
     ctx.textAlign = "left";
   }
 
+  // A generic centered-message frame (the WD endgame placeholder). Reads as
+  // intentionally empty, not broken — the same idiom as drawNoModel, but for a regime
+  // we don't model yet rather than a too-hot clamp.
+  function drawPlaceholder(msg) {
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD_T, W - PAD_L - PAD_R, H - PAD_T - PAD_B);
+    const cx = (PAD_L + W - PAD_R) / 2, cy = (PAD_T + H - PAD_B) / 2;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#aeb7c8"; ctx.font = "14px system-ui, sans-serif";
+    ctx.fillText("No spectral model for this star yet", cx, cy - 8);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(msg, cx, cy + 13);
+    ctx.textAlign = "left";
+  }
+
   // The honest "what am I looking at" caption: the parameters the spectrum stands
   // for, plus — when the grid has no metallicity axis — a plain note that the
   // [Fe/H] control does not (yet) change this panel.
@@ -330,5 +364,5 @@ export function createSpectrum({ api }) {
     renderCaption();
   }
 
-  return { update, resize };
+  return { update, showPlaceholder, resize };
 }

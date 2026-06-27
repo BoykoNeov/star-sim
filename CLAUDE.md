@@ -794,6 +794,50 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   monotonicity + age-monotonic + final-mass, WR stripping, SN dead-end, snap-to-true-mass, EEP continues,
   WR-threshold-by-feh gated `requires_mist_heldout_feh`, off-grid raises, `/endgame` route shape + 422) +
   always-on stub/MESA "none" tests. **137 tests pass** (was 121). Frontend untouched (Chunks 2–5).
+- **Done (Phase 5, WR/WD endgame — Chunk 2, reversible WD gateway + WD mode shell, frontend-only):**
+  the white-dwarf vertical slice of the gateway (`docs/plans/smoldering-cinder-gateway.md` §Chunk 2;
+  pytest **unchanged 137** — no backend/API/spine touch). At the **age-slider limit** a
+  **"→ Continue: White Dwarf"** button appears when the snapped star classifies WD (an honest
+  "core collapse — supernova; remnant not simulated" note for the SN masses; nothing for `none`/WR —
+  WR is Chunk 4); clicking enters a **reversible `wd-mode`** (a "← Back to the living star" button
+  restores the living star at its track end). Inside the mode the **age slider becomes a log-spaced
+  cooling scrubber** and **mass/[Fe/H] stay live** (re-snap the progenitor → a different remnant; a
+  mass that leaves the WD range reverts to the last WD mass with a note). The HR diagram swaps to **wide
+  endgame axes** (logT→5.7 for the 100–400 kK central stars, logL→−5.6) and draws the **Teff-coloured
+  cooling track** (cool giant → blazing central star → cold cinder, with the faint living track for
+  context); the 3D star, scale bar, composition and readout take the endgame `StellarState`; the
+  spectrum shows an **honest placeholder** (WD log g 7–9 is off the atmosphere grid — Chunk 6); the SED
+  keeps its blackbody but **drops the dynamo-less X-ray overlay** and hides the rotation control.
+  **The cooling-axis design was the crux (advisor #1, measured before building):** a naive single
+  log-cooling-age axis lets the 601 chaotic thermal-pulse rows eat ~half the slider and crushes the
+  dramatic ~100 kK central-star spike to a ~0.02-decade sliver — the *opposite* of Locked decision #3's
+  intent. Fix = a **3-zone piecewise-INDEX map** (pulses 12% → rise-to-central-star 16% → cooling 72%),
+  zone boundaries DERIVED from the data (last TPAGB row + hottest post-AGB "knee"). The cooling zone is
+  plain index-linear because **MIST's post-knee rows are already ~even in log(cooling age)** (verified:
+  frac→log10(cooling-age) monotone over 7.16 decades on the 1 M☉ track), so each cooling decade still
+  gets visible travel. **Architecture (advisor #2/#3):** the WD path is **separate from the live
+  plumbing** — `refreshWD()` picks `states[i]` from the pre-fetched `/endgame` result (no `/state`
+  fetch, no window build, no phase snap); consumers get **explicit mode signals**, never logg
+  heuristics: `spectrum.showPlaceholder(msg)`, `classify.update(s,"wd")` (AGB→PN-central-star→white-dwarf
+  by phase+logg, not "O2 III blue giant"), `sed.update(s,{endgame})`. `hr.setEndgame/clearEndgame`
+  swap the axes + draw the cooling track. **Two real bugs the Playwright pass caught** (not green-check
+  theatre): (a) a **live `/state` landing after `enterWD()` clobbered the WD render** (the reqToken
+  guard only catches newer `refresh()` calls, not a mode switch) → `refresh()`/`refreshTrack()` now bail
+  if `mode !== "live"`, and `enterWD` bumps the tokens; (b) **`exitWD` returned the wrong star** — typing
+  an SN mass in the focused number box reverts `massValue` but `setNum`'s focus-guard can't update the
+  box, so the **blur `change` on the exit click re-commits the stale value** right before exit →
+  `exitWD` now restores `lastWDMass/Feh` (the confirmed WD progenitor we were viewing), deterministic
+  regardless of the race. `/endgame` is fetched **lazily** (when the age nears the limit, not per mass
+  drag — 1 MB/58 ms, but only when it matters). **Verified via Playwright** (bundled Chromium — the
+  `chrome --headless` hijack caveat) on the real served UI, **22/22 checks**: gateway appears at the
+  1 M☉ life-end → enter → scrub pulses (TPAGB) / 107 kK central star (frac 0.28) / 2393 K cold WD at
+  logg 7.95 (frac 1.0) → re-snap to 3 M☉ (remnant 0.544→0.666 M☉) → mass=8 SN revert with note →
+  reversible Back → SN dead-end note at 8 M☉ → no gateway at 0.3 M☉; the **§10 living Sun anchor
+  (L 1.07, Teff 5834 K, G2 V) + the variable-star overlay are unregressed** and the HR reverts to its
+  normal axes on exit. No JS errors. No JS test harness → the screenshot/assertion pass *is* the
+  regression check (as in Phases 2–5). First-pass composition feeds the endgame track as-is (the DA
+  hydrogen surface shows correctly); the **WD-correct 3D shader + WD-semantics structure panel are
+  Chunk 3**, and the WR branch is Chunk 4.
 - **Done (Phase 5, broadband SED panel — gamma → radio, the "wider range" view, frontend-only):**
   the user asked to see the spectrum "not only near visible" → then clarified **"extend to gamma and
   radio."** The honest answer (advisor-confirmed) is **NOT more synthetic-grid data**: the baked cube is

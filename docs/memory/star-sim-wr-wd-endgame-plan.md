@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNK 1 (backend accessor+classifier) BUILT; plus the hot-end-can't-extend spectrum finding.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier) & 2 (reversible WD gateway + WD mode shell) BUILT; plus the hot-end-can't-extend spectrum finding.
 metadata:
   type: project
 ---
@@ -61,13 +61,49 @@ L is *not* discarded — sets R\*→Rt). Naming trap: "Reindl 2020" pure-H grid 
 Rauch 2020 = TLUSTY twin (95 kK cap), NOT TMAP. So Chunk 6 (Koester+TMAP) tractable, Chunk 7 (PoWR)
 carries the real design cost.
 
-**Remaining: Chunks 2–7** (frontend gateway + WD/WR mode shells + 3D shaders, then the data-gated WR/WD
-spectra above). **Chunk 2 forward notes (advisor, capture while fresh):** (1) the **log cooling-age axis
-needs RELATIVE cooling age, not `age_yr`** — total age is only 11.67→27.55 Gyr (0.37 dex, log does
-nothing); cooling age *since WD formation* spans ~5 decades → Chunk 2 must subtract a formation
-zero-point (forces the "cooling age vs time-since-AGB" open question); the 601 TPAGB pulse rows sit in
-a thin young-end sliver. (2) `final_mass_msun` is populated for SN/none too (harmless pre-collapse
-`Mcur[r_last]`) — don't surface it as a "remnant mass" on the SN card. See the chunk list below.
+**CHUNK 2 DONE (frontend reversible WD gateway + WD mode shell; frontend-only, pytest UNCHANGED 137).**
+A **"→ Continue: White Dwarf"** button at the age-slider limit when the snapped star classifies WD
+(honest "core collapse — not simulated" note for SN masses; nothing for none/WR — WR is Chunk 4);
+click → reversible **`wd-mode`** (a "← Back to the living star" button). In the mode the age slider is a
+**cooling scrubber**, **mass/[Fe/H] stay live** (re-snap → different remnant; out-of-WD-range reverts
+with a note), HR swaps to **wide endgame axes** (logT→5.7, logL→−5.6) drawing the **Teff-coloured
+cooling track** (cool giant → ~100–400 kK central star → cold cinder); 3D/scale/comp/readout take the
+endgame StellarState; spectrum = placeholder; SED keeps the blackbody but drops the X-ray overlay.
+Reusable lessons (advisor + the Playwright pass — all genuinely caught, not green-check theatre):
+- **The cooling-axis crux (the forward-note #1 above, RESOLVED):** confirmed a single log-cooling-age
+  axis inverts the story (601 pulse rows eat ~half the slider; the 107 kK central-star spike → a
+  ~0.02-dex sliver). Fix = a **3-zone piecewise-INDEX map** — pulses 12% / rise-to-central-star 16% /
+  cooling 72% — with the boundaries DERIVED from the data (last TPAGB row + hottest post-AGB "knee").
+  The cooling zone is plain index-linear because **MIST's post-knee rows are ALREADY ~even in
+  log(cooling age)** (measured: frac→log10(age−knee_age) monotone over 7.16 decades on 1 M☉), so each
+  decade still gets visible travel — no log math needed in the mapping at all. (So the "cooling age vs
+  time-since-AGB" open question dissolved: index-based scrub; the readout shows BOTH absolute age and a
+  "cooling age = age − knee_age".)
+- **Forward-note #2 honored:** the SN card shows the supernova mass but NO "remnant mass" line; the WD
+  readout's "Remnant mass" row uses `final_mass_msun` only for WD states.
+- **Separate the WD path from the live plumbing (advisor):** `refreshWD()` picks `states[i]` from the
+  pre-fetched `/endgame` result — NO `/state` fetch, no window build, no phase snap. Consumers get
+  **explicit mode signals**, NOT logg heuristics: `spectrum.showPlaceholder(msg)`,
+  `classify.update(s,"wd")` (AGB→PN-central-star→white-dwarf by phase+logg, dodging "O2 III blue
+  giant"), `sed.update(s,{endgame})` (drops the dynamo-less X-ray band). `hr.setEndgame/clearEndgame`.
+- **TWO real bugs the Playwright pass caught:** (a) a live `/state` landing **after `enterWD()`
+  clobbered the WD render** (reqToken only catches newer `refresh()` calls, not a mode switch) →
+  `refresh()`/`refreshTrack()` now bail if `mode !== "live"` + `enterWD` bumps the tokens; (b)
+  **`exitWD` returned the wrong star** — typing an SN mass in the FOCUSED number box reverts `massValue`
+  but `setNum`'s focus-guard can't update the box, so the **blur `change` on the exit click re-commits
+  the stale value** right before exit → `exitWD` restores `lastWDMass/Feh` (the confirmed WD progenitor
+  we were viewing), deterministic regardless of the race. (General lesson: a focus-guarded number box +
+  a click that blurs it = a stale re-commit; restore from a known-good var, don't trust the live value.)
+- **Lazy `/endgame` fetch** (when the age nears the limit, not per mass drag — 1 MB/58 ms, only when it
+  matters). Verified via **Playwright bundled Chromium** (the `chrome --headless` hijack caveat),
+  **22/22**: gateway→scrub pulses/107 kK central star/2393 K cold WD (logg 7.95)→re-snap 1→3 M☉
+  (remnant 0.544→0.666)→SN revert→reversible Back→SN note at 8→none at 0.3; §10 living Sun anchor
+  (1.07, 5834 K, G2 V) + variable-star overlay unregressed, HR reverts to normal axes on exit, no JS
+  errors. First-pass comp feeds the endgame track as-is (DA hydrogen surface correct). **WD-correct 3D
+  shader + WD-semantics structure panel = Chunk 3; WR branch = Chunk 4.**
+
+**Remaining: Chunks 3–7** (WD 3D shader + structure panel, then the WR mode shell + 3D wind shader, then
+the data-gated WR/WD spectra above).
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

@@ -454,3 +454,63 @@ main {
 /* While any panel is in flight, kill text selection and show the grab cursor
    everywhere so a fast drag doesn't select surrounding prose. */
 body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-select: none; }
+
+/* --- Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md) --- */
+
+/* The gateway block sits under the age slider; it appears only when the star is
+   scrubbed to the very end of its life. */
+.gateway { margin: 12px 0 2px; }
+.gateway-btn {
+  font: inherit; font-size: 14px; font-weight: 650; cursor: pointer;
+  color: var(--bg); background: var(--accent);
+  border: 1px solid var(--accent); border-radius: 8px;
+  padding: 8px 14px; width: 100%;
+  box-shadow: 0 6px 18px rgba(255, 210, 127, 0.18);
+}
+.gateway-btn:hover { filter: brightness(1.08); }
+.gateway-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* The supernova dead-end note (8–40 M☉): no remnant renderer, said honestly. */
+.gateway-note {
+  margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;
+  border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px;
+}
+.gateway-note b { color: #cbd2e0; }
+
+/* The endgame bar at the top of the controls panel (shown in WD mode). */
+.endgame-bar {
+  margin: 0 0 14px; padding: 10px 12px;
+  border: 1px solid var(--accent); border-radius: 10px;
+  background: rgba(255, 210, 127, 0.06);
+}
+.endgame-bar-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.endgame-title { font-weight: 650; color: var(--accent); }
+.endgame-back {
+  font: inherit; font-size: 12.5px; cursor: pointer; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 10px; white-space: nowrap;
+}
+.endgame-back:hover { color: var(--ink); border-color: var(--accent); }
+.endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.endgame-narrate b { color: #cbd2e0; font-weight: 600; }
+
+/* The WD cooling-time caption under the age slider (shown only in WD mode). */
+.endgame-age-caption {
+  display: none; color: var(--accent); font-size: 12.5px; min-height: 1.4em;
+}
+
+/* The age label swaps its live "… Gyr" affordance for a WD "cooling time" tag. */
+.age-wd { display: none; color: var(--accent); }
+
+/* In the white-dwarf endgame: the age input becomes a cooling scrubber (no number
+   entry), the cooling caption shows, and the SED's rotation control is hidden (a
+   white dwarf has no convective dynamo to drive it). */
+body.wd-mode .age-live { display: none; }
+body.wd-mode .age-wd { display: inline; }
+body.wd-mode .endgame-age-caption { display: block; }
+body.wd-mode #sed-rot { display: none; }
+.endgame-resnap-note {
+  margin: 8px 0 0; color: #ffb07a; font-size: 12.5px; line-height: 1.45;
+  border: 1px dashed rgba(255, 176, 122, 0.5); border-radius: 6px; padding: 6px 10px;
+}

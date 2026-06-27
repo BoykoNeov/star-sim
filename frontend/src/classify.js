@@ -74,6 +74,21 @@ function commonName(cls, lum) {
   return `${color} ${lum.word}`;
 }
 
+// The white-dwarf endgame is NOT a main-sequence MK type — a degenerate remnant has no
+// O–M / I–V classification. So in endgame mode we replace the MK line with an honest
+// endgame label, driven by the explicit mode flag (NOT a log g heuristic that would
+// mislabel the low-gravity central-star rows "O2 III blue giant"). It still reads only
+// StellarState fields (phase, log g, Teff): the thermal-pulsing AGB giant, then the hot
+// contracting central star of the planetary nebula, then the cooling white dwarf. Real
+// DA/DB spectral typing waits for the Chunk 6 white-dwarf spectra.
+function wdLabel(state) {
+  const g = state.logg, t = state.Teff_K;
+  if (state.phase === "TPAGB") return { tag: "AGB", name: "thermal-pulsing giant" };
+  if (g != null && g < 7) return { tag: "PN", name: "planetary-nebula central star" };
+  const heat = t >= 20000 ? "hot " : t < 5000 ? "cool " : "";
+  return { tag: "WD", name: `${heat}white dwarf` };
+}
+
 // Build the two child spans once; update() only rewrites their text + the type color.
 export function createClassification(el) {
   if (!el) return { update() {} };
@@ -82,8 +97,16 @@ export function createClassification(el) {
   const nameEl = el.querySelector(".sc-name");
 
   return {
-    update(state) {
+    // mode === "wd": show the endgame label instead of the MK type.
+    update(state, mode) {
       if (!state || state.Teff_K == null) return;
+      if (mode === "wd") {
+        const w = wdLabel(state);
+        typeEl.textContent = w.tag;
+        typeEl.style.color = teffToCSS(state.Teff_K);
+        nameEl.textContent = w.name;
+        return;
+      }
       const t = tempClass(state.Teff_K);
       const lum = lumClass(state);
       typeEl.textContent = `${t.letter}${t.sub} ${lum.roman}`;

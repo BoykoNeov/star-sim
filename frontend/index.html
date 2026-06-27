@@ -103,6 +103,26 @@
     <section class="panel controls-panel" data-panel-id="controls">
       <h2>Controls</h2>
 
+      <!-- Shown only inside the white-dwarf endgame (the reversible gateway mode). It
+           narrates the step the simulation does NOT model — the planetary-nebula
+           ejection that bridges the dying giant to its bare cooling core — and carries
+           the way back to the living star. -->
+      <div id="endgame-bar" class="endgame-bar" hidden>
+        <div class="endgame-bar-top">
+          <span class="endgame-title">White-dwarf endgame</span>
+          <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
+        </div>
+        <p class="endgame-narrate" id="endgame-narrate">
+          The star has shed its outer layers as a <b>planetary nebula</b> — a step this
+          simulator doesn't model — leaving the hot, bare core. You're now scrubbing that
+          core's afterlife: the final <b>thermal pulses</b>, the brief blaze as a
+          <b>~100&nbsp;kK central star</b>, then billions of years <b>cooling</b> to a
+          cold, dense cinder. Mass and [Fe/H] stay live (they re-snap the progenitor to a
+          different remnant).
+        </p>
+        <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
+      </div>
+
       <label for="mass">Mass
         <input id="mass-num" class="val-input" type="number" /> M<sub>☉</sub>
         <span class="help help-left" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
@@ -124,14 +144,27 @@
       <datalist id="feh-ticks"></datalist>
 
       <label for="age">Age
-        <input id="age-num" class="val-input" type="number" /> Gyr
-        <span class="help help-left" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr.">?</span>
+        <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
+        <span class="age-wd">· cooling time (white-dwarf endgame)</span>
+        <span class="help help-left" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">
         <input id="age" type="range" list="age-ticks" />
         <div class="ticks" id="age-marks"></div>
       </div>
       <datalist id="age-ticks"></datalist>
+      <p class="note endgame-age-caption" id="endgame-age-caption"></p>
+
+      <!-- The stellar-endgame gateway (docs/plans/smoldering-cinder-gateway.md): at
+           the end of a star's life, a button to "continue" into its remnant (a white
+           dwarf for low/intermediate mass) — or, for the masses that core-collapse, an
+           honest note that the supernova remnant isn't simulated. Shown only when the
+           star is scrubbed to the very end of its track; populated by main.js from the
+           /endgame classifier. -->
+      <div id="gateway" class="gateway" hidden>
+        <button id="gateway-wd" class="gateway-btn" type="button" hidden>→ Continue: White&nbsp;Dwarf</button>
+        <p id="gateway-sn" class="gateway-note" hidden></p>
+      </div>
 
       <h2>State readout
         <span class="help help-left" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>

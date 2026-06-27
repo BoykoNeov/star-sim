@@ -208,6 +208,12 @@ export function createSED(canvas) {
   plotW = W - PAD_L - PAD_R;
 
   let teff = null, logg = null, age = null, phase = null, mass = null, feh = null;
+  // Endgame (WD) mode: a white dwarf has no convective dynamo, so the cool-star coronal
+  // X-ray band / gyrochronology line would be physically wrong (a cold WD at logg ~8
+  // would otherwise trip the cool-dwarf band). The blackbody SED itself is fine and
+  // even nice (the hot central star peaks in the UV, the cold cinder in the IR), so we
+  // keep the curve but suppress the non-thermal overlay. Set via update(state,{endgame}).
+  let endgameMode = false;
   // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
   // gyro-valid domain); userProt = a manual slider override (null = follow the
   // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
@@ -219,8 +225,9 @@ export function createSED(canvas) {
   const yOf = (dec) =>
     PAD_T + (-dec / FLOOR_DECADES) * (H - PAD_T - PAD_B);
 
-  function update(state) {
+  function update(state, opts) {
     if (!state || state.Teff_K == null) return;
+    const eg = !!(opts && opts.endgame);
     // The redraw key (Chunk 3): logg gates the band (dwarf dynamo vs cool-giant
     // suppressed corona); age/phase/mass drive the gyrochronology line; [Fe/H] only
     // matters as part of the "is this a new star?" test for the override reset.
@@ -229,8 +236,9 @@ export function createSED(canvas) {
     const ph = state.phase ?? null;
     const m = state.mass_init_msun ?? null;
     const fe = state.feh_init ?? null;
-    if (state.Teff_K === teff && g === logg && a === age && ph === phase &&
-        m === mass && fe === feh) return;
+    if (eg === endgameMode && state.Teff_K === teff && g === logg && a === age &&
+        ph === phase && m === mass && fe === feh) return;
+    endgameMode = eg;
     // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
     // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
     if (m !== mass || fe !== feh) userProt = null;
@@ -276,7 +284,7 @@ export function createSED(canvas) {
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
 
-    drawActivity(lamPeak);
+    if (!endgameMode) drawActivity(lamPeak);   // no convective dynamo for a white dwarf
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
   }
@@ -724,6 +732,16 @@ export function createSED(canvas) {
     // caption's line count) varies — so instead the four branches are matched in length
     // (~130–140 chars) to wrap to the same number of lines at any width. The full story
     // lives in the legend tooltip + the panel's ? tip, not here.
+    // Endgame (WD): no non-thermal overlay (no convective dynamo). The blackbody is the
+    // whole story here — the hot central star peaks in the UV, the cold cinder in the IR.
+    if (endgameMode) {
+      caption.textContent =
+        `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
+        `(${where}). A white dwarf has no convective dynamo, so no coronal X-ray ` +
+        `overlay is drawn. γ-rays stay empty. Evocative, not predictive.`;
+      return;
+    }
+
     const reg = regimeOf(teff, logg);
     let act;
     if (reg === "hot")

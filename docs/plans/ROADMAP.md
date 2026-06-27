@@ -25,7 +25,7 @@ the plan and only the one-line hook here. CLAUDE.md's "what's next" points at th
 | Instability-strip / variable-class HR overlay | **done** | Shipped: an opt-in toggle on the HR panel shades the classical instability strip (δ Scuti / RR Lyrae / Cepheids, one tilted κ-mechanism band) + LBV and Mira zones as a labeled, schematic *view*. Frontend-only (`hr.js` `setOverlay`). | `whirling-cohort-atlas.md` (bonus) |
 | SED Chunk 1 — cool-star coronal X-ray + radio **band** | ✅ done | Shaded `L_X/L_bol` 10⁻⁷…10⁻³ envelope in `sed.js`, frontend-only; **placement is Teff-only** (L_bol cancels via the blackbody effective width 1.521·λ_peak). Güdel–Benz radio = a compact floor marker (it buries on the Fλ axis — kept FLOOR_DECADES=14; the real radio-above-floor payoff is Chunk 2's wind tail). Gated Teff+logg (cool / hot-wind-shock / A-gap / cool-giant). | `magnetic-ember-broadcast.md` §Chunk 1 |
 | SED Chunk 3 — band → **line** (age-derived + slider) | ✅ done | Shipped: gyrochronology (Ballesteros→MH08→Wright, all-Wright calibration, Sun→10⁻⁶·²) collapses the band to a cool-blue line for MS cool stars (default-from-age) + a user rotation-period slider (drag-to-override); ±dex fuzz, gated redward of the (B−V)=0.495 singularity, line only in the cool branch. Frontend-only (`sed.js`). | `magnetic-ember-broadcast.md` §Chunk 3 |
-| Endgame Chunk 2 — reversible WD gateway + WD mode shell | planned | The "→ Continue: White Dwarf" button, log cooling-age axis, live mass re-snap, WD cooling track on the HR diagram. Backend done (Chunk 1 ✅). | `smoldering-cinder-gateway.md` §Chunk 2 |
+| Endgame Chunk 2 — reversible WD gateway + WD mode shell | **done** | Shipped: the "→ Continue: White Dwarf" button at the slider limit, reversible `wd-mode`, 3-zone log-cooling scrub (pulses→central star→cold cinder), live mass/[Fe/H] re-snap, the Teff-coloured WD cooling track on the wide HR axes. Frontend-only. | `smoldering-cinder-gateway.md` §Chunk 2 |
 | Endgame Chunk 3 — WD 3D shader + structure panel | planned | Degenerate-sphere shader (Earth-scale, cooling-color shift) + WD-semantics composition/cooling-curve panel. | `smoldering-cinder-gateway.md` §Chunk 3 |
 | Endgame Chunk 4 — WR mode shell + HR + composition | planned | WR gateway branch (feh-threshold-gated), HR axis to ~250 kK, stripped-surface WN→WC→WO composition (already on the track). | `smoldering-cinder-gateway.md` §Chunk 4 |
 | Endgame Chunk 5 — WR 3D wind shader | planned | Optically-thick-wind look (radial outflow, emission-line glow); closes the on-hand-data endgame work. | `smoldering-cinder-gateway.md` §Chunk 5 |
@@ -67,7 +67,7 @@ The cheapest-honest-win-first order the individual docs already imply, merged:
 
 1. ~~**Instability-strip HR overlay**~~ — **done** (zero new data, immediate subpopulation payoff).
 2. ~~**SED Chunk 3**~~ — **done** (gyrochronology + rotation-slider line collapsing the Chunk-1 band, frontend-only).
-3. **Endgame Chunks 2–5** — the full WR/WD gateway on data already on disk (backend Chunk 1 is done).
+3. **Endgame Chunks 3–5** — the full WR/WD gateway on data already on disk (backend Chunk 1 + frontend Chunk 2 ✅ done; next: WD 3D shader + structure panel, then the WR branch).
 4. **Rotation `vvcrit` toggle** — the substantive answer to the rotation question; do the mass-ramp diff first.
 5. **SED Chunk 2** (wind radio, spine touch) and **v sin i broadening** — the predictive/visible rotation follow-ons.
 6. **Endgame Chunks 6–7** + **[α/Fe]** + **spectra density** — the data-gated spectrum work.
