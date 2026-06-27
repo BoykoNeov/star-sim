@@ -864,8 +864,49 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   UI** across all five gating branches (cool dwarf 5832 K / M-dwarf 3257 K / A-gap 9034 K / hot O/B 27482 K /
   cool giant 3625 K→Linsky) + phone 390 px; only the pre-existing favicon 404, no JS errors. No JS test
   harness → the screenshot pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** —
-  frontend-only, no backend/API/spine touch. Chunks 2 (wind free–free radio from real Ṁ, needs the spine
-  touch) + 3 (collapse the band to a line via age-gyrochronology + an activity slider) remain.
+  frontend-only, no backend/API/spine touch. Chunk 2 (wind free–free radio from real Ṁ, needs the spine
+  touch) remains; **Chunk 3 is now done — see the next bullet**.
+- **Done (Phase 5, non-thermal SED Chunk 3 — collapse the X-ray band to a LINE via rotation, frontend-only):**
+  the upgrade ladder's top rung (Chunk 1 band → age-derived line → user slider). The Chunk-1 coronal band
+  is wide only because **one dimension is missing — rotation**; the rotation–activity dynamo (Wright 2011)
+  fixes `L_X/L_bol` from the Rossby number `Ro = P_rot/τ_conv`, so supplying `P_rot` collapses the band to
+  a **line** — kept with a **±dex fuzz** (the relation carries ~0.45 dex scatter + a ~10× activity-cycle
+  wobble, so a razor-thin line would be the fake-precision trap the project guards against). Two honest
+  `P_rot` sources: **(a)** DERIVED from the age the sim already carries, via **gyrochronology** (MS cool
+  stars only), and **(b)** a **rotation-period slider** the user pins (the Lane–Emden-`n` precedent — the
+  user supplies the dimension the sim won't fabricate from a Teff ramp). **All `sed.js` + `index.html` +
+  `styles.css` — NO backend/API/spine touch, pytest unchanged (137).** The physics chain (advisor-greenlit,
+  Sun cross-checked): Teff→**(B−V)** via Ballesteros 2012 (inverted closed form) → **P_rot** via
+  Mamajek–Hillenbrand 2008 gyro → **τ_conv** via Wright 2011 **mass-based** fit → **Ro** → **L_X/L_bol**
+  via Wright 2011 (saturates at `Ro_sat=0.13`, `β=−2.7`, `−3.13`). **ONE self-consistent calibration** —
+  Wright throughout (Ro_sat/β are defined with Wright's OWN τ; pairing them with e.g. Noyes 1984 τ shifts
+  the zero-point off the Sun); this lands the **Sun at L_X/L_bol ≈ 10⁻⁶·²** (measured live: P_rot 25.4 d
+  matching the real Sun; observed ~10⁻⁶·³ — the anchor). **Three advisor-caught guards built in:** (1) the
+  **blue-edge is a NaN + spurious-saturation trap** — `[(B−V)−0.495]^0.325` is NaN below 0.495 and →0 just
+  above (→ P_rot→0 → fake "saturated"), so the gyro line is gated **redward of the singularity**
+  (`B−V ≥ 0.55 ≈ Teff 6150 K`, **not** the bare 0.495 — verified an F8/6354 K dwarf is suppressed, not
+  pinned-to-ceiling); (2) the line's **alpha is tied to `coolA`** (the Chunk-1 cool→gap morph weight) and
+  it is drawn **only in the cool branch** — never gap/hot/coolgiant (a rotation value can't manufacture an
+  O-star/giant dynamo); (3) the line is **clamped into the band's [10⁻³,10⁻⁷]** and the **saturated branch
+  plateaus** (no rise below Ro_sat). **Gating** (all read off the state — `phase`/`Teff`/`logg`/`age`/
+  `mass`, added to the redraw key): age-derived line only for `phase=="MS"` cool stars; suppressed for
+  **young** (≲300 Myr — spin unconverged → band + note) with **wider fuzz + flags** for **old** (van Saders
+  weakened braking) and **M-dwarf** (MH08 extrapolated past ~K); the slider's *effect* is gated to the
+  cool-MS dynamo regime (**disabled + grayed** for hot/gap/giant, where rotation can't drive a corona).
+  **Slider model (advisor-locked):** default-from-age, **drag-to-override**, the override **cleared on a
+  star change** (mass/[Fe/H]) but **kept across age-scrub** (hold a rotation, watch the band context) — one
+  control, no toggle (a `⟲ age` reset re-links to the default); the line is a distinct **cool-blue**
+  (vs the coral evocative band — the more-concrete rung of the ladder). The Chunk-1 caption variants stay
+  **length-matched** (measured panel-height spread **0.0 px** across all states — the resize jank this panel
+  guards against). Pedagogy: the slider `?` + a new "rotation→activity line" legend entry + the panel `<h2>`
+  tip + the band legend tip all updated (the Chunk-1 "models no rotation/age" framing flipped to describe
+  the new line). **Verified via Playwright** (bundled Chromium — `chrome --headless` hijacks the user's
+  running Chrome) on the **real served UI**: Sun (line low, "from age", P_rot 25.4 d) / young Sun (line up,
+  7.7 d) / old Sun (down, 37.3 d, flagged) / M-dwarf (flagged) / F-edge (no auto line, "F/G boundary" note)
+  / hot O 42660 K (slider disabled, wind band, no line) / EAGB giant (disabled, Linsky band, no line) /
+  slider drag to 0.3 d (saturated, "rotation set") & 70 d (quiet) + phone 390 (control + canvas re-fit, no
+  overflow); only the pre-existing favicon 404, no JS errors. No JS test harness → the screenshot pass *is*
+  the regression check (as in Phases 2–5). Chunk 2 (wind radio, the spine touch) is the remaining SED chunk.
 - **Done (UX, draggable + responsive panel dashboard — frontend-only):** the user asked to make the
   panels **movable, auto-stack to screen width (phone → vertical, desktop → several columns), and never
   overlap when moved.** The advisor confirmed the only model that satisfies all three at once is a

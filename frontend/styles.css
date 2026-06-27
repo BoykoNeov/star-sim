@@ -177,6 +177,30 @@ main {
 .sed-panel .legend { justify-content: center; }
 .sed-panel .legend i { width: 22px; }
 
+/* Chunk-3 rotation/activity control: supplies the missing rotation dimension so the
+   coronal X-ray band can collapse to a line (gyrochronology default + manual pin). A
+   compact slider under the SED canvas, disabled + grayed outside the cool main-
+   sequence dynamo regime (where rotation cannot drive a corona). */
+.sed-rot { max-width: 420px; margin: 12px auto 0; }
+.sed-rot.disabled { opacity: 0.5; }
+.sed-rot > label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--ink); font-weight: 600;
+}
+.sed-rot input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 6px; }
+.sed-rot-reset {
+  margin-left: auto; font-size: 11px; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 2px 7px; cursor: pointer;
+}
+.sed-rot-reset:hover { color: var(--ink); border-color: var(--accent); }
+/* Reserve the note height (1 line desktop, 2 on a narrow panel) so switching note
+   states / disabling can't resize the panel. */
+.sed-rot-note {
+  color: var(--accent); font-size: 12px; min-height: 1.4em; margin: 4px 0 0; text-align: center;
+}
+@media (max-width: 480px) { .sed-rot-note { min-height: 2.8em; } }
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

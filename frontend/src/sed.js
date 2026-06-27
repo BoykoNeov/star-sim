@@ -87,6 +87,85 @@ const GB_LOG_HZ = 15.5;                                 // log10(L_X / L_R), Hz
 const C_NM_S = 2.99792458e17;                           // speed of light, nm/s
 const LAM_RADIO = 6e7;                                  // nm ≈ 6 cm ≈ 5 GHz (the GB band)
 
+// ─── Chunk 3: collapse the X-ray BAND to a LINE via rotation (gyrochronology) ───
+// The Chunk-1 band is wide only because ONE dimension is missing — rotation. The
+// rotation–activity dynamo (Wright 2011) fixes L_X/L_bol from the Rossby number
+// Ro = P_rot/τ_conv, so supplying P_rot collapses the band to a line — kept with a
+// FUZZ (the relation carries ~0.4–0.5 dex scatter + a ~10× activity-cycle wobble, so
+// a razor-thin line would be the fake-precision trap the project guards against).
+// Two honest sources of P_rot, an upgrade ladder ON TOP of the band:
+//   (a) DERIVED from the age the sim already carries, via gyrochronology — but only
+//       for a main-sequence cool star (the convective-dynamo regime), and
+//   (b) a USER slider that PINS rotation directly (the Lane–Emden-n precedent: the
+//       user supplies the dimension the sim won't fabricate from a Teff ramp).
+//
+// ONE self-consistent calibration — do NOT mix scales (Ro_sat/β are defined with
+// Wright's OWN τ; pairing them with e.g. Noyes 1984 τ silently shifts the zero-point
+// off the Sun). Wright (2011) throughout: mass-based τ_conv(M) + Ro_sat = 0.13,
+// β = −2.7, saturated log(L_X/L_bol) = −3.13. This chain lands the Sun at
+// L_X/L_bol ≈ 10^−6.2 (observed ~10^−6.3) — the cross-check anchor. Refs: Mamajek &
+// Hillenbrand 2008 (gyro P_rot = a·[(B−V)−c]^b·t^n); Ballesteros 2012 (Teff↔B−V);
+// Wright 2011 (τ_conv(M), rotation–activity); van Saders 2016 (weakened braking).
+const ROT_SAT = 0.13;            // Wright 2011 saturation Rossby number
+const ROT_BETA = -2.7;           // Wright 2011 unsaturated slope
+const LXLB_SAT_LOG = -3.13;      // Wright 2011 saturated log10(L_X/L_bol)
+const LXLB_FLOOR_LOG = -7;       // quiet end of the activity band (the display clamp)
+const MH_A = 0.407, MH_B = 0.325, MH_C = 0.495, MH_N = 0.566;   // Mamajek–Hillenbrand 2008
+// Gate the gyro line REDWARD of the (B−V)=0.495 singularity: just blueward the term
+// [(B−V)−0.495]^0.325 is NaN (a fractional power of a negative), and just redward it
+// → 0 → P_rot → 0 → a spurious "saturated" verdict. 0.55 (≈ Teff 6150 K) is safely past.
+const GYRO_BV_MIN = 0.55;
+const GYRO_BV_MAX = 1.40;        // MH08 is calibrated to ~K; redder (M) is flagged extrapolation
+const YOUNG_MYR = 300;           // younger: rotation hasn't converged → no age-derived line
+const OLD_MYR = 4600;            // older (van Saders): braking weakens → wider fuzz, flagged
+
+// Teff → (B−V)₀, inverting Ballesteros (2012):
+//   T = 4600·[1/(0.92(B−V)+1.7) + 1/(0.92(B−V)+0.62)]  → a quadratic in u = 0.92(B−V).
+// (Sun T=5772 → B−V≈0.65 ✓.) Returns null if no real positive root.
+function teffToBV(t) {
+  const k = t / 4600;
+  const a = k, b = 2.32 * k - 2, c = 1.054 * k - 2.32;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  return ((-b + Math.sqrt(disc)) / (2 * a)) / 0.92;
+}
+
+// Wright (2011) mass-based convective turnover time, days:
+//   log10 τ_conv = 1.16 − 1.49·log10 M − 0.54·(log10 M)²   (M in M_sun).
+function tauConvDays(massMsun) {
+  const lm = Math.log10(Math.max(0.1, massMsun));
+  return 10 ** (1.16 - 1.49 * lm - 0.54 * lm * lm);
+}
+
+// Mamajek & Hillenbrand (2008) gyrochronology rotation period (days). null blueward
+// of the singularity (the caller also gates on GYRO_BV_MIN).
+function gyroProtDays(bv, ageMyr) {
+  if (bv == null || bv <= MH_C) return null;
+  return MH_A * Math.pow(bv - MH_C, MH_B) * Math.pow(ageMyr, MH_N);
+}
+
+// Wright (2011) rotation–activity: log10(L_X/L_bol) from P_rot. SATURATES (plateaus)
+// at Ro_sat — it must NOT keep climbing for Ro < Ro_sat.
+function lxlbLogFromProt(protDays, massMsun) {
+  const ro = protDays / tauConvDays(massMsun);
+  if (ro <= ROT_SAT) return LXLB_SAT_LOG;
+  return LXLB_SAT_LOG + ROT_BETA * Math.log10(ro / ROT_SAT);
+}
+
+// The rotation slider's period domain (days, log-spaced) + its landmark presets.
+const PROT_MIN_D = 0.3, PROT_MAX_D = 70;
+const PROT_PRESETS = [
+  { d: 1,  label: "1 d" },    // fast young rotator — saturated
+  { d: 5,  label: "5 d" },
+  { d: 12, label: "12 d" },
+  { d: 25, label: "25 d" },   // ≈ the present Sun
+  { d: 50, label: "50 d" },   // slow / old
+];
+const protToFrac = (d) =>
+  (Math.log10(d) - Math.log10(PROT_MIN_D)) / (Math.log10(PROT_MAX_D) - Math.log10(PROT_MIN_D));
+const fracToProt = (v) =>
+  10 ** (Math.log10(PROT_MIN_D) + v * (Math.log10(PROT_MAX_D) - Math.log10(PROT_MIN_D)));
+
 // The seven EM bands, by wavelength in nm (standard teaching boundaries). The
 // visible band is painted as the true spectral rainbow (reusing color.js); the rest
 // get a muted tint. Note how THIN visible is — ~0.3 of a decade out of 14: the slice
@@ -128,7 +207,11 @@ export function createSED(canvas) {
   ({ ctx, W, H } = fitCanvas(canvas, 720, 300));
   plotW = W - PAD_L - PAD_R;
 
-  let teff = null, logg = null;
+  let teff = null, logg = null, age = null, phase = null, mass = null, feh = null;
+  // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
+  // gyro-valid domain); userProt = a manual slider override (null = follow the
+  // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
+  let protAuto = null, userProt = null, gyroFlag = "";
 
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
@@ -138,14 +221,24 @@ export function createSED(canvas) {
 
   function update(state) {
     if (!state || state.Teff_K == null) return;
-    // logg gates the activity overlay (dwarf dynamo vs cool-giant suppressed corona),
-    // so it must be part of the redraw key: two stars at the same Teff but different
-    // logg (a dwarf vs a giant crossing the same temperature) draw different bands.
+    // The redraw key (Chunk 3): logg gates the band (dwarf dynamo vs cool-giant
+    // suppressed corona); age/phase/mass drive the gyrochronology line; [Fe/H] only
+    // matters as part of the "is this a new star?" test for the override reset.
     const g = state.logg ?? null;
-    if (state.Teff_K === teff && g === logg) return;
-    teff = state.Teff_K; logg = g;
+    const a = state.age_yr ?? null;
+    const ph = state.phase ?? null;
+    const m = state.mass_init_msun ?? null;
+    const fe = state.feh_init ?? null;
+    if (state.Teff_K === teff && g === logg && a === age && ph === phase &&
+        m === mass && fe === feh) return;
+    // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
+    // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
+    if (m !== mass || fe !== feh) userProt = null;
+    teff = state.Teff_K; logg = g; age = a; phase = ph; mass = m; feh = fe;
+    recomputeRotation();
     draw();
     renderCaption();
+    rot.sync();
   }
 
   // Re-fit to a new display size (responsive layout) and redraw from the last Teff.
@@ -240,6 +333,10 @@ export function createSED(canvas) {
       drawXrayBand(decFromLog, { logHi: lerp(-3, -6, gapW), logLo: -7, dim: false,
         tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA });
       drawGudelBenzRadio(lamPeak, 1e-3, coolA);
+      // (1b) The rotation→X-ray LINE collapsing the band (Chunk 3): cool branch ONLY,
+      //      its alpha tied to coolA so it fades WITH the band across the cool→gap morph.
+      const line = activityLine();
+      if (line) drawActivityLine(decFromLog, line, coolA);
     }
 
     // (2) The A/early-F X-ray gap: a faint dashed marker that fades IN only in the
@@ -347,6 +444,155 @@ export function createSED(canvas) {
     ctx.textAlign = "left";
     ctx.restore();
   }
+
+  // ─── Chunk 3 helpers: the rotation→X-ray line, its gate, and its slider ───────
+
+  // A rotation→X-ray LINE is meaningful ONLY for a cool main-sequence star with a
+  // convective dynamo. Hot (no dynamo), the A/F gap, an evolved giant, and the
+  // suppressed-corona cool giant all keep the band/gap/wind branch — a rotation value
+  // cannot manufacture a dynamo corona there, so the slider's effect is gated to this.
+  function dynamoLineAllowed() {
+    if (phase !== "MS") return false;
+    if (teff == null || teff >= 6500) return false;
+    if (logg != null && logg < 3.0 && teff < 5000) return false;   // cool giant
+    return true;
+  }
+
+  // Compute the age-derived default P_rot (protAuto) + an honesty flag (gyroFlag) for
+  // the caption/fuzz. Null outside the gyro-valid domain — then only a USER slider
+  // value yields a line. Called on every state change.
+  function recomputeRotation() {
+    protAuto = null; gyroFlag = "";
+    if (!dynamoLineAllowed() || age == null) return;
+    const bv = teffToBV(teff);
+    if (bv == null || bv < GYRO_BV_MIN) { gyroFlag = "warm"; return; } // F-edge: no clean gyro
+    const ageMyr = age / 1e6;
+    if (ageMyr < YOUNG_MYR) { gyroFlag = "young"; return; }           // spin unconverged
+    protAuto = gyroProtDays(bv, ageMyr);
+    if (ageMyr > OLD_MYR) gyroFlag = "old";          // van Saders: braking weakens → wide fuzz
+    else if (bv > GYRO_BV_MAX) gyroFlag = "mdwarf";  // MH08 extrapolated past ~K → wide fuzz
+  }
+
+  // The effective L_X/L_bol LINE for the current view, or null. Uses the user's pinned
+  // P_rot if set, else the age-derived default; carries the source + an honest fuzz.
+  function activityLine() {
+    if (!dynamoLineAllowed()) return null;
+    const prot = userProt ?? protAuto;
+    if (prot == null) return null;
+    const lxlbLog = lxlbLogFromProt(prot, mass ?? 1);
+    // Base ~0.45 dex (Wright scatter + the activity-cycle wobble); wider where the
+    // age-derived relation is extrapolated/uncertain (a pinned value keeps the base).
+    let fuzz = 0.45;
+    if (userProt == null && (gyroFlag === "old" || gyroFlag === "mdwarf")) fuzz = 0.7;
+    return { lxlbLog, fuzz, src: userProt != null ? "set" : "age" };
+  }
+
+  // Draw the line + its ±fuzz envelope across the soft-X-ray band, clamped into the
+  // band's own [10⁻³,10⁻⁷] range so it always reads INSIDE the envelope. Cool blue —
+  // distinct from the coral evocative band: this is the more-concrete rung of the
+  // ladder (a single rotation→activity value, not the whole range). alpha fades it
+  // with the band across the cool→gap morph.
+  function drawActivityLine(decFromLog, line, alpha) {
+    const lx = Math.min(LXLB_SAT_LOG, Math.max(LXLB_FLOOR_LOG, line.lxlbLog));
+    const decMid = decFromLog(lx);
+    const decHi = Math.min(0, decFromLog(Math.min(LXLB_SAT_LOG, lx + line.fuzz)));
+    const decLo = Math.max(-FLOOR_DECADES, decFromLog(Math.max(LXLB_FLOOR_LOG, lx - line.fuzz)));
+    const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI);
+    const yMid = yOf(decMid), yHi = yOf(decHi), yLo = yOf(decLo);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "rgba(120,200,255,0.16)";
+    ctx.fillRect(x0, yHi, x1 - x0, yLo - yHi);
+    ctx.strokeStyle = "rgba(150,210,255,0.95)"; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x0, yMid); ctx.lineTo(x1, yMid); ctx.stroke();
+    ctx.fillStyle = "#bfe0ff"; ctx.font = "9px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(line.src === "set" ? "rotation set" : "age-derived", x0 + 2, yMid - 3);
+    ctx.restore();
+    ctx.textAlign = "left";
+  }
+
+  // The rotation/activity slider (Chunk 3) — a sed.js-local control like lane.js's
+  // n-slider, no spine touch. It DEFAULTS from age (gyrochronology) and the user can
+  // drag to override for the current star; the override is cleared on a star change
+  // (see update()). Its effect is gated to the cool-MS dynamo regime: disabled and
+  // grayed elsewhere (a rotation value can't make an O-star or a giant a dynamo).
+  function setupRotControl() {
+    const wrap = document.getElementById("sed-rot");
+    const slider = document.getElementById("sed-prot");
+    const num = document.getElementById("sed-prot-num");
+    const marksEl = document.getElementById("sed-prot-marks");
+    const note = document.getElementById("sed-rot-note");
+    const resetBtn = document.getElementById("sed-rot-reset");
+    if (!slider) return { sync() {} };
+
+    slider.min = 0; slider.max = 1; slider.step = 0.001;
+    if (num) { num.min = PROT_MIN_D; num.max = PROT_MAX_D; num.step = 0.5; }
+    if (marksEl) marksEl.innerHTML = PROT_PRESETS.map((p) => {
+      const left = (protToFrac(p.d) * 100).toFixed(2);
+      return `<span class="tick" style="left:${left}%">` +
+        `<span class="tick-label">${p.label}</span></span>`;
+    }).join("");
+
+    // Snap a raw period to the nearest preset within a small window (in slider-fraction
+    // units, so it's magnetic, not grabby); the number box bypasses snapping.
+    function snap(d) {
+      const v = protToFrac(d);
+      let best = d, bestD = 0.04;
+      for (const p of PROT_PRESETS) {
+        const dd = Math.abs(v - protToFrac(p.d));
+        if (dd < bestD) { bestD = dd; best = p.d; }
+      }
+      return best;
+    }
+
+    slider.addEventListener("input", () => {
+      userProt = snap(fracToProt(Number(slider.value)));
+      sync(); draw(); renderCaption();
+    });
+    if (num) num.addEventListener("change", () => {
+      if (num.value.trim() === "") return;
+      let d = Number(num.value);
+      if (!isFinite(d)) return;
+      userProt = Math.min(Math.max(d, PROT_MIN_D), PROT_MAX_D);
+      sync(); draw(); renderCaption();
+    });
+    if (resetBtn) resetBtn.addEventListener("click", () => {
+      userProt = null;
+      sync(); draw(); renderCaption();
+    });
+
+    function sync() {
+      const allowed = dynamoLineAllowed();
+      const eff = userProt ?? protAuto;
+      if (wrap) wrap.classList.toggle("disabled", !allowed);
+      slider.disabled = !allowed;
+      if (num) num.disabled = !allowed;
+      if (eff != null) {
+        slider.value = protToFrac(eff);
+        if (num && document.activeElement !== num) num.value = Number(eff.toPrecision(3));
+      }
+      if (resetBtn) resetBtn.hidden = (userProt == null);
+      if (note) note.textContent = rotNote(allowed, eff);
+    }
+
+    // Short status line under the slider (its own element, so its length doesn't drive
+    // the caption/canvas resize — kept terse anyway, with a reserved height in CSS).
+    function rotNote(allowed, eff) {
+      if (!allowed) return "Rotation → X-ray line: cool main-sequence stars only (no dynamo here).";
+      if (eff == null) return gyroFlag === "warm"
+        ? "No clean age–rotation relation near the F/G boundary — drag to pin a period."
+        : "Too young to derive rotation from age — drag to pin a period.";
+      const src = userProt != null ? "set by you" : "from age";
+      let flag = "";
+      if (userProt == null && gyroFlag === "old") flag = " · old star: braking weakens, wide uncertainty";
+      else if (userProt == null && gyroFlag === "mdwarf") flag = " · M-dwarf: relation extrapolated";
+      return `P_rot ≈ ${eff.toPrecision(3)} d (${src})${flag}.`;
+    }
+
+    return { sync };
+  }
+  const rot = setupRotControl();
 
   // Faint translucent EM-band columns; the visible band is the true rainbow.
   function drawBands() {
@@ -489,9 +735,24 @@ export function createSED(canvas) {
     else if (reg === "coolgiant")
       act = `Overlaid (coral, dimmed): a coronal X-ray band, but suppressed and ` +
             `uncertain past the Linsky–Haisch corona–wind dividing line — a guide only.`;
-    else
-      act = `Overlaid (coral, hatched): the coronal soft-X-ray activity band, ` +
-            `L_X/L_bol ≈ 10⁻⁷…10⁻³ — a RANGE, not a value (rotation and age unmodeled).`;
+    else {
+      // Cool branch — varies with whether a rotation LINE is drawn. Kept ~equal length
+      // across variants (and to the other regimes) so scrubbing age / the slider can't
+      // resize the panel (the resize jank this panel guards against).
+      const line = activityLine();
+      if (line && line.src === "age")
+        act = `Overlaid: coral band L_X/L_bol ≈ 10⁻⁷…10⁻³, the blue line this star's ` +
+              `age-derived rotation–activity level — kept with a ±dex fuzz, not a razor.`;
+      else if (line)
+        act = `Overlaid: coral band L_X/L_bol ≈ 10⁻⁷…10⁻³, the blue line YOUR pinned ` +
+              `rotation–activity level — drag the rotation slider; kept with a ±dex fuzz.`;
+      else if (gyroFlag === "young")
+        act = `Overlaid (coral, hatched): the coronal band L_X/L_bol ≈ 10⁻⁷…10⁻³ — too ` +
+              `young to pin a rotation line yet (spin unconverged); drag the slider to set one.`;
+      else
+        act = `Overlaid (coral, hatched): the coronal soft-X-ray band L_X/L_bol ≈ ` +
+              `10⁻⁷…10⁻³ — a range; set the rotation slider below to collapse it to a line.`;
+    }
 
     caption.textContent =
       `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +

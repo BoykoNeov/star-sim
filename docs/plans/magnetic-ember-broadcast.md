@@ -1,6 +1,26 @@
 # Plan: Non-thermal SED layer — coronal soft-X-ray + radio (Phase 5)
 
-## Status: Chunk 1 BUILT (frontend-only, shipped + verified). Chunks 2–3 PLANNED.
+## Status: Chunks 1 & 3 BUILT (frontend-only, shipped + verified). Chunk 2 PLANNED.
+
+**Chunk 3 as-built (collapse the band → line via rotation):** all in `frontend/src/sed.js`
++ the SED control markup/CSS/legend, **no backend/spine touch** (pytest unchanged 137).
+The chain is Teff→(B−V) (Ballesteros 2012, inverted) → P_rot (Mamajek–Hillenbrand 2008
+gyrochronology) → τ_conv (Wright 2011 **mass-based**) → Ro → L_X/L_bol (Wright 2011,
+sat `Ro_sat=0.13`, `β=−2.7`, `−3.13`) — **ONE self-consistent (all-Wright) calibration**;
+it lands the **Sun at L_X/L_bol ≈ 10⁻⁶·²** (live P_rot 25.4 d; observed ~10⁻⁶·³). Three
+advisor-caught guards: (1) the gyro line is gated **redward of the (B−V)=0.495 singularity**
+(`B−V≥0.55 ≈ Teff 6150 K`) — just blueward `[(B−V)−0.495]^0.325` is NaN, just redward → 0 →
+P_rot → 0 → a spurious "saturated" verdict; (2) the line's alpha is **tied to `coolA`** and it
+draws **only in the cool branch** (never gap/hot/giant — a rotation value can't make an O-star
+dynamo); (3) it is **clamped into [10⁻³,10⁻⁷]** with the **saturated branch plateauing**.
+Gating reads `phase`/`Teff`/`logg`/`age`/`mass` (added to the redraw key): age-line for cool
+`phase=="MS"` only, suppressed for **young** (≲300 Myr) with **wider fuzz + flags** for **old**
+(van Saders) and **M-dwarf** (MH08 extrapolation). Slider model: **default-from-age,
+drag-to-override, override cleared on a star change (mass/[Fe/H]) but kept across age-scrub**,
+one control + a `⟲ age` reset; the line is cool-blue (vs the coral band — the more-concrete
+rung). Captions stay **length-matched** (measured panel-height spread **0.0 px**). Verified via
+Playwright on the real served UI across the Sun (young/now/old, line sweeps) + M-dwarf + F-edge
++ hot O + EAGB giant (no line) + slider drag + phone 390 px; only the favicon 404, no JS errors.
 
 **Chunk 1 as-built (the cool-star coronal X-ray + Güdel–Benz radio band):**
 all in `frontend/src/sed.js` + the `index.html`/legend, **no backend/spine touch**
@@ -192,7 +212,7 @@ The one data-grounded, predictive piece. **Requires exposing Ṁ on the spine.**
   caption; absolute distance cancels under per-peak normalization (we plot `L_ν`,
   not a flux at a distance).
 
-### Chunk 3 — collapse the band to a line: age-derived default + an activity/rotation slider (the synthesis)
+### Chunk 3 — collapse the band to a line: age-derived default + an activity/rotation slider (the synthesis) — ✅ BUILT (see status block above)
 
 The X-ray band is wide only because **one dimension is missing — rotation.** There
 are two honest ways to supply it, and the synthesis uses **both, in a ladder**.

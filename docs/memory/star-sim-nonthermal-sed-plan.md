@@ -1,6 +1,6 @@
 ---
 name: star-sim-nonthermal-sed-plan
-description: "Non-thermal SED layer (CHUNK 1 BUILT, Chunks 2–3 planned) — coronal soft-X-ray + Güdel–Benz radio band + hot-star wind radio; the accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate."
+description: "Non-thermal SED layer (CHUNKS 1 & 3 BUILT, Chunk 2 planned) — coronal soft-X-ray + Güdel–Benz radio band, then a rotation→X-ray LINE (gyrochronology + slider) collapsing it; hot-star wind radio is Chunk 2. The accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate."
 metadata: 
   node_type: memory
   type: project
@@ -42,9 +42,31 @@ kept short + **~equal length** to wrap identically at any width → measured spr
 desktop/phone/intermediate. (Reusable: when flex-wrap width varies, equalize text length, don't
 min-height-reserve.) Verified Playwright (bundled Chromium — chrome --headless hijacks the user's
 Chrome) on the real served UI across all 5 gating branches + phone 390; only the pre-existing
-favicon 404, no JS errors. **Chunks 2 (wind free–free radio from real Ṁ, the spine touch) + 3
-(collapse band→line via age-gyrochronology + activity slider) remain.** Below = the original
-plan record (still valid for Chunks 2–3):
+favicon 404, no JS errors. **Chunk 2 (wind free–free radio from real Ṁ, the spine touch) remains;
+Chunk 3 is now BUILT (see next).**
+
+**CHUNK 3 BUILT (frontend-only, `sed.js`+SED control markup/CSS/legend, NO spine touch, pytest
+unchanged 137).** Collapses the Chunk-1 BAND to a LINE via rotation — the upgrade ladder's top rung.
+Chain (advisor-greenlit, Sun-cross-checked): Teff→(B−V) Ballesteros 2012 (inverted closed form) →
+P_rot Mamajek–Hillenbrand 2008 gyro → τ_conv Wright 2011 **mass-based** → Ro → L_X/L_bol Wright 2011
+(sat Ro_sat=0.13, β=−2.7, −3.13). **ONE self-consistent (all-Wright) calibration** — Ro_sat/β are
+defined with Wright's OWN τ; mixing Noyes τ shifts the zero-point off the Sun → **Sun lands at
+L_X/L_bol ≈ 10⁻⁶·²** (live P_rot 25.4 d matching the real Sun; obs ~10⁻⁶·³ = the anchor). **Three
+advisor-caught guards (reusable):** (1) **blue-edge NaN + spurious-saturation trap** — `[(B−V)−0.495]^0.325`
+is NaN below 0.495 and →0 just above (→ P_rot→0 → fake "saturated"), so gate the gyro line **redward
+of the singularity** (B−V≥0.55 ≈ Teff 6150 K, NOT the bare 0.495 — verify an F8/6354 K dwarf is
+suppressed not pinned-to-ceiling); (2) the line's **alpha tied to coolA** (the Chunk-1 morph weight),
+drawn **only in the cool branch** (a rotation value can't make an O-star/giant dynamo); (3) **clamp into
+[10⁻³,10⁻⁷]** + the **saturated branch plateaus** (no rise below Ro_sat). Gating reads phase/Teff/logg/
+age/mass (added to the redraw key): age-line only for cool phase=="MS", suppressed **young** (≲300 Myr,
+spin unconverged → band+note), **wider fuzz+flags** for **old** (van Saders braking) + **M-dwarf** (MH08
+extrapolated). **Slider model (advisor-locked, the reusable pattern):** default-from-age,
+**drag-to-override**, override **cleared on a star change (mass/[Fe/H]) but KEPT across age-scrub**
+(hold a rotation, watch the band context) — one control + a ⟲-age reset, no toggle; the line is
+cool-**blue** vs the coral band (two epistemic tiers read as two). Captions stay **length-matched**
+(measured panel-height spread **0.0 px** — the resize jank guard). Verified Playwright (bundled Chromium)
+across Sun young/now/old (line sweeps) + M-dwarf + F-edge + hot O + EAGB giant (no line) + slider drag +
+phone 390. Below = the original plan record:
 
 **The science is real & advisor-verified** but a DIFFERENT KIND of model than the
 photosphere: magnetic-**activity**-driven (rotation/age, not Teff/logg/[Fe/H]),
