@@ -445,9 +445,9 @@ const STATUS_OK_TIP =
 const providerTip = (name) =>
   name === "MISTProvider"
     ? "Data source (spec §3) — real MIST v2.5 stellar-evolution tracks, " +
-      "EEP-interpolated in mass and [Fe/H]. Every panel above is built only on " +
-      "this one interface; swapping it (e.g. for the data-free StubProvider) " +
-      "would change nothing downstream."
+      "EEP-interpolated in mass and [Fe/H]. A faithful model, but an approximation: " +
+      "L☉ and R☉ are *defined* as 1, yet MIST predicts L≈1.07, R≈1.01 for the Sun " +
+      "at 4.6 Gyr — a few-percent residual."
     : "The StellarStateProvider feeding every panel (spec §3). It is " +
       "interchangeable behind one interface — nothing downstream knows or cares " +
       "which provider is active.";

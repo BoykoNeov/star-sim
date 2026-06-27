@@ -86,6 +86,31 @@ Scope of this cut (widen later):
 Anchors that must hold (the §10 regression for the stub->MIST swap, with
 *empirical* tolerances — see tests/test_mist_provider.py):
   state_at(1.0, 0.0, 4.6e9) ~ Sun: L~1.07, Teff~5835 K, R~1.01, logg~4.42.
+
+The model is close to reality, but it is an approximation — and the Sun is the
+clearest example. L_sun and R_sun are *defined* units: the real present-day Sun is
+exactly 1.0 by construction. The anchor values above are MIST's *prediction* for a
+1 M_sun, [Fe/H]=0 star at 4.6 Gyr, and it lands ~7% bright / ~1% large. Two honest
+reasons, neither a bug:
+  1. Calibration residual. MIST tunes its mixing length and initial helium to
+     reproduce the Sun, but only at the grid's exact protosolar composition and at
+     fixed [Fe/H] nodes. An interpolated (mass, [Fe/H], age) request carries a small
+     leftover offset in initial Z/Y, so the rendered "Sun" is a few percent off the
+     defined point.
+  2. Main-sequence brightening. A star's luminosity climbs as it burns H -> He
+     (rising mean molecular weight -> the core contracts and heats): the Sun has
+     gained ~30% L since ZAMS and still brightens ~1% per ~100 Myr. So the predicted
+     L depends sharply on the age you pick. Scrub the age slider back to ~3.9-4.0 Gyr
+     and the model reads L~1.0 — but that is using age to paper over the composition
+     residual, not a "more correct" age. The real Sun is ~4.57 Gyr *and* L=1.0
+     simultaneously; this model cannot put both at once, and we keep it faithful to
+     the evolutionary physics rather than retune the age to hit the anchor.
+We deliberately do NOT solar-calibrate to force L=R=1 — that would be a fake green
+check (the StubProvider returned the Sun by construction; a real physics provider
+should not). We report the honest residual and pin it with empirical tolerances. The
+independent MESAProvider cross-check lands *its* solar run at L~1.18 at 4.6 Gyr,
+equally uncalibrated — so the offset is real cross-code model spread, not a defect.
+See tests/test_mist_provider.py::test_sun_anchor.
 """
 
 from __future__ import annotations
