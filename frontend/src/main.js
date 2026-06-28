@@ -13,6 +13,7 @@ import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
 import { createClassification } from "./classify.js";
 import { makeSortable } from "./layout.js";
+import { initTooltips } from "./tooltip.js";
 import { teffToCSS } from "./color.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
@@ -147,6 +148,12 @@ const sed = createSED(document.getElementById("sed-canvas"));
 const sortable = makeSortable(document.querySelector("main"));
 const resetLayoutBtn = document.getElementById("reset-layout");
 if (resetLayoutBtn) resetLayoutBtn.addEventListener("click", () => sortable.reset());
+
+// Hover/focus pedagogy tooltips. A single body-mounted, viewport-clamped layer
+// (tooltip.js) replaces the old per-element CSS `::after` tooltips, which clipped
+// off the viewport edge once a panel was dragged near it. Delegated, so it also
+// covers the JS-rendered readout-row "?" glyphs created later in refresh().
+initTooltips();
 
 // Make the plot canvases track their panel's width. fitCanvas sets an INLINE width
 // that overrides any stylesheet width, so the canvases cannot be made responsive in
@@ -500,18 +507,19 @@ function escAttr(s) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// A "?" help glyph whose pedagogy shows on hover/focus (CSS tooltip via data-tip).
-// Used for the JS-rendered readout rows (controls panel → open leftward); the
-// static panels use the same markup written directly in index.html.
+// A "?" help glyph whose pedagogy shows on hover/focus (the shared tooltip layer,
+// tooltip.js, reads data-tip). Used for the JS-rendered readout rows; the static
+// panels use the same markup written directly in index.html. Placement is now
+// viewport-clamped in JS, so no per-glyph open-direction class is needed.
 function help(tip) {
-  return `<span class="help help-left" tabindex="0" data-tip="${escAttr(tip)}">?</span>`;
+  return `<span class="help" tabindex="0" data-tip="${escAttr(tip)}">?</span>`;
 }
 
 // A glyph-free hover tooltip: the text *is* the affordance (subtle dotted
-// underline, no "?"). Used for the status-line tokens. Opens upward (tip-up)
-// because the status line sits low in the panel.
+// underline, no "?"). Used for the status-line tokens; the shared layer flips the
+// tooltip above the token automatically when it would overflow the bottom.
 function tipSpan(text, tip) {
-  return `<span class="tip tip-up" tabindex="0" data-tip="${escAttr(tip)}">${escAttr(text)}</span>`;
+  return `<span class="tip" tabindex="0" data-tip="${escAttr(tip)}">${escAttr(text)}</span>`;
 }
 
 // Pedagogy for the status-line tokens. The phase token is dynamic, so each

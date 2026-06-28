@@ -125,7 +125,7 @@
 
       <label for="mass">Mass
         <input id="mass-num" class="val-input" type="number" /> M<sub>☉</sub>
-        <span class="help help-left" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
+        <span class="help" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
       </label>
       <div class="slider-wrap">
         <input id="mass" type="range" list="mass-ticks" />
@@ -135,7 +135,7 @@
 
       <label for="feh">[Fe/H]
         <input id="feh-num" class="val-input" type="number" />
-        <span class="help help-left" tabindex="0" data-tip="Metallicity: log₁₀ of the iron-to-hydrogen ratio relative to the Sun. 0 = solar, + = metal-rich (cooler, dimmer), − = metal-poor (hotter, brighter). The marks below the slider are solar and the grid edges; type an exact value to land between them.">?</span>
+        <span class="help" tabindex="0" data-tip="Metallicity: log₁₀ of the iron-to-hydrogen ratio relative to the Sun. 0 = solar, + = metal-rich (cooler, dimmer), − = metal-poor (hotter, brighter). The marks below the slider are solar and the grid edges; type an exact value to land between them.">?</span>
       </label>
       <div class="slider-wrap">
         <input id="feh" type="range" list="feh-ticks" />
@@ -146,7 +146,7 @@
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>
-        <span class="help help-left" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
+        <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">
         <input id="age" type="range" list="age-ticks" />
@@ -167,7 +167,7 @@
       </div>
 
       <h2>State readout
-        <span class="help help-left" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
+        <span class="help" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
       </h2>
       <div id="readout" class="readout"></div>
       <p class="note" id="status"></p>
@@ -194,7 +194,7 @@
       <div class="sed-rot" id="sed-rot">
         <label for="sed-prot">Rotation period
           <input id="sed-prot-num" class="val-input" type="number" />
-          <span class="help help-left" tabindex="0" data-tip="The coronal X-ray band collapses to a LINE once you know the star's rotation: the dynamo's strength is set by the Rossby number Ro = P_rot/τ_conv (Wright 2011). For a cool main-sequence star this period is DERIVED from its age by gyrochronology (Mamajek–Hillenbrand 2008 — the Sun at 4.6 Gyr rotates in ~25 days, giving L_X/L_bol ≈ 10⁻⁶·³, matching observations), so just scrubbing the age moves the blue line. Drag the slider to PIN a different rotation instead (a young fast rotator saturates near 10⁻³; a slow old one drops toward 10⁻⁷) — the line keeps a ±dex fuzz because the relation has real scatter and a ~10× activity-cycle wobble. It is disabled for hot stars (no dynamo), the A/early-F X-ray gap, and giants, where rotation cannot make a corona. Press ⟲ to return to the age-derived value.">?</span>
+          <span class="help" tabindex="0" data-tip="The coronal X-ray band collapses to a LINE once you know the star's rotation: the dynamo's strength is set by the Rossby number Ro = P_rot/τ_conv (Wright 2011). For a cool main-sequence star this period is DERIVED from its age by gyrochronology (Mamajek–Hillenbrand 2008 — the Sun at 4.6 Gyr rotates in ~25 days, giving L_X/L_bol ≈ 10⁻⁶·³, matching observations), so just scrubbing the age moves the blue line. Drag the slider to PIN a different rotation instead (a young fast rotator saturates near 10⁻³; a slow old one drops toward 10⁻⁷) — the line keeps a ±dex fuzz because the relation has real scatter and a ~10× activity-cycle wobble. It is disabled for hot stars (no dynamo), the A/early-F X-ray gap, and giants, where rotation cannot make a corona. Press ⟲ to return to the age-derived value.">?</span>
           <button type="button" id="sed-rot-reset" class="sed-rot-reset" hidden>⟲ age</button>
         </label>
         <div class="slider-wrap">
@@ -233,14 +233,14 @@
         <div>
           <canvas id="lane-canvas"></canvas>
           <div class="legend">
-            <span><i style="background:#ff9966"></i><span class="tip tip-up" tabindex="0" data-tip="The density profile ρ/ρc = θⁿ — the gas density at each radius as a fraction of the central density. This is the payoff curve: as n rises it plunges more steeply, meaning the star packs ever more of its mass into a tiny core.">ρ/ρc — density (θⁿ)</span></span>
-            <span><i style="background:#5b8def"></i><span class="tip tip-up" tabindex="0" data-tip="θ (theta) is the raw solution of the Lane–Emden equation. It falls from 1 at the centre to 0 at the surface (ξ₁); pressure and temperature each scale with a power of it, and density is θ raised to the n. The density curve above is derived from this one.">θ — Lane–Emden function</span></span>
+            <span><i style="background:#ff9966"></i><span class="tip" tabindex="0" data-tip="The density profile ρ/ρc = θⁿ — the gas density at each radius as a fraction of the central density. This is the payoff curve: as n rises it plunges more steeply, meaning the star packs ever more of its mass into a tiny core.">ρ/ρc — density (θⁿ)</span></span>
+            <span><i style="background:#5b8def"></i><span class="tip" tabindex="0" data-tip="θ (theta) is the raw solution of the Lane–Emden equation. It falls from 1 at the centre to 0 at the surface (ξ₁); pressure and temperature each scale with a power of it, and density is θ raised to the n. The density curve above is derived from this one.">θ — Lane–Emden function</span></span>
           </div>
         </div>
         <div class="lane-controls">
           <label for="lane-n">Index n
             <input id="lane-n-num" class="val-input" type="number" />
-            <span class="help help-left" tabindex="0" data-tip="The polytropic index n in P = K·ρ^(1+1/n) — it sets how compressible the gas is, and so how centrally concentrated the star is. Landmarks: n=0 uniform density; n=1 the exact θ=sin ξ/ξ; n=1.5 a fully convective star (and non-relativistic degenerate matter, e.g. a white dwarf core); n=3 the Eddington standard model / radiative core (and a relativistic degenerate gas); n=5 the radius runs to infinity — no finite surface. Drag to snap to these, or type any value in 0–5.">?</span>
+            <span class="help" tabindex="0" data-tip="The polytropic index n in P = K·ρ^(1+1/n) — it sets how compressible the gas is, and so how centrally concentrated the star is. Landmarks: n=0 uniform density; n=1 the exact θ=sin ξ/ξ; n=1.5 a fully convective star (and non-relativistic degenerate matter, e.g. a white dwarf core); n=3 the Eddington standard model / radiative core (and a relativistic degenerate gas); n=5 the radius runs to infinity — no finite surface. Drag to snap to these, or type any value in 0–5.">?</span>
           </label>
           <div class="slider-wrap">
             <input id="lane-n" type="range" list="lane-n-ticks" />

@@ -325,9 +325,11 @@ main {
 .readout .v { text-align: right; color: var(--ink); white-space: nowrap; }
 
 /* "?" help glyph: the pedagogy (panel notes, control hints, per-quantity
-   descriptions) is now hover/focus-revealed instead of always-on prose, so the
-   panels and the readout stay compact. Panels keep overflow:visible so the
-   tooltip isn't clipped. */
+   descriptions) is hover/focus-revealed instead of always-on prose, so the
+   panels and the readout stay compact. The tooltip itself is a single
+   body-mounted, viewport-clamped layer (.tooltip-layer, driven by tooltip.js) —
+   not a CSS `::after` on the glyph — so a panel dragged hard against a viewport
+   edge can't clip it. This rule only styles the glyph affordance. */
 .help {
   display: inline-flex; align-items: center; justify-content: center;
   width: 16px; height: 16px; margin-left: 5px;
@@ -341,40 +343,46 @@ main {
 .help:hover, .help:focus-visible {
   color: var(--ink); border-color: var(--accent); outline: none;
 }
-.help::after, .tip::after {
-  content: attr(data-tip);
-  position: absolute; top: calc(100% + 7px); left: 0;
-  width: max-content; max-width: 250px; padding: 9px 11px;
+/* The shared tooltip surface. One instance lives directly under <body>
+   (tooltip.js), position:fixed so no panel's overflow/transform can clip it; its
+   left/top are set per-trigger in JS and clamped to the viewport (both axes), so
+   it reads cleanly even when its panel sits against an edge. max-width is also
+   viewport-bounded so a narrow phone never overflows it. */
+.tooltip-layer {
+  position: fixed; left: 0; top: 0;
+  /* max-content keeps short tips compact; the max-width only binds the verbose
+     pedagogy paragraphs. 340 (vs the old 250) is a touch wider ON PURPOSE: the
+     longest tips run ~2000 chars and at 250 wrapped TALLER than the viewport, so
+     a wider measure makes them short enough to fit. max-height (set per-show in
+     JS to the live viewport) is the hard ceiling so an over-tall tip can never
+     overflow; overflow:hidden absorbs the rare clip on a tiny viewport. */
+  width: max-content; max-width: min(340px, calc(100vw - 16px));
+  overflow: hidden;
+  padding: 9px 11px;
   background: #0d1120; color: var(--ink);
   border: 1px solid var(--line); border-radius: 8px;
   font: 400 12px/1.45 system-ui, sans-serif;
   text-transform: none; letter-spacing: 0;
   text-align: left; white-space: normal;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
-  opacity: 0; visibility: hidden; transform: translateY(-3px);
-  transition: opacity .12s ease, transform .12s ease;
-  z-index: 30; pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity .12s ease;   /* opacity only — left/top must jump, not glide */
+  z-index: 9999; pointer-events: none;
 }
-.help:hover::after, .help:focus-visible::after,
-.tip:hover::after, .tip:focus-visible::after {
-  opacity: 1; visibility: visible; transform: translateY(0);
-}
-/* Glyphs in the rightmost (controls) column open the tooltip leftward, toward
-   screen center — opening rightward there could run off the viewport edge. */
-.help-left::after { left: auto; right: 0; }
+.tooltip-layer.show { opacity: 1; visibility: visible; }
 
 /* Glyph-free hover affordance: the text itself carries the tooltip (a subtle
    dotted underline is the only visual cue — no "?" circle). Used for the status
    line tokens (OK / phase / provider name). */
 .tip {
-  position: relative; cursor: help;
+  cursor: help;
   text-decoration: underline dotted; text-underline-offset: 3px;
   text-decoration-thickness: 1px;
 }
 .tip:focus-visible { outline: none; }
-/* The status line sits near the bottom of the controls panel, so its tooltips
-   open UPWARD to stay on-screen (downward would clip below the viewport). */
-.tip-up::after { top: auto; bottom: calc(100% + 7px); transform: translateY(3px); }
+/* The status line's tooltips used to need an explicit upward flip to stay
+   on-screen; the shared layer now flips above the trigger automatically whenever
+   it would overflow the bottom, so no per-token anchoring is required. */
 /* Win over `.controls-panel label span { color: var(--ink) }` so the glyph reads
    as a muted affordance, not body text. */
 .controls-panel label .help { color: var(--muted); font-weight: 700; }

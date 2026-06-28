@@ -42,9 +42,9 @@ function escAttr(s) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-// "?" help glyph (opens leftward — the panel can sit near the viewport edge).
+// "?" help glyph; the shared tooltip layer (tooltip.js) places it viewport-clamped.
 const help = (tip) =>
-  `<span class="help help-left" tabindex="0" data-tip="${escAttr(tip)}">?</span>`;
+  `<span class="help" tabindex="0" data-tip="${escAttr(tip)}">?</span>`;
 
 // Physical gloss for the caption under the slider — exact for a landmark n,
 // generic otherwise.
