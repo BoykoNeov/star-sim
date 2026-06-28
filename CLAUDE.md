@@ -838,6 +838,49 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   regression check (as in Phases 2–5). First-pass composition feeds the endgame track as-is (the DA
   hydrogen surface shows correctly); the **WD-correct 3D shader + WD-semantics structure panel are
   Chunk 3**, and the WR branch is Chunk 4.
+- **Done (Phase 5, WR/WD endgame — Chunk 3, WD 3D shader + structure panel, frontend-only):**
+  the WD-correct renderers (`docs/plans/smoldering-cinder-gateway.md` §Chunk 3; pytest **unchanged
+  137** — no backend/API/spine touch). **3D shader (`star.js`):** `update(state, {endgame:"wd"})`
+  draws a **smooth, featureless cooling sphere** — granulation off, corona off, just the blackbody
+  color at Teff (blue-white central star → orange cold cinder) under quadratic limb darkening. The
+  advisor's correction shaped two things: **(1) crystallization is a CORE phenomenon, NOT
+  photospheric** — faceting the gaseous surface would imply a crystalline *surface* (wrong), so the
+  3D sphere stays perfectly smooth and the crystallization cue lives in the structure panel's core;
+  **(2) granulation is faded by a log g GATE** (`uGran = clamp((4−logg)/3)`), not a hard wd flag, so
+  the sequence's opening **TPAGB giant still boils** (a real convective star, log g ≈ 0.5 → uGran 1)
+  and only the degenerate remnant goes smooth — gentle scrub transition, and it doesn't regress the
+  Chunk-2 giant. The living path (no opts) restores granulation + corona automatically on exit.
+  **Structure panel (`comp.js`):** new `setEndgame(states)`/`clearEndgame()` (mirrors
+  `hr.setEndgame`) swap the burning-abundance views for a **schematic layered cross-section** — an
+  onion disk (C/O core under a thin He buffer under a thin H DA atmosphere) + a label column.
+  **Honest where the data is, schematic-and-labeled where it isn't** (measured first via
+  `/endgame` curl): the **C/O core composition (C:O) and DA/DB atmosphere type are READ FROM THE
+  MODEL each frame** — the loaded MIST grid gives **all DA + C/O** WDs (surface purifies to pure H
+  by gravitational settling — `X_surf` 0.70 central star → 1.00 cold WD; the core is already C/O at
+  the TPAGB, `Z_core=1`, C≈0.24/O≈0.74); the **He buffer + ALL layer thicknesses are canonical and
+  exaggerated to be visible** (no radial structure is modeled), with the drawn **envelope thinning as
+  log g rises** (giant shedding → degenerate thin skin, tied to the real log g). **Crystallization
+  in the core**, onset **log g-gated** (~6.5 kK at log g 7.95 for 0.54 M☉ up to ~13 kK at log g 8.7
+  for 1.0 M☉ — the Gaia crystallization sequence), grows center-out as it cools. The non-DA/He-core
+  paths are a **minimal data-parameterized fallback** (commented; current grid only makes DA C/O),
+  not authored artwork. `main.js` wires `star.update(s,{endgame:"wd"})` + `comp.setEndgame/clearEndgame`
+  in `refreshWD`/`enterWD`/`exitWD`/`tryWDResnap`; CSS hides the comp mode toggle + legends in
+  `body.wd-mode`. **The mass–radius relation is the re-snap payoff** the floor-clamped 3D sphere
+  can't show (advisor) — it lives in the readout + scale bar: re-snapping 1→6 M☉ shrinks the WD
+  (R 0.0129→0.0079 R☉, log g 7.95→8.63, remnant 0.544→0.973 M☉, ~82%→~90% crystallized), and the
+  cold-WD scale marker lands at the **Earth dot** (≈1.4 R⊕ — "Earth-sized" made visual). **Width
+  fix (advisor-caught — the first pass truncated labels at phone width, my wide-only screenshots
+  missed it):** the label sublines **wrap** to the column width (never clip at the canvas edge) and
+  the honesty caption's reserve is **dynamic** (`wrapText` returns its line count). **Verified via
+  Playwright (bundled Chromium — `chrome --headless` hijacks the user's running Chrome) at 1440 AND
+  390 px:** the cooling sequence (boiling amber giant → smooth blue-white 107 kK central star →
+  smooth orange Earth-sized cold WD), the structure reading "thick envelope → thin skin" with a
+  growing crystallized core, the mass-radius re-snap, and reversible exit (granulation + corona +
+  comp toggle all return; living Sun/HR unregressed). Only the pre-existing favicon 404; no JS
+  errors. **Tracked for Chunk 6:** the spectrum panel shows the WD placeholder for the *whole*
+  endgame scrub incl. the TPAGB-giant rows where it's false (a 3600 K giant has a real spectrum) —
+  a Chunk-2 `refreshWD` decision, fix when wiring WD spectra (make it phase-aware). See
+  [[star-sim-wr-wd-endgame-plan]].
 - **Done (Phase 5, broadband SED panel — gamma → radio, the "wider range" view, frontend-only):**
   the user asked to see the spectrum "not only near visible" → then clarified **"extend to gamma and
   radio."** The honest answer (advisor-confirmed) is **NOT more synthetic-grid data**: the baked cube is

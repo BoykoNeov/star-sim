@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier) & 2 (reversible WD gateway + WD mode shell) BUILT; plus the hot-end-can't-extend spectrum finding.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT; plus the hot-end-can't-extend spectrum finding.
 metadata:
   type: project
 ---
@@ -102,8 +102,51 @@ Reusable lessons (advisor + the Playwright pass — all genuinely caught, not gr
   errors. First-pass comp feeds the endgame track as-is (DA hydrogen surface correct). **WD-correct 3D
   shader + WD-semantics structure panel = Chunk 3; WR branch = Chunk 4.**
 
-**Remaining: Chunks 3–7** (WD 3D shader + structure panel, then the WR mode shell + 3D wind shader, then
-the data-gated WR/WD spectra above).
+**CHUNK 3 DONE (WD 3D shader + structure panel; frontend-only, pytest UNCHANGED 137).** The WD-correct
+renderers replace Chunk 2's first-pass ones. **3D shader (`star.js`):** `update(state,{endgame:"wd"})`
+draws a **smooth, featureless cooling sphere** — granulation off, corona off, blackbody color from Teff
+(blue-white central star → orange cold cinder), quadratic limb darkening. **The advisor's two corrections
+shaped it:** (1) **crystallization is a CORE phenomenon, NOT photospheric** — faceting the gaseous surface
+would imply a crystalline *surface* (wrong) AND is simpler-and-more-correct, so the 3D sphere stays
+perfectly smooth and the crystal cue goes in the structure-panel CORE; (2) **granulation is faded by a
+log g GATE** (`uGran = clamp((4−logg)/3)`), not a hard wd flag, so the sequence's opening **TPAGB giant
+still boils** (real convective star, log g≈0.5→uGran 1) and only the degenerate remnant is smooth. Living
+path (no opts) auto-restores granulation+corona on exit (the Chunk-2 exit-restoration discipline).
+**Structure panel (`comp.js`):** new `setEndgame(states)`/`clearEndgame()` (mirrors `hr.setEndgame`) swap
+the burning-abundance views for a **schematic layered cross-section** (onion disk: C/O core under thin He
+buffer under thin H DA atmosphere + a label column), driven by the MARKER state, not the EEP/track
+machinery. **Honest where the data is, schematic-and-labeled where it isn't — MEASURED via `/endgame`
+curl before building** (the recurring "verify before you label" discipline): the loaded MIST grid gives
+**ALL DA + C/O WDs** across masses 1–6.5 (surface purifies to **pure H** by gravitational settling —
+X_surf 0.70 central star→1.00 cold WD; the core is **already C/O at the TPAGB**, Z_core=1, C≈0.24/O≈0.74),
+so the **core C:O ratio and DA/DB atmosphere type are READ FROM THE MODEL each frame** (data-driven); the
+**He buffer + ALL layer thicknesses are canonical & exaggerated to be visible** (no radial structure is
+modeled — the Lane-Emden/MESA-profile territory), with the drawn **envelope thinning as log g rises**
+(giant shedding→degenerate thin skin, tied to real log g). **Crystallization in the core, onset log
+g-GATED** (~6.5 kK at log g 7.95 for 0.54 M☉ up to ~13 kK at log g 8.7 for 1.0 M☉ — the Gaia
+crystallization sequence; a fixed Teff threshold would under-state massive WDs), grows center-out. The
+non-DA/He-core paths are a **minimal data-parameterized fallback** (commented; don't author untested DB
+artwork that reads as a tested feature — advisor). **The mass–radius relation is the re-snap payoff** the
+floor-clamped 3D sphere CAN'T show (advisor) → it lives in the readout + scale bar: re-snap 1→6 M☉ shrinks
+the WD (R 0.0129→0.0079 R☉, log g 7.95→8.63, remnant 0.544→0.973, ~82%→~90% crystallized), cold-WD scale
+marker lands at the **Earth dot** (≈1.4 R⊕ — "Earth-sized" made visual). **Width-fix (advisor-caught — my
+wide-only 1440/760 screenshots MISSED it; the project verifies 390 px every frontend chunk):** the first
+pass drew label sublines at a fixed x with no wrap → **truncated at phone width** (confirmed at 308 px:
+"…~1e-4 M (schema", "…≈99% of the m"); the caption clipped too. Fix = label sublines **wrap** to the
+column width + the caption reserve is **DYNAMIC** (`wrapText` returns its line count → `capH` = lines·lh).
+**General lesson: a fixed-x / fixed-reserve canvas layout is width-fragile; verify at 390 px, not just
+wide.** `main.js` wires `star.update(s,{endgame:"wd"})` + `comp.setEndgame/clearEndgame` in
+refreshWD/enterWD/exitWD/tryWDResnap; CSS hides the comp mode toggle + legends in `body.wd-mode`. Verified
+via **Playwright bundled Chromium** (the `chrome --headless` hijack caveat) at **1440 AND 390 px**: cooling
+sequence (boiling amber giant→smooth blue-white 107 kK central star→smooth orange Earth-sized cold WD),
+structure "thick envelope→thin skin" + growing crystallized core, mass-radius re-snap, reversible exit
+(granulation+corona+comp toggle all return; living Sun/HR unregressed). Only the pre-existing favicon 404.
+**Tracked for Chunk 6:** the spectrum shows the WD placeholder for the WHOLE endgame scrub incl. the
+TPAGB-giant rows where it's false (a ~3600 K giant has a real spectrum) — Chunk-2 `refreshWD` behavior,
+make it phase-aware when wiring WD spectra.
+
+**Remaining: Chunks 4–7** (WR mode shell + HR-to-250kK + stripped-surface composition, then the WR 3D
+wind shader, then the data-gated WR/WD spectra above).
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

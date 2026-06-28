@@ -88,6 +88,7 @@ uniform float uContrast;  // granule brightness contrast
 uniform float uOmega;     // equatorial angular rate (rad/s, visual)
 uniform float uShear;     // differential-rotation fraction (poles slower)
 uniform float uLife;      // granule lifetime / reform cycle (s)
+uniform float uGran;      // granulation amount (1 = living star, 0 = smooth WD)
 
 varying vec3 vObjPos;
 varying vec3 vViewNormal;
@@ -156,9 +157,15 @@ float granulation(vec3 p0, float time) {
 }
 
 void main() {
+  // A cooling white dwarf's photosphere is a featureless, limb-darkened disk — its
+  // atmosphere is in radiative equilibrium, not the convective "boil" of a cool MS
+  // star — so uGran fades the granulation out entirely (smooth is the MORE accurate
+  // look here, not a shortcut). uGran=1 keeps the full living-star granulation.
+  // (Crystallization is a CORE phenomenon, shown in the structure panel — never on
+  // this gaseous surface, which has no lattice.)
   float f = granulation(vObjPos, uTime);
   float lanes = clamp(f / 0.9, 0.0, 1.0);
-  float granule = 1.0 - uContrast * lanes;
+  float granule = 1.0 - uContrast * lanes * uGran;
 
   // Limb darkening (quadratic law): μ = cos(angle to the viewer). The camera is
   // at the origin in view space, so the view direction is -normalize(vViewPos).
@@ -228,6 +235,7 @@ export function createStar(canvas) {
       uOmega: { value: 0.12 },   // gentle visual spin (rad/s); not a real v_rot
       uShear: { value: 0.35 },   // poles ~35% slower than the equator
       uLife: { value: 8.0 },     // granule reform cycle (s) — bounds the shear
+      uGran: { value: 1.0 },     // granulation amount (0 = smooth degenerate WD)
     },
   });
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
@@ -265,14 +273,38 @@ export function createStar(canvas) {
     }
   }
 
-  function update(state) {
+  // update(state, opts): opts.endgame === "wd" renders the degenerate-white-dwarf
+  // look — a smooth, featureless cooling sphere (no convective granulation, no
+  // corona): just the blackbody color at Teff (which sweeps blue-white → white →
+  // yellow → red as the remnant cools over Gyr) under quadratic limb darkening.
+  // With no opts it is the normal living star, so the living path automatically
+  // restores granulation + corona (uGran→1) on the way back out of the endgame.
+  function update(state, opts) {
+    const wd = !!(opts && opts.endgame === "wd");
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
     surfaceMat.uniforms.uCells.value = granuleCells(state);
+    // In the WD endgame the sequence opens on the thermally-pulsing AGB giant — a
+    // real convective star that still boils — and ends on the degenerate remnant,
+    // whose radiative atmosphere is smooth. Fade granulation out as log g rises (the
+    // remnant becomes degenerate) rather than a hard switch, so the scrub transition
+    // is gentle. Living stars always granulate (uGran = 1).
+    surfaceMat.uniforms.uGran.value = wd
+      ? Math.max(0, Math.min(1, (4 - state.logg) / 3))
+      : 1.0;
 
     const rad = displayRadius(state.R_rsun);
     star.scale.setScalar(rad);
+
+    if (wd) {
+      // A cooling white dwarf has no convective dynamo / steady corona, so suppress
+      // the glow entirely (consistent with the SED dropping its X-ray overlay). Keep
+      // the quad sized so a stray frame can't leave a giant halo behind.
+      corona.scale.setScalar(rad * 1.12);
+      coronaMat.uniforms.uIntensity.value = 0.0;
+      return;
+    }
 
     // Activity drives both how bright and how far the corona reaches; a small
     // floor keeps a faint neutral bloom so even a hot, inactive star isn't a

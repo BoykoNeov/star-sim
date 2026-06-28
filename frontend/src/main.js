@@ -840,11 +840,11 @@ function refreshWD() {
   const i = Math.max(0, Math.min(endgame.states.length - 1, wdIndexFromFraction(wdFraction, z)));
   const s = endgame.states[i];
 
-  star.update(s);
+  star.update(s, { endgame: "wd" });   // smooth degenerate sphere, cooling color, no corona
   classification.update(s, "wd");
   scale.update(s);
   hr.update(s);
-  comp.update(s);
+  comp.update(s);                       // WD structure cross-section (comp is in endgame mode)
   sed.update(s, { endgame: true });
   spectrum.showPlaceholder(
     "White-dwarf atmospheres (log g 7–9) aren't in the spectral grid yet.");
@@ -921,7 +921,7 @@ function enterWD() {
   els.gateway.hidden = true;
   els.endgameBar.hidden = false;
   hr.setEndgame(endgame.states);
-  comp.setTrack(endgame.states);
+  comp.setEndgame(endgame.states);
   rebuildWDTicks();
   wdFraction = 0;                 // start at the first thermal pulse — scrub forward
   els.age.value = wdFraction;
@@ -935,6 +935,7 @@ function exitWD() {
   els.endgameBar.hidden = true;
   setWDResnapNote("");
   hr.clearEndgame();
+  comp.clearEndgame();
   endgame = null; endgameKey = null;
   // Return to the LIVING version of the white-dwarf progenitor we were viewing
   // (lastWDMass/Feh) — not whatever transient value massValue holds. This is robust to
@@ -968,7 +969,7 @@ async function tryWDResnap() {
     lastWDMass = mass; lastWDFeh = feh;
     setWDResnapNote("");
     hr.setEndgame(eg.states);
-    comp.setTrack(eg.states);
+    comp.setEndgame(eg.states);
     rebuildWDTicks();
     refreshWD();
   } else {

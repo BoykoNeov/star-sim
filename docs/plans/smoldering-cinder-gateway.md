@@ -182,7 +182,49 @@ HR diagram** (extend axes down to logL ≈ −5). First pass feeds the *existing
 pulses→PN→cold WD, drag mass to get a different final mass, slide back out; no JS
 errors. **Depends:** Chunk 1.
 
-### Chunk 3 — WD 3D shader + structure panel
+### Chunk 3 — WD 3D shader + structure panel — ✅ DONE
+**Status:** shipped (frontend-only; 137 tests unchanged). The first-pass renderers are
+replaced with WD-correct ones. **3D shader (`star.js`):** `update(state, {endgame:"wd"})`
+renders a **smooth, featureless cooling sphere** — granulation off, corona off, just the
+blackbody color at Teff (which sweeps blue-white central star → orange cold cinder) under
+quadratic limb darkening. Granulation is faded out by a **log g gate** (`uGran =
+clamp((4−logg)/3)`), NOT a hard wd flag, so the sequence's opening **TPAGB giant still
+boils** (a real convective star, log g ≈ 0.5 → uGran 1) and only the degenerate remnant
+goes smooth — a gentle scrub transition, and it doesn't regress Chunk 2's giant. The
+living path (no opts) restores granulation + corona automatically on exit. **Structure
+panel (`comp.js`):** a new `setEndgame(states)`/`clearEndgame()` (mirrors `hr.setEndgame`)
+swaps the burning-abundance views for a **schematic layered cross-section** — a C/O core
+under a thin He buffer under a thin H (DA) atmosphere, an onion disk + a label column.
+What's **honest** (the advisor's discipline): the **C/O core composition (C:O) and the
+DA/DB atmosphere type are READ FROM THE MODEL each frame** (data-driven — the loaded MIST
+grid measured ALL DA + C/O: surface purifies to pure H by gravitational settling, core is
+already C/O at the TPAGB); the **He buffer + all layer thicknesses are canonical and
+exaggerated to be visible** (no radial structure is modeled), with the drawn envelope
+**thinning as log g rises** (giant shedding its envelope → degenerate thin skin — an
+evocative cue tied to the real log g). **Crystallization is shown in the CORE, never on
+the gaseous surface** (the advisor's key correction — the C/O lattice forms in the dense
+interior, not the atmosphere), with the **onset Teff rising with log g** (~6.5 kK at log g
+7.95 for a 0.54 M☉ WD up to ~13 kK at log g 8.7 for a 1.0 M☉ WD — the Gaia crystallization
+sequence), so a re-snapped massive WD crystallizes hotter. The non-DA/He-core paths are a
+**minimal data-parameterized fallback** (commented; the current grid only produces DA C/O
+WDs), not authored artwork. The wide HR cooling axes + readout (Chunk 2) carry the
+mass–radius relation the floor-clamped 3D sphere can't (R 0.013→0.0079 R☉, log g 7.95→8.63
+as the progenitor mass rises 1→6.5 M☉; the cold-WD scale-bar marker lands at the **Earth
+dot**, ≈1.4 R⊕ — "Earth-sized" made visual). `main.js` wires `star.update(s,{endgame:"wd"})`
++ `comp.setEndgame/clearEndgame` in `refreshWD`/`enterWD`/`exitWD`/`tryWDResnap`; CSS hides
+the comp mode toggle + legends in `body.wd-mode` (the structure view draws its own labels).
+**Width-robust** (advisor-caught — the first pass truncated labels at phone width): the
+label sublines **wrap** to the column width (never clip at the canvas edge) and the honesty
+caption's reserve is **dynamic** (its wrapped line count, so the last line never clips on a
+narrow panel). Verified via Playwright (bundled Chromium — the `chrome --headless` hijack
+caveat) on the real served UI at **1440 AND 390 px**: the cooling sequence (boiling amber
+giant → smooth blue-white 107 kK central star → smooth orange Earth-sized cold WD), the
+structure cross-section reading "thick envelope → thin skin" with a growing crystallized
+core, the mass–radius re-snap (1→6 M☉: smaller WD, thinner envelope, ~90% crystallized),
+and reversible exit (granulation + corona + the comp toggle all return). Only the
+pre-existing favicon 404; no JS errors. No JS test harness → the screenshot pass is the
+regression check (as in Phases 2–5).
+
 **Goal:** replace the wrong-looking first-pass renderers with WD-correct ones.
 **Do:** a **degenerate-sphere shader** — Earth-scale relative size, smooth (no
 granulation), quadratic limb darkening, **cooling-color shift** blue-white →
@@ -226,6 +268,14 @@ temperature/logg-gated line guides. Replace the placeholder.
 numbers): Balmer depth vs Teff, DA vs DB, logg dependence. **Fallback:** if
 Chunk 0 is a no-go, keep the labeled placeholder and document it.
 **Depends:** Chunks 0, 3.
+**Known polish (deferred here on purpose):** in the endgame the spectrum panel shows the
+WD placeholder ("White-dwarf atmospheres (log g 7–9) aren't in the spectral grid yet")
+**for the whole scrub, including the TPAGB-giant rows** at the start — where it's actually
+false (a ~3600 K giant *does* have a real spectrum in the baked grid). It's a Chunk-2
+decision (`refreshWD` calls `showPlaceholder` unconditionally) and the spectrum is this
+chunk's domain, so leave it. When wiring the WD spectrum here, make the placeholder/route
+phase-aware: show the real giant spectrum during TPAGB, the WD spectrum (or placeholder)
+only once degenerate.
 
 ### Chunk 7 — WR spectra (data-gated, hardest; depends on Chunk 0)
 **Goal:** real WR emission spectra.

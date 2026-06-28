@@ -43,9 +43,18 @@
 // from /state; setMode() flips the view. Same split as hr.js.
 
 import { fitCanvas } from "./canvas.js";
+import { teffToCSS } from "./color.js";
 
 const PAD_L = 30, PAD_R = 10, PAD_T = 16, PAD_B = 26;
 const GAP = 22;   // vertical gap between the core and surface sub-charts
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+// Honesty caption for the white-dwarf structure view (see drawWD): the C/O core and
+// DA atmosphere are read from the model; the He buffer + all layer thicknesses are
+// canonical and exaggerated to be visible (the simulator models no radial structure).
+const WD_CAPTION =
+  "Schematic cross-section. Composition is from the model (the C/O core and DA " +
+  "atmosphere are real); the He buffer and all layer thicknesses are canonical, " +
+  "exaggerated to be visible — no radial structure is modeled.";
 
 // Bulk band colors: H a cool blue, He a warm gold, metals a violet. Z is ~1.5%
 // so its band is a thin sliver at the top — honest, not a rendering bug.
@@ -95,6 +104,8 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   let marker = null;   // current StellarState (moves as age scrubs)
   let mode = "bulk";   // "bulk" (X/Y/Z bands) | "cno" (14-element lines) | "light" (Li/Be/F)
   let scale = "lin";   // "lin" | "log" — the cno view's y-axis (log reveals Li/Na)
+  let wd = false;      // white-dwarf endgame: replace the burning-abundance views with
+                       // a layered structure cross-section (see drawWD)
   // Per-element visibility for the cno view (legend-click toggles). Session-only
   // (not persisted). Scoped to the cno view — the light view is only three lines.
   const hidden = new Set();
@@ -102,6 +113,11 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
   function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
+  // Enter/leave the white-dwarf endgame structure view (mirrors hr.setEndgame). It
+  // swaps the burning-abundance views for the layered cross-section, driven by the
+  // marker state alone (the EEP-vs-track machinery doesn't apply to a structure view).
+  function setEndgame(states) { wd = true; track = states && states.length ? states : track; draw(); }
+  function clearEndgame() { wd = false; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
   // Toggle one per-element line in the cno view on/off, returning its new
   // visibility. Hiding doesn't just declutter: region() autoscales over only the
@@ -132,6 +148,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    if (wd) { drawWD(); return; }   // structure view drives off the marker, not the track
     if (!track) return;
     if (mode === "cno") drawCno();
     else if (mode === "light") drawLight();
@@ -211,6 +228,173 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     drawPhaseDividers(xOf);
     drawMarker(xOf, e0, e1);
     drawAxis();
+  }
+
+  // -- white-dwarf structure view: a schematic layered cross-section -------------
+  // The burning-abundance views are over once the star is a degenerate remnant, so in
+  // the endgame the panel shows the white dwarf's ANATOMY instead: a C/O core under a
+  // thin He buffer under a thin H (or He) atmosphere. What is honest here:
+  //   * The C/O core composition (C:O) and the atmosphere type (DA pure-H vs DB He)
+  //     are READ FROM THE MODEL each frame (data-driven) — for the loaded MIST grid
+  //     every white dwarf comes out DA with a C/O core (the surface purifies to pure
+  //     hydrogen by gravitational settling; the non-DA / He-core paths are kept as a
+  //     minimal data-parameterized fallback, not authored artwork).
+  //   * The He buffer and ALL layer thicknesses are CANONICAL and exaggerated to be
+  //     visible — the simulator models no radial structure. The drawn envelope thins
+  //     as log g rises (giant shedding its envelope → degenerate remnant with a thin
+  //     skin), an evocative cue tied to the real log g, not a measured profile.
+  //   * Crystallization is shown in the CORE (where the C/O lattice forms), never on
+  //     the gaseous surface; its onset temperature rises with log g (denser remnants
+  //     crystallize hotter — the Gaia crystallization sequence). Evocative, labeled.
+  function drawWD() {
+    const s = marker;
+    if (!s) return;
+    const PAD = 12;
+    const coolCol = teffToCSS(s.Teff_K);
+
+    // --- read the composition from the state (data-driven) ---
+    const heCore = (s.Y_core ?? 0) > 0.5;          // He-core WD (very low mass) vs C/O
+    const mc = s.metals_core || {};
+    const cC = mc.C ?? 0, cO = mc.O ?? 0;
+    const da = (s.X_surf ?? 0) >= (s.Y_surf ?? 0);  // DA (H atmosphere) vs DB (He)
+
+    // --- schematic geometry, the envelope thinning with log g (real) ---
+    const g = s.logg ?? 8;
+    const t = clamp01((g - 0.5) / (8.7 - 0.5));     // 0 ≈ AGB giant, 1 ≈ cold remnant
+    const coreFrac = 0.35 + 0.55 * t;               // tiny core+vast envelope → thin skin
+    const envFrac = 1 - coreFrac;
+
+    // --- crystallization: a core phenomenon, onset rising with log g ---
+    // ~6.5 kK at log g 7.95 (0.54 M☉) up to ~13 kK at log g 8.7 (1.0 M☉). Only for a
+    // genuinely degenerate remnant (log g ≳ 7) below its onset; grows from the centre.
+    const onset = Math.max(4000, Math.min(20000, 6500 + 8700 * (g - 7.95)));
+    let crystFrac = 0;
+    if (g >= 7 && s.Teff_K < onset)
+      crystFrac = Math.max(0, Math.min(0.9, ((onset - s.Teff_K) / onset) * 1.3));
+
+    // --- layout: cross-section disk on the left, a label column on the right ---
+    // The caption reserve is DYNAMIC — its wrapped line count grows as the canvas
+    // narrows, so a fixed reserve would clip the last line on a phone-width panel.
+    const titleH = 24, capLh = 11;
+    ctx.font = "10px system-ui, sans-serif";
+    const capH = wrapText(WD_CAPTION, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
+    const top = PAD + titleH, bot = H - PAD - capH;
+    const LW = Math.max(150, W * 0.42);             // label column width (text-fit)
+    const diskAreaW = W - PAD - PAD - LW;
+    const cx = PAD + diskAreaW / 2;
+    const cy = (top + bot) / 2;
+    const Rd = Math.max(24, Math.min(diskAreaW / 2 - 4, (bot - top) / 2 - 4));
+
+    const COL_CORE = heCore ? "#ffce6b" : "#aeb9cf";   // He gold / C·O degenerate steel
+    const COL_BUF = "#e0b85f";                          // He buffer (canonical)
+    const COL_ATM = da ? "#5b8def" : "#ffce6b";         // H (DA) blue / He (DB) gold
+    const COL_CRYST = "#e6eeff";                        // diamond/lattice tint
+
+    const circle = (r) => { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); };
+
+    const rCore = Rd * coreFrac;
+    const atmTh = Rd * envFrac * 0.30;
+    const rBuf = Rd - atmTh;
+
+    // soft cooling-color rim (the only place Teff tints the cross-section)
+    ctx.save();
+    ctx.shadowColor = coolCol; ctx.shadowBlur = 14;
+    ctx.fillStyle = COL_ATM; circle(Rd);
+    ctx.restore();
+    ctx.fillStyle = COL_BUF; circle(rBuf);
+    ctx.fillStyle = COL_CORE; circle(rCore);
+    // subtle radial shading so the dense core reads as a sphere, not a flat disk
+    const grd = ctx.createRadialGradient(cx - rCore * 0.3, cy - rCore * 0.3, rCore * 0.1, cx, cy, rCore);
+    grd.addColorStop(0, "rgba(255,255,255,0.18)");
+    grd.addColorStop(1, "rgba(0,0,0,0.22)");
+    ctx.fillStyle = grd; circle(rCore);
+
+    // crystallized inner region (area-proportional), with faint facet lines
+    if (crystFrac > 0) {
+      const rCr = rCore * Math.sqrt(crystFrac);
+      ctx.fillStyle = COL_CRYST; circle(rCr);
+      ctx.strokeStyle = "rgba(120,140,180,0.55)"; ctx.lineWidth = 1;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, rCr, 0, Math.PI * 2); ctx.clip();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(a) * rCr, cy - Math.sin(a) * rCr);
+        ctx.lineTo(cx + Math.cos(a) * rCr, cy + Math.sin(a) * rCr);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // thin separators between shells
+    ctx.strokeStyle = "rgba(8,10,18,0.45)"; ctx.lineWidth = 1;
+    for (const r of [Rd, rBuf, rCore]) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // --- title + type tag (type tinted by the cooling color) ---
+    labelPill("white-dwarf structure", PAD, PAD);
+    const tag = `${da ? "DA" : "DB"} · ${heCore ? "He core" : "C/O core"}`;
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.fillStyle = coolCol; ctx.textAlign = "right";
+    ctx.fillText(tag, W - PAD, PAD + 12);
+    ctx.textAlign = "left";
+
+    // --- label column: one entry per layer, outer → inner. Sublines WRAP to the
+    // column width (never truncate at the canvas edge — the phone-width failure the
+    // first pass had), advancing the cursor by however many lines they take. ---
+    const lx = W - PAD - LW + 2;
+    const txtW = LW - 16;            // text width available after the swatch
+    let ly = top + 4;
+    const entry = (col, title, lines) => {
+      ctx.fillStyle = col;
+      ctx.fillRect(lx, ly + 2, 9, 9);
+      ctx.fillStyle = "#e7ecf5"; ctx.font = "600 11px system-ui, sans-serif";
+      ctx.fillText(title, lx + 14, ly + 10);
+      ctx.fillStyle = "#9aa3b5"; ctx.font = "10px system-ui, sans-serif";
+      let yy = ly + 22;
+      for (const l of lines) yy += wrapText(l, lx + 14, yy, txtW, 12) * 12;
+      ly = yy + 6;
+    };
+    const yFmt = (v) => ((v ?? 0) < 1e-4 ? "0" : fmtFrac(v));  // tidy the pure-H WD's Y≈0
+    entry(COL_ATM,
+      da ? "H atmosphere (DA)" : "He atmosphere (DB)",
+      [`X ${fmtFrac(s.X_surf ?? 0)} · Y ${yFmt(s.Y_surf)}`, "~1e-4 M skin"]);
+    if (da) entry(COL_BUF, "He buffer", ["~1e-2 M"]);
+    entry(COL_CORE,
+      heCore ? "He core" : "C/O core",
+      heCore
+        ? [`Y ${fmtFrac(s.Y_core ?? 0)}`, "degenerate · ~99% mass"]
+        : [`C ${pct(cC)} · O ${pct(cO)}`, "degenerate · ~99% mass"]);
+    if (crystFrac > 0)
+      entry(COL_CRYST, "crystallizing core",
+        [`~${Math.round(crystFrac * 100)}% solid`, "C/O lattice (evocative)"]);
+
+    // --- honesty caption (wrapped; capH reserved its exact line count above) ---
+    ctx.fillStyle = "#7e879a"; ctx.font = "10px system-ui, sans-serif";
+    wrapText(WD_CAPTION, PAD, bot + 12, W - 2 * PAD, capLh);
+  }
+
+  // Format a mass fraction as a whole-ish percent for compact core labels.
+  function pct(v) { return `${Math.round((v || 0) * 100)}%`; }
+
+  // Minimal word-wrap for canvas text: draw `text` from (x,y) wrapping to maxW, and
+  // return the number of lines used. With dry=true it measures only (no draw), so a
+  // caller can reserve the right height before laying out — the panel must stay
+  // width-robust (a phone-narrow canvas wraps more lines than a wide one). Assumes the
+  // font is already set on ctx (measureText/​fillText both read it).
+  function wrapText(text, x, y, maxW, lh, dry) {
+    const words = text.split(" ");
+    let line = "", n = 0;
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxW && line) {
+        if (!dry) ctx.fillText(line, x, y);
+        y += lh; n++; line = w;
+      } else line = test;
+    }
+    if (line) { if (!dry) ctx.fillText(line, x, y); n++; }
+    return n;
   }
 
   // One sub-chart of element lines for `elems`, scaled to ITS OWN range (the
@@ -361,5 +545,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update, setMode, setScale, toggleElem, resize };
+  return { setTrack, update, setMode, setScale, toggleElem, setEndgame, clearEndgame, resize };
 }
