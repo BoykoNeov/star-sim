@@ -273,51 +273,48 @@ export function createStar(canvas) {
     }
   }
 
-  // update(state, opts): opts.endgame === "wd" renders the degenerate-white-dwarf
-  // look — a smooth, featureless cooling sphere (no convective granulation, no
-  // corona): just the blackbody color at Teff (which sweeps blue-white → white →
-  // yellow → red as the remnant cools over Gyr) under quadratic limb darkening.
-  // With no opts it is the normal living star, so the living path automatically
-  // restores granulation + corona (uGran→1) on the way back out of the endgame.
+  // update(state, opts): opts.endgame === "wd" renders the white-dwarf endgame. The
+  // look is driven by the star's OWN state (a degeneracy gate from log g), not a hard
+  // mode switch, so the sequence is continuous: it opens on the thermally-pulsing AGB
+  // giant (still boiling, still glowing — like the EAGB giant the user just left) and
+  // ends on the degenerate remnant — a smooth, featureless cooling sphere (no
+  // convective granulation, no corona), just the blackbody color at Teff (which sweeps
+  // blue-white → white → yellow → red as it cools over Gyr) under limb darkening.
+  // With no opts it is the normal living star (gate = 1 -> granulation + corona intact).
   function update(state, opts) {
     const wd = !!(opts && opts.endgame === "wd");
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
     surfaceMat.uniforms.uCells.value = granuleCells(state);
-    // In the WD endgame the sequence opens on the thermally-pulsing AGB giant — a
-    // real convective star that still boils — and ends on the degenerate remnant,
-    // whose radiative atmosphere is smooth. Fade granulation out as log g rises (the
-    // remnant becomes degenerate) rather than a hard switch, so the scrub transition
-    // is gentle. Living stars always granulate (uGran = 1).
-    surfaceMat.uniforms.uGran.value = wd
-      ? Math.max(0, Math.min(1, (4 - state.logg) / 3))
-      : 1.0;
+    // Degeneracy gate (WD endgame only): 1 for a convective giant (log g ≲ 1), fading
+    // to 0 as the bared core contracts into a degenerate remnant (log g ≳ 4). The SAME
+    // gate drives BOTH the granulation AND the corona below, so the two fade together —
+    // and living stars always pass 1, leaving their look byte-identical. This is what
+    // makes the gateway a CONTINUATION, not a cut: the thermally-pulsing AGB giant the
+    // endgame opens on still boils and still glows (just like the EAGB giant the user
+    // just left), and only the cooling remnant goes smooth and glowless.
+    const gDeg = wd ? Math.max(0, Math.min(1, (4 - state.logg) / 3)) : 1.0;
+    surfaceMat.uniforms.uGran.value = gDeg;
 
     const rad = displayRadius(state.R_rsun);
     star.scale.setScalar(rad);
 
-    if (wd) {
-      // A cooling white dwarf has no convective dynamo / steady corona, so suppress
-      // the glow entirely (consistent with the SED dropping its X-ray overlay). Keep
-      // the quad sized so a stray frame can't leave a giant halo behind.
-      corona.scale.setScalar(rad * 1.12);
-      coronaMat.uniforms.uIntensity.value = 0.0;
-      return;
-    }
-
-    // Activity drives both how bright and how far the corona reaches; a small
-    // floor keeps a faint neutral bloom so even a hot, inactive star isn't a
-    // hard-edged disk (the activity-driven part is what actually grows). The
-    // quad half-size is rad·extent, so the limb sits at fraction 1/extent of it;
-    // the falloff is scaled so the glow has faded by the quad edge (low activity
-    // -> tight thin rim, high activity -> far-reaching corona).
+    // Corona: activity drives both how bright and how far the glow reaches; a small
+    // floor keeps a faint neutral bloom so even a hot, inactive star isn't a hard-edged
+    // disk (the activity-driven part is what actually grows). The quad half-size is
+    // rad·extent, so the limb sits at fraction 1/extent of it; the falloff is scaled so
+    // the glow has faded by the quad edge. In the WD endgame the degeneracy gate fades
+    // the corona out over the SAME log g range as the granulation, so it doesn't vanish
+    // abruptly at the gateway — it persists on the AGB giant and dies with the dynamo as
+    // the remnant degenerates (a cold white dwarf has no steady corona; this is also why
+    // the SED drops its coronal X-ray overlay over the same range). gDeg=1 living.
     const act = activityOf(state);
-    const extent = 1.12 + 1.4 * act;
+    const extent = 1.12 + 1.4 * act * gDeg;
     corona.scale.setScalar(rad * extent);
     coronaMat.uniforms.uInnerFrac.value = 1.0 / extent;
     coronaMat.uniforms.uFalloff.value = 3.2 / (extent - 1.0);
-    coronaMat.uniforms.uIntensity.value = 0.3 + 1.4 * act;
+    coronaMat.uniforms.uIntensity.value = (0.3 + 1.4 * act) * gDeg;
   }
 
   const clock = new THREE.Clock();

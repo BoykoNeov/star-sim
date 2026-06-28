@@ -1359,6 +1359,40 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   **solid red fading to dark** (no green), nm axis (400/500/600/700/800), TiO guides lit; SED visible
   sliver still a clean rainbow, not washed out; no JS errors. No JS test harness → the screenshot
   pass *is* the regression check (as in Phases 2–5); **pytest unchanged (137)** — frontend-only.
+- **Done (UX, living→WD endgame transition made continuous — frontend-only):** the user reported
+  that switching into the white-dwarf endgame felt like "some steps are missing" — the corona
+  vanished, the SED coronal X-ray/radio band vanished, and the radius popped. Root cause (measured
+  via `/state`+`/endgame` curl, advisor-reviewed): the endgame's first state (`states[0]`, the first
+  thermal pulse) is the **very next track row** after the living EAGB endpoint — nearly identical
+  (mass 1: R 82.8→86.6, Teff 3624→3601, **activity 0.82→0.83**) — so the *data* is continuous, but
+  three layers **hard-switched on the `wd` mode flag** instead of on the star's state: the 3D corona
+  (`star.js` `if (wd) { uIntensity=0; return; }`) and the SED X-ray overlay (`sed.js`
+  `if (!endgameMode) drawActivity()`), while granulation already faded smoothly via a log g gate. Fix
+  = **drive the corona AND the SED X-ray overlay by the SAME degeneracy gate `gDeg = clamp((4−logg)/3)`
+  that granulation already uses**, so all three fade together: the thermally-pulsing AGB giant the
+  endgame opens on keeps the boil + glow + (dimmed) coronal band it had as a living star (a
+  *continuation*, not a cut), and they die with the dynamo only as the bared core contracts into the
+  degenerate remnant (gDeg→0 at log g≳4 → smooth glowless cold WD, no X-ray band — physically correct,
+  no convective dynamo). Living stars pass gDeg=1 → byte-identical. **The radius pop was a latent
+  BIGGER bug the advisor surfaced + curl confirmed:** the gateway showed at `GATE_SHOW=0.98`, but the
+  linear-age axis crams the whole post-RGB drama (RGB tip→CHeB→EAGB) into the last ~2%, so at 0.98 the
+  living star is still a **mid-RGB star** (R=8.4) — entering then jumped RGB→AGB-giant (R=86.6, 10×).
+  Fix = raise `GATE_SHOW`→**0.999** so the gateway appears only at the true track end (the EAGB giant),
+  where the step to states[0] is genuinely *slight* (displayRadius 2.42→2.43, imperceptible); the age
+  slider's existing snap (drags within 1.5% of the end → exactly 1.0) keeps reaching it a natural
+  "slam right" gesture, and `/endgame` still prefetches at `GATE_FETCH=0.9`. **The blocker the advisor
+  flagged + I verified first:** the corona fix only works if endgame `states[0].activity` ≈ the living
+  end-row's (the old hard-off never read it) — curl confirmed it does (0.82↔0.83), so the gate alone
+  suffices. **Spectrum held OUT of scope** (advisor): the WD placeholder is *honest* (no atmosphere
+  grid at log g 7–9), and a giant-phase "show the real spectrum" version reintroduces the wrong-clamp
+  bug Chunk 2 deliberately avoided — same symptom, separate/riskier Chunk-6 decision. All
+  `star.js`/`sed.js`/`main.js`, no backend/API/spine touch. **Verified via Playwright (bundled
+  Chromium — `chrome --headless` hijacks the user's running Chrome):** gateway hidden at frac
+  0.95/0.98, shown at 1.0; WD entry shows the corona ring + boiling granulation (a screenshot pair
+  against the living EAGB end is indistinguishable) + 324 coral X-ray px in the SED; cold WD = smooth
+  glowless orange sphere + 0 coral px (band fully faded); reversible exit; only the pre-existing
+  favicon 404. No JS test harness → the screenshot/pixel pass *is* the regression check (as in
+  Phases 2–5); **pytest unchanged (137)** — frontend-only. See [[star-sim-wr-wd-endgame-plan]].
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

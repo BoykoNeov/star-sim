@@ -208,11 +208,14 @@ export function createSED(canvas) {
   plotW = W - PAD_L - PAD_R;
 
   let teff = null, logg = null, age = null, phase = null, mass = null, feh = null;
-  // Endgame (WD) mode: a white dwarf has no convective dynamo, so the cool-star coronal
-  // X-ray band / gyrochronology line would be physically wrong (a cold WD at logg ~8
-  // would otherwise trip the cool-dwarf band). The blackbody SED itself is fine and
-  // even nice (the hot central star peaks in the UV, the cold cinder in the IR), so we
-  // keep the curve but suppress the non-thermal overlay. Set via update(state,{endgame}).
+  // Endgame (WD) mode: the non-thermal overlay is NOT suppressed outright — it is faded
+  // by a degeneracy gate (the same (4−logg)/3 the 3D corona/granulation use), so the
+  // thermally-pulsing AGB giant the endgame opens on keeps the (suppressed) coronal band
+  // it had as a living star — a CONTINUATION across the gateway, not an abrupt vanish —
+  // and the band fades to nothing as the bared core contracts into a degenerate remnant
+  // (no convective dynamo; a cold WD at logg ~8 must NOT trip the cool-dwarf band — the
+  // gate → 0 there guarantees it). The blackbody curve is always fine (the hot central
+  // star peaks in the UV, the cold cinder in the IR). Set via update(state,{endgame}).
   let endgameMode = false;
   // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
   // gyro-valid domain); userProt = a manual slider override (null = follow the
@@ -284,7 +287,16 @@ export function createSED(canvas) {
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
 
-    if (!endgameMode) drawActivity(lamPeak);   // no convective dynamo for a white dwarf
+    // The non-thermal coronal overlay. Living: drawn per regime. WD endgame: faded by
+    // the degeneracy gate (the same (4−logg)/3 the 3D corona/granulation use), so the
+    // AGB giant the endgame opens on keeps the band it had as a living star (continuity
+    // across the gateway) and it dies with the dynamo as the remnant degenerates.
+    if (!endgameMode) {
+      drawActivity(lamPeak);
+    } else {
+      const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
+      if (gDeg > 0.01) drawActivity(lamPeak, gDeg);
+    }
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
   }
@@ -314,18 +326,21 @@ export function createSED(canvas) {
   // dashed "X-ray gap" sliver right where it lands (one object shrinking, not two
   // ghosts crossfading); the secondary gap↔hot edge is a plain alpha crossfade.
   // Drawn hatched/translucent throughout — a RANGE we can't pin, never a crisp line
-  // (see the header note). lamPeak is the Fλ peak wavelength in nm.
-  function drawActivity(lamPeak) {
+  // (see the header note). lamPeak is the Fλ peak wavelength in nm. `fade` (1 for living
+  // stars) is the WD-endgame degeneracy gate, multiplied into every layer's alpha so the
+  // whole overlay fades out together as the remnant degenerates (see draw()).
+  function drawActivity(lamPeak, fade = 1) {
     const logW = Math.log10(BB_EFF_WIDTH * lamPeak / XRAY_DLAM);
     const decFromLog = (logFx) => logFx + logW;             // dec below the BB peak Fλ
 
     // A cool LUMINOUS giant's corona is suppressed past the Linsky–Haisch dividing
     // line — a dimmed, capped band. It lives far below the warm-edge transitions
-    // (Teff < 5000 K), so it stays a discrete branch, no morph.
+    // (Teff < 5000 K), so it stays a discrete branch, no morph. (This is also the branch
+    // the WD endgame opens on — the thermally-pulsing AGB giant — so `fade` carries it.)
     if (logg != null && logg < 3.0 && teff < 5000) {
       drawXrayBand(decFromLog, { logHi: -5, logLo: -8, dim: true,
-        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: 1 });
-      drawGudelBenzRadio(lamPeak, 1e-5, 1);
+        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: fade });
+      drawGudelBenzRadio(lamPeak, 1e-5, fade);
       return;
     }
 
@@ -339,12 +354,12 @@ export function createSED(canvas) {
     const coolA = 1 - gapW;
     if (coolA > 0.01) {
       drawXrayBand(decFromLog, { logHi: lerp(-3, -6, gapW), logLo: -7, dim: false,
-        tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA });
-      drawGudelBenzRadio(lamPeak, 1e-3, coolA);
+        tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA * fade });
+      drawGudelBenzRadio(lamPeak, 1e-3, coolA * fade);
       // (1b) The rotation→X-ray LINE collapsing the band (Chunk 3): cool branch ONLY,
       //      its alpha tied to coolA so it fades WITH the band across the cool→gap morph.
       const line = activityLine();
-      if (line) drawActivityLine(decFromLog, line, coolA);
+      if (line) drawActivityLine(decFromLog, line, coolA * fade);
     }
 
     // (2) The A/early-F X-ray gap: a faint dashed marker that fades IN only in the
@@ -352,12 +367,12 @@ export function createSED(canvas) {
     //     onto its level, so the two read as ONE morph, not a double image — then
     //     back OUT as wind shocks take over toward the hot edge.
     const gapA = smoothstep(6500, 6900, teff) * (1 - hotW);
-    if (gapA > 0.01) drawXrayGap(lamPeak, gapA);
+    if (gapA > 0.01) drawXrayGap(lamPeak, gapA * fade);
 
     // (3) The O/B wind-shock band (~10⁻⁷): a plain crossfade in across the hot edge.
     if (hotW > 0.01) {
       drawXrayBand(decFromLog, { logHi: -6.5, logLo: -7.5, dim: false,
-        tag: "wind X-ray ~10⁻⁷", topLabel: "", botLabel: "", alpha: hotW });
+        tag: "wind X-ray ~10⁻⁷", topLabel: "", botLabel: "", alpha: hotW * fade });
     }
   }
 
@@ -732,13 +747,17 @@ export function createSED(canvas) {
     // caption's line count) varies — so instead the four branches are matched in length
     // (~130–140 chars) to wrap to the same number of lines at any width. The full story
     // lives in the legend tooltip + the panel's ? tip, not here.
-    // Endgame (WD): no non-thermal overlay (no convective dynamo). The blackbody is the
-    // whole story here — the hot central star peaks in the UV, the cold cinder in the IR.
+    // Endgame (WD): the overlay fades over the scrub rather than vanishing — the AGB
+    // giant still carries its suppressed coronal band; the degenerate remnant (no
+    // convective dynamo) is left with none. One fixed-structure sentence for the whole
+    // sequence (so scrubbing can't resize the panel). The blackbody is the through-line:
+    // the hot central star peaks in the UV, the cold cinder in the IR.
     if (endgameMode) {
       caption.textContent =
         `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
-        `(${where}). A white dwarf has no convective dynamo, so no coronal X-ray ` +
-        `overlay is drawn. γ-rays stay empty. Evocative, not predictive.`;
+        `(${where}). The dying giant's evocative coronal X-ray band fades as the bared ` +
+        `core contracts into a degenerate white dwarf, which has no convective dynamo. ` +
+        `γ-rays stay empty. Evocative, not predictive.`;
       return;
     }
 

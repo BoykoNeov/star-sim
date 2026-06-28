@@ -233,9 +233,17 @@ let wdFraction = 0;             // slider position 0..1 inside the WD endgame sc
 let lastWDMass = 1, lastWDFeh = 0;   // last accepted WD progenitor (for the revert)
 let pinAgeToEnd = false;        // one-shot: land the next track refresh at the very end
 
-// The gateway button appears once the star is scrubbed to ~the end of its life; the
-// /endgame data is fetched a little earlier so it's ready when the user gets there.
-const GATE_SHOW = 0.98, GATE_FETCH = 0.9;
+// The gateway button appears only once the star is scrubbed to the VERY end of its
+// visible life (the EAGB giant) — not merely "near" it. The age axis is linear in age,
+// so the post-RGB drama (RGB tip → CHeB → EAGB) is crammed into the last ~2% of the
+// slider; a looser threshold (the old 0.98) put the button up while the marker was still
+// a mid-RGB star, so entering jumped RGB → AGB-giant (the "missing steps" the user felt).
+// At the true end the living EAGB giant is continuous with the endgame's first state (the
+// first thermal pulse), so the corona / X-ray / radius all carry across smoothly. The age
+// slider snaps drags within ~1.5% of the end to exactly 1.0, so reaching it stays a
+// natural "slam to the right" gesture. The /endgame data is still PREFETCHED earlier
+// (GATE_FETCH) so the button is instant when the user lands at the end.
+const GATE_SHOW = 0.999, GATE_FETCH = 0.9;
 
 // The WD endgame slider is a 3-zone piecewise map over the snapped cooling sequence —
 // pulses → rise to the central star → cooling. The boundaries DERIVE from the data

@@ -225,6 +225,32 @@ and reversible exit (granulation + corona + the comp toggle all return). Only th
 pre-existing favicon 404; no JS errors. No JS test harness → the screenshot pass is the
 regression check (as in Phases 2–5).
 
+**Follow-up (continuous living→WD transition) — ✅ DONE** (frontend-only; 137 unchanged).
+User report: switching into the endgame "feels some steps are missing" — the corona, the
+SED coronal X-ray/radio band, and (slightly) the radius all popped. Root cause (curl
+`/state`+`/endgame`, advisor-reviewed): the endgame's first state is the **very next track
+row** after the living EAGB endpoint (mass 1: R 82.8→86.6, Teff 3624→3601, activity
+0.82→0.83 — continuous *data*), but the corona (`star.js`) and the SED X-ray overlay
+(`sed.js`) **hard-switched on the wd mode flag** while granulation already faded via a log g
+gate. Fix = drive **corona AND the SED X-ray overlay by the SAME degeneracy gate
+`clamp((4−logg)/3)`** granulation uses → all three fade together: the opening AGB giant keeps
+the boil + glow + dimmed coronal band it had as a living star (a *continuation*), dying only
+as the bared core degenerates (gDeg→0 at log g≳4 → smooth glowless cold WD, no band). Living
+stars pass gDeg=1 → byte-identical. The **radius pop was a latent bigger bug** (advisor
++ curl): the gateway showed at `GATE_SHOW=0.98`, but the linear-age axis crams RGB-tip→CHeB→
+EAGB into the last ~2%, so at 0.98 the living star is still a **mid-RGB star** (R=8.4) →
+entering jumped RGB→AGB-giant (10×). Fix = raise `GATE_SHOW`→**0.999** (gateway only at the
+true end, where the step to states[0] is imperceptible — displayRadius 2.42→2.43); the age
+snap (drags within 1.5% → exactly 1.0) keeps it a natural "slam right", `/endgame` still
+prefetches at 0.9. **Blocker verified first:** corona continuity needs endgame
+`states[0].activity` ≈ the living end-row's (the old hard-off never read it) — curl confirmed
+(0.82↔0.83). **Spectrum held out of scope** (advisor): the WD placeholder is honest (no
+atmosphere grid at log g 7–9); a giant-phase "show the real spectrum" reintroduces the
+wrong-clamp Chunk 2 avoided — same symptom, separate Chunk-6 decision. Verified via Playwright
+(bundled Chromium): gateway hidden at 0.95/0.98, shown at 1.0; WD entry indistinguishable from
+the living EAGB end (corona ring + boil) + 324 coral X-ray px; cold WD smooth glowless + 0
+coral px; reversible exit; only the favicon 404.
+
 **Goal:** replace the wrong-looking first-pass renderers with WD-correct ones.
 **Do:** a **degenerate-sphere shader** — Earth-scale relative size, smooth (no
 granulation), quadratic limb darkening, **cooling-color shift** blue-white →
