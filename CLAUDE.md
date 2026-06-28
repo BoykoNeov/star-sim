@@ -1401,6 +1401,34 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   glowless orange sphere + 0 coral px (band fully faded); reversible exit; only the pre-existing
   favicon 404. No JS test harness → the screenshot/pixel pass *is* the regression check (as in
   Phases 2–5); **pytest unchanged (137)** — frontend-only. See [[star-sim-wr-wd-endgame-plan]].
+- **Done (UX, Lane–Emden panel earns its keep in the WD endgame — frontend-only):** the user asked
+  whether the Lane–Emden interior panel is *irrelevant* to the white-dwarf endgame — the answer flips
+  it: a white dwarf **IS** a degenerate polytrope (n≈1.5 non-relativistic → **n=3** as the mass nears
+  the **Chandrasekhar limit**; the n=3, γ=4/3 limit is *why* there's a maximum mass — the same physics
+  behind the endgame mass–radius relation + the WD→SN boundary), so it's the *most* relevant the panel
+  ever gets, not the least. The user chose **"hint, keep n user-set"** (over auto-deriving n, which is
+  the honest carve-out here — unlike the rejected MS-star auto-derive — but departs from the decoupled-
+  toy design): in `body.wd-mode` a gold callout **swaps in for** the general "not the real interior"
+  intro ("this remnant's degenerate core is genuinely a polytrope … set n≈1.5 → n=3 near Chandrasekhar"
+  + a `?` with the full degenerate-EOS depth: γ=5/3↔4/3, ~1.4 M☉, the real structure interpolates so
+  n=1.5–3 *brackets* it). **The advisor caught that hiding the intro made a latent caption clash
+  worse:** the intro was the "teaching idealization" disclaimer that *reconciled* lane.js's general n=3
+  caption ("a Sun-like radiative star") — gone, the WD hint sat directly above a caption calling n=3 a
+  Sun-like star with nothing bridging them. Fix (the advisor's key unlock — **editing a static n-only
+  caption does NOT break decoupling**: decoupling = not feeding *star state* into the panel, which still
+  holds; I'd wrongly conflated "don't touch lane.js" with "keep it decoupled"): the **n=3 landmark
+  caption now carries BOTH framings** ("…a Sun-like radiative star — and, by the same maths, a
+  relativistic degenerate gas: a white dwarf near the Chandrasekhar mass…"), both true; the **n=1.5
+  caption already carried both** (it always named white-dwarf cores), so the hint + the two landmark
+  captions now tell one coherent story. **All HTML + CSS + the one caption string — lane.js stays
+  decoupled (n the sole driver, never wired to `refresh`), no backend/API/spine touch, pytest unchanged
+  (137).** Verified via Playwright bundled Chromium (the `chrome --headless` hijack caveat) at **1440
+  AND 390px** (the documented per-chunk phone check): live→intro / wd→hint swap + reverse on exit, the
+  n slider/readout stay live in wd-mode (drag to n=3 → ξ₁ 6.90, ρc/ρ̄ 54.18), hint wraps cleanly at
+  phone width (no clip), 0 JS errors. **Known caveat (advisor, not gated):** the static hint shows for
+  the *whole* wd-mode scrub incl. the opening TPAGB-giant rows where "degenerate core" is slightly
+  premature — same character as the tracked Chunk-6 spectrum-placeholder issue, milder (a mode-level
+  note, the panel's decoupled). See [[star-sim-wr-wd-endgame-plan]].
 - **Next:** the canonical cross-plan index of everything proposed-but-unbuilt is
   **`docs/plans/ROADMAP.md`** (SED non-thermal + WR/WD endgame + the rotation/subpopulation
   atlas + the spectra-density stragglers, one priority view) — update it (not a second list)

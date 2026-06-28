@@ -515,6 +515,18 @@ body.wd-mode #sed-rot { display: none; }
    (the structure cross-section draws its own labels), so hide them. */
 body.wd-mode .comp-modes,
 body.wd-mode .comp-panel .legend { display: none; }
+/* In the white-dwarf endgame the Lane–Emden panel finally earns its keep: a white
+   dwarf genuinely IS a degenerate polytrope (n≈1.5 non-relativistic → n=3 near the
+   Chandrasekhar mass), so swap the general "not the real interior" intro for a hint
+   pointing at the physically meaningful indices. n stays user-set — lane.js is
+   untouched and decoupled; this is pure HTML + CSS driven off the wd-mode class. */
+.lane-wd-hint { display: none; }
+body.wd-mode .lane-intro { display: none; }
+body.wd-mode .lane-wd-hint {
+  display: block; margin: 0 0 12px; color: var(--accent);
+  font-size: 12.5px; line-height: 1.5;
+  border-left: 3px solid rgba(255, 210, 127, 0.5); padding: 2px 0 2px 10px;
+}
 .endgame-resnap-note {
   margin: 8px 0 0; color: #ffb07a; font-size: 12.5px; line-height: 1.45;
   border: 1px dashed rgba(255, 176, 122, 0.5); border-radius: 6px; padding: 6px 10px;

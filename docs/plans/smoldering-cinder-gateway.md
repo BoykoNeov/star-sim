@@ -257,6 +257,25 @@ wrong-clamp Chunk 2 avoided — same symptom, separate Chunk-6 decision. Verifie
 the living EAGB end (corona ring + boil) + 324 coral X-ray px; cold WD smooth glowless + 0
 coral px; reversible exit; only the favicon 404.
 
+**Follow-up (Lane–Emden panel in the WD endgame) — ✅ DONE** (frontend-only; 137 unchanged).
+The user asked whether the Lane–Emden interior panel is *irrelevant* in wd-mode (every other
+panel transforms; this decoupled sibling just sits there showing the user's chosen n). The answer
+flips it: a white dwarf **IS** a degenerate polytrope (n≈1.5 non-relativistic → **n=3** as the mass
+nears the **Chandrasekhar limit**; the n=3/γ=4/3 limit is *why* there's a maximum mass — the same
+physics behind this gateway's mass–radius relation + the WD→SN boundary), so it's the *most* relevant
+the panel ever gets. User chose **"hint, keep n user-set"** (over auto-deriving n — the one honest
+carve-out, but it departs from the decoupled-toy design). Built: a `body.wd-mode` gold callout that
+**swaps in for** the general "not the real interior" intro, pointing at n≈1.5–3. **Advisor caught**
+that hiding the intro made a latent caption clash worse (the intro reconciled lane.js's general n=3
+"Sun-like radiative star" caption; gone, the WD hint sat above a Sun-star label) — and the key unlock:
+**editing a static n-only caption does NOT break decoupling** (decoupling = not feeding *star state*
+into the panel; n stays the sole driver). Fix: the **n=3 landmark caption now carries both framings**
+(Sun-like radiative star *and* a relativistic degenerate gas near Chandrasekhar); n=1.5 already named
+white-dwarf cores. All HTML + CSS + one caption string; lane.js stays decoupled. Verified Playwright
+at 1440 + **390px** (the n slider/readout stay live; hint wraps clean, no clip; 0 JS errors).
+**Caveat (not gated):** the hint shows for the whole scrub incl. opening TPAGB-giant rows where
+"degenerate core" is premature — same character as the Chunk-6 spectrum-placeholder note, milder.
+
 **Goal:** replace the wrong-looking first-pass renderers with WD-correct ones.
 **Do:** a **degenerate-sphere shader** — Earth-scale relative size, smooth (no
 granulation), quadratic limb darkening, **cooling-color shift** blue-white →

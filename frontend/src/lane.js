@@ -25,7 +25,7 @@ const PRESETS = [
   { n: 0,   label: "0",   meaning: "n = 0 · uniform density — the crudest guess (the same density everywhere). No real star is this simple; it is the anchor at one extreme." },
   { n: 1,   label: "1",   meaning: "n = 1 · the exact closed form θ = sin ξ / ξ — a clean mathematical checkpoint, not a particular kind of star." },
   { n: 1.5, label: "1.5", meaning: "n = 1.5 · fully convective stars (red dwarfs, giant envelopes) and non-relativistic degenerate gas (white-dwarf & brown-dwarf cores)." },
-  { n: 3,   label: "3",   meaning: "n = 3 · the textbook (Eddington) approximation to a Sun-like radiative star — its centre is ~54× denser than its average (the real Sun: ~110×)." },
+  { n: 3,   label: "3",   meaning: "n = 3 · the textbook (Eddington) approximation to a Sun-like radiative star — and, by the same maths, a relativistic degenerate gas: a white dwarf near the Chandrasekhar mass. Its centre is ~54× denser than its average (the real Sun: ~110×)." },
   { n: 5,   label: "5",   meaning: "n = 5 · the gas is so compressible the star has no surface at all — its radius runs to infinity. The mathematical edge of the family." },
 ];
 const N_MIN = 0, N_MAX = 5, N_DEFAULT = 3;

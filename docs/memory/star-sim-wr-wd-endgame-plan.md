@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the hot-end-can't-extend spectrum finding.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding.
 metadata:
   type: project
 ---
@@ -178,6 +178,32 @@ endgame by the **star's state (a degeneracy gate), not a mode flag** — so the 
 not a cut; and a too-loose end-of-life threshold + a linear-age axis = the visible "missing steps". Verified
 Playwright (bundled Chromium): gateway hidden 0.95/0.98 / shown 1.0; WD entry indistinguishable from the
 living EAGB end (corona ring+boil)+324 coral X-ray px; cold WD smooth glowless+0 coral px; reversible exit.
+
+**LANE–EMDEN-IN-WD FOLLOW-UP DONE (frontend-only, pytest UNCHANGED 137).** User asked: is the
+Lane–Emden interior panel *irrelevant* to the WD endgame (it's the one panel that doesn't transform —
+a decoupled sibling showing the user's chosen n)? **The answer FLIPS it:** a white dwarf **IS** a
+degenerate polytrope (n≈1.5 non-relativistic → **n=3** as the mass nears the **Chandrasekhar limit**;
+the n=3/γ=4/3 limit is *why* there's a max mass — same physics as this gateway's mass–radius relation +
+the WD→SN boundary), so it's the *most* relevant the panel ever gets. **n.b. auto-deriving n is the ONE
+honest carve-out here** (a WD genuinely is a polytrope) vs the rejected MS-star auto-derive (MIST gives
+no convective/radiative split → faked fit) — but the user chose **"hint, keep n user-set"** (preserve
+the decoupled-toy design). Built: a `body.wd-mode` gold callout that **swaps in for** the general "not
+the real interior" intro (`.lane-wd-hint` shown, `.lane-intro` hidden via CSS), pointing at n≈1.5–3.
+**ADVISOR caught two things:** (1) hiding the intro made a latent caption clash WORSE — the intro was
+the disclaimer that *reconciled* lane.js's general n=3 caption ("a Sun-like radiative star"); gone, the
+WD hint sat directly above a Sun-star label with nothing bridging. (2) **THE KEY UNLOCK / a premise I had
+WRONG: editing a static n-only caption does NOT break decoupling.** Decoupling = not feeding *star state*
+(`refresh`/`refreshTrack`) into the panel; a richer n-only string keeps n the sole driver. I'd conflated
+"don't touch lane.js" with "keep it decoupled" — they're different. FIX = enrich the **n=3 landmark
+caption to carry BOTH framings** ("…a Sun-like radiative star — and, by the same maths, a relativistic
+degenerate gas: a white dwarf near the Chandrasekhar mass…"), both true; **n=1.5 already carried both**
+(always named white-dwarf cores), so hint + the two captions now tell one coherent story. All HTML + CSS
++ one caption string; lane.js stays decoupled (never wired to refresh). Verified Playwright bundled
+Chromium at **1440 AND 390px** (the documented per-chunk phone check — the overflow flag was the
+hover-tooltip element, hint text wraps clean): live→intro / wd→hint swap + reverse on exit, n
+slider/readout stay live in wd-mode (drag n=3 → ξ₁ 6.90, ρc/ρ̄ 54.18), 0 JS errors. **CAVEAT (advisor,
+not gated):** the static hint shows for the whole wd-mode scrub incl. the opening TPAGB-giant rows where
+"degenerate core" is premature — same character as the Chunk-6 spectrum-placeholder note, milder.
 
 **Remaining: Chunks 4–7** (WR mode shell + HR-to-250kK + stripped-surface composition, then the WR 3D
 wind shader, then the data-gated WR/WD spectra above).
