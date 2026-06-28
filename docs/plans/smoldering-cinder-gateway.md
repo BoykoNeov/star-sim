@@ -236,8 +236,14 @@ gate. Fix = drive **corona AND the SED X-ray overlay by the SAME degeneracy gate
 `clamp((4−logg)/3)`** granulation uses → all three fade together: the opening AGB giant keeps
 the boil + glow + dimmed coronal band it had as a living star (a *continuation*), dying only
 as the bared core degenerates (gDeg→0 at log g≳4 → smooth glowless cold WD, no band). Living
-stars pass gDeg=1 → byte-identical. The **radius pop was a latent bigger bug** (advisor
-+ curl): the gateway showed at `GATE_SHOW=0.98`, but the linear-age axis crams RGB-tip→CHeB→
+stars pass gDeg=1 → byte-identical. **Mid-scrub refinement (2nd advisor pass + state scan):**
+routing the endgame through the living Teff-regime machinery, its hard coolgiant→cool boundary at
+5000 K would flash the band UP to the brighter dynamo level as the post-AGB contraction races through
+5000–6500 K — a **1-row pop for ~2 M☉** (none for 1/3 M☉; their rows skip the zone). Closed by drawing
+**only the dimmed "dying-giant" band gated by gDeg** in the endgame (no regime switches — a contracting
+post-AGB core is not a cool MS dynamo / A-F gap / O-wind star), so the band stays at one level and fades
+monotonically (verified the 2 M☉ danger row now flat: ymean 82→83, count fading not jumping). The
+**radius pop was a latent bigger bug** (advisor + curl): the gateway showed at `GATE_SHOW=0.98`, but the linear-age axis crams RGB-tip→CHeB→
 EAGB into the last ~2%, so at 0.98 the living star is still a **mid-RGB star** (R=8.4) →
 entering jumped RGB→AGB-giant (10×). Fix = raise `GATE_SHOW`→**0.999** (gateway only at the
 true end, where the step to states[0] is imperceptible — displayRadius 2.42→2.43); the age

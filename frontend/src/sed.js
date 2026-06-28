@@ -295,7 +295,7 @@ export function createSED(canvas) {
       drawActivity(lamPeak);
     } else {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
-      if (gDeg > 0.01) drawActivity(lamPeak, gDeg);
+      if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // endgame: dying-giant band only
     }
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
@@ -326,21 +326,37 @@ export function createSED(canvas) {
   // dashed "X-ray gap" sliver right where it lands (one object shrinking, not two
   // ghosts crossfading); the secondary gap↔hot edge is a plain alpha crossfade.
   // Drawn hatched/translucent throughout — a RANGE we can't pin, never a crisp line
-  // (see the header note). lamPeak is the Fλ peak wavelength in nm. `fade` (1 for living
-  // stars) is the WD-endgame degeneracy gate, multiplied into every layer's alpha so the
-  // whole overlay fades out together as the remnant degenerates (see draw()).
-  function drawActivity(lamPeak, fade = 1) {
+  // (see the header note). lamPeak is the Fλ peak wavelength in nm. `fade`/`endgame` are
+  // the WD path only: when endgame, draw a single dimmed band at alpha `fade` (the
+  // degeneracy gate) and skip the living regime machinery (see the block below + draw()).
+  function drawActivity(lamPeak, fade = 1, endgame = false) {
     const logW = Math.log10(BB_EFF_WIDTH * lamPeak / XRAY_DLAM);
     const decFromLog = (logFx) => logFx + logW;             // dec below the BB peak Fλ
+
+    // WD endgame: the only honest non-thermal feature is the dying giant's SUPPRESSED
+    // corona, fading as the bared core degenerates — never a cool main-sequence dynamo
+    // (the post-AGB contraction is NOT a dynamo star) nor the A/F-gap / O-wind branches.
+    // So draw just the dimmed band at the degeneracy-gated alpha, with NO Teff-regime
+    // switches: the contraction races up through ~5000–6500 K in a row or two, and the
+    // hard coolgiant→cool branch boundary there would briefly flash the band UP to the
+    // brighter dynamo level (measured: a 1-row pop for ~2 M☉ progenitors). One dimmed
+    // band fading monotonically with gDeg is both smoother and more honest.
+    if (endgame) {
+      drawXrayBand(decFromLog, { logHi: -5, logLo: -8, dim: true,
+        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: fade });
+      drawGudelBenzRadio(lamPeak, 1e-5, fade);
+      return;
+    }
 
     // A cool LUMINOUS giant's corona is suppressed past the Linsky–Haisch dividing
     // line — a dimmed, capped band. It lives far below the warm-edge transitions
     // (Teff < 5000 K), so it stays a discrete branch, no morph. (This is also the branch
-    // the WD endgame opens on — the thermally-pulsing AGB giant — so `fade` carries it.)
+    // the living EAGB giant shows just before the gateway — so the endgame's identical
+    // dimmed band above lands continuous across the click.)
     if (logg != null && logg < 3.0 && teff < 5000) {
       drawXrayBand(decFromLog, { logHi: -5, logLo: -8, dim: true,
-        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: fade });
-      drawGudelBenzRadio(lamPeak, 1e-5, fade);
+        tag: "coronal X-ray", topLabel: "10⁻⁵", botLabel: "10⁻⁸", alpha: 1 });
+      drawGudelBenzRadio(lamPeak, 1e-5, 1);
       return;
     }
 
@@ -354,12 +370,12 @@ export function createSED(canvas) {
     const coolA = 1 - gapW;
     if (coolA > 0.01) {
       drawXrayBand(decFromLog, { logHi: lerp(-3, -6, gapW), logLo: -7, dim: false,
-        tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA * fade });
-      drawGudelBenzRadio(lamPeak, 1e-3, coolA * fade);
+        tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA });
+      drawGudelBenzRadio(lamPeak, 1e-3, coolA);
       // (1b) The rotation→X-ray LINE collapsing the band (Chunk 3): cool branch ONLY,
       //      its alpha tied to coolA so it fades WITH the band across the cool→gap morph.
       const line = activityLine();
-      if (line) drawActivityLine(decFromLog, line, coolA * fade);
+      if (line) drawActivityLine(decFromLog, line, coolA);
     }
 
     // (2) The A/early-F X-ray gap: a faint dashed marker that fades IN only in the
@@ -367,12 +383,12 @@ export function createSED(canvas) {
     //     onto its level, so the two read as ONE morph, not a double image — then
     //     back OUT as wind shocks take over toward the hot edge.
     const gapA = smoothstep(6500, 6900, teff) * (1 - hotW);
-    if (gapA > 0.01) drawXrayGap(lamPeak, gapA * fade);
+    if (gapA > 0.01) drawXrayGap(lamPeak, gapA);
 
     // (3) The O/B wind-shock band (~10⁻⁷): a plain crossfade in across the hot edge.
     if (hotW > 0.01) {
       drawXrayBand(decFromLog, { logHi: -6.5, logLo: -7.5, dim: false,
-        tag: "wind X-ray ~10⁻⁷", topLabel: "", botLabel: "", alpha: hotW * fade });
+        tag: "wind X-ray ~10⁻⁷", topLabel: "", botLabel: "", alpha: hotW });
     }
   }
 

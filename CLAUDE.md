@@ -1373,7 +1373,15 @@ Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
   endgame opens on keeps the boil + glow + (dimmed) coronal band it had as a living star (a
   *continuation*, not a cut), and they die with the dynamo only as the bared core contracts into the
   degenerate remnant (gDeg→0 at log g≳4 → smooth glowless cold WD, no X-ray band — physically correct,
-  no convective dynamo). Living stars pass gDeg=1 → byte-identical. **The radius pop was a latent
+  no convective dynamo). Living stars pass gDeg=1 → byte-identical. **A second advisor pass caught a
+  mid-scrub artifact my endpoint-only checks missed:** routing the endgame through the living
+  Teff-regime machinery, its hard coolgiant→cool branch boundary at 5000 K would flash the band UP to
+  the brighter dynamo level as the post-AGB contraction races through 5000–6500 K — scanning the real
+  `/endgame` states found a **1-row pop for ~2 M☉ progenitors** (none for 1/3 M☉, whose rows skip the
+  zone). Closed it more honestly: in the endgame the SED draws **only the dimmed "dying-giant" band
+  gated by gDeg** (a contracting post-AGB core is not a cool MS dynamo, nor an A/F gap, nor an O-wind
+  star), so the band stays pinned at one level and fades monotonically — verified the 2 M☉ danger row
+  is now flat (band ymean 82→83 across it, count fading not jumping). **The radius pop was a latent
   BIGGER bug the advisor surfaced + curl confirmed:** the gateway showed at `GATE_SHOW=0.98`, but the
   linear-age axis crams the whole post-RGB drama (RGB tip→CHeB→EAGB) into the last ~2%, so at 0.98 the
   living star is still a **mid-RGB star** (R=8.4) — entering then jumped RGB→AGB-giant (R=86.6, 10×).
