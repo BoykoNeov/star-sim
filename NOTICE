@@ -1,0 +1,26 @@
+Star Simulator
+Copyright 2026 Boyko Neov
+
+This software was originally created by Boyko Neov.
+
+This product is licensed under the Apache License, Version 2.0 (see the LICENSE
+file). Per Section 4(d) of that license, the attribution in this NOTICE file
+must be retained in redistributions and derivative works.
+
+================================================================================
+Third-party components
+================================================================================
+
+This product bundles read_mist_models.py — the MIST project's stellar-track /
+isochrone parser — kept verbatim at:
+
+    backend/star_sim/providers/_vendor/read_mist_models.py
+
+That file is Copyright (c) 2017 Jieun Choi and is distributed under the MIT
+License, a copy of which sits beside it as LICENSE.MIST_codes.txt.
+Source: https://github.com/jieunchoi/MIST_codes
+
+The MIST/MESA stellar-evolution tracks and the model-atmosphere spectral grids
+that this software downloads at build time are NOT part of this repository and
+are NOT redistributed here. Each carries its own upstream license and citation
+requirements; see backend/docs/ for their provenance.

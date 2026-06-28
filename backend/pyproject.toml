@@ -3,6 +3,12 @@ name = "star-sim-backend"
 version = "0.1.0"
 description = "Backend for the Star Simulator — serves StellarState over localhost (see ../STAR_SIM_SPEC.md)."
 requires-python = ">=3.11"
+# Apache-2.0 (see ../LICENSE, ../NOTICE). Use the classifier rather than the
+# SPDX-string `license = "Apache-2.0"` form, which needs setuptools>=77 — we pin
+# >=68. The classifier is recognized across versions.
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+]
 
 # Lower-bound pins: this runs locally only, so we want recent scientific
 # tooling without freezing to exact builds. Tighten to == once a known-good

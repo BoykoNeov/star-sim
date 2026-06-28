@@ -115,3 +115,17 @@ frontend/
   src/{main,star,hr,comp,color,canvas}.js  # star.js = §7 shader (color×granulation×limb×rotation + corona); color.js = Planck→CIE→sRGB; HR diagram, composition panel, HiDPI canvas helper
 data/                  # downloaded grids (gitignored; fetched at build time)
 ```
+
+## License
+
+Star Simulator is licensed under the **Apache License, Version 2.0** — you are
+free to use, modify, and redistribute it, including in derivative and commercial
+works. The one obligation is **attribution**: keep the [`NOTICE`](./NOTICE) file
+(which credits the original author, Boyko Neov) in any redistribution or
+derivative work, per Section 4(d) of the license. See [`LICENSE`](./LICENSE) for
+the full text.
+
+One bundled third-party file, `read_mist_models.py` (the MIST track parser), is
+MIT-licensed by Jieun Choi — see [`NOTICE`](./NOTICE). The stellar-evolution and
+spectral data grids the app downloads at build time are **not** part of this
+repository and carry their own upstream licenses.
