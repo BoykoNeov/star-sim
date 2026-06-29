@@ -325,15 +325,20 @@ deliberate deferral.
   the WD/WR buttons. This is a pedagogy change beyond the literal ask, so it was **explicitly
   confirmed with the user** (they chose "From the start (foreshadow)" over "only at end-of-life",
   the latter of which would have re-introduced the rejected jitter/empty-reserve).
-- **Resnap note (`#endgame-resnap-note`) — DEFERRED (conscious, not dropped).** Unlike the
-  gateway, the resnap note has **no persistent content to fill a reserve with**, so reserving
-  it produces exactly the empty space the user rejected. It appears **only on a *failed*
-  re-snap inside an endgame** (a deliberate exploratory mass/[Fe/H] drag to a fate that doesn't
-  support the current endgame), so it's the lowest-value jitter. The advisor retracted its
-  earlier "reserve it without asking" once this distinction was clear. **Clean close-out option
-  if revisited:** move the note **below** the sliders (it's feedback about the mass control, so
-  it belongs there), where it grows the panel downward instead of shoving the sliders under the
-  cursor — no empty space, no reserve.
+- **Resnap note (`#endgame-resnap-note`) — initially DEFERRED, then DONE in the Chunk D
+  session.** Unlike the gateway, the resnap note has **no persistent content to fill a reserve
+  with**, so reserving it produces exactly the empty space the user rejected. It appears **only
+  on a *failed* re-snap inside an endgame** (a deliberate exploratory mass/[Fe/H] drag to a fate
+  that doesn't support the current endgame), so it's the lowest-value jitter. The advisor
+  retracted its earlier "reserve it without asking" once this distinction was clear. The clean
+  close-out — **move the note below the sliders** (it's feedback about the mass control, and that
+  way it grows the panel downward instead of shoving the sliders under the cursor — no empty
+  space, no reserve) — was **shipped alongside Chunk D**: the `<p id="endgame-resnap-note">` moved
+  out of `#endgame-bar` (top of Controls) to **after `#endgame-age-caption`, before the gateway**.
+  The CSS class is unscoped (not `.endgame-bar`-scoped) so the move was pure markup; `setWDResnapNote`
+  still drives its `hidden`; `exitEndgame` still clears it on return to live (no parent-`hidden`
+  reliance). Playwright-verified: in WD mode, dragging mass into the SN range fires the note with
+  the right text, and its top sits **below the age slider's bottom**.
 
 **Verification (Playwright, the regression gate):** fresh + saved-layout profiles; Sun WD button
 greyed (transparent bg) at mid-life → enabled/filled-accent (`rgb(255,210,127)`) at end-of-life,
@@ -389,6 +394,56 @@ the age slider, promptly.
 ### Consult
 Optional — consult only if the repro reveals the fix touches the token/latest-wins
 machinery (that code is subtle and load-bearing).
+
+### Status — ✅ BUILT (2026-06-29)
+The repro **disproved the "never appears" logic bug** — and the advisor predicted exactly
+this. Post-Chunk-C the gateway button is always-present and `updateGateway` runs on every
+`refreshTrack`, so changing mass at end-of-life **does** auto-show the new fate's button with
+**no age nudge**. Measured (Playwright, m=40 SN → m=50 WR, age untouched): the WR button
+appeared **enabled at +628 ms**. So this was **suspect (a) — latency/perception**, not (b)
+logic. Two confirmed latency causes from the network trace:
+- The `/endgame` fetch is **serialized after** `/track` (fires at +380 ms, *after* `/track`
+  resolves at +327 ms) — total wait = track + endgame, not the max.
+- A **double-fetch**: `refreshTrack` fires `fetchEndgamePreview` (tok A), then its closing
+  `updateLiveGateway → maybeFetchEndgame` fires a *second* `/endgame` for the same key (tok B,
+  +458 ms), which invalidates tok A via the shared token. Two ~1 MB fetches compete.
+
+The user-visible symptom: `refreshTrack` clears the gateway **children** then waits on that
+fetch, so the reserved slot is **blank for ½–2 s** — reads as "nothing happened," which is why
+nudging the age slider (which re-runs `updateGateway` against the now-warm fetch) *looked*
+required.
+
+**Fix — two parts (frontend-only), settled by a second advisor consult:**
+
+1. **A muted italic "Computing the star's fate…" placeholder** (`#gateway-loading`) fills the
+   reserved slot during the fetch so it never reads blank. `updateGateway` owns it, gated on a
+   real in-flight flag: `els.gatewayLoading.hidden = !(endgameLoading && !eg)` — shown only while
+   a fetch is **in flight** AND no fate is resolved. `endgameLoading` is set true when a
+   live-gateway fetch starts (the `refreshTrack` clear + `fetchEndgamePreview` /
+   `maybeFetchEndgame`) and cleared on settle by the **latest token only**, on **success OR
+   failure**. (The first cut gated on `hidden = !!eg`; the advisor caught that as dead code — `eg`
+   stays null on a fetch failure, so `!!eg` would *re-show* the placeholder forever → a stuck
+   spinner. The flag fixes it; verified by aborting the `/endgame` route in Playwright — the
+   placeholder clears, doesn't stick.)
+2. **De-duped the double-fetch — and it shortens the real gap.** `refreshTrack`'s tail now calls
+   `updateGateway()` instead of `updateLiveGateway()`. The old tail fired a *second* `/endgame`
+   (`maybeFetchEndgame`, tok B) which — sharing `endgameToken` — invalidated the
+   `fetchEndgamePreview` (tok A) response that had **already landed** (+406 ms), forcing the button
+   to wait for the later of two competing ~1 MB fetches. The advisor sharpened this: it doesn't
+   just waste a fetch, it *discards a completed response*. The single-fetch path is **safe — it
+   touches no token internals** (the age-scrub path still calls `maybeFetchEndgame` directly;
+   `fetchEndgamePreview` is the sole repopulator on a track change). Measured: WR button now
+   enabled at **+474 ms** (was +628 ms), single `/endgame` fetch.
+
+Both verified (Playwright): placeholder bridges the gap and the **correct** fate resolves across
+**all** WD↔SN↔WR transitions both ways; `/endgame`-failure → placeholder clears (no stuck
+spinner); zero page errors.
+
+**Deliberately NOT done (the genuine backend/scope item):**
+- **The true latency root** is fetching ~1 MB of `states` just to render a button that only needs
+  the *type*. A tiny type-only `/endgame?meta=1` (or returning the type in the `/track` payload)
+  would make the button near-instant — but that's a **backend/scope** change the plan explicitly
+  excludes; flagged to the user, not expanded silently.
 
 ---
 

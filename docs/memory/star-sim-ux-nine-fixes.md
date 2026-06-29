@@ -1,6 +1,6 @@
 ---
 name: star-sim-ux-nine-fixes
-description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing), B (endgame quick-wins) & C (readout panel split + gateway greyed-button) BUILT; D–E planned. Plan docs/plans/polished-cinder-frame.md.
+description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing), B (endgame quick-wins), C (readout panel split + gateway greyed-button) & D (gateway auto-appear = latency, not logic → "computing the star's fate…" placeholder; + resnap note moved below sliders) BUILT; E (age-slider remap) planned. Plan docs/plans/polished-cinder-frame.md.
 metadata: 
   node_type: memory
   type: project
@@ -89,11 +89,14 @@ three files (`frontend/index.html`, `frontend/src/main.js`, `frontend/styles.css
   `isSn`, so every 8–40 M☉ star shows the honest core-collapse dead-end note (no Continue; remnant
   not modeled) throughout life, consistent with the WD/WR buttons. Pedagogy change beyond the
   literal ask → explicitly confirmed (user chose "From the start (foreshadow)").
-- **Resnap note (`#endgame-resnap-note`) — DEFERRED (conscious).** Unlike the gateway it has **no
-  persistent content to fill a reserve**, so reserving = the empty space the user rejected; it
-  appears only on a *failed* re-snap inside an endgame (deliberate exploratory drag). Advisor
-  retracted its earlier "reserve it." Clean close-out if revisited: move the note **below** the
-  sliders (it's mass-control feedback) so it grows the panel downward, no empty space.
+- **Resnap note (`#endgame-resnap-note`) — deferred in C, then MOVED in the D session.** It has
+  **no persistent content to fill a reserve**, so reserving = the empty space the user rejected;
+  it appears only on a *failed* re-snap inside an endgame (deliberate exploratory drag). The clean
+  close-out shipped: moved the `<p>` out of `#endgame-bar` (top of Controls) to **after
+  `#endgame-age-caption`, before the gateway** — below the sliders, so it grows the panel
+  **downward** instead of shoving the sliders under the cursor. CSS class is unscoped (pure markup
+  move); `setWDResnapNote` drives `hidden`; `exitEndgame` clears it on return to live. Verified:
+  note fires with right text, top sits below the age slider's bottom.
 
 **Gotcha for future gateway work:** the gateway block no longer toggles `hidden` in live mode
 (only enter/exitEndgame do); `updateGateway` returns early unless `mode==="live"` and always sets
@@ -102,6 +105,43 @@ visibility — visibility is `hidden` per fate type. Verified Playwright: Sun gr
 note at genuine mid-MS (ageFrac 0.30), m=120 WR disabled at genuine mid-MS, both layout profiles,
 zero page errors.
 
-**D–E still planned**: D gateway auto-appear (repro-driven; note the always-present greyed button
-may have shifted its dynamics — re-repro before fixing), E age-slider remap (design). Related:
-[[star-sim-wr-wd-endgame-plan]].
+**Chunk D — gateway auto-appear (item 3) — ✅ BUILT 2026-06-29**, three files
+(`frontend/index.html`, `frontend/src/main.js`, `frontend/styles.css`). The re-repro
+(warned about in C) **disproved the "never appears" logic bug**: post-C the always-present
+button + `updateGateway`-on-every-`refreshTrack` mean a mass change at end-of-life **does**
+auto-show the new fate with **no age nudge** (measured: WR button enabled at **+628 ms**,
+m=40 SN → m=50 WR, age untouched). So it was **latency/perception, not logic** (advisor
+predicted this exactly). Causes: `/endgame` fetch **serialized after** `/track`, **+** a
+**double-fetch** (`fetchEndgamePreview` tok A, then `maybeFetchEndgame` tok B invalidates A —
+two ~1 MB fetches). Symptom: `refreshTrack` clears the gateway children then waits ½–2 s on
+that fetch → **blank reserved slot** reads as "nothing happened"; nudging age just re-ran
+`updateGateway` against the warm fetch (why it *looked* required).
+
+Fix is **two parts** (a second advisor consult sharpened both):
+- **A muted italic "Computing the star's fate…" placeholder** (`#gateway-loading`) fills the
+  slot during the fetch. Gated on a real in-flight flag: `updateGateway` does
+  `els.gatewayLoading.hidden = !(endgameLoading && !eg)` (shown only while a fetch is in flight
+  AND no fate resolved). `endgameLoading` set true at the `refreshTrack` clear + in
+  `fetchEndgamePreview`/`maybeFetchEndgame`; cleared on settle **by the latest token only**, on
+  success OR failure. **First cut gated on `!!eg` — advisor caught it as DEAD CODE**: `eg` stays
+  null on a fetch failure so `!!eg` re-shows the placeholder forever (stuck spinner). Flag fixes
+  it; verified by aborting `/endgame` in Playwright (placeholder clears, doesn't stick).
+- **De-duped the double-fetch — shortens the REAL gap** (not just masks it). `refreshTrack` tail
+  `updateLiveGateway()` → `updateGateway()`. The old tail fired a 2nd `/endgame`
+  (`maybeFetchEndgame` tok B) that, sharing `endgameToken`, **invalidated the already-landed
+  (+406 ms) `fetchEndgamePreview` (tok A) response** → button waited for the later of two
+  competing ~1 MB fetches. Safe: touches **no token internals** (age-scrub path still calls
+  `maybeFetchEndgame`; `fetchEndgamePreview` is the sole repopulator on a track change). Button
+  now **+474 ms** (was +628), single fetch.
+- **Still NOT done (genuine backend/scope):** the true root — fetching ~1 MB of `states` for a
+  button needing only the *type*. A type-only `/endgame?meta=1` (or type in `/track`) → near-
+  instant, but backend, excluded by the plan; flagged to user.
+
+**Gotcha for future gateway work:** the placeholder is gated on `endgameLoading` (an in-flight
+flag), NOT on `!!eg` — clear `endgameLoading` (latest-token-only, success+failure) wherever a
+live-gateway `/endgame` fetch settles, or the spinner sticks. `refreshTrack`'s tail calls
+`updateGateway` (not `updateLiveGateway`) on purpose — don't "restore" it or the double-fetch +
+discarded-response regression returns.
+
+**E still planned**: age-slider remap (item 2, design: EEP/piecewise vs linear-age plateau).
+Related: [[star-sim-wr-wd-endgame-plan]].

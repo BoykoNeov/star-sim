@@ -42,6 +42,7 @@ const els = {
   gatewayWd: document.getElementById("gateway-wd"),
   gatewayWr: document.getElementById("gateway-wr"),
   gatewaySn: document.getElementById("gateway-sn"),
+  gatewayLoading: document.getElementById("gateway-loading"),
   endgameBar: document.getElementById("endgame-bar"),
   endgameBack: document.getElementById("endgame-back"),
   endgameResnapNote: document.getElementById("endgame-resnap-note"),
@@ -237,6 +238,10 @@ let mode = "live";              // "live" | "wd" | "wr"
 let endgame = null;             // the latest /endgame result (type, states, masses…)
 let endgameKey = null;          // the requested (mass|feh) the `endgame` data is for
 let endgameToken = 0;           // latest-wins guard for /endgame fetches
+let endgameLoading = false;     // a live-gateway /endgame fetch is in flight (drives the
+                                // "computing…" placeholder; cleared on settle, success OR
+                                // fail, by the latest token only — so a stale/failed fetch
+                                // can't leave a stuck spinner)
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
 let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
 let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
@@ -368,7 +373,9 @@ function rebuildWRTicks() {
   els.ageTicks.innerHTML = "";   // the WR snap uses its own targets, not the datalist
 }
 
-// A transient note in the endgame bar (e.g. after a mass re-snap left the WD range).
+// A transient note below the sliders (e.g. after a mass re-snap left the WD range). It
+// grows the panel downward instead of shoving the sliders, so it lives under the age
+// caption, not in the endgame bar above the controls.
 function setWDResnapNote(msg) {
   if (!els.endgameResnapNote) return;
   els.endgameResnapNote.textContent = msg || "";
@@ -1083,6 +1090,13 @@ function updateGateway() {
       `leaving a neutron star or black hole — a remnant this simulator doesn't model.`;
   }
   els.gatewaySn.hidden = !isSn;
+  // The "computing the star's fate…" placeholder shows exactly while a /endgame fetch is
+  // IN FLIGHT and we don't yet have a resolved fate for the current (mass, [Fe/H]) — i.e.
+  // the brief gap after a mass/[Fe/H] change. The moment the fetch settles, endgameLoading
+  // clears (success → `eg` set; failure → no `eg`), so the slot falls back to the real
+  // control or to blank — never a stuck spinner. (Gating on endgameLoading, NOT on `!!eg`:
+  // `eg` stays null on a fetch failure, so `!!eg` would re-show the placeholder forever.)
+  els.gatewayLoading.hidden = !(endgameLoading && !eg);
   els.gateway.hidden = false;   // block stays in the layout (reserved height); only its
                                 // children toggle, so the panel never jitters in live mode
 }
@@ -1098,15 +1112,22 @@ async function fetchEndgamePreview() {
   if (mode !== "live") return;
   const key = egKey();
   const tok = ++endgameToken;
+  endgameLoading = true;   // a fetch is now in flight → the placeholder is live
   const mass = massValue, feh = Number(els.feh.value);
   try {
     const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
     // Drop a stale/superseded response, or one for a star we've since moved off of.
     if (tok !== endgameToken || mode !== "live" || egKey() !== key) return;
     endgame = eg; endgameKey = key;
+    endgameLoading = false;
     hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
     updateGateway();
-  } catch { /* non-fatal: no preview/gateway this time */ }
+  } catch {
+    // non-fatal: no preview/gateway this time. Only the LATEST fetch clears the loading
+    // flag (a stale failure mustn't blank a still-pending newer fetch), then repaints —
+    // so a failed fetch falls back to the blank reserved slot, not a stuck spinner.
+    if (tok === endgameToken && mode === "live") { endgameLoading = false; updateGateway(); }
+  }
 }
 
 // Lazily fetch /endgame as the star nears the end of its life, so the gateway is ready
@@ -1117,18 +1138,25 @@ async function maybeFetchEndgame() {
   const key = egKey();
   if (endgame && endgameKey === key) return;
   const tok = ++endgameToken;
+  endgameLoading = true;   // (the age-scrub path; the mass-change path fetches via
+                           // fetchEndgamePreview, which sets this too)
   const mass = massValue, feh = Number(els.feh.value);
   try {
     const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
     if (tok !== endgameToken || mode !== "live") return;
     endgame = eg; endgameKey = key;
+    endgameLoading = false;
     // Set the HR preview here too, not just in fetchEndgamePreview: the two share
-    // endgameToken, so when both fire (e.g. exiting WD at ageFraction=1, where this
-    // path wins the token race) only the winner runs its success branch — it must
-    // also set the preview, or the dashed track silently fails to appear.
+    // endgameToken, so if both ever race (e.g. a mass change fires the preview fetch, then
+    // an age scrub past GATE_FETCH fires this one before the first lands) only the
+    // token-winner runs its success branch — it must also set the preview, or the dashed
+    // track silently fails to appear.
     hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
     updateGateway();
-  } catch { /* non-fatal: no gateway this time */ }
+  } catch {
+    // non-fatal: no gateway this time. Latest-token-only clear + repaint (see above).
+    if (tok === endgameToken && mode === "live") { endgameLoading = false; updateGateway(); }
+  }
 }
 
 function updateLiveGateway() {
@@ -1358,10 +1386,15 @@ async function refreshTrack() {
     // The star changed, so any cached endgame is stale — drop it + clear the gateway's
     // CHILDREN (the buttons/note), but leave the block itself in the layout so its
     // reserved height holds while the new fate loads (no reflow). fetchEndgamePreview
-    // (below) repopulates it; maybeFetchEndgame is the near-end-of-life fallback. Clear
-    // the faint HR preview too, then refetch it for the new star (fire-and-forget).
+    // (below) is the SOLE repopulator on a track change (the tail calls updateGateway, not
+    // updateLiveGateway, so maybeFetchEndgame does NOT also fire here — see the tail note).
+    // Clear the faint HR preview too, then refetch it for the new star (fire-and-forget).
     endgame = null; endgameKey = null;
     els.gatewayWd.hidden = els.gatewayWr.hidden = els.gatewaySn.hidden = true;
+    endgameLoading = true;               // a fetch is about to fire (fetchEndgamePreview)
+    els.gatewayLoading.hidden = false;   // show "computing…" now (covers the await refresh()
+                                         // window before updateGateway runs), so the slot
+                                         // never flashes blank while the new fate loads
     hr.setEndgamePreview(null);
     fetchEndgamePreview();
     if (t.length) {
@@ -1394,7 +1427,13 @@ async function refreshTrack() {
   }
   if (token !== trackToken) return;
   await refresh();
-  updateLiveGateway();   // if we landed at the end (e.g. exiting WD), offer the gateway
+  // updateGateway (NOT updateLiveGateway): this path already fired fetchEndgamePreview
+  // above, so the fate is on its way. Calling updateLiveGateway here would fire a SECOND
+  // /endgame (maybeFetchEndgame) for the same star, which — sharing endgameToken — would
+  // invalidate the preview fetch that was about to land, so the button would wait for the
+  // later of two competing ~1 MB fetches instead of the one already in flight. Just paint
+  // with what we have; fetchEndgamePreview's response repaints when it lands (faster).
+  updateGateway();
 }
 
 // When [Fe/H] changes, the valid *mass* span can change (the dead corner), so

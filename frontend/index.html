@@ -134,7 +134,6 @@
           stay live (they re-snap to a different Wolf–Rayet). What follows — the
           <b>core-collapse supernova</b> — this simulator doesn't model.
         </p>
-        <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
       </div>
 
       <label for="mass">Mass
@@ -170,6 +169,14 @@
       <datalist id="age-ticks"></datalist>
       <p class="note endgame-age-caption" id="endgame-age-caption"></p>
 
+      <!-- Feedback when a mass/[Fe/H] drag INSIDE an endgame re-snapped to a fate that
+           doesn't support the current endgame (e.g. dragging a WD progenitor up into the
+           supernova range): it reverts and says so. Placed below the sliders (not in the
+           endgame bar above) so it grows the panel DOWNWARD when it appears, rather than
+           shoving the mass slider out from under the cursor mid-drag. Hidden in live mode
+           (its own `hidden`, toggled by setWDResnapNote). -->
+      <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
+
       <!-- The stellar-endgame gateway (docs/plans/smoldering-cinder-gateway.md): at
            the end of a star's life, a button to "continue" into its remnant (a white
            dwarf for low/intermediate mass) — or, for the masses that core-collapse, an
@@ -180,6 +187,11 @@
         <button id="gateway-wd" class="gateway-btn" type="button" hidden disabled>→ Continue: White&nbsp;Dwarf</button>
         <button id="gateway-wr" class="gateway-btn" type="button" hidden disabled>→ Continue: Wolf–Rayet</button>
         <p id="gateway-sn" class="gateway-note" hidden></p>
+        <!-- Bridges the brief /endgame-fetch gap after a mass/[Fe/H] change: the fate
+             classifier runs server-side, so for ~½ s the reserved slot would otherwise be
+             blank (reads as "nothing happened"). This honest placeholder fills it until the
+             WD/WR button or SN note lands. -->
+        <p id="gateway-loading" class="gateway-loading" hidden>Computing the star's fate…</p>
       </div>
 
     </section>

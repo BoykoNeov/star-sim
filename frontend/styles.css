@@ -494,6 +494,13 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
   border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px;
 }
 .gateway-note b { color: #cbd2e0; }
+/* Transient "computing the star's fate…" placeholder that bridges the /endgame fetch gap
+   after a mass/[Fe/H] change — muted + italic so it reads as a working status, not a
+   result. Fits within .gateway's reserved min-height (one line), so no jitter. */
+.gateway-loading {
+  margin: 0; color: var(--muted); font-size: 13px; font-style: italic;
+  line-height: 1.45; padding: 8px 12px;
+}
 
 /* The endgame bar at the top of the controls panel (shown in WD mode). */
 .endgame-bar {
