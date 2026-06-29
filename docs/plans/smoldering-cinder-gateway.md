@@ -327,7 +327,48 @@ honest placeholder. **Verify:** Playwright — a 60 M☉ star, cross into WR, se
 stripped-surface composition and the hot HR position; reversibility holds.
 **Depends:** Chunks 1–2 (gateway scaffolding).
 
-### Chunk 5 — WR 3D wind shader (next)
+### Chunk 5 — WR 3D wind shader — ✅ DONE
+**Status:** shipped (frontend-only; pytest UNCHANGED 137; Playwright bundled-Chromium pass on
+the real served UI at 1440 + 390 px). Replaces Chunk 4's smooth blazing-hot-sphere placeholder.
+A new **WR wind layer in `star.js`** (`WIND_FRAG` + a `wind` mesh) renders the optically-thick-
+wind look: the (still-opaque) hot sphere is wrapped in a camera-facing additive **wind halo** —
+an electron-scattering **haze brightest in a thin annulus AT the limb** (softening the hard edge
+into the wind, the "pseudo-photosphere"; the limb-brightening is genuinely apt for an extended
+scattering atmosphere), decaying outward, broken up by **radial outflow filaments** (2D value
+noise advected outward over `uTime`, two decorrelated octaves so they scatter organically, NOT
+into spokes). No granulation/corona (gDeg=0 still). **Evocative/labeled** (the WR narrate paragraph
+now says so): color is the honest blackbody at Teff; the halo's reach + density read from
+**`Z_surf`** (a smooth, extended helium WN wind sharpens into a denser, clumpier carbon/oxygen
+WC/WO wind), intensity from a gentle clamped `L` tie — explicitly **not a measured Ṁ** (`star_mdot`
+isn't on StellarState, §3/Option B). **No chemistry-driven hue** (advisor: it would contradict the
+spectrum panel's honest "no WR model yet" placeholder — the WN/WC/WO flavor falls out of state via
+Teff + radius + the `Z_surf` density cue instead).
+
+**The headline (advisor-caught BEFORE coding):** the WR scrub **opens large** — 60 M☉ → `states[0]`
+R≈33 R☉ → `displayRadius`≈2.23, near the 2.65 clamp; the camera (z=8, 40° FOV) sees ±2.91 world
+units, tighter horizontally at 390 px (aspect<1). A **constant** halo extent would straight-edge-clip
+the viewport (the framing-pop family that bit Chunks 2/3). Fix = **fit-to-frame extent** (`applyWindScale`:
+cap the quad half-size at `0.95·FRAME_HALF_H·min(1,aspect)`), recomputed **every frame** in `animate()`
+so a live resize can't reintroduce the clip. Happy side effect: the halo is **thin at the big entry →
+fuller as the core strips and shrinks** (R 33→0.57, Teff 32→249 kK) — physically apt AND a gentle
+entry. `uTime` is driven from the same clock in `animate()` (the corona has none — easy to
+forget). The `wind` mesh is `visible=false` in **every non-WR path**, so living + WD are untouched.
+
+**Entry-pop fix (2nd advisor pass — don't ship a rationalized flag):** capping *extent* alone wasn't
+enough — intensity was `L`-driven and `logL`≈6 is ~flat across the sub-track, so the wind blazed at
+~full even at the WNh entry, popping from the near-glowless living CHeB star into a bright limb ring
+(also the "eye/ring" look). FIX = **ramp the wind intensity by strippedness, not L** — `wStrip =
+1 − clamp(X_surf/0.25)` is ≈0 while H-rich (WNh entry, X≈0.28) and →1 as hydrogen vanishes (full by
+frac≈0.28, exactly as Z_surf flips to WC). So the gateway is a **continuation** (entry = the bare
+continuing sphere, wind blazes UP as the core stripping bares it — a real WN→WC growth in the wind
+itself, not just the Z_surf clumpiness), the same discipline every prior endgame chunk used. Verified:
+entry now a bare sphere matching the living star, no pop; outward streaming confirmed across frames;
+WN-only (35 @ +0.5, Z≈0.045) keeps a smooth halo while WC/WO (60, 300 M☉) go clumpy/streaky.
+**Verified:** WNh entry (smooth thin halo) → WC mid (clumpy ring) → WO end (compact blazing core +
+dense clumpy halo), no clip at 1440 OR 390 px, reversible exit restores granulation+corona, living
+Sun (granulation+corona) + cold WD (smooth glowless) unregressed, 0 real JS errors (only Playwright's
+own WebGL `ReadPixels` perf warnings from screenshotting).
+
 **Goal:** the optically-thick-wind look (closes the on-hand-data work). Replaces Chunk 4's
 smooth blazing-hot-sphere placeholder (`star.update(s,{endgame:"wr"})`, currently gDeg=0).
 **Do:** a wind shader — radial outflow / electron-scattering haze, a bright hot

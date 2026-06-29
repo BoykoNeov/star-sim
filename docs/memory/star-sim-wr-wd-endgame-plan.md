@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; smooth-hot-sphere 3D placeholder for Chunk 5; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) & 5 (WR 3D optically-thick-wind shader: WIND_FRAG additive halo over the opaque sphere — limb-brightened electron-scattering haze + outward-advected value-noise filaments, Z_surf density cue WN→WC/WO, honest Teff color NOT a chemistry hue, intensity ramps by X_surf strippedness (≈off at WNh entry → blazes up as H strips: no entry pop, the continuation-not-cut discipline) × a clamped-L tie NOT a measured Ṁ; FIT-TO-FRAME extent recomputed each frame because the WR scrub opens on a huge R≈33 star that would clip; uTime wiring trap) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
 metadata:
   type: project
 ---
@@ -268,8 +268,56 @@ shared **`lastEgMass/Feh`**, a **`tryResnap()` dispatcher**, and **3-way** event
   maps, NO revert note), then 100→20 (SN) reverts to 100 with a note. Plus WN-only (35 @ +0.5: no WC tick,
   stays WN at the hot end, core-collapse caption), Sun anchor unregressed, 0 JS errors.
 
-**Remaining: Chunks 5–7** (WR 3D wind shader — replaces Chunk 4's smooth-sphere placeholder — then the
-data-gated WR/WD spectra above).
+**CHUNK 5 DONE (WR 3D wind shader; frontend-only, pytest UNCHANGED 137; Playwright bundled-Chromium
+pass on the real served UI at 1440 + 390 px).** Replaces Chunk 4's smooth blazing-hot-sphere
+placeholder with the **optically-thick-wind look**. A new `star.js` **`WIND_FRAG` + `wind` mesh** (a
+second camera-facing additive quad, `visible=false` in EVERY non-WR path → living + WD byte-identical)
+wraps the still-opaque hot sphere in a luminous **wind halo**: an electron-scattering **haze brightest
+in a thin annulus AT the limb** (softens the hard edge into the wind — the "pseudo-photosphere"; the
+limb-brightening is genuinely apt for an extended scattering atmosphere) decaying outward, broken up by
+**radial outflow filaments** (2D value noise sampled in cartesian space — no atan/seam — advected
+OUTWARD over `uTime`, two decorrelated octaves so they scatter organically NOT into spokes; smooth haze
+is the base). No granulation/corona (gDeg=0 unchanged). **Evocative/labeled** (the WR narrate paragraph
+in index.html now says so): the COLOR is the honest Teff blackbody; the halo's reach (`desiredExtent`)
+and density (`uFalloff`/`uDensity`) read from **`Z_surf`** (smooth extended helium WN → denser clumpier
+carbon/oxygen WC/WO), intensity from a gentle **clamped `L`** tie — explicitly **NOT a measured Ṁ**
+(`star_mdot` isn't on StellarState, §3/Option B).
+- **ADVISOR-CRITICAL (caught BEFORE coding, the headline):** the WR scrub **opens LARGE** — confirmed
+  via curl `/endgame?mass=60&feh=0`: `states[0]` R≈33.4 R☉ → `displayRadius`≈2.23 (near the 2.65 clamp);
+  the camera (z=8, 40° vfov) sees ±8·tan20°≈2.91 world units, **tighter horizontally at 390 px** (aspect<1).
+  A **constant** halo extent would straight-edge-clip the viewport (the framing-pop family that bit
+  Chunks 2/3). FIX = **fit-to-frame extent** (`applyWindScale`: half-size = `min(rad·desiredExtent,
+  0.95·FRAME_HALF_H·min(1,aspect))`, `uInnerFrac = rad/half = 1/extent`), recomputed **every frame** in
+  `animate()` so a live resize can't reintroduce the clip. Happy side effect: the halo is **thin at the
+  big entry → fuller as the core strips and shrinks** (measured 60 M☉: R 33→0.57, Teff 32→249 kK, Z_surf
+  0.016→0.866) — physically apt AND a gentle entry (no pop). **REUSABLE: a fixed-extent additive halo is
+  frame-fragile exactly like the fixed-x canvas layout (Chunk 3) — fit it to the frame, verify 390 px.**
+- **ADVISOR 2ND-PASS, the entry-pop fix (don't ship a rationalized flag I'd talked myself out of):** the
+  fit-to-frame capped *extent* but NOT *intensity*, and intensity was `L`-driven with `logL`≈6 ~flat across
+  the sub-track → the wind blazed at ~full even at the WNh entry, popping from the near-glowless living
+  CHeB star into a bright limb RING (also the "eye/ring" look I'd rationalized as "limb-brightening").
+  FIX = **ramp wind intensity by STRIPPEDNESS, not L**: `wStrip = 1 − clamp(X_surf/0.25)` (X_surf is on
+  StellarState; ≈0 while H-rich at the WNh entry X≈0.28, →1 by frac≈0.28 as H vanishes, exactly as Z_surf
+  flips to WC). Now the gateway is a **continuation** — entry = the bare continuing sphere (matches the
+  living star, only granulation/corona fade, the accepted Chunk-4 seam), the wind blazes UP as the core
+  strips (a real WN→WC growth in the wind, not just Z_surf clumpiness). **REUSABLE: render the endgame by
+  the star's state (here X_surf), not a mode flag — the "continuation not a cut" discipline every endgame
+  chunk used; and don't accept your own rationalization of a flag you AND the advisor both raised.**
+- **ADVISOR rejected a chemistry-driven emission HUE** (my Q): it would actively contradict the spectrum
+  panel's honest "no WR emission model yet" placeholder (an emission-line-coloured halo claims what that
+  disclaims). So color stays the Teff continuum; the WN/WC/WO flavor falls out of state for free (hotter→
+  bluer, more-stripped→smaller R→fuller fit-to-frame halo) + the **structural** `Z_surf` density cue
+  (denser/clumpier WC/WO). Don't make chemistry-colour the mechanism.
+- **`uTime` wiring trap (advisor):** the corona has NO `uTime` updated in `animate()`; the wind needs its
+  own driven by the same clock or the outflow freezes. Easy to forget — wired.
+- **Verified** (Playwright bundled Chromium — the `chrome --headless` hijack caveat): WNh entry (smooth
+  thin halo, big star) → WC mid (clumpy ring) → WO end (compact blazing core + dense clumpy halo), filaments
+  ORGANIC not spokes, **no frame clip at 1440 OR 390 px**, reversible exit restores granulation+corona on
+  the living star (wind gone), living Sun (granulation+corona, no wind) + cold WD (smooth glowless, no wind)
+  unregressed, **0 real JS errors** (only Playwright's own WebGL `ReadPixels` GPU-stall perf warnings from
+  screenshotting a WebGL canvas — benign, not from the page).
+
+**Remaining: Chunks 6–7** (the data-gated WR/WD spectra above — Koester/TMAP for WD, PoWR for WR).
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

@@ -240,6 +240,77 @@ void main() {
   gl_FragColor = vec4(lin2srgb(uColor), a);
 }`;
 
+// --- Wolf–Rayet wind shader (Chunk 5) -----------------------------------------
+// The WR endgame's optically-thick-wind look. A WR's *apparent* surface is not the
+// hydrostatic core but a dense, fast, radiatively-driven wind — so instead of a hard
+// limb we wrap the (still-opaque) hot sphere in a luminous, streaming halo: an
+// electron-scattering haze brightest right at the limb (softening the silhouette into
+// the wind — the "pseudo-photosphere"), decaying outward, broken up by radial outflow
+// filaments that drift away from the star over time. EVOCATIVE, NOT PREDICTIVE (the
+// corona precedent, spec §7): the *color* is the honest blackbody at Teff, but the halo
+// is illustrative — its brightness is NOT a measured mass-loss rate (the grid's star_mdot
+// is deliberately not on StellarState) and the filaments are not real emission-line
+// structure (the spectrum panel shows the honest "no WR model yet" placeholder). The only
+// state-driven cues are the Teff color, the radius (fit-to-frame, below) and a Z_surf knob
+// that makes the carbon/oxygen (WC/WO) wind denser and clumpier than the smoother helium
+// (WN) wind. No granulation — a stripped, wind-driven core is not convective.
+const WIND_FRAG = `
+precision highp float;
+uniform vec3  uColor;      // LINEAR sRGB continuum color (Teff) — the honest pixel
+uniform float uTime;       // seconds (real clock) — animates the outflow
+uniform float uIntensity;  // overall wind brightness (evocative; NOT a measured mass-loss rate)
+uniform float uInnerFrac;  // star limb as a fraction of the quad half-size (= 1/extent)
+uniform float uFalloff;    // radial decay of the haze beyond the limb
+uniform float uDensity;    // filament contrast (0 ~ smooth WN haze .. 1 ~ clumpy WC/WO wind)
+varying vec2 vUv;
+
+${GLSL_LIN2SRGB}
+
+// Cheap 2D value noise (hash + smooth bilinear) for the wind's turbulent filaments.
+float hash21(vec2 p) {
+  p = fract(p * vec2(123.34, 345.45));
+  p += dot(p, p + 34.345);
+  return fract(p.x * p.y);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+void main() {
+  vec2 c = vUv - 0.5;
+  float d = length(c) * 2.0;                 // 0 at center .. 1 at the quad edge
+  float rd = d / uInnerFrac;                 // radius in units of the star limb (1 = silhouette)
+  vec2 dir = c / max(1e-4, length(c));       // outward unit direction
+
+  // Electron-scattering haze: a smooth radial envelope brightest in a thin annulus AT
+  // the limb (rd≈1) — softening the hard sphere edge into the wind (the optically-thick
+  // pseudo-photosphere) — then decaying outward. Suppressed over the inner disk
+  // (rd<~0.6) so the bright hot core stays readable rather than washed out.
+  float core = smoothstep(0.6, 1.0, rd);
+  float decay = exp(-max(0.0, rd - 1.0) * uFalloff);
+  float haze = core * decay;
+
+  // Radial outflow filaments: 2D value-noise turbulence sampled in cartesian space
+  // (no atan -> no angular seam) and advected OUTWARD over time, so the wind visibly
+  // streams away from the star. Two decorrelated octaves so low-frequency cells scatter
+  // organically instead of lining up into spokes. The smooth haze is the base; uDensity
+  // controls how much the filaments break it up (WN ~ smooth, WC/WO ~ clumpy).
+  vec2 p1 = c * 6.0  - dir * uTime * 0.40;
+  vec2 p2 = c * 11.0 - dir * uTime * 0.63 + 7.3;
+  float turb = vnoise(p1) * 0.62 + vnoise(p2) * 0.38;
+  float fil = mix(0.85, turb * 1.7, clamp(uDensity, 0.0, 1.0));
+
+  float edge = 1.0 - smoothstep(0.95, 1.0, d);   // clean cutoff at the quad's own edge
+  float a = clamp(haze * fil * edge * uIntensity, 0.0, 1.0);
+  gl_FragColor = vec4(lin2srgb(uColor), a);
+}`;
+
 export function createStar(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -291,6 +362,32 @@ export function createStar(canvas) {
   corona.renderOrder = 2;
   scene.add(corona);
 
+  // Wolf–Rayet wind halo (Chunk 5): a second camera-facing additive quad, hidden except
+  // in the WR endgame (it never co-displays with the corona — the WR path zeroes the
+  // corona via gDeg=0). Its uTime is driven by the clock in animate() so the outflow
+  // streams; its size is fit-to-frame each frame (see applyWindScale) so the big cool
+  // WNh entry star can't straight-edge-clip the viewport.
+  const windMat = new THREE.ShaderMaterial({
+    vertexShader: CORONA_VERT,
+    fragmentShader: WIND_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uTime: { value: 0 },
+      uIntensity: { value: 0.7 },
+      uInnerFrac: { value: 0.6 },
+      uFalloff: { value: 3.0 },
+      uDensity: { value: 0.4 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const wind = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), windMat);
+  wind.renderOrder = 1;
+  wind.visible = false;
+  scene.add(wind);
+
   function resize() {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
@@ -299,6 +396,28 @@ export function createStar(canvas) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     }
+  }
+
+  // Half-height of the camera frustum at the focal plane (z=0): the camera sits at z=8
+  // with a 40° vertical FOV, so it sees ±8·tan(20°) ≈ ±2.91 world units vertically, and
+  // ±that·aspect horizontally. The WR wind halo must stay inside this box or its additive
+  // quad gets sliced by the viewport into a hard straight edge (the framing-pop family).
+  const FRAME_HALF_H = 8 * Math.tan((40 * Math.PI / 180) / 2);
+
+  // Size the WR wind quad to fit the frame. The wind *wants* an extended halo, but the WR
+  // scrub opens on a huge cool WNh star (R≈33 R☉ → displayRadius near the clamp), where a
+  // fixed extent would clip; so we cap the quad half-size at the tighter of the two frame
+  // axes (horizontal binds at narrow/phone widths, aspect<1). A happy side effect: the
+  // halo is thin at the big entry and grows fuller as the core strips and shrinks — both
+  // physically apt and a gentle entry (no pop). Recomputed every frame so a live resize
+  // can't reintroduce the clip. uInnerFrac = star limb / quad half-size = 1/extent.
+  let windState = null;
+  function applyWindScale() {
+    if (!windState) return;
+    const frameHalf = FRAME_HALF_H * Math.min(1, camera.aspect || 1);
+    const half = Math.min(windState.rad * windState.desiredExtent, 0.95 * frameHalf);
+    wind.scale.setScalar(half);
+    windMat.uniforms.uInnerFrac.value = windState.rad / half;
   }
 
   // update(state, opts): opts.endgame === "wd" renders the white-dwarf endgame. The
@@ -350,6 +469,35 @@ export function createStar(canvas) {
     coronaMat.uniforms.uInnerFrac.value = 1.0 / extent;
     coronaMat.uniforms.uFalloff.value = 3.2 / (extent - 1.0);
     coronaMat.uniforms.uIntensity.value = (0.3 + 1.4 * act) * gDeg;
+
+    // WR wind halo (Chunk 5): shown ONLY in the WR endgame — hidden for the living star and
+    // the WD endgame, so neither is touched. The color is the honest blackbody at Teff; the
+    // halo's reach (desiredExtent) and density/clumpiness (uFalloff/uDensity) read from the
+    // surface composition — a smoother, more extended helium (WN) wind sharpens into a
+    // denser, clumpier carbon/oxygen (WC/WO) wind as Z_surf climbs. Intensity carries a
+    // gentle, clamped luminosity tie — evocative, NOT a measured mass-loss rate (star_mdot
+    // isn't on StellarState, by §3/Option B). applyWindScale() then fits it to the frame.
+    wind.visible = wr;
+    if (wr) {
+      windMat.uniforms.uColor.value.setRGB(r, g, b);
+      const z = Math.max(0, Math.min(1, (state.Z_surf ?? 0) / 0.6)); // 0 (WN) → 1 (WC/WO)
+      windMat.uniforms.uFalloff.value = 2.4 + 1.4 * z;               // WC/WO: tighter, denser
+      windMat.uniforms.uDensity.value = 0.25 + 0.75 * z;             // WN: smoother, WC/WO: clumpy
+      const logL = Math.log10(Math.max(1, state.L_lsun));
+      // The wind blazes UP as the star strips: ~0 while the entry star is still
+      // hydrogen-rich (WNh, X_surf≈0.28), so the gateway is a CONTINUATION of the
+      // near-glowless living CHeB star rather than a hard cut to a bright limb ring,
+      // then rising to full as hydrogen vanishes and the bare He/C/O core is exposed
+      // (WN→WC→WO — a real growth in the wind, not just the Z_surf clumpiness). Evocative:
+      // it tracks strippedness for visual continuity, not a claim that WNh winds are weak.
+      const wStrip = 1 - Math.max(0, Math.min(1, (state.X_surf ?? 0) / 0.25));
+      windMat.uniforms.uIntensity.value =
+        wStrip * (0.55 + 0.35 * Math.max(0, Math.min(1, (logL - 4.5) / 2)));
+      windState = { rad, desiredExtent: 1.95 - 0.3 * z };
+      applyWindScale();
+    } else {
+      windState = null;
+    }
   }
 
   const clock = new THREE.Clock();
@@ -358,7 +506,14 @@ export function createStar(canvas) {
     resize();
     // Drive time from a real clock so boil/rotation speed is frame-rate
     // independent (not a per-frame increment).
-    surfaceMat.uniforms.uTime.value = clock.getElapsedTime();
+    const t = clock.getElapsedTime();
+    surfaceMat.uniforms.uTime.value = t;
+    // The WR wind outflow streams from the same clock (the corona has no uTime); refit it
+    // to the frame each frame so a live resize can't slice the additive quad at the edge.
+    if (wind.visible) {
+      windMat.uniforms.uTime.value = t;
+      applyWindScale();
+    }
     renderer.render(scene, camera);
     raf = requestAnimationFrame(animate);
   }

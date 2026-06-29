@@ -140,8 +140,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   → reversible `wr-mode`: index-linear scrub over the φ9 sub-track (WN→WC→WO landmark),
   HR axes to ~316 kK / logL 7, the **normal comp views** (the stripped surface IS the
   story — no custom cross-section), WN/WC/WO subtype from surface composition, mass-stays-
-  live re-snap, end caption narrates the un-modeled core-collapse. **Chunks 1–4 built; the
-  WR 3D wind shader (Chunk 5) + WR/WD spectra (Chunks 6–7) are later chunks.**
+  live re-snap, end caption narrates the un-modeled core-collapse. WR 3D (Chunk 5) = the
+  **optically-thick-wind shader** (`star.js` `WIND_FRAG` + `wind` mesh): an additive halo
+  over the opaque hot sphere — electron-scattering haze brightest at the limb (pseudo-
+  photosphere) + outward-advected value-noise filaments; reach/density read from `Z_surf`
+  (smooth WN → clumpy WC/WO), color = honest Teff blackbody (no chemistry hue — it'd
+  contradict the spectrum placeholder), intensity a gentle clamped `L` tie (NOT a measured
+  Ṁ). **Fit-to-frame extent** (`applyWindScale`, recomputed each frame) — the WR scrub opens
+  on a huge R≈33 R☉ star, so a constant extent would clip the viewport. **Chunks 1–5 built;
+  the WR/WD spectra (Chunks 6–7) are later chunks.**
   [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
