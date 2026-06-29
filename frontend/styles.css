@@ -465,9 +465,13 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 
 /* --- Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md) --- */
 
-/* The gateway block sits under the age slider; it appears only when the star is
-   scrubbed to the very end of its life. */
-.gateway { margin: 12px 0 2px; }
+/* The gateway block sits under the age slider. The "Continue" button is shown from
+   early in the star's life (foreshadowing the endgame) but DISABLED until scrubbed to
+   the very end; min-height reserves one button row so the block doesn't collapse while
+   the endgame type loads, or for a star with no modeled endgame — so the button sits in
+   place instead of popping in and resizing the panel (item 4). The taller core-collapse
+   note still expands the block (the rarer, accepted case). */
+.gateway { margin: 12px 0 2px; min-height: 36px; }
 .gateway-btn {
   font: inherit; font-size: 14px; font-weight: 650; cursor: pointer;
   color: var(--bg); background: var(--accent);
@@ -477,6 +481,13 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 }
 .gateway-btn:hover { filter: brightness(1.08); }
 .gateway-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Locked (not yet at end-of-life): a muted outline, NOT the filled accent — so the
+   button visibly "lights up" to the yellow accent button when it unlocks at the end. */
+.gateway-btn:disabled {
+  cursor: not-allowed; color: var(--muted);
+  background: transparent; border-color: var(--line); box-shadow: none;
+}
+.gateway-btn:disabled:hover { filter: none; }
 /* The supernova dead-end note (8–40 M☉): no remnant renderer, said honestly. */
 .gateway-note {
   margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45;

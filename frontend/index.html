@@ -176,12 +176,15 @@
            honest note that the supernova remnant isn't simulated. Shown only when the
            star is scrubbed to the very end of its track; populated by main.js from the
            /endgame classifier. -->
-      <div id="gateway" class="gateway" hidden>
-        <button id="gateway-wd" class="gateway-btn" type="button" hidden>→ Continue: White&nbsp;Dwarf</button>
-        <button id="gateway-wr" class="gateway-btn" type="button" hidden>→ Continue: Wolf–Rayet</button>
+      <div id="gateway" class="gateway">
+        <button id="gateway-wd" class="gateway-btn" type="button" hidden disabled>→ Continue: White&nbsp;Dwarf</button>
+        <button id="gateway-wr" class="gateway-btn" type="button" hidden disabled>→ Continue: Wolf–Rayet</button>
         <p id="gateway-sn" class="gateway-note" hidden></p>
       </div>
 
+    </section>
+
+    <section class="panel readout-panel" data-panel-id="readout">
       <h2>State readout
         <span class="help" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
       </h2>

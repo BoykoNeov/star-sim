@@ -1060,20 +1060,31 @@ function refreshWR() {
 // matching the current (mass, [Fe/H]). WD / WR each get a "Continue" button; the
 // core-collapse gap (SN) gets an honest note; "none" → nothing.
 function updateGateway() {
+  if (mode !== "live") return;   // the whole block is hidden inside an endgame
   const eg = (endgame && endgameKey === egKey()) ? endgame : null;
-  const atEnd = mode === "live" && ageFraction >= GATE_SHOW && eg;
-  const showWd = !!(atEnd && eg.type === "WD" && eg.states.length);
-  const showWr = !!(atEnd && eg.type === "WR" && eg.states.length);
-  const showSn = !!(atEnd && eg.type === "SN");
-  els.gatewayWd.hidden = !showWd;
-  els.gatewayWr.hidden = !showWr;
-  if (showSn) {
+  // Show the fate's control as soon as the endgame TYPE is known — fetchEndgamePreview
+  // fetches /endgame on every track, regardless of age, so the fate is known early. The
+  // WD/WR "Continue" button is shown but kept DISABLED (greyed) until the star is
+  // scrubbed to the very end of its life, where it unlocks. So the button never pops
+  // into existence and resizes the panel (item 4): it sits in place, foreshadowing the
+  // endgame, and "lights up" when you arrive. The core-collapse note (no Continue — the
+  // remnant isn't modeled) likewise shows from the start as an honest dead-end marker.
+  const atEnd = ageFraction >= GATE_SHOW;
+  const isWd = !!(eg && eg.type === "WD" && eg.states.length);
+  const isWr = !!(eg && eg.type === "WR" && eg.states.length);
+  const isSn = !!(eg && eg.type === "SN");
+  els.gatewayWd.hidden = !isWd;
+  els.gatewayWr.hidden = !isWr;
+  els.gatewayWd.disabled = !atEnd;
+  els.gatewayWr.disabled = !atEnd;
+  if (isSn) {
     els.gatewaySn.innerHTML =
       `<b>Core collapse.</b> A ${fmt(eg.mass_init_msun)} M☉ star ends as a supernova, ` +
       `leaving a neutron star or black hole — a remnant this simulator doesn't model.`;
   }
-  els.gatewaySn.hidden = !showSn;
-  els.gateway.hidden = !(showWd || showWr || showSn);
+  els.gatewaySn.hidden = !isSn;
+  els.gateway.hidden = false;   // block stays in the layout (reserved height); only its
+                                // children toggle, so the panel never jitters in live mode
 }
 
 // Fetch /endgame as soon as a new track lands, so the living HR can show a faint
@@ -1344,10 +1355,13 @@ async function refreshTrack() {
     currentTrack = t;
     hr.setTrack(t);
     comp.setTrack(t);
-    // The star changed, so any cached endgame is stale — drop it + hide the gateway
-    // (maybeFetchEndgame refetches when the user next scrubs near the end). Clear the
-    // faint HR preview too, then refetch it for the new star (fire-and-forget, below).
-    endgame = null; endgameKey = null; els.gateway.hidden = true;
+    // The star changed, so any cached endgame is stale — drop it + clear the gateway's
+    // CHILDREN (the buttons/note), but leave the block itself in the layout so its
+    // reserved height holds while the new fate loads (no reflow). fetchEndgamePreview
+    // (below) repopulates it; maybeFetchEndgame is the near-end-of-life fallback. Clear
+    // the faint HR preview too, then refetch it for the new star (fire-and-forget).
+    endgame = null; endgameKey = null;
+    els.gatewayWd.hidden = els.gatewayWr.hidden = els.gatewaySn.hidden = true;
     hr.setEndgamePreview(null);
     fetchEndgamePreview();
     if (t.length) {

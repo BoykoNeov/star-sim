@@ -290,6 +290,56 @@ layout (new panel appended last).
 **Consult on the reserve-vs-waste decision** (the #4 scope) before building — it's a
 genuine product trade-off the user gestured at.
 
+### Status — ✅ BUILT (2026-06-29)
+Three files changed (`frontend/index.html`, `frontend/src/main.js`, `frontend/styles.css`).
+The advisor consult + a user redirect resolved the #4 scope in a way that **sidesteps the
+reserve-vs-waste dichotomy entirely**, and one plan-listed sub-item (the resnap note) is a
+deliberate deferral.
+
+- **Item 1 (readout panel) — built as planned.** Moved the `State readout` `<h2>` + `#readout`
+  + `#status` into a new `<section class="panel readout-panel" data-panel-id="readout">`
+  inserted after `controls` in the authored order. JS is id-referenced, so wiring is
+  untouched; the new panel's `<h2>` auto-gets a `layout.js` drag grip. **Verified both
+  profiles:** a fresh profile shows the authored order (`…controls, readout, spectrum…`); a
+  pre-split saved order gets `readout` **appended last** (the accepted trade), and **Reset
+  layout** restores the authored position.
+- **Item 4 (jitter) — the user redirected from "reserve empty space" to "place the button,
+  greyed out until available," which is strictly better.** The advisor's checkpoint had
+  narrowed the achievable scope to "reserve the within-mode toggles, accept the one-time
+  mode-transition relayout," and noted the only genuinely-new reserves were the gateway block
+  and the resnap note (the age caption + SED rotation note are already `min-height`-reserved).
+  The shipped gateway design: the block is **always in the layout** (live mode), and its
+  control is shown **as soon as the endgame TYPE is known** — `fetchEndgamePreview` already
+  fetches `/endgame` on *every* track regardless of age, so the fate (WD/WR button or SN note)
+  appears from early life. The **WD/WR "Continue" button is shown but `disabled`/greyed** (a
+  muted outline) **until `ageFraction >= GATE_SHOW`**, where it enables and **"lights up" to
+  the filled-accent yellow button** — same position and size in both states, so the panel
+  **never resizes** as you scrub (the literal cure for "appearing buttons resize panels"). A
+  `min-height` on `.gateway` (~one button row) stops the block collapsing while the type loads
+  or for a no-endgame star; the taller SN note still expands (rare, accepted). `refreshTrack`
+  now clears the gateway **children** (not the block) on a track change, so the reserved height
+  holds while the new fate loads.
+- **SN note now foreshadows from ZAMS — user-confirmed.** Changing the SN branch from
+  `atEnd && type==="SN"` to `isSn` means every 8–40 M☉ star shows the honest core-collapse
+  dead-end note (no "Continue"; remnant not modeled) **throughout its life**, consistent with
+  the WD/WR buttons. This is a pedagogy change beyond the literal ask, so it was **explicitly
+  confirmed with the user** (they chose "From the start (foreshadow)" over "only at end-of-life",
+  the latter of which would have re-introduced the rejected jitter/empty-reserve).
+- **Resnap note (`#endgame-resnap-note`) — DEFERRED (conscious, not dropped).** Unlike the
+  gateway, the resnap note has **no persistent content to fill a reserve with**, so reserving
+  it produces exactly the empty space the user rejected. It appears **only on a *failed*
+  re-snap inside an endgame** (a deliberate exploratory mass/[Fe/H] drag to a fate that doesn't
+  support the current endgame), so it's the lowest-value jitter. The advisor retracted its
+  earlier "reserve it without asking" once this distinction was clear. **Clean close-out option
+  if revisited:** move the note **below** the sliders (it's feedback about the mass control, so
+  it belongs there), where it grows the panel downward instead of shoving the sliders under the
+  cursor — no empty space, no reserve.
+
+**Verification (Playwright, the regression gate):** fresh + saved-layout profiles; Sun WD button
+greyed (transparent bg) at mid-life → enabled/filled-accent (`rgb(255,210,127)`) at end-of-life,
+same box; m=25 SN note shown at **genuine** mid-MS (ageFrac 0.30, phase MS); m=120 WR button shown
+**disabled** at genuine mid-MS; readout in its own panel with its own grip; **zero page errors**.
+
 ---
 
 ## Chunk D — gateway auto-appears on mass/[Fe/H] change at end-of-life (item 3)
