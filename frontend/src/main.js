@@ -193,15 +193,15 @@ for (const r of RESPONSIVE) {
 
 // --- slider <-> physical value mapping ---------------------------------------
 let logMassMin = -1, logMassMax = Math.log10(40); // overwritten by /ranges
-// `ageValue` (absolute years, below) is the SOURCE OF TRUTH for the age — analogous
-// to `massValue`. `ageFraction` is a *display* derived from it: each track has its
-// own age window, so when mass/[Fe/H] changes (and the window moves) we KEEP the
-// absolute age and recompute the fraction, clamped to the new window — so moving the
-// mass slider doesn't change the age value when it stays in range. ageValue is kept
-// UNCLAMPED (the desired age); only the fetch/display clamp it, so dragging mass up
-// through short-lived stars and back springs the age back instead of ratcheting it
-// to zero.
-let ageFraction = 0.46;   // slider position 0..1, mapped into [ageMin, ageMax]
+// `ageValue` (absolute years, below) is the SOURCE OF TRUTH for the desired age —
+// analogous to `massValue`. `ageFraction` is the slider POSITION, now linear in EEP
+// (Chunk E — see trackRowFromPos/posFromAge above), not in age. When mass/[Fe/H] changes
+// (and the track/window move) we KEEP the absolute age and recompute the position as the
+// nearest EEP row to it — so moving the mass slider doesn't change the age when it stays
+// in range. ageValue is kept UNCLAMPED (the desired age); only the display clamps it, so
+// dragging mass up through short-lived stars and back springs the age back instead of
+// ratcheting it to zero.
+let ageFraction = 0.46;   // slider position 0..1 (linear in EEP, -> a track row)
 // The age window is read off the TRACK itself (first/last row's age_yr) — one
 // source of truth, so the slider domain and the composition panel's EEP span can
 // never disagree. They used to come from a separate, *unguarded* /age_range fetch:
@@ -227,6 +227,49 @@ let currentTrack = null;           // last /track result; the source for age tic
 // Snap-tick positions in each slider's own coordinate (mass/age: 0..1; feh: dex).
 let massTickPos = [], massTickVals = [], fehTickPos = [], ageTickPos = [];
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+// --- the age slider is LINEAR IN EEP, not in years (Chunk E) ------------------
+// A star spends ~85–90% of its LIFE on the main sequence barely changing, so a slider
+// linear in age is a long dead plateau — "age rises, nothing changes" (the user's item 2).
+// The MIST track is one row per integer EEP (ZAMS..EAGB — a fixed 606 rows split MS 42% /
+// RGB 25% / CHeB 17% / EAGB 17% at EVERY mass), so mapping the slider POSITION to EEP-row
+// index gives every phase fair, mass-invariant travel. This is §6 ("interpolate on EEP, not
+// age") applied to the slider's feel, and it matches comp.js's xOf(eep) axis EXACTLY — the
+// age thumb and the composition-panel marker move in lockstep (both = (eep−e0)/(e1−e0)).
+//
+// The marker state is PICKED straight from the already-fetched track by row (like the WD/WR
+// scrubs pick states[i]) — NEVER via a /state fetch. An age-based fetch would be DEGENERATE
+// in flat-age bands: the 1 M☉ CHeB blue loop is 48 EEP rows spanning ~4800 yr, so age→EEP is
+// near-vertical there and an age slider can't resolve those rows at all (measured). Picking by
+// row gives those dramatic near-instant features (blue loops, the He flash) real travel.
+//
+// ageValue (yr) stays the honest readout/desired-age: it's DERIVED from the picked row on a
+// scrub, and PRESERVED across a mass/[Fe/H] change (so the same absolute age survives a mass
+// drag — the same-age-across-masses pedagogy; the thumb JUMPS because that age sits at a
+// different EEP fraction per mass, which is correct and accepted).
+//
+// position (0..1) -> nearest EEP-row index of currentTrack.
+function trackRowFromPos(pos) {
+  if (!currentTrack || currentTrack.length < 2) return -1;
+  const n = currentTrack.length;
+  return Math.min(n - 1, Math.max(0, Math.round(clamp01(pos) * (n - 1))));
+}
+// absolute age (yr) -> slider position, by snapping to the nearest row whose age is
+// closest (track ages are monotonically increasing). Used on a mass/[Fe/H] change to
+// place the thumb at the preserved absolute age. Clamps out-of-window ages to 0 / 1.
+function posFromAge(age) {
+  const t = currentTrack;
+  if (!t || t.length < 2) return 0;
+  if (age <= t[0].age_yr) return 0;
+  if (age >= t[t.length - 1].age_yr) return 1;
+  let lo = 0, hi = t.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (t[mid].age_yr <= age) lo = mid; else hi = mid;
+  }
+  const i = (age - t[lo].age_yr) <= (t[hi].age_yr - age) ? lo : hi;
+  return clamp01(i / (t.length - 1));
+}
 
 // --- stellar-endgame gateway + white-dwarf mode ------------------------------
 // (docs/plans/smoldering-cinder-gateway.md, Chunk 2). `mode` is the one switch: the
@@ -257,15 +300,17 @@ let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for th
 let pinAgeToEnd = false;        // one-shot: land the next track refresh at the very end
 
 // The gateway button appears only once the star is scrubbed to the VERY end of its
-// visible life (the EAGB giant) — not merely "near" it. The age axis is linear in age,
-// so the post-RGB drama (RGB tip → CHeB → EAGB) is crammed into the last ~2% of the
-// slider; a looser threshold (the old 0.98) put the button up while the marker was still
-// a mid-RGB star, so entering jumped RGB → AGB-giant (the "missing steps" the user felt).
-// At the true end the living EAGB giant is continuous with the endgame's first state (the
-// first thermal pulse), so the corona / X-ray / radius all carry across smoothly. The age
-// slider snaps drags within ~1.5% of the end to exactly 1.0, so reaching it stays a
-// natural "slam to the right" gesture. The /endgame data is still PREFETCHED earlier
-// (GATE_FETCH) so the button is instant when the user lands at the end.
+// visible life (the EAGB giant) — not merely "near" it. These thresholds live in SLIDER-
+// POSITION space (0..1). Now that the slider is linear in EEP (Chunk E), position maps to
+// evolutionary progress, so 0.999 ≈ the last EEP row (the true end) and 0.9 ≈ deep into the
+// EAGB — the post-RGB drama is no longer crammed into a sliver, so the threshold is robust
+// to where the gate sits rather than fighting a near-flat age plateau (the old linear-age
+// rationale for a tight gate is obsolete). At the true end the living EAGB giant is
+// continuous with the endgame's first state (the first thermal pulse), so the corona /
+// X-ray / radius all carry across smoothly. The age slider snaps drags within ~1.5% of the
+// end to exactly 1.0, so reaching it stays a natural "slam to the right" gesture. The
+// /endgame data is still PREFETCHED earlier (GATE_FETCH) so the button is instant when the
+// user lands at the end.
 const GATE_SHOW = 0.999, GATE_FETCH = 0.9;
 
 // The WD endgame slider is a 3-zone piecewise map over the snapped cooling sequence —
@@ -394,7 +439,7 @@ function setWDResnapNote(msg) {
 const egKey = () => `${massValue.toFixed(4)}|${Number(els.feh.value).toFixed(2)}`;
 
 // Trailing debounce for the EXPENSIVE backend fetch behind a slider drag. Each
-// /track (and the /state inside refresh()) rebuilds the full (mass,[Fe/H]) EEP
+// /track rebuilds the full (mass,[Fe/H]) EEP
 // interpolation window on the backend, so a fast slider fling firing dozens of
 // `input` events would spin the CPU computing intermediate stars whose results the
 // latest-wins token then just throws away. We defer only the fetch — the cheap UI
@@ -480,13 +525,13 @@ function snap(value, ticks, min, max) {
   return best;
 }
 
-// Snap an age FRACTION (0..1) to a landmark or to a track endpoint. The endpoints
-// (0 = ZAMS, 1 = the final EAGB state) are snap targets too, so dragging fully right
-// always reaches the true end of the track — even when a late landmark (CHeB/EAGB)
-// sits within the snap radius of 1.0, which used to capture the whole right edge and
-// trap the slider short of the end. Returns the EXACT float (never the range input's
-// step-quantized value): the phase boundaries are razor-sharp, so refresh() must
-// derive the age from this exact fraction or the readout shows the previous phase.
+// Snap an age-slider POSITION (0..1, linear in EEP) to a landmark row or to a track
+// endpoint. The endpoints (0 = ZAMS, 1 = the final EAGB state) are snap targets too, so
+// dragging fully right always reaches the true end of the track — even when a late
+// landmark (CHeB/EAGB) sits within the snap radius of 1.0, which used to capture the
+// whole right edge and trap the slider short of the end. Returns the EXACT float (never
+// the range input's step-quantized value) so the row index round() lands exactly on the
+// snapped landmark's EEP row.
 function snapAge(raw) {
   const thresh = 0.015;
   let best = raw, bestD = thresh;
@@ -686,11 +731,13 @@ function rebuildFehTicks() {
 function criticalAges(track) {
   const pts = [];
   let prev = null;
-  for (const s of track) {
+  for (let i = 0; i < track.length; i++) {
+    const s = track[i];
     if (s.phase !== prev) {
       // Phase transitions are the real landmarks — kind:"phase" marks them as
-      // never-droppable (dropping CHeB was the "CHeB is nowhere as a tick" bug).
-      if (prev !== null) pts.push({ age: s.age_yr, label: s.phase, kind: "phase" });
+      // never-droppable (dropping CHeB was the "CHeB is nowhere as a tick" bug). The
+      // row INDEX `i` is the EEP-axis position (the slider is linear in EEP now, Chunk E).
+      if (prev !== null) pts.push({ i, label: s.phase, kind: "phase" });
       prev = s.phase;
     }
   }
@@ -699,26 +746,27 @@ function criticalAges(track) {
   // can exceed the RGB tip for intermediate masses — the global max would mislabel
   // an EAGB state as the "RGB tip". Skipped if the star never has an RGB phase.
   // Tagged kind:"tip": for every star that ignites helium the tip coincides with
-  // CHeB onset (the He flash happens AT the tip — measured |Δpos| < 1.3e-4 across all
-  // masses), so rebuildAgeTicks drops it as a redundant mark when CHeB sits on top of
-  // it, leaving it only for stars whose window ends mid-RGB (no CHeB).
-  let tip = null;
-  for (const s of track)
-    if (s.phase === "RGB" && (tip === null || s.R_rsun > tip.R_rsun)) tip = s;
-  if (tip !== null) pts.push({ age: tip.age_yr, label: "RGB tip", kind: "tip" });
+  // CHeB onset (the He flash happens AT the tip — it sits one EEP row before CHeB onset),
+  // so rebuildAgeTicks drops it as a redundant mark when CHeB sits on top of it, leaving
+  // it only for stars whose window ends mid-RGB (no CHeB).
+  let tip = null, tipI = -1;
+  for (let i = 0; i < track.length; i++)
+    if (track[i].phase === "RGB" && (tip === null || track[i].R_rsun > tip.R_rsun)) {
+      tip = track[i]; tipI = i;
+    }
+  if (tip !== null) pts.push({ i: tipI, label: "RGB tip", kind: "tip" });
   return pts;
 }
 
-// Build the age ticks from the track (the single source for the age window now).
-// Position uses the SAME map the slider uses — frac = (age - ageMin)/(ageMax -
-// ageMin) — so each landmark tick lands exactly under the marker at that age. (If
-// this drifted from refresh()'s `age = ageMin + frac*(ageMax-ageMin)`, snapping
-// would jump the marker off the landmark.)
+// Build the age ticks from the track. Position uses the SAME EEP-row map the slider
+// uses — pos = i/(N−1) — so each landmark tick lands exactly under the marker at that
+// EEP. (If this drifted from the slider's row map, snapping would jump the marker off
+// the landmark — the invariant flagged at the els.age input handler.)
 function rebuildAgeTicks() {
-  if (!currentTrack || !(ageMax > ageMin)) return;
-  const span = ageMax - ageMin;
+  if (!currentTrack || currentTrack.length < 2) return;
+  const n = currentTrack.length;
   const all = criticalAges(currentTrack)
-    .map((p) => ({ ...p, pos: clamp01((p.age - ageMin) / span) }));
+    .map((p) => ({ ...p, pos: clamp01(p.i / (n - 1)) }));
   // Phase transitions are always kept (the old global 0.01 dedup dropped CHeB — the
   // "CHeB is nowhere as a tick" bug). The RGB-tip is the only droppable point: it
   // sits one row before CHeB onset (the He flash is AT the tip), so it's dropped
@@ -734,8 +782,8 @@ function rebuildAgeTicks() {
   ].sort((a, b) => a.pos - b.pos).map((p) => ({ pos: p.pos, label: p.label }));
   ageTickPos = opts.map((o) => o.pos);
   buildDatalist(els.ageTicks, opts);
-  // The age axis is linear in age, so the evolutionary landmarks crowd the right edge
-  // for low/intermediate-mass stars — stagger their labels onto stacked rows (no-drop)
+  // On the EEP axis the landmarks are well spread (MS→RGB ~42%, →CHeB ~67%, →EAGB ~83%),
+  // but neighbouring labels can still collide, so stagger them onto stacked rows (no-drop)
   // so each one stays visible. Prepend a "ZAMS" label at the LEFT end: the slider's zero
   // is the zero-age main sequence (where the window starts — the pre-main-sequence
   // contraction is clipped), NOT the star's literal birth. For a low-mass star the ZAMS
@@ -803,10 +851,9 @@ const gyrNum = (yr) => {
 };
 
 // --- latest-request-wins -----------------------------------------------------
-// Two independent token streams: the per-change state fetch, and the track fetch
-// (which only fires on mass/feh changes, so a slow track can't be clobbered by a
-// fast age scrub). Each guards against a stale response overwriting a newer one.
-let reqToken = 0;
+// The track fetch (the only living-path network call now — the age scrub picks from the
+// already-fetched track, Chunk E) carries a token so a stale response can't overwrite a
+// newer one. (The endgame fetches carry their own separate tokens.)
 let trackToken = 0;
 
 async function fetchJSON(path) {
@@ -1227,8 +1274,9 @@ function updateLiveGateway() {
 function enterWD() {
   if (!endgame || endgame.type !== "WD" || !endgame.states.length) return;
   mode = "wd";
-  // Invalidate any in-flight live fetch so it can't land and clobber the WD render.
-  reqToken++; trackToken++;
+  // Invalidate any in-flight live /track so it can't land and clobber the WD render
+  // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
+  trackToken++;
   document.body.classList.add("wd-mode");
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -1249,8 +1297,9 @@ function enterWD() {
 function enterWR() {
   if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
   mode = "wr";
-  // Invalidate any in-flight live fetch so it can't land and clobber the WR render.
-  reqToken++; trackToken++;
+  // Invalidate any in-flight live /track so it can't land and clobber the WR render
+  // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
+  trackToken++;
   document.body.classList.add("wr-mode");
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -1372,8 +1421,29 @@ function tryResnap() {
   if (mode === "wr") return tryWRResnap();
 }
 
-async function refresh() {
-  const token = ++reqToken;
+// Paint every living consumer (the 3D star, HR, composition, scale, spectrum, SED,
+// classification + the readout/status) from one StellarState — the living marker.
+// Shared by refresh() (the track-pick path) so the source of the state stays in one
+// place. (The WD/WR endgame modes have their own render paths — refreshWD/refreshWR.)
+function paintState(s) {
+  star.update(s);
+  classification.update(s);
+  scale.update(s);
+  hr.update(s);
+  comp.update(s);
+  spectrum.update(s);
+  sed.update(s);
+  renderReadout(s);
+  els.status.style.color = teffToCSS(s.Teff_K);
+  // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the
+  // text itself is the hover target). innerHTML, not textContent, for the spans.
+  els.status.innerHTML =
+    tipSpan("OK", STATUS_OK_TIP) +
+    " · " + tipSpan(s.phase, phaseTip(s.phase)) +
+    (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+}
+
+function refresh() {
   // Clamp the source-of-truth mass to the span valid at this [Fe/H] (the dead
   // low-mass corner moves with metallicity) and PERSIST the clamp, then sync the
   // thumb so it can't visually sit in the disabled (dead-corner) region.
@@ -1381,45 +1451,24 @@ async function refresh() {
   const mass = massValue;
   els.mass.value = clamp01(sliderFromMass(mass));
   const feh = Number(els.feh.value);
-  // Fetch + display at the desired age, CLAMPED to the current window. ageValue is
-  // the unclamped source of truth; the thumb is set from it in refreshTrack() and the
-  // age handlers — refresh() must NOT re-read els.age.value (that re-quantizes to the
-  // 0.0005 step and reintroduces the razor-sharp-phase off-by-one). Display == fetch
-  // == readout (all the clamped age), so the unclamped desired value is never shown.
-  const age = Math.min(Math.max(ageValue, ageMin), ageMax);
-
   setNum(els.massNum, fmt(mass));
   setNum(els.fehNum, feh.toFixed(2));
-  setNum(els.ageNum, gyrNum(age));
 
-  try {
-    const s = await fetchJSON(
-      `/state?mass=${mass}&feh=${feh}&age=${age}`,
-    );
-    // Bail if a newer request superseded this one OR if we've since entered the WD
-    // endgame — a live /state landing after enterWD() would clobber the WD render
-    // (refreshWD doesn't bump reqToken, so the token alone wouldn't catch it).
-    if (token !== reqToken || mode !== "live") return;
-    star.update(s);
-    classification.update(s);
-    scale.update(s);
-    hr.update(s);
-    comp.update(s);
-    spectrum.update(s);
-    sed.update(s);
-    renderReadout(s);
-    els.status.style.color = teffToCSS(s.Teff_K);
-    // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the
-    // text itself is the hover target). innerHTML, not textContent, for the spans.
-    els.status.innerHTML =
-      tipSpan("OK", STATUS_OK_TIP) +
-      " · " + tipSpan(s.phase, phaseTip(s.phase)) +
-      (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
-  } catch (err) {
-    if (token !== reqToken) return;
-    els.status.style.color = "#ff6b6b";
-    els.status.textContent = `Error: ${err.message}`;
-  }
+  // The living marker is PICKED from the already-fetched track by EEP-row (Chunk E): the
+  // slider is linear in EEP, so ageFraction → the nearest row, NO /state fetch. The track
+  // holds every EEP state; age-based fetching is degenerate in flat-age bands (blue loops /
+  // the He flash). If no track has landed yet (first call before /track), there's nothing
+  // to paint — refreshTrack drives the first paint once currentTrack is set. Bail in an
+  // endgame mode too (refreshWD/refreshWR own those).
+  if (mode !== "live" || !currentTrack || !currentTrack.length) return;
+  const i = trackRowFromPos(ageFraction);
+  if (i < 0) return;
+  const s = currentTrack[i];
+  // The displayed age is the picked row's true age (honest by construction). Don't write
+  // ageValue here: it's the preserved DESIRED age (source of truth for the spring-back
+  // across a mass change); only an explicit age scrub / typed value commits it.
+  setNum(els.ageNum, gyrNum(s.age_yr));
+  paintState(s);
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -1471,21 +1520,32 @@ async function refreshTrack() {
       // step-aligned (see gyrNum), so a hand-typed value is honored across the cycle.
       configureAgeNum(ageMin, ageMax);
       // The age WINDOW moved with the new track, but the desired absolute age
-      // (ageValue) is preserved — recompute the slider fraction from it, clamped to
-      // the new window, and sync the thumb. So changing mass/[Fe/H] keeps the age
-      // fixed when it stays in range, and pins it to the nearest end when it doesn't
-      // (ageValue itself stays unclamped, so dragging back springs it out again). On
-      // the very first track ageValue is still the Sun's DEFAULT_AGE_YR, so this also
-      // places the default star at ~4.6 Gyr — no first-track special case needed.
-      if (ageMax > ageMin) {
-        ageFraction = clamp01((ageValue - ageMin) / (ageMax - ageMin));
+      // (ageValue) is preserved — recompute the slider position from it via posFromAge
+      // (the nearest EEP row to that age, Chunk E), and sync the thumb. So changing
+      // mass/[Fe/H] keeps the age fixed when it stays in range, and pins it to the nearest
+      // end when it doesn't (ageValue itself stays unclamped, so dragging back springs it
+      // out again). The thumb JUMPS when the absolute age survives but lands at a different
+      // EEP fraction on the new track — that's correct (same age, different evolutionary
+      // point per mass). On the very first track ageValue is still the Sun's DEFAULT_AGE_YR,
+      // so this also places the default star at ~4.6 Gyr — no first-track special case.
+      if (currentTrack && currentTrack.length > 1) {
+        ageFraction = posFromAge(ageValue);
         els.age.value = ageFraction;
       }
       rebuildAgeTicks();
     }
-  } catch {
+  } catch (err) {
     if (token !== trackToken) return;
-    /* non-fatal: keep the last good track + window; refresh() surfaces errors */
+    // Non-fatal: keep the last good track + window if we have one (a transient failure
+    // shouldn't wipe a working display). But with NO track yet (a first-load /track
+    // failure while the backend is otherwise up — init() already covers backend-down)
+    // there's nothing for refresh() to paint, so surface the error here (refresh() no
+    // longer fetches /state, Chunk E, so it can't surface it as it used to).
+    if (!currentTrack) {
+      els.status.style.color = "#ff6b6b";
+      els.status.textContent = `Error: ${err.message}`;
+      return;
+    }
   }
   if (token !== trackToken) return;
   await refresh();
@@ -1599,23 +1659,23 @@ async function init() {
       refreshWR();
       return;
     }
-    // NOT debounced, on purpose. The /state it fetches costs the same backend window
-    // build as a /track (state_at also rebuilds _interp_window), so age-fling CPU is
-    // real — but age intermediates are *wanted*: scrubbing age is the "watch the star
-    // evolve" experience, where every in-between frame is the point. Mass/[Fe/H]
-    // intermediates are waste (only the endpoint is wanted), which is why those defer.
-    // ageFraction is the SOURCE OF TRUTH (like massValue): keep the EXACT snapped
-    // float, never the range input's step-quantized value. Re-reading els.age.value
-    // would round to the 0.0005 step and land just below a razor-sharp phase
-    // boundary — the "snap to CHeB, readout says RGB" off-by-one. The thumb is set
-    // from the exact value purely as a display (the browser may re-quantize *that*).
+    // NOT debounced, on purpose. The marker is now PICKED from the already-fetched
+    // track (no fetch at all, Chunk E), so age-scrub frames are essentially free — and
+    // age intermediates are *wanted*: scrubbing age is the "watch the star evolve"
+    // experience, where every in-between frame is the point (mass/[Fe/H] intermediates
+    // are waste, which is why those defer). ageFraction is the slider position in EEP
+    // space; snapAge snaps it to the landmark ROW positions. Keep the EXACT snapped float
+    // (the thumb is re-quantized to the 0.0005 step only for display) so the row index
+    // round() lands exactly on the snapped landmark.
     ageFraction = snapAge(Number(els.age.value));
     els.age.value = ageFraction;
-    // ageValue (the source of truth) is the EXACT absolute age this fraction maps to
-    // — keep the exact float so refresh() fetches at it (preserving the off-by-one
-    // fix) and so a later mass/[Fe/H] change preserves *this* age, not a re-quantized
-    // one.
-    ageValue = ageMin + ageFraction * (ageMax - ageMin);
+    // ageValue (the desired/displayed age, the source of truth for the spring-back across
+    // a later mass/[Fe/H] change) is DERIVED from the picked EEP row — honest by
+    // construction, and this is the ONLY place a scrub commits it. Picking the row directly
+    // obsoletes the old "razor-sharp phase off-by-one": there's no age→EEP round-trip to
+    // land on the wrong side of a boundary — the snapped position IS the row.
+    const iScrub = trackRowFromPos(ageFraction);
+    if (iScrub >= 0) ageValue = currentTrack[iScrub].age_yr;
     refresh();
     updateLiveGateway();   // offer the gateway once scrubbed to the end of the life
   });
@@ -1643,7 +1703,7 @@ async function init() {
     const gy = Number(els.ageNum.value);
     if (!isFinite(gy)) return;
     ageValue = gy * 1e9;   // the typed absolute age is the new desired value
-    ageFraction = clamp01((ageValue - ageMin) / (ageMax - ageMin));
+    ageFraction = posFromAge(ageValue);   // -> the nearest EEP row position (Chunk E)
     els.age.value = ageFraction;
     refresh();
     updateLiveGateway();

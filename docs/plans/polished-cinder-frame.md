@@ -533,6 +533,58 @@ several positions per mass.
 **Own advisor consult when built** — the remap choice (EEP vs piecewise vs log) and the
 tick/snap/readout consequences are a real design decision, not a mechanical fix.
 
+### Status — ✅ BUILT (2026-06-29)
+Frontend-only (`frontend/src/main.js`). The remap is **linear-in-EEP**, and the marker is
+**picked straight from the already-fetched track by row** — *no `/state` fetch at all* on an
+age scrub. The advisor consult reframed the design as **two** decisions and the measurements
+settled both:
+
+- **Measured first (per the plan).** The MIST track is **one row per integer EEP** (step
+  exactly 1.0, eep 202→807) with a **mass-invariant** phase split — *always* 606 rows, MS 41.6%
+  / RGB 24.9% / CHeB 16.8% / EAGB 16.7% at every mass (MIST allocates a fixed count of secondary
+  EEPs between primaries). So EEP-index travel gives post-MS a constant **58.5%** of the slider at
+  every mass — no per-mass tuning. Linear-age, by contrast, gives post-MS only **9–18%** and
+  *which* phase vanishes depends on mass (CHeB/EAGB <1% for low mass; RGB collapses to 0.25–0.8%
+  — invisible — for 5–20 M☉).
+- **Decision 1 — the marker MUST come from the EEP coordinate, not an age round-trip.** Measured
+  the per-row age increments: flat-age bands are real and large (the 1 M☉ CHeB **blue loop** is
+  48 EEP rows spanning **~4,800 yr**; a 20 M☉ EAGB band is 31 rows over ~1,280 yr). An "EEP slider
+  that still fetches `/state?age=`" would be **degenerate** there — those rows would get slider
+  travel but map to one age → a *new* dead band at the most dramatic moment. This kills age-fetch,
+  log-age, and piecewise-*in-age*. The marker is therefore **picked from `currentTrack[round(pos·(N−1))]`**
+  (nearest row), mirroring the WD/WR index-linear scrubs exactly.
+- **Decision 2 — linear-in-EEP, not piecewise-per-phase.** `comp.js` already positions its marker
+  `xOf(eep)` (linear in eep), so a linear-in-EEP age fraction **equals the comp-marker x-fraction
+  exactly** — the age thumb and the composition marker move in lockstep. Piecewise would desync them.
+  Plus it's mass-invariant and §6-canonical ("interpolate on EEP, not age").
+- **Pick-from-track (A), not a backend eep-fetch (B).** The track already holds every EEP state, so
+  `/state`-per-frame was redundant; A needs no Protocol change, kills the per-frame window rebuild
+  (age scrubs are now **fetch-free → instant**), and *simplifies* the code: landmarks position by row
+  index (`pos = i/(N−1)`, in `criticalAges`/`rebuildAgeTicks`); `ageValue` (yr) is a **derived honest
+  readout** of the picked row; and the old **razor-sharp phase off-by-one is obsoleted** (we address
+  rows directly — no age→EEP round-trip to land on the wrong side of a boundary). The four mapping
+  sites all flow through the same row map: the `els.age` input handler (commit), `refreshTrack`'s
+  recompute + `els.age-num` typed path (both via `posFromAge`, the nearest-row-to-an-absolute-age
+  inverse), and `rebuildAgeTicks`. `refresh()` is now sync and bails in endgame mode; `refreshTrack`'s
+  catch surfaces a first-load `/track` failure itself (refresh() no longer fetches to surface it).
+  `/state` is **kept** (tests/other callers) — it's just unused by the living marker.
+- **Preserve-absolute-age on a mass change** (the documented spring-back, same-age-across-masses
+  pedagogy): `ageValue` stays the unclamped desired age, only an explicit scrub/typed value commits
+  it, and the thumb JUMPS on a mass change (same age → different EEP fraction per mass — correct,
+  accepted). The GATE_SHOW/GATE_FETCH comment was updated (its "post-RGB crammed into the last ~2%"
+  rationale is obsolete under the EEP map); the thresholds still fire the gateway at the true end.
+
+**Verification — both advisor gates passed in the RUNNING app (Playwright, bundled Chromium):**
+(1) the previously-**dead** bands now animate — 1.0 & 1.5 M☉ **CHeB** sweep Teff ~1300–1450 K /
+L×44–52, and 5 & 20 M☉ **RGB** sweep Teff 9,200–12,200 K, with EEP strictly advancing across each
+(these were <1.2% of the old linear-age slider; now ~17–25% of travel). The quiescent red-clump
+stretch is *physically* stationary (the star really parks there) — not a dead slider, since EEP still
+advances and the comp/HR marker still moves. (2) The default **Sun stays on the §10 anchor** under
+nearest-row: L=1.07, Teff=5835 K, MS, age 4.63 Gyr (measured nearest-row L=1.0728/Teff=5835 vs exact
+4.6 Gyr L=1.0699/Teff=5834 — within 0.3%/0.6 K, so **no scalar interpolation needed**). Plus: the WD
+gateway is shown-but-**disabled** through MS/RGB/EAGB-onset and **enables only at the true end**
+(pos 1.0; the remap relocated EAGB to 0.833–1.0 without breaking the gate); zero page/console errors.
+
 ---
 
 ## Cross-chunk notes

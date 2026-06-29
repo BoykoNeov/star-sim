@@ -1,6 +1,6 @@
 ---
 name: star-sim-ux-nine-fixes
-description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing), B (endgame quick-wins), C (readout panel split + gateway greyed-button) & D (gateway auto-appear = latency, not logic → "computing the star's fate…" placeholder; + resnap note moved below sliders; + the type-only `/endgame?meta=1` fast-path = structurally decouples the button from the 1 MB, additive to the Chunk D token machinery, with an advisor-caught enable-gating fix) BUILT; E (age-slider remap) planned. Plan docs/plans/polished-cinder-frame.md.
+description: Third user-reported UX-fix batch (nine items), ALL FIVE chunks A–E BUILT. A (HR auto-fit framing), B (endgame quick-wins), C (readout panel split + gateway greyed-button), D (gateway auto-appear = latency, not logic → "computing the star's fate…" placeholder + resnap note moved below sliders + the type-only `/endgame?meta=1` fast-path that structurally decouples the button from the 1 MB), E (age-slider remap = linear-in-EEP, marker PICKED from the track by row, no /state fetch — kills the dead MS plateau, mass-invariant 58.5% post-MS travel). Plan docs/plans/polished-cinder-frame.md.
 metadata: 
   node_type: memory
   type: project
@@ -175,5 +175,52 @@ gates on the full `eg` (`disabled = !atEnd || !eg`), NOT on `atEnd` alone — `e
 `endgame.states`, so enabling on `egMeta` alone makes a click in the meta→full gap a silent dead no-op
 (the exit→re-enter path restarts the full fetch from null while `atEnd` holds — the reachable normal case).
 
-**E still planned**: age-slider remap (item 2, design: EEP/piecewise vs linear-age plateau).
-Related: [[star-sim-wr-wd-endgame-plan]].
+**Chunk E — age-slider remap (item 2) — ✅ BUILT 2026-06-29**, frontend-only
+(`frontend/src/main.js`). The slider was **linear in age**, so ~85–90% of it was a dead MS
+plateau ("age rises, nothing changes"). Now it is **linear in EEP**, and the living marker is
+**picked straight from the already-fetched `/track` by row** — *no `/state` fetch at all* on an
+age scrub (like the WD/WR scrubs pick `states[i]`). Advisor reframed the design as **two
+decisions**, both settled by **measuring first** (per the plan):
+
+- **The MIST track is one row per integer EEP** (step exactly 1.0, eep 202→807) with a
+  **mass-invariant** phase split — *always* 606 rows, MS 41.6 / RGB 24.9 / CHeB 16.8 / EAGB 16.7%
+  at every mass. So EEP-index travel gives post-MS a constant **58.5%** of the slider at every
+  mass (no per-mass tuning). Linear-age gives post-MS only 9–18%, and *which* phase vanishes varies
+  with mass (CHeB/EAGB <1% low-mass; RGB collapses to 0.25–0.8% — invisible — for 5–20 M☉).
+- **Decision 1 — marker MUST come from the EEP coordinate, not an age round-trip.** Flat-age bands
+  are real and large (the 1 M☉ CHeB **blue loop** = 48 EEP rows over **~4,800 yr**), so an EEP slider
+  that still fetched `/state?age=` would be **degenerate** there → a new dead band. This kills
+  age-fetch, log-age, and piecewise-*in-age*. Marker = `currentTrack[round(pos·(N−1))]` (nearest row).
+- **Decision 2 — linear-in-EEP, not piecewise.** `comp.js` positions its marker `xOf(eep)`, so a
+  linear-in-EEP age fraction **equals the comp-marker x-fraction exactly** → age thumb & comp marker
+  move in lockstep. Plus mass-invariant + §6-canonical ("interpolate on EEP, not age").
+- **Pick-from-track, not a backend eep-fetch:** no Protocol change, fetch-free instant scrubs, and it
+  *simplifies* — landmarks position by row index (`pos = i/(N−1)` in `criticalAges`/`rebuildAgeTicks`),
+  `ageValue` (yr) is a **derived honest readout** of the picked row, and the **razor-sharp phase
+  off-by-one is obsoleted** (rows addressed directly, no age→EEP round-trip). New helpers
+  `trackRowFromPos` (pos→nearest row) + `posFromAge` (absolute-age→nearest-row position, the inverse).
+  Four mapping sites all flow through them: `els.age` input (commit `ageValue` from the picked row),
+  `refreshTrack` recompute + `els.age-num` typed path (both `posFromAge`), `rebuildAgeTicks`. `refresh()`
+  is now sync + bails in endgame mode + paints via the new `paintState(s)` helper; `refreshTrack`'s catch
+  surfaces a first-load `/track` failure itself (refresh no longer fetches). `/state` route **kept**
+  (tests/other callers), just unused by the living marker.
+
+**Gotcha for future age-slider / `refresh()` work:** the age scrub is now **fetch-free** — `refresh()`
+picks `currentTrack[round(ageFraction·(N−1))]` and `paintState`s it; it does NOT call `/state`. `ageValue`
+(yr) is the preserved DESIRED age (source of truth for the spring-back across a mass change) — **only an
+explicit scrub or typed value commits it**; `refresh()` must NOT write `ageValue` (it derives the *display*
+age from the picked row but leaves the variable alone, or the spring-back breaks). On a mass change the
+thumb JUMPS (same absolute age sits at a different EEP fraction per mass — correct). The GATE_SHOW/GATE_FETCH
+thresholds are position-space and their old "post-RGB crammed into the last ~2%" rationale is **obsolete**
+under the EEP map (EAGB is now 0.833–1.0, so `atEnd ≥ 0.999` enables the gateway only at the true last row —
+verified the gateway stays greyed through MS/RGB/EAGB-onset). The quiescent red-clump stretch in CHeB is
+*physically* stationary (the star parks there) — NOT a dead slider, since EEP still advances and the
+comp/HR marker still moves; don't "fix" it.
+
+Chunk E verification = both advisor gates in the RUNNING app (Playwright, bundled Chromium): dead bands
+animate (1.0/1.5 M☉ CHeB sweep Teff ~1300–1450 K / L×44–52; 5/20 M☉ RGB sweep Teff 9.2–12.2 kK; EEP strictly
+advances), Sun on the §10 anchor under nearest-row (L=1.07/Teff=5835/4.63 Gyr — within 0.3%/0.6 K of the
+exact 4.6 Gyr interp, so **no scalar interpolation needed**); zero page errors. No backend change → 138
+pytest unaffected (the §10 anchor uses the untouched `state_at`).
+
+Related: [[star-sim-wr-wd-endgame-plan]], [[star-sim-frontend-ux]], [[star-sim-composition-panel]].
