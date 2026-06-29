@@ -791,6 +791,20 @@ export function createSED(canvas) {
     // caption's line count) varies — so instead the four branches are matched in length
     // (~130–140 chars) to wrap to the same number of lines at any width. The full story
     // lives in the legend tooltip + the panel's ? tip, not here.
+    // Endgame — TWO distinct objects, two captions. WR must NOT inherit the WD text
+    // (item 7): a Wolf–Rayet is a stripped hot core driving a dense wind, not a degenerate
+    // remnant. No coronal band (wind, not dynamo); its free–free radio is the un-built
+    // SED Chunk 2 (so honestly "not drawn"); and the un-modeled next step is core-collapse,
+    // NOT a white dwarf. One fixed sentence for the whole WR scrub (Teff aside), like WD,
+    // so scrubbing within the mode can't resize the panel.
+    if (endgameWR) {
+      caption.textContent =
+        `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
+        `(${where}). This bared hot core blows a dense wind, not a dynamo — so no coronal ` +
+        `band (its free–free radio isn't drawn); the un-modeled next step is core-collapse, ` +
+        `not a white dwarf. γ-rays stay empty. Evocative, not predictive.`;
+      return;
+    }
     // Endgame (WD): the overlay fades over the scrub rather than vanishing — the AGB
     // giant still carries its suppressed coronal band; the degenerate remnant (no
     // convective dynamo) is left with none. One fixed-structure sentence for the whole

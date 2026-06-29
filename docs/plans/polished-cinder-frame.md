@@ -193,6 +193,38 @@ modes. No app-behaviour repro needed (pure text/CSS).
 ### Consult
 None needed — small, safe, self-contained.
 
+### Status — ✅ BUILT (2026-06-29)
+Two files changed (`frontend/src/sed.js`, `frontend/styles.css`); item 8 confirmed
+**no-fix**.
+
+- **Item 7 (bug):** added an `if (endgameWR)` branch **before** the `endgameMode` (WD)
+  branch in `sed.js renderCaption()` — the two are now distinct objects with distinct
+  captions, so WR no longer inherits the WD text via the shared `endgameMode` gate. WR
+  caption: *"…This bared hot core blows a dense wind, not a dynamo — so no coronal band
+  (its free–free radio isn't drawn); the un-modeled next step is core-collapse, not a
+  white dwarf…"* The phrase "white dwarf" survives **only as a negation** that corrects
+  the exact misconception the user flagged (the WD gateway is one mass-drag away in the
+  same UI, so the explicit contrast is an active teaching beat, not evasion — advisor-
+  endorsed). Honest content: stripped hot core (peaks far-UV/EUV via the live `peakTxt`),
+  wind-not-dynamo → no coronal band, free–free radio "isn't drawn" (the un-built SED Chunk
+  2), next step = core-collapse. The WD caption is untouched.
+- **Item 9 (polish):** restyled `.endgame-back` to a **compact filled-accent (yellow)**
+  button — mirrors `.gateway-btn`'s treatment (`color: var(--bg)`; `background: var(--accent)`;
+  `font-weight: 600`; hover `brightness(1.08)`; `:focus-visible` outline) but stays compact
+  (no `width:100%`) so the bar's title-+-back single row survives.
+- **Item 8 (question, no change):** confirmed in-app — WR mode shows the **generic** Lane–Emden
+  intro ("a teaching idealization… not the real interior"), WD mode shows the WD-specific
+  "genuinely a polytrope" hint. The generic intro is honest and adequate for a WR (it's not a
+  single polytrope; the WD's degenerate core genuinely is). The optional `.lane-wr-hint` polish
+  is **available but deferred** unless the user opts in — additive, not a fix.
+
+**Verification (Playwright, the regression gate):** drove the real UI — WR endgame at m=120,
+WD endgame at m=1. Asserted the WR caption reads as a WR (no "contracts into a white dwarf"),
+the WD caption is unchanged, and `#endgame-back`'s computed background is the accent yellow
+(`rgb(255,210,127)`) in **both** modes. Zero page errors; full-page screenshots both modes. One
+mass per path suffices (unlike Chunk A): the WR caption is fixed text (only Teff varies) and the
+button is mode-CSS — both mass-independent.
+
 ---
 
 ## Chunk C — layout: split the readout panel + stop the jitter (items 1, 4)

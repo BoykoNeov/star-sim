@@ -1,6 +1,6 @@
 ---
 name: star-sim-ux-nine-fixes
-description: Third user-reported UX-fix batch (nine items). Chunk A (HR auto-fit framing) BUILT; B–E planned. Plan docs/plans/polished-cinder-frame.md.
+description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing) & B (endgame quick-wins) BUILT; C–E planned. Plan docs/plans/polished-cinder-frame.md.
 metadata: 
   node_type: memory
   type: project
@@ -41,7 +41,31 @@ in a draw path. `xOf`/`yOf` and the variable-star overlay read the live bindings
 follow expanded/auto-fit bounds automatically (overlay is also clipped + living-mode-only).
 
 Verification = Playwright sweep (m=1/3/7/120/300, living + WR + WD views) + numeric containment;
-no JS test harness ([[star-sim-frontend-ux]]). **B–E still planned**: B endgame quick-wins
-(7 WR-SED-says-WD · 8 Lane–Emden-for-WR=no-fix · 9 yellow Back button), C layout (split readout
-panel + reserve jitter slots), D gateway auto-appear (repro-driven), E age-slider remap (design).
-Related: [[star-sim-wr-wd-endgame-plan]].
+no JS test harness ([[star-sim-frontend-ux]]).
+
+**Chunk B — endgame quick-wins (items 7, 8, 9) — ✅ BUILT 2026-06-29**, two files
+(`frontend/src/sed.js`, `frontend/styles.css`); item 8 = no-fix.
+
+- **Item 7 (bug):** WR's SED caption inherited the WD text via the shared `endgameMode` gate in
+  `sed.js renderCaption()`. Fix = an `if (endgameWR)` branch **before** the WD branch. WR caption:
+  stripped hot core / wind-not-dynamo → no coronal band / free–free radio "isn't drawn" (un-built
+  SED Chunk 2) / next step = **core-collapse, not a white dwarf**. The phrase "white dwarf" survives
+  ONLY as a corrective negation (the WD gateway is one mass-drag away → explicit contrast is a
+  teaching beat, not evasion; advisor-endorsed, matches plan line 152). WD caption untouched.
+- **Item 9 (polish):** `.endgame-back` restyled to a **compact filled-accent (yellow)** button —
+  mirrors `.gateway-btn` (`color:var(--bg)`; `background:var(--accent)`; weight 600; hover
+  `brightness(1.08)`; `:focus-visible` outline) but stays compact (no `width:100%`) so the bar's
+  title-+-back single row survives. Yellow in BOTH wd-mode and wr-mode.
+- **Item 8 (question, NO change):** WR shows the **generic** Lane–Emden intro ("teaching
+  idealization… not the real interior"); only the WD remnant earns the "genuinely a polytrope"
+  hint (`.lane-wd-hint`, `wd-mode`-only). A WR is radiation-pressure-dominated + wind-shrouded, NOT
+  a single polytrope → the generic disclaimer is honest and adequate. Optional `.lane-wr-hint` =
+  **available but deferred** unless the user opts in (additive, not a fix).
+
+Chunk B verification: Playwright drove the real UI (WR m=120, WD m=1) — asserted WR caption reads
+as a WR (no "contracts into a white dwarf"), WD caption unchanged, `#endgame-back` computed bg =
+accent `rgb(255,210,127)` in both modes; zero page errors. **One mass per path suffices** (vs Chunk
+A's sweep): WR caption is fixed text (Teff aside) + button is mode-CSS — both mass-independent.
+
+**C–E still planned**: C layout (split readout panel + reserve jitter slots), D gateway auto-appear
+(repro-driven), E age-slider remap (design). Related: [[star-sim-wr-wd-endgame-plan]].
