@@ -439,11 +439,47 @@ Both verified (Playwright): placeholder bridges the gap and the **correct** fate
 **all** WD↔SN↔WR transitions both ways; `/endgame`-failure → placeholder clears (no stuck
 spinner); zero page errors.
 
-**Deliberately NOT done (the genuine backend/scope item):**
-- **The true latency root** is fetching ~1 MB of `states` just to render a button that only needs
-  the *type*. A tiny type-only `/endgame?meta=1` (or returning the type in the `/track` payload)
-  would make the button near-instant — but that's a **backend/scope** change the plan explicitly
-  excludes; flagged to the user, not expanded silently.
+**The genuine backend/scope item — initially deferred, then DONE 2026-06-29 (user opted in).**
+- **What it is:** the button only needs the fate *type*, but waited on the full ~1 MB `/endgame`.
+  Shipped a type-only **`/endgame?meta=1`** that serves the same `EndgameResult` minus its `states`
+  (~120–140 B vs ~1 MB), plus an explicit `has_states` boolean so the frontend keeps its exact
+  `type==="WD"/"WR" && states.length` guard without assuming "type implies states". Still §3-clean —
+  every meta field is the routing metadata the dataclass already exposes; the route still goes through
+  `PROVIDER.endgame()` (the classifier still builds the full track, so **cold latency is unchanged** —
+  `meta` only drops serialize+ship of the 1 MB, not the compute).
+- **Frontend = a purely additive fast-path** (the Chunk D token machinery is left untouched). A new
+  `fetchEndgameMeta()` with its **own** `endgameMetaToken`/`endgameMetaKey`/`endgameMeta` cache fires
+  on every track change alongside the existing `fetchEndgamePreview()` (full). `updateGateway` derives
+  the button's fate from the full `endgame` **if present, else falls back to `endgameMeta`** — so the
+  button lights up from the tiny meta the instant the track lands, while the full fetch still loads in
+  the background for the **HR preview + the warm enter cache** (the load-bearing "slam-to-the-end"
+  prefetch, `main.js:258`, is preserved — that's *why* the full fetch stays eager rather than going
+  lazy; the user's "don't ship 1 MB" premise is only half-met: the 1 MB still loads, it just no longer
+  gates the *button*). The "computing…" placeholder now hides via a `known = !!fType` flag (meta OR
+  full resolved), and **meta never touches `endgameLoading`** (the full fetch owns it) so a meta
+  *failure* can't blank the slot early — it stays up until the full fetch settles.
+- **The enable-gating fix (advisor-caught, would have shipped a dead button).** Pre-meta, `isWd`/`isWr`
+  required the full `eg`, so `disabled = !atEnd` was safe (at-end ⟹ full loaded). With meta the button
+  can SHOW from `egMeta` while `endgame` is still null, so the enable now gates on the full result too:
+  **`disabled = !atEnd || !eg`** — appearance stays instant (meta), but the button stays greyed until
+  the `states` `enterWD/WR` actually read are present. Without this, a click in the meta→full gap is a
+  silent no-op — reachable on the NORMAL path (change mass while pinned at end; **exit→re-enter** the
+  reversible gateway, which restarts the full fetch from null while `atEnd` holds), not just on a full-
+  fetch failure. Locked by Playwright (full aborted → button shown but `disabled`, forced click does
+  not enter; exit→re-enter re-enables then re-enters).
+- **Honest magnitude (in-session Playwright A/B — the gate).** The headline is **structural decoupling**,
+  not a big number: the button no longer waits on the 1 MB, *guaranteed*, regardless of full-fetch
+  warmth. The measured warm-localhost saving on the `/endgame` hop is **modest (~15–30 ms median**;
+  WD full 103–136 ms vs meta 98–112 ms fetch+parse) — the 1 MB transfers + `JSON.parse`s fast on
+  localhost and the warm provider compute (~37 ms) is identical either way. The win is **larger when
+  the full fetch is cold, uncached, contended, on a slow link, or as the state count grows**; and the
+  **cold first call is unchanged** (compute-bound — the Chunk D placeholder still covers that; the two
+  compose). The earlier "~160 ms vs ~474 ms / 66%" framing was a **cross-session artifact** (the 474 ms
+  baseline was cold/double-fetched) — corrected here.
+- Exactly **one meta + one full** fetch per track change (meta-first; no double-fetch regression).
+  Enter/exit/re-enter/WD-preview intact; all three abort combinations (both / full-only / meta-only)
+  settle with **no stuck spinner**; zero page errors. Backend: new `test_api_endgame_meta_is_type_only`
+  (138 pytest, was 137).
 
 ---
 

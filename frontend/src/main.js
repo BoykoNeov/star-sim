@@ -242,6 +242,15 @@ let endgameLoading = false;     // a live-gateway /endgame fetch is in flight (d
                                 // "computing…" placeholder; cleared on settle, success OR
                                 // fail, by the latest token only — so a stale/failed fetch
                                 // can't leave a stuck spinner)
+let endgameMeta = null;         // type-only /endgame?meta=1 result for the CURRENT star —
+                                // {type, mass_init_msun, has_states, …}. Lights the gateway
+                                // button (greyed, foreshadowing) the instant a track lands,
+                                // ~120 B, WITHOUT waiting on the ~1 MB full fetch (which still
+                                // loads in the background for the HR preview + a warm enter
+                                // cache, so the slam-to-the-end gesture stays instant).
+let endgameMetaKey = null;      // the (mass|feh) key endgameMeta is for (staleness guard)
+let endgameMetaToken = 0;       // latest-wins guard, SEPARATE from endgameToken — the full
+                                // fetch's stabilized machinery (Chunk D) is left untouched
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
 let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
 let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
@@ -1069,36 +1078,85 @@ function refreshWR() {
 function updateGateway() {
   if (mode !== "live") return;   // the whole block is hidden inside an endgame
   const eg = (endgame && endgameKey === egKey()) ? endgame : null;
-  // Show the fate's control as soon as the endgame TYPE is known — fetchEndgamePreview
-  // fetches /endgame on every track, regardless of age, so the fate is known early. The
-  // WD/WR "Continue" button is shown but kept DISABLED (greyed) until the star is
-  // scrubbed to the very end of its life, where it unlocks. So the button never pops
-  // into existence and resizes the panel (item 4): it sits in place, foreshadowing the
-  // endgame, and "lights up" when you arrive. The core-collapse note (no Continue — the
-  // remnant isn't modeled) likewise shows from the start as an honest dead-end marker.
+  const egMeta = (endgameMeta && endgameMetaKey === egKey()) ? endgameMeta : null;
+  // The button's fate descriptor: prefer the FULL result (authoritative; it also backs
+  // enter + the HR preview), but fall back to the tiny meta result so the button LIGHTS UP
+  // before the ~1 MB full fetch lands. `has_states` (meta) mirrors `states.length` (full),
+  // so the WD/WR "has a renderable sequence" guard is identical either way.
+  const fType = eg ? eg.type : (egMeta ? egMeta.type : null);
+  const fHas = eg ? eg.states.length > 0 : (egMeta ? !!egMeta.has_states : false);
+  const fMass = eg ? eg.mass_init_msun : (egMeta ? egMeta.mass_init_msun : null);
+  // Show the fate's control as soon as the endgame TYPE is known — fetchEndgameMeta fetches
+  // it (~120 B) on every track, so the fate lights up almost immediately. The WD/WR
+  // "Continue" button is shown but kept DISABLED (greyed) until the star is scrubbed to the
+  // very end of its life, where it unlocks. So the button never pops into existence and
+  // resizes the panel (item 4): it sits in place, foreshadowing the endgame, and "lights
+  // up" when you arrive. The core-collapse note (no Continue — the remnant isn't modeled)
+  // likewise shows from the start as an honest dead-end marker.
   const atEnd = ageFraction >= GATE_SHOW;
-  const isWd = !!(eg && eg.type === "WD" && eg.states.length);
-  const isWr = !!(eg && eg.type === "WR" && eg.states.length);
-  const isSn = !!(eg && eg.type === "SN");
+  const isWd = fType === "WD" && fHas;
+  const isWr = fType === "WR" && fHas;
+  const isSn = fType === "SN";
   els.gatewayWd.hidden = !isWd;
   els.gatewayWr.hidden = !isWr;
-  els.gatewayWd.disabled = !atEnd;
-  els.gatewayWr.disabled = !atEnd;
+  // ENABLE gates on the FULL `eg` (not just `atEnd`): the button can now SHOW from the tiny
+  // `egMeta` before the full fetch lands, but enterWD/WR read the full `endgame.states`, so
+  // enabling on meta alone would make a click in the meta→full gap a silent no-op (a dead
+  // button — reachable on the NORMAL path: change mass while pinned at end, or exit→re-enter
+  // the reversible gateway, both of which restart the full fetch from null while atEnd holds).
+  // So: appearance is instant (meta), but the button stays greyed until the data it acts on
+  // is actually present. Happy path is unchanged (full loaded seconds ago → eg present).
+  els.gatewayWd.disabled = !atEnd || !eg;
+  els.gatewayWr.disabled = !atEnd || !eg;
   if (isSn) {
     els.gatewaySn.innerHTML =
-      `<b>Core collapse.</b> A ${fmt(eg.mass_init_msun)} M☉ star ends as a supernova, ` +
+      `<b>Core collapse.</b> A ${fmt(fMass)} M☉ star ends as a supernova, ` +
       `leaving a neutron star or black hole — a remnant this simulator doesn't model.`;
   }
   els.gatewaySn.hidden = !isSn;
   // The "computing the star's fate…" placeholder shows exactly while a /endgame fetch is
-  // IN FLIGHT and we don't yet have a resolved fate for the current (mass, [Fe/H]) — i.e.
-  // the brief gap after a mass/[Fe/H] change. The moment the fetch settles, endgameLoading
-  // clears (success → `eg` set; failure → no `eg`), so the slot falls back to the real
-  // control or to blank — never a stuck spinner. (Gating on endgameLoading, NOT on `!!eg`:
-  // `eg` stays null on a fetch failure, so `!!eg` would re-show the placeholder forever.)
-  els.gatewayLoading.hidden = !(endgameLoading && !eg);
+  // IN FLIGHT and we don't yet have a resolved fate (from EITHER cache) for the current
+  // (mass, [Fe/H]) — i.e. the brief gap after a mass/[Fe/H] change. Meta now resolves the
+  // type in ~tens of ms (warm), so this barely flashes; it still covers the COLD case (the
+  // classifier builds the full track, up to ~1 s on a cache miss). The moment a fetch
+  // settles, endgameLoading clears (success → a fate is `known`; failure → no fate), so the
+  // slot falls back to the real control or to blank — never a stuck spinner. (Gating on
+  // endgameLoading, NOT on `!!known`: a fate stays unknown on a fetch failure, so `!known`
+  // alone would re-show the placeholder forever.)
+  const known = !!fType;
+  els.gatewayLoading.hidden = !(endgameLoading && !known);
   els.gateway.hidden = false;   // block stays in the layout (reserved height); only its
                                 // children toggle, so the panel never jitters in live mode
+}
+
+// Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
+// /endgame?meta=1) so the gateway button appears (greyed, foreshadowing) the instant a new
+// track lands — instead of waiting ~150 ms+ for the full ~1 MB /endgame the preview/enter
+// path fetches. Purely ADDITIVE: its OWN token + cache, never touches endgame/endgameToken,
+// so the stabilized full-fetch machinery (Chunk D) is unchanged. updateGateway prefers the
+// full `endgame` when present and falls back to `endgameMeta` for the button alone — enter
+// + the HR preview + resnap all still read the full `endgame`, so this can't regress them.
+async function fetchEndgameMeta() {
+  if (mode !== "live") return;
+  const key = egKey();
+  const tok = ++endgameMetaToken;
+  const mass = massValue, feh = Number(els.feh.value);
+  try {
+    const m = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&meta=1`);
+    // Drop a stale/superseded response, or one for a star we've since moved off of.
+    if (tok !== endgameMetaToken || mode !== "live" || egKey() !== key) return;
+    endgameMeta = m; endgameMetaKey = key;
+    // Note: do NOT touch endgameLoading here. It's owned by the full fetch
+    // (fetchEndgamePreview — Chunk D). The "computing…" placeholder hides via the `known`
+    // flag in updateGateway the moment EITHER cache resolves, so a successful meta hides it
+    // immediately; a FAILED meta leaves the placeholder up (correct — the fate is still
+    // unknown until the full fetch lands), and the full fetch's settle is the sole owner
+    // that finally clears endgameLoading. So a meta failure can never blank the slot early.
+    updateGateway();
+  } catch {
+    // non-fatal: the full fetch still populates the button when it lands. Nothing to paint
+    // from meta (endgameMeta stays null), and we must not clear endgameLoading (see above).
+  }
 }
 
 // Fetch /endgame as soon as a new track lands, so the living HR can show a faint
@@ -1383,20 +1441,24 @@ async function refreshTrack() {
     currentTrack = t;
     hr.setTrack(t);
     comp.setTrack(t);
-    // The star changed, so any cached endgame is stale — drop it + clear the gateway's
-    // CHILDREN (the buttons/note), but leave the block itself in the layout so its
-    // reserved height holds while the new fate loads (no reflow). fetchEndgamePreview
-    // (below) is the SOLE repopulator on a track change (the tail calls updateGateway, not
-    // updateLiveGateway, so maybeFetchEndgame does NOT also fire here — see the tail note).
-    // Clear the faint HR preview too, then refetch it for the new star (fire-and-forget).
+    // The star changed, so any cached endgame is stale — drop BOTH caches (the full result
+    // and the type-only fast-path one) + clear the gateway's CHILDREN (the buttons/note),
+    // but leave the block itself in the layout so its reserved height holds while the new
+    // fate loads (no reflow). On a track change two fetches fire: fetchEndgameMeta (~120 B,
+    // lights the button almost immediately) and fetchEndgamePreview (the ~1 MB full result —
+    // SOLE repopulator of `endgame`, backs the HR preview + the warm enter cache). The tail
+    // calls updateGateway, NOT updateLiveGateway, so maybeFetchEndgame does NOT also fire
+    // here (see the tail note). Clear the faint HR preview too, then refetch for the new star.
     endgame = null; endgameKey = null;
+    endgameMeta = null; endgameMetaKey = null;
     els.gatewayWd.hidden = els.gatewayWr.hidden = els.gatewaySn.hidden = true;
-    endgameLoading = true;               // a fetch is about to fire (fetchEndgamePreview)
+    endgameLoading = true;               // a fetch is about to fire (meta + full)
     els.gatewayLoading.hidden = false;   // show "computing…" now (covers the await refresh()
                                          // window before updateGateway runs), so the slot
                                          // never flashes blank while the new fate loads
     hr.setEndgamePreview(null);
-    fetchEndgamePreview();
+    fetchEndgameMeta();      // type-only → button lights up (greyed) almost immediately
+    fetchEndgamePreview();   // full → HR preview + warm enter cache (slam-to-end stays instant)
     if (t.length) {
       ageMin = t[0].age_yr;
       ageMax = t[t.length - 1].age_yr;

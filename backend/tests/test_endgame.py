@@ -227,3 +227,25 @@ def test_api_endgame_out_of_range_is_422():
     client = TestClient(app)
     resp = client.get("/endgame", params={"mass": 999.0, "feh": 0.0})
     assert resp.status_code == 422
+
+
+def test_api_endgame_meta_is_type_only():
+    """`meta=1` serves the same routing metadata minus the heavy `states` list — the
+    gateway button's fast path. It drops `states` (so the ~1 MB WD/WR track never ships
+    just to render a button), adds an explicit `has_states` boolean mirroring the
+    frontend's `states.length` guard, and the scalar fate fields are IDENTICAL to the
+    full response (same provider call, same snap)."""
+    client = TestClient(app)
+    for mass, want_type, want_has in ((1.0, "WD", True), (20.0, "SN", False), (60.0, "WR", True)):
+        full = client.get("/endgame", params={"mass": mass, "feh": 0.0}).json()
+        meta = client.get("/endgame", params={"mass": mass, "feh": 0.0, "meta": 1}).json()
+        assert meta["type"] == full["type"] == want_type
+        assert meta["states"] == []                      # the bulk is dropped
+        assert meta["has_states"] is want_has            # but the guard is preserved
+        assert (len(full["states"]) > 0) is want_has     # ...and it matches the full result
+        # the scalar routing fields are byte-for-byte the full ones (same snap)
+        for k in ("mass_init_msun", "feh_init", "final_mass_msun", "wr_threshold_msun"):
+            assert meta[k] == full[k]
+        # the meta payload is a tiny fraction of the full one for a star with a track
+        if want_has:
+            assert len(str(meta)) < len(str(full)) / 100

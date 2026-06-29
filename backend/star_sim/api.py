@@ -144,6 +144,12 @@ def track(
 def endgame(
     mass: float = Query(..., description="initial mass / M_sun"),
     feh: float = Query(..., description="initial [Fe/H]"),
+    meta: bool = Query(
+        False,
+        description="type-only fast path: drop the heavy `states` list and return just "
+        "the routing metadata (fate type + snapped mass + a `has_states` flag). The "
+        "gateway BUTTON needs only these — ~120 B vs the full ~1 MB cooling/wind track.",
+    ),
 ) -> dict:
     """(mass, [Fe/H]) -> the stellar endgame past the normal track window: the WR/WD
     gateway (STAR_SIM_SPEC §6+; docs/plans/smoldering-cinder-gateway.md).
@@ -155,14 +161,27 @@ def endgame(
     provider it is). The response is the `EndgameResult` dataclass with its `states`
     serialized exactly as the §3 `StellarState` shape (the API adds no fields). The
     gateway reads `type` (WD / WR / SN / none) to pick the renderer; `states` is the
-    scrubbable endgame sequence (empty for SN / none)."""
+    scrubbable endgame sequence (empty for SN / none).
+
+    `meta=1` serves the *same* `EndgameResult`, minus its bulk: the gateway button only
+    needs the fate type, the snapped `mass_init_msun` (for the SN note), and whether a
+    renderable sequence exists. So we drop `states` and add an explicit `has_states`
+    boolean (mirrors the frontend's `states.length` guard without assuming "type implies
+    states"). Still §3-clean — every field is the same routing metadata the dataclass
+    already exposes, no provider internals leak; the classifier still builds the full
+    track (so cold latency is unchanged), we just don't serialize/ship the 1 MB. The
+    full fetch (no `meta=`) still backs the HR preview + the warm gateway-enter cache."""
     try:
         result = PROVIDER.endgame(mass, feh)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
         raise _provider_unavailable(exc) from exc
-    return asdict(result)
+    d = asdict(result)
+    if meta:
+        d["has_states"] = bool(d["states"])
+        d["states"] = []
+    return d
 
 
 @app.get("/polytrope")

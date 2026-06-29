@@ -1,6 +1,6 @@
 ---
 name: star-sim-ux-nine-fixes
-description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing), B (endgame quick-wins), C (readout panel split + gateway greyed-button) & D (gateway auto-appear = latency, not logic → "computing the star's fate…" placeholder; + resnap note moved below sliders) BUILT; E (age-slider remap) planned. Plan docs/plans/polished-cinder-frame.md.
+description: Third user-reported UX-fix batch (nine items). Chunks A (HR auto-fit framing), B (endgame quick-wins), C (readout panel split + gateway greyed-button) & D (gateway auto-appear = latency, not logic → "computing the star's fate…" placeholder; + resnap note moved below sliders; + the type-only `/endgame?meta=1` fast-path = structurally decouples the button from the 1 MB, additive to the Chunk D token machinery, with an advisor-caught enable-gating fix) BUILT; E (age-slider remap) planned. Plan docs/plans/polished-cinder-frame.md.
 metadata: 
   node_type: memory
   type: project
@@ -133,15 +133,47 @@ Fix is **two parts** (a second advisor consult sharpened both):
   competing ~1 MB fetches. Safe: touches **no token internals** (age-scrub path still calls
   `maybeFetchEndgame`; `fetchEndgamePreview` is the sole repopulator on a track change). Button
   now **+474 ms** (was +628), single fetch.
-- **Still NOT done (genuine backend/scope):** the true root — fetching ~1 MB of `states` for a
-  button needing only the *type*. A type-only `/endgame?meta=1` (or type in `/track`) → near-
-  instant, but backend, excluded by the plan; flagged to user.
+- **The backend/scope root — initially deferred, then DONE 2026-06-29 (user opted in):** a type-only
+  **`/endgame?meta=1`** that serves the same `EndgameResult` minus its `states` (~120–140 B vs ~1 MB),
+  plus an explicit `has_states` boolean (mirrors the frontend's `states.length` guard). Still §3-clean
+  (meta fields are the routing metadata the dataclass already exposes; route still goes through
+  `PROVIDER.endgame()`). Frontend = a **purely additive fast-path**: a new `fetchEndgameMeta()` with its
+  OWN `endgameMetaToken`/`endgameMetaKey`/`endgameMeta` cache fires alongside the untouched
+  `fetchEndgamePreview()` (full); `updateGateway` derives the button's fate from full `endgame` **else
+  falls back to `endgameMeta`**. The full fetch **stays eager** (NOT lazy) because it's load-bearing —
+  it pre-warms the HR preview + the "slam-to-the-end" enter cache (`main.js:258`); meta just makes the
+  button *appear* without waiting on the 1 MB (the user's "don't ship 1 MB" premise is only half-met:
+  the 1 MB still loads for preview/enter, it just no longer gates the *button*; bandwidth is unchanged).
+- **Enable-gating fix (advisor-caught — would have shipped a DEAD BUTTON).** Pre-meta, `isWd`/`isWr`
+  needed the full `eg`, so `disabled = !atEnd` was safe (at-end ⟹ full loaded). With meta the button
+  can SHOW from `egMeta` while `endgame` is null, so enable now gates on the full too:
+  **`disabled = !atEnd || !eg`**. Without it, a click in the meta→full gap is a silent no-op
+  (`enterWD/WR` read `endgame.states`) — reachable on the NORMAL path (change mass while pinned at end;
+  **exit→re-enter** the reversible gateway restarts the full fetch from null while `atEnd` holds), not
+  just on full-fetch failure. Locked by Playwright (full aborted → shown-but-`disabled`, forced click
+  no-ops; exit→re-enter re-enables then re-enters).
+- **Honest magnitude — STRUCTURAL win, not a big number.** The button is now *decoupled* from the 1 MB,
+  guaranteed, regardless of full-fetch warmth. Measured warm-localhost saving on the `/endgame` hop is
+  **modest (~15–30 ms median**; WD full 103–136 vs meta 98–112 ms fetch+parse) — 1 MB transfers+parses
+  fast on localhost and warm provider compute (~37 ms) is identical either way. Larger when the full is
+  cold/uncached/contended/slow-link or as state-count grows; **cold first call unchanged** (compute-bound
+  — Chunk D placeholder covers it; the two compose). The earlier "~160 vs ~474 ms / 66%" was a
+  **cross-session artifact** (474 ms baseline was cold/double-fetched) — corrected. Exactly 1 meta + 1
+  full per change (meta-first, no double-fetch); all 3 abort combos no-stuck-spinner;
+  `test_api_endgame_meta_is_type_only` (138 pytest).
 
-**Gotcha for future gateway work:** the placeholder is gated on `endgameLoading` (an in-flight
-flag), NOT on `!!eg` — clear `endgameLoading` (latest-token-only, success+failure) wherever a
-live-gateway `/endgame` fetch settles, or the spinner sticks. `refreshTrack`'s tail calls
-`updateGateway` (not `updateLiveGateway`) on purpose — don't "restore" it or the double-fetch +
-discarded-response regression returns.
+**Gotcha for future gateway work:** the placeholder is now gated on `endgameLoading && !known` where
+`known = !!fType` (a fate resolved from EITHER the full `endgame` OR the `endgameMeta` cache). The
+**meta fetch must NOT touch `endgameLoading`** — the full fetch (`fetchEndgamePreview`) is its sole
+owner; meta clearing it on *failure* would blank the slot before the full fetch lands (the fate is
+genuinely still unknown then). The two caches/tokens are SEPARATE on purpose — never thread meta
+through `endgameToken`/`endgameKey`/`fetchEndgamePreview`/`maybeFetchEndgame` (the Chunk D machinery).
+`refreshTrack`'s tail calls `updateGateway` (not `updateLiveGateway`) on purpose — don't "restore" it
+or the double-fetch + discarded-response regression returns. The full fetch stays EAGER (don't make it
+lazy "to save the 1 MB") — it pre-warms the slam-to-the-end enter cache. And the WD/WR button's ENABLE
+gates on the full `eg` (`disabled = !atEnd || !eg`), NOT on `atEnd` alone — `enterWD/WR` read
+`endgame.states`, so enabling on `egMeta` alone makes a click in the meta→full gap a silent dead no-op
+(the exit→re-enter path restarts the full fetch from null while `atEnd` holds — the reachable normal case).
 
 **E still planned**: age-slider remap (item 2, design: EEP/piecewise vs linear-age plateau).
 Related: [[star-sim-wr-wd-endgame-plan]].
