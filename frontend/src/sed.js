@@ -369,13 +369,19 @@ export function createSED(canvas) {
     //     collapses — so it SHRINKS into the gap rather than vanishing abruptly.
     const coolA = 1 - gapW;
     if (coolA > 0.01) {
-      drawXrayBand(decFromLog, { logHi: lerp(-3, -6, gapW), logLo: -7, dim: false,
+      // The band's CURRENT decade range — its top descends from 10⁻³ toward 10⁻⁶ as the
+      // cool dynamo weakens into the gap (gapW→1). The rotation line below is clamped to
+      // this SAME top, so it can't escape ABOVE the band once the top has dropped — the
+      // "rotation set band beyond the X-ray limits" bug for a warm ~6400 K dwarf (1.29
+      // M☉), where the band sits at ~10⁻³·⁹ but the saturated level is 10⁻³·¹³.
+      const bandHi = lerp(-3, -6, gapW), bandLo = -7;
+      drawXrayBand(decFromLog, { logHi: bandHi, logLo: bandLo, dim: false,
         tag: "coronal X-ray", topLabel: "10⁻³", botLabel: "10⁻⁷", alpha: coolA });
       drawGudelBenzRadio(lamPeak, 1e-3, coolA);
       // (1b) The rotation→X-ray LINE collapsing the band (Chunk 3): cool branch ONLY,
       //      its alpha tied to coolA so it fades WITH the band across the cool→gap morph.
       const line = activityLine();
-      if (line) drawActivityLine(decFromLog, line, coolA);
+      if (line) drawActivityLine(decFromLog, line, coolA, bandHi, bandLo);
     }
 
     // (2) The A/early-F X-ray gap: a faint dashed marker that fades IN only in the
@@ -527,15 +533,19 @@ export function createSED(canvas) {
   }
 
   // Draw the line + its ±fuzz envelope across the soft-X-ray band, clamped into the
-  // band's own [10⁻³,10⁻⁷] range so it always reads INSIDE the envelope. Cool blue —
-  // distinct from the coral evocative band: this is the more-concrete rung of the
-  // ladder (a single rotation→activity value, not the whole range). alpha fades it
-  // with the band across the cool→gap morph.
-  function drawActivityLine(decFromLog, line, alpha) {
-    const lx = Math.min(LXLB_SAT_LOG, Math.max(LXLB_FLOOR_LOG, line.lxlbLog));
+  // band's CURRENT [bandLo, bandHi] range so it always reads INSIDE the envelope —
+  // including where the band top has descended toward the X-ray gap (passed in by the
+  // caller as lerp(-3,-6,gapW)). Cool blue — distinct from the coral evocative band:
+  // this is the more-concrete rung of the ladder (a single rotation→activity value, not
+  // the whole range). alpha fades it with the band across the cool→gap morph. NOTE: when
+  // the band top has dropped below the saturated level (~10⁻³·¹³) this clamp slightly
+  // understates that level — an accepted, minimal compromise vs. a line floating above
+  // its own band.
+  function drawActivityLine(decFromLog, line, alpha, bandHi, bandLo) {
+    const lx = Math.min(bandHi, Math.max(bandLo, line.lxlbLog));
     const decMid = decFromLog(lx);
-    const decHi = Math.min(0, decFromLog(Math.min(LXLB_SAT_LOG, lx + line.fuzz)));
-    const decLo = Math.max(-FLOOR_DECADES, decFromLog(Math.max(LXLB_FLOOR_LOG, lx - line.fuzz)));
+    const decHi = Math.min(0, decFromLog(Math.min(bandHi, lx + line.fuzz)));
+    const decLo = Math.max(-FLOOR_DECADES, decFromLog(Math.max(bandLo, lx - line.fuzz)));
     const x0 = xOf(XRAY_LO), x1 = xOf(XRAY_HI);
     const yMid = yOf(decMid), yHi = yOf(decHi), yLo = yOf(decLo);
     ctx.save();
@@ -546,7 +556,10 @@ export function createSED(canvas) {
     ctx.beginPath(); ctx.moveTo(x0, yMid); ctx.lineTo(x1, yMid); ctx.stroke();
     ctx.fillStyle = "#bfe0ff"; ctx.font = "9px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(line.src === "set" ? "rotation set" : "age-derived", x0 + 2, yMid - 3);
+    // Below the line, not above: when a saturated fast rotator pins the line to the
+    // band's top edge, a label above would collide with the band's own "coronal X-ray"
+    // tag — keeping it under the line stays clear of that tag and inside the envelope.
+    ctx.fillText(line.src === "set" ? "rotation set" : "age-derived", x0 + 2, yMid + 11);
     ctx.restore();
     ctx.textAlign = "left";
   }
@@ -624,7 +637,13 @@ export function createSED(canvas) {
         : "Too young to derive rotation from age — drag to pin a period.";
       const src = userProt != null ? "set by you" : "from age";
       let flag = "";
-      if (userProt == null && gyroFlag === "old") flag = " · old star: braking weakens, wide uncertainty";
+      // Below the saturation Rossby number the rotation–activity law plateaus: a faster
+      // spin no longer raises L_X/L_bol, so the line stops moving as the slider drops
+      // past ~Ro_sat·τ_conv (≈1.3 d for the Sun-like τ here). Say so — otherwise the
+      // frozen line at the fast end reads as a bug ("nothing happens below ~1 day").
+      if (eff / tauConvDays(mass ?? 1) <= ROT_SAT)
+        flag = " · saturated: faster spin won't raise X-rays";
+      else if (userProt == null && gyroFlag === "old") flag = " · old star: braking weakens, wide uncertainty";
       else if (userProt == null && gyroFlag === "mdwarf") flag = " · M-dwarf: relation extrapolated";
       return `P_rot ≈ ${eff.toPrecision(3)} d (${src})${flag}.`;
     }

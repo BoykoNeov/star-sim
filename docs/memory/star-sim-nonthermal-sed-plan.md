@@ -1,6 +1,6 @@
 ---
 name: star-sim-nonthermal-sed-plan
-description: "Non-thermal SED layer (CHUNKS 1 & 3 BUILT, Chunk 2 planned) — coronal soft-X-ray + Güdel–Benz radio band, then a rotation→X-ray LINE (gyrochronology + slider) collapsing it; hot-star wind radio is Chunk 2. The accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate."
+description: "Non-thermal SED layer (CHUNKS 1 & 3 BUILT, Chunk 2 planned) — coronal soft-X-ray + Güdel–Benz radio band, then a rotation→X-ray LINE (gyrochronology + slider) collapsing it; hot-star wind radio is Chunk 2. The accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate. + the cool→gap band-descent line-clamp + saturation-cue fixes."
 metadata: 
   node_type: memory
   type: project
@@ -130,3 +130,21 @@ Even pinned: ~0.5-1 dex scatter + ~10× cycle wobble → "line with a fuzz", nev
 Wright2011/Cranmer-Saar2011; slider = sed.js-local like lane.js n-slider; gating reads
 phase). Ladder: **band (Chunk 1) → age-derived line → slider**, each rung more concrete,
 none faking a number. Chunk 3 depends on Chunk 1 (collapses its band), NOT on Chunk 2.
+
+**CHUNK 3 FOLLOW-UP (user-reported, frontend-only, pytest unchanged 137).** Two rotation-line
+fixes on a warm cool-dwarf (1.29 M☉, [Fe/H] 0 at ZAMS, Teff 6380): **(1)** the blue "rotation
+set" line **escaped ABOVE the coral band** — `drawActivityLine` clamped to the FIXED saturation
+range [10⁻³·¹³,10⁻⁷], but in the cool→gap morph the band's top DESCENDS to `lerp(-3,-6,gapW)`
+(≈10⁻³·⁹ at 6380 K) while a saturated fast rotator pins L_X/L_bol at 10⁻³·¹³ ABOVE it → the line
+floated outside its own band ("rotation set band goes beyond the limits of coronal x-ray"). FIX =
+pass the band's CURRENT `[bandHi,bandLo]` into `drawActivityLine` and clamp the line + fuzz to it
+(a tiny, accepted understatement of the true saturation level vs. a line outside its band); also
+moved the line LABEL **below** the line so a top-pinned (saturated) line doesn't collide with the
+band's own "coronal X-ray" tag. **(2)** saturation was **silent** — below Ro_sat the line stops
+moving (correct physics: faster spin won't raise X-rays), reading as a bug ("slider goes below
+~1 d, nothing happens"). FIX = `rotNote` appends "· saturated: faster spin won't raise X-rays"
+when `P_rot/τ_conv ≤ ROT_SAT`. **GOTCHA worth keeping:** the rotation→X-ray line only draws in a
+NARROW window — cool MS, Teff<6500 (`dynamoLineAllowed`); a 1.29 M☉ is in it ONLY right at ZAMS
+(Teff 6380; by 0.03 Gyr it's 6528 → suppressed), so "age 0" was load-bearing in the report.
+Verified Playwright bundled Chromium (saturated line pinned inside the band top, note reads
+"saturated"; slow rotator line sits mid-band).

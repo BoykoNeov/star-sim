@@ -518,6 +518,14 @@ body.wd-mode .age-live { display: none; }
 body.wd-mode .age-wd { display: inline; }
 body.wd-mode .endgame-age-caption { display: block; }
 body.wd-mode #sed-rot { display: none; }
+/* The variable-star overlay is a LIVING-star HR feature (the classical instability
+   strip; white-dwarf pulsators like ZZ Ceti are a different mechanism), and the HR
+   panel is the WD cooling track in this mode — so hide the toggle + its legend, the
+   same way #sed-rot is hidden. Without this the toggle stayed clickable but drew
+   nothing (hr.js draw() skips the overlay in endgame mode), leaving a dead button +
+   an orphaned legend. The overlay's on/off state is preserved and re-shown on exit. */
+body.wd-mode .hr-modes,
+body.wd-mode .legend-vars { display: none; }
 /* The composition panel becomes the white-dwarf STRUCTURE view in the endgame: its
    burning-abundance mode toggle and legends are meaningless for a degenerate remnant
    (the structure cross-section draws its own labels), so hide them. */

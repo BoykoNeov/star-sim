@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
 metadata:
   type: project
 ---
@@ -204,6 +204,28 @@ hover-tooltip element, hint text wraps clean): live→intro / wd→hint swap + r
 slider/readout stay live in wd-mode (drag n=3 → ξ₁ 6.90, ρc/ρ̄ 54.18), 0 JS errors. **CAVEAT (advisor,
 not gated):** the static hint shows for the whole wd-mode scrub incl. the opening TPAGB-giant rows where
 "degenerate core" is premature — same character as the Chunk-6 spectrum-placeholder note, milder.
+
+**CHUNK 2/3 FOLLOW-UP #2 (user-reported, frontend-only, pytest UNCHANGED 137).** Three endgame UX fixes:
+**(1) living-HR endgame PREVIEW** — `hr.setEndgamePreview(states)` draws the WD cooling track
+faint+dashed+CLIPPED to the living-axes frame ("where this star is headed"; the in-bounds stretch is the
+post-AGB climb toward the hot upper-left + the start of the cooling sweep), the mirror of the endgame
+view's faint living track. Fed by a new `fetchEndgamePreview()` that fetches `/endgame` **eagerly on
+every track load** (user accepted the ~1 MB cost — it rides the track debounce, once per settled
+mass/[Fe/H], and also warms the gateway), gated to `type==="WD"` (SN/WR show nothing — never promise a
+remnant the star won't form). **TOKEN-RACE TRAP (advisor-caught, the screenshot MISSED it — happy-path
+Sun at 4.6 Gyr never hit it):** `fetchEndgamePreview` and `maybeFetchEndgame` share `endgameToken`; when
+`refreshTrack` runs at `ageFraction≥GATE_FETCH` (most clearly **exit-WD**, which pins to age=1) BOTH
+fire, the latter wins the token, and the former returns early on the stale token → preview silently never
+sets at the EAGB endpoint. FIX = `maybeFetchEndgame` ALSO calls `hr.setEndgamePreview` in its success
+branch, so whichever fetch wins the race sets it. **(2) variable-star overlay toggle hidden in wd-mode** —
+`hr.js draw()` skips `drawOverlay` in endgameMode, so the toggle was a dead click + an orphaned legend;
+CSS `body.wd-mode .hr-modes,.legend-vars{display:none}` mirrors `#sed-rot`. The classical instability
+strip is a LIVING-star feature (WD pulsators like ZZ Ceti are a different mechanism) → hide > draw; state
+is preserved + re-shown on exit. **(3) total age in the cooling caption** — already in the WD readout's
+Age row (`s.age_yr`, cumulative from ZAMS incl. cooling), but the user didn't see it there; surfaced in
+the prominent `endgame-age-caption` ("· total age N Gyr since ZAMS") where the eye is. Verified Playwright
+bundled Chromium incl. **enter→exit-WD → preview reappears** on the living HR; 20 M☉ (SN) shows no preview;
+saturated/slow checks; Sun anchor 1.07/5834 unregressed.
 
 **Remaining: Chunks 4–7** (WR mode shell + HR-to-250kK + stripped-surface composition, then the WR 3D
 wind shader, then the data-gated WR/WD spectra above).

@@ -663,9 +663,15 @@ function rebuildAgeTicks() {
   buildDatalist(els.ageTicks, opts);
   // The age axis is linear in age, so the evolutionary landmarks crowd the right edge
   // for low/intermediate-mass stars — stagger their labels onto stacked rows (no-drop)
-  // so each one stays visible.
+  // so each one stays visible. Prepend a "ZAMS" label at the LEFT end: the slider's zero
+  // is the zero-age main sequence (where the window starts — the pre-main-sequence
+  // contraction is clipped), NOT the star's literal birth. For a low-mass star the ZAMS
+  // age is hundreds of Myr (a 0.3 M☉ sits at ~0.45 Gyr there), so without this the left
+  // end reads as an arbitrary non-zero floor. Strip-label only — pos 0 is already a
+  // snapAge target, and the age "?" tooltip carries the why.
   buildTickStrip(els.ageMarks,
-    opts.map((o) => ({ pos01: o.pos, label: o.label })), { stagger: true });
+    [{ pos01: 0, label: "ZAMS" }, ...opts.map((o) => ({ pos01: o.pos, label: o.label }))],
+    { stagger: true });
 }
 
 // Write a number input's display value without fighting the user mid-type.
@@ -874,13 +880,19 @@ function refreshWD() {
     " · " + tipSpan(s.phase, phaseTip(s.phase)) +
     (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
 
-  // The cooling caption names the current act.
+  // The cooling caption names the current act and carries the TOTAL age (living life +
+  // endgame cooling, measured from ZAMS — the same s.age_yr as the readout's Age row,
+  // surfaced here where the eye is). The cooling age (since the central-star peak) is the
+  // separate "how long a white dwarf" clock.
   const coolingAge = s.age_yr - endgame.states[z.knee].age_yr;
+  const total = gyr(s.age_yr);
   let cap;
-  if (i <= z.tpEnd) cap = "Thermal-pulse phase — the dying giant sheds its envelope.";
-  else if (i < z.knee) cap = "Contracting toward the hot planetary-nebula central star.";
+  if (i <= z.tpEnd)
+    cap = `Thermal-pulse phase — the dying giant sheds its envelope · total age ${total} since ZAMS.`;
+  else if (i < z.knee)
+    cap = `Contracting toward the hot planetary-nebula central star · total age ${total} since ZAMS.`;
   else cap = `Cooling white dwarf · ${gyr(coolingAge)} since the central-star peak ` +
-    `· Teff ${fmt(s.Teff_K, 4)} K.`;
+    `· total age ${total} since ZAMS · Teff ${fmt(s.Teff_K, 4)} K.`;
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
 }
 
@@ -902,6 +914,28 @@ function updateGateway() {
   els.gateway.hidden = !(showWd || showSn);
 }
 
+// Fetch /endgame as soon as a new track lands, so the living HR can show a faint
+// preview of where the star is headed (a white dwarf) — and the gateway data is already
+// warm when the user scrubs to the very end. Only a WD endgame yields a preview; SN/WR
+// stars show nothing (we never promise a remnant the star won't form). Latest-wins
+// (shares endgameToken with maybeFetchEndgame, which then no-ops once this populated the
+// cache). Fire-and-forget — never blocks the marker refresh. The ~1 MB fetch rides the
+// track debounce (once per settled mass/[Fe/H]), so age scrubbing stays light.
+async function fetchEndgamePreview() {
+  if (mode !== "live") return;
+  const key = egKey();
+  const tok = ++endgameToken;
+  const mass = massValue, feh = Number(els.feh.value);
+  try {
+    const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
+    // Drop a stale/superseded response, or one for a star we've since moved off of.
+    if (tok !== endgameToken || mode !== "live" || egKey() !== key) return;
+    endgame = eg; endgameKey = key;
+    hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
+    updateGateway();
+  } catch { /* non-fatal: no preview/gateway this time */ }
+}
+
 // Lazily fetch /endgame as the star nears the end of its life, so the gateway is ready
 // when the user reaches the slider limit (keeps normal scrubbing light — no 1 MB fetch
 // per mass drag). Latest-wins; re-fetches whenever (mass, [Fe/H]) changed.
@@ -915,6 +949,11 @@ async function maybeFetchEndgame() {
     const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
     if (tok !== endgameToken || mode !== "live") return;
     endgame = eg; endgameKey = key;
+    // Set the HR preview here too, not just in fetchEndgamePreview: the two share
+    // endgameToken, so when both fire (e.g. exiting WD at ageFraction=1, where this
+    // path wins the token race) only the winner runs its success branch — it must
+    // also set the preview, or the dashed track silently fails to appear.
+    hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
     updateGateway();
   } catch { /* non-fatal: no gateway this time */ }
 }
@@ -1076,8 +1115,11 @@ async function refreshTrack() {
     hr.setTrack(t);
     comp.setTrack(t);
     // The star changed, so any cached endgame is stale — drop it + hide the gateway
-    // (maybeFetchEndgame refetches when the user next scrubs near the end).
+    // (maybeFetchEndgame refetches when the user next scrubs near the end). Clear the
+    // faint HR preview too, then refetch it for the new star (fire-and-forget, below).
     endgame = null; endgameKey = null; els.gateway.hidden = true;
+    hr.setEndgamePreview(null);
+    fetchEndgamePreview();
     if (t.length) {
       ageMin = t[0].age_yr;
       ageMax = t[t.length - 1].age_yr;

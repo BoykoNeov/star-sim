@@ -1,6 +1,6 @@
 ---
 name: star-sim-frontend-ux
-description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes."
+description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS."
 metadata: 
   node_type: memory
   type: project
@@ -46,6 +46,14 @@ plus `comp.js`/`hr.js`/`canvas.js`). Non-obvious decisions worth not re-litigati
   oversized canvases.
 - **Launcher:** `start.bat` (Windows double-click) + `start.sh`, documented in
   `README.md` — venv + uvicorn + open browser, for a non-CLI launch.
+- **The age slider's left end is labeled "ZAMS", not zero** (user: "why can't age go
+  to zero?"). The window starts at the zero-age main sequence (`t[0].age_yr`), which
+  for a low-mass star is hundreds of Myr (0.3 M☉ ≈ 0.45 Gyr; the Sun ≈ 42 Myr; 20 M☉
+  ≈ 0) — the pre-main-sequence contraction is clipped by the deliberate spec ZAMS→EAGB
+  window (extending to literal birth = un-clipping PMS + adding PMS EEPs to the §6
+  interp; rejected as scope creep). `rebuildAgeTicks()` prepends a **strip-only**
+  `{pos01:0,label:"ZAMS"}` so the non-zero floor reads as a physical landmark, not an
+  arbitrary cutoff. pos 0 is already a `snapAge` target; the age `?` tip explains it.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the

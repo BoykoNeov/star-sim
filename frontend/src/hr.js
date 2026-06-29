@@ -133,6 +133,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let showOverlay = false; // variable-star zones (off by default — opt-in view)
   let endgameMode = false; // WD endgame view: wide axes + the cooling track
   let endgameTrack = null; // the endgame StellarStates (the cooling sequence)
+  let previewTrack = null; // LIVING-mode faint preview of where a WD-bound star is headed
 
   // Fill + dashed outline the current path with a zone's colors.
   function fillZone(fill, stroke) {
@@ -228,12 +229,40 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     }
   }
 
+  // A faint, dashed preview of the white-dwarf cooling track on the LIVING HR — "where
+  // this star is headed" once its visible life ends (the mirror of the endgame view,
+  // which keeps the living track faint for context). The cooling sequence runs far
+  // hotter and fainter than the living-star axes, so it's CLIPPED to the plot frame:
+  // only the in-bounds stretch shows (the post-AGB climb toward the hot upper-left and
+  // the start of the cooling sweep), reading as a ghostly path leaving the bright track.
+  // Set only for WD-ending stars (setEndgamePreview(null) for SN/WR), so it never
+  // promises a remnant the star won't form.
+  function drawPreviewEndgame() {
+    if (!previewTrack || previewTrack.length < 2) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+    ctx.beginPath();
+    previewTrack.forEach((s, i) => {
+      const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "rgba(231,236,245,0.22)";
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   function draw() {
     drawAxes();
     if (endgameMode) {
       drawEndgameTrack();
     } else {
       if (showOverlay) drawOverlay(); // behind the track, so the live star stays on top
+      drawPreviewEndgame();           // ghostly "headed for the WD corner" path, clipped
       drawTrack();
     }
     if (!marker) return;
@@ -251,6 +280,12 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
   function update(state) { marker = state; draw(); }
   function setOverlay(on) { showOverlay = !!on; draw(); }
+  // The living-mode endgame preview — pass the WD cooling states, or null to clear it
+  // (a star changed, or it doesn't end as a white dwarf). Drawn only in living mode.
+  function setEndgamePreview(states) {
+    previewTrack = states && states.length ? states : null;
+    if (!endgameMode) draw();
+  }
 
   // Enter/leave the white-dwarf endgame view. setEndgame() swaps in the wide axes and
   // the cooling track; clearEndgame() restores the living-star bounds + track.
@@ -275,5 +310,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgame, clearEndgame, resize };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, clearEndgame, resize };
 }
