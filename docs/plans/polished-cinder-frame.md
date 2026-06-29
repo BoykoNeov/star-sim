@@ -97,6 +97,42 @@ visible. Playwright screenshots at the extremes.
 **Own advisor consult when built** — the auto-fit-vs-fixed decision and the
 "nice rounding" of dynamic gridlines are worth a second opinion.
 
+### Status — ✅ BUILT (2026-06-29)
+Implemented in `frontend/src/hr.js` (only changed file). Diverges from the plan's
+recommendation in one deliberate way, endorsed by the advisor consult:
+
+- **Endgame views (WD + WR):** auto-fit as planned — `setEndgame` computes
+  `fitBounds(endgameTrack, track)` (the endgame journey **plus** the faint living-context
+  track drawn under it) with a small padding margin, regenerating gridlines from the live
+  bounds (`niceStepL` integer-dex / `niceStepT` half-dex → `genTicks`). `kind` is now
+  framing-agnostic. Verified: WR m=120 (316→56 kK, framed with headroom), WD m=1 cooling
+  track (100 kK→3.2 kK, framed; living context greyed).
+- **Living view:** *not* the plan's "widen `LOGL_MAX` to ~7 with fixed bounds." Instead a
+  **hybrid** (`applyLivingBounds`): keep the exact fixed teaching frame (3.4–4.7 logT,
+  −4…6 logL) + hand-tuned gridlines for ordinary stars, and expand **only the edges the raw
+  track actually crosses** (margin added solely on overflowing edges; only an expanded axis
+  regenerates its gridlines). The advisor flagged that pure auto-fit would destroy the
+  inter-star scale cue (a 0.5 M☉ and a 5 M☉ would fill the frame identically) — the hybrid
+  preserves the comparison frame **and** guarantees framing. Verified: Sun/0.1/1/5 keep the
+  exact default frame; m=300 expands the overflow edges and frames the marker.
+- **WD living-view preview** (the user's two extra asks, beyond items 5/6): dashed → **solid
+  faint grey** (matches how the endgame view greys the living track). The "clipped, and it is
+  unclear what it is" complaint was the **full** post-AGB→WD cooling sequence drawing a
+  confusing diagonal clear across the living frame (the raw states meander on the cool TPAGB,
+  jump blueward to a ~100–200 kK exposed core, then sweep down to logL ≈ −5). Fix: draw only a
+  **directional leader** from the AGB tip (where the living track ends) to the **hottest** state
+  (the post-AGB knee), which runs up-left and exits the frame toward the hot WD regime, with a
+  `→ white dwarf` label on the line. The full cooling physics lives in the dedicated WD endgame
+  view (the gateway). Correctly **suppressed for SN** progenitors (m ≳ 7 here → `type="SN"`, no
+  preview) and WR.
+
+**Advisor's two flagged checks, both cleared:** (1) the preview no longer reads as a stray
+clipped line (leader + label, verified m=1/3/7); (2) fixed-coordinate decorations under
+expanded/auto-fit bounds — the variable-star overlay follows `xOf`/`yOf` (the live `bT0..bL1`
+bindings, not `LOGT_MIN`-class constants, which are only default seeds + overflow thresholds)
+and is clipped + living-mode-only; verified rendering cleanly at m=300. No JS errors across the
+Playwright sweep (m=1/3/7/120/300, living + WR + WD views).
+
 ---
 
 ## Chunk B — endgame quick-wins (items 7, 8, 9) · cheap & safe

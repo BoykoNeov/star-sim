@@ -6,38 +6,54 @@
 import { teffToCSS } from "./color.js";
 import { fitCanvas } from "./canvas.js";
 
-// Plot bounds (log10): covers cool red dwarfs to hot O stars, and ~1e-4..1e6 L.
+// DEFAULT living-view plot bounds (log10): covers cool red dwarfs to hot O stars, and
+// ~1e-4..1e6 L. This is the stable TEACHING frame — the Sun and ordinary stars are read
+// against fixed axes here so you can compare stars at a glance. But massive stars clip:
+// ≳60 M☉ reach log L > 6 (off the top) and ≳120 M☉ also exceed log T 4.7 (off the left).
+// So the living frame is EXPANDED to enclose the current track whenever it crosses an
+// edge (applyLivingBounds) — fixed for the common case, auto-fit only when a track demands
+// it. The ENDGAME views (WD cooling, WR stripping) span a far wider, mass-dependent range
+// (a WD fades to log L ≈ −5; a WR core blazes to ~316 kK / log L ≈ 7), so they FIT TIGHTLY
+// to the actual endgame.states each time (setEndgame → fitBounds) — mirroring star.js
+// applyWindScale, which fits the WR-3D extent to the frame for exactly this reason. Auto-
+// fit GUARANTEES the track is framed regardless of progenitor mass/[Fe/H], which a fixed
+// ceiling could not (item 6: a WR trail "so high up nothing is displayed").
 const LOGT_MIN = 3.4;   // ~2500 K  (right edge, cool)
 const LOGT_MAX = 4.7;   // ~50000 K (left edge, hot)
 const LOGL_MIN = -4;
 const LOGL_MAX = 6;
-// Wider bounds for the WHITE-DWARF ENDGAME view (the smoldering-cinder gateway): the
-// cooling track runs from the cool-giant corner up to a ~100–400 kK central star
-// (log T ≈ 5.0–5.6) and all the way down to a cold cinder at logL ≈ −5.3. The normal
-// bounds would clip both the hot central star (off the left) and the faded WD (off the
-// bottom), so endgame mode swaps in these. setEndgame()/clearEndgame() toggle them.
-const LOGT_MIN_EG = 3.35;
-const LOGT_MAX_EG = 5.7;    // ~500 kK — fits the hottest central stars (394 kK at 6.5 M☉)
-const LOGL_MIN_EG = -5.6;
-const LOGL_MAX_EG = 4.5;
-// Wider bounds for the WOLF–RAYET ENDGAME view: a WR star is the stripped, blazing core
-// of a massive star — far HOTTER (the stripped surface climbs to ~250 kK, log T ≈ 5.4)
-// and far MORE LUMINOUS (log L ≈ 5.6–6.8; the 300 M☉ onset peaks at log L 6.80) than a
-// white dwarf, so the WD endgame's faint-L ceiling (4.5) would clip the whole WR track
-// off the top. The cool side stays open enough to show the immediate-pre-WR giant in the
-// faint living-track context (the cool CHeB excursion reaches log T ≈ 3.9).
-const LOGT_MIN_WR = 3.6;    // ~4 kK   (right edge, shows the cool pre-WR giant for context)
-const LOGT_MAX_WR = 5.5;    // ~316 kK (left edge, fits the hottest stripped WO core)
-const LOGL_MIN_WR = 4.3;
-const LOGL_MAX_WR = 7.0;    // headroom above the 300 M☉ onset (log L 6.80)
-// Per-mode gridline values (Teff in log10 K, L in log10 L☉) — the endgame views need
-// hotter Teff and (WD) fainter / (WR) brighter L ticks than the living view.
+// Default living-view gridlines (Teff in log10 K, L in log10 L☉). Used as-is for the
+// unexpanded frame; when the frame expands for a massive star — or in an auto-fit endgame
+// view — the gridlines are regenerated from the live bounds (genTicks) so labels stay
+// legible and on-frame. L ticks stay at INTEGER dex (labels are "1e<n>"); Teff ticks allow
+// half-dex steps (labels are kK, so 3.5 → 3.2kK reads fine).
 const GRID_T = [4.5, 4.0, 3.7, 3.5];
 const GRID_L = [-3, 0, 3, 6];
-const GRID_T_EG = [5.5, 5.0, 4.5, 4.0, 3.5];
-const GRID_L_EG = [-5, -2, 1, 4];
-const GRID_T_WR = [5.4, 5.0, 4.5, 4.0];
-const GRID_L_WR = [5, 6, 7];
+
+// --- auto-fit axis helpers ----------------------------------------------------
+// Nice gridline step (in log10 dex) for ~4 intervals across `span`. L uses integer dex
+// only (its labels are "1e<n>"); Teff allows finer steps (its labels are kK).
+function niceStepL(span) { const r = span / 4; return r <= 1 ? 1 : r <= 2 ? 2 : Math.ceil(r); }
+function niceStepT(span) { const r = span / 5; for (const s of [0.25, 0.5, 1, 1.5, 2]) if (s >= r) return s; return Math.ceil(r); }
+// Gridline values that are multiples of `step` lying inside [lo, hi].
+function genTicks(lo, hi, step) {
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(Math.round(v * 100) / 100);
+  return out;
+}
+// Padded log10 bounds enclosing every state across the given StellarState arrays. A small
+// margin keeps the track off the frame edge; a floor pad handles near-flat tracks. Teff/L
+// are read straight off the state (Teff_K, L_lsun) — the §3 consumer rule, no provider guts.
+function fitBounds(...lists) {
+  let t0 = Infinity, t1 = -Infinity, l0 = Infinity, l1 = -Infinity;
+  for (const list of lists) for (const s of (list || [])) {
+    const lt = Math.log10(s.Teff_K), ll = Math.log10(s.L_lsun);
+    if (lt < t0) t0 = lt; if (lt > t1) t1 = lt;
+    if (ll < l0) l0 = ll; if (ll > l1) l1 = ll;
+  }
+  const pT = Math.max(0.12, (t1 - t0) * 0.06), pL = Math.max(0.2, (l1 - l0) * 0.06);
+  return { t0: t0 - pT, t1: t1 + pT, l0: l0 - pL, l1: l1 + pL };
+}
 // Asymmetric left pad: the y-axis needs two lanes side by side — the rotated
 // "L / L☉" title in the far-left lane, the 1e-3..1e6 tick numbers in the lane
 // just inside it — so they stop overlapping. Top/right/bottom stay at PAD.
@@ -90,9 +106,11 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let ctx, W, H;
   ({ ctx, W, H } = fitCanvas(canvas, cssW, cssH));
 
-  // Current plot bounds — swapped between the living-star and endgame views below.
-  // xOf/yOf capture these `let` bindings, so a mode switch + redraw rescales the plot.
+  // Current plot bounds + gridlines — recomputed by applyLivingBounds (living view) and
+  // setEndgame (endgame views). xOf/yOf and drawAxes capture these `let` bindings, so a
+  // recompute + redraw rescales the plot and relabels the axes.
   let bT0 = LOGT_MIN, bT1 = LOGT_MAX, bL0 = LOGL_MIN, bL1 = LOGL_MAX;
+  let gridT = GRID_T, gridL = GRID_L;
 
   // Teff reversed: hot (high logT) on the LEFT.
   const xOf = (logT) =>
@@ -112,7 +130,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
 
     // Teff gridlines (label in kK), centered under each line.
     ctx.textAlign = "center";
-    for (const logT of (endgameMode ? (endgameKind === "wr" ? GRID_T_WR : GRID_T_EG) : GRID_T)) {
+    for (const logT of gridT) {
       const x = xOf(logT);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
@@ -123,7 +141,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // L gridlines — tick numbers right-aligned in the lane just left of the
     // frame, so they never collide with the rotated axis title further left.
     ctx.textAlign = "right";
-    for (const logL of (endgameMode ? (endgameKind === "wr" ? GRID_L_WR : GRID_L_EG) : GRID_L)) {
+    for (const logL of gridL) {
       const y = yOf(logL);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD, y); ctx.stroke();
@@ -143,8 +161,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let track = null;        // array of StellarState (age-independent, set per mass/feh)
   let marker = null;       // current StellarState (moves as age scrubs)
   let showOverlay = false; // variable-star zones (off by default — opt-in view)
-  let endgameMode = false; // endgame view: wide axes + the endgame track
-  let endgameKind = "wd";  // "wd" (cooling track) | "wr" (stripping sub-track) — picks bounds/gridlines
+  let endgameMode = false; // endgame view: auto-fit axes + the endgame track
   let endgameTrack = null; // the endgame StellarStates (the cooling / stripping sequence)
   let previewTrack = null; // LIVING-mode faint preview of where a WD-bound star is headed
 
@@ -242,30 +259,48 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     }
   }
 
-  // A faint, dashed preview of the white-dwarf cooling track on the LIVING HR — "where
-  // this star is headed" once its visible life ends (the mirror of the endgame view,
-  // which keeps the living track faint for context). The cooling sequence runs far
-  // hotter and fainter than the living-star axes, so it's CLIPPED to the plot frame:
-  // only the in-bounds stretch shows (the post-AGB climb toward the hot upper-left and
-  // the start of the cooling sweep), reading as a ghostly path leaving the bright track.
-  // Set only for WD-ending stars (setEndgamePreview(null) for SN/WR), so it never
-  // promises a remnant the star won't form.
+  // A faint preview of where a WD-bound star is headed once its visible life ends, drawn on
+  // the LIVING HR. Drawn SOLID and faint (not dashed) to MATCH the endgame view, which keeps
+  // the living track solid-faint for context: the two views share one "faint grey = the part
+  // of the story you're not focused on" treatment.
+  //
+  // The raw WD endgame states are NOT a clean line: they meander on the cool TPAGB (an upper-
+  // right tangle the living track deliberately omits), then jump blueward to a hot exposed core
+  // (off the left of the living frame), then sweep DOWN across the whole diagram as the WD cools.
+  // Drawing all of it scrawls a confusing diagonal over the living view — exactly the "clipped,
+  // and it is unclear what it is" complaint. The only cue we want here is DIRECTIONAL: "this star
+  // heads off toward the hot WD regime." So we draw a single straight leader from the AGB tip
+  // (previewTrack[0], = where the living track ends) to the HOTTEST state (the post-AGB knee),
+  // which runs up-left and exits the frame toward the hot corner, with a "→ white dwarf" label on
+  // it. The full cooling physics lives in the dedicated WD endgame view (the gateway button), not
+  // here. Clipped to the plot frame as a backstop. Set only for WD-ending stars
+  // (setEndgamePreview(null) for SN/WR), so it never promises a remnant the star won't form.
   function drawPreviewEndgame() {
     if (!previewTrack || previewTrack.length < 2) return;
+    const p0 = previewTrack[0];
+    let hot = p0;
+    for (const s of previewTrack) if (s.Teff_K > hot.Teff_K) hot = s;
+    if (hot === p0) return;   // no blueward leg to point at
+    const x0 = xOf(Math.log10(p0.Teff_K)), y0 = yOf(Math.log10(p0.L_lsun));
+    const x1 = xOf(Math.log10(hot.Teff_K)), y1 = yOf(Math.log10(hot.L_lsun));
     ctx.save();
     ctx.beginPath();
     ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
     ctx.clip();
     ctx.beginPath();
-    previewTrack.forEach((s, i) => {
-      const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = "rgba(231,236,245,0.22)";
-    ctx.setLineDash([4, 3]);
-    ctx.lineWidth = 1.2;
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.strokeStyle = "rgba(231,236,245,0.30)";
+    ctx.lineWidth = 1.4;
     ctx.stroke();
-    ctx.setLineDash([]);
+    // Label on the leader, near its midpoint, clamped inside the frame so it stays legible and
+    // unclipped (the hot end is usually off-frame to the left).
+    const lx = Math.max(PAD_L + 4, Math.min(W - PAD - 78, (x0 + x1) / 2 - 10));
+    const ly = Math.max(PAD + 12, Math.min(H - PAD - 4, (y0 + y1) / 2 - 6));
+    ctx.fillStyle = "rgba(231,236,245,0.6)";
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("→ white dwarf", lx, ly);
     ctx.restore();
   }
 
@@ -290,7 +325,40 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.stroke();
   }
 
-  function setTrack(t) { track = t && t.length ? t : null; draw(); }
+  // Recompute the living frame from the current track. Each edge keeps the fixed teaching
+  // default UNLESS the RAW track data actually crosses it — then that edge extends (with a
+  // margin) to enclose the overflow. So the Sun and ordinary stars get the EXACT default
+  // frame + hand-tuned gridlines (a stable comparison frame); only a genuinely off-scale
+  // star (≳60 M☉ over the top, ≳120 M☉ past the hot-left, the coolest dwarfs past 2500 K)
+  // moves an edge, and only an expanded axis regenerates its gridlines from the live bounds.
+  // The margin is added solely on overflowing edges, so within-frame padding never trips it.
+  function applyLivingBounds() {
+    if (!track || !track.length) {
+      bT0 = LOGT_MIN; bT1 = LOGT_MAX; bL0 = LOGL_MIN; bL1 = LOGL_MAX;
+      gridT = GRID_T; gridL = GRID_L; return;
+    }
+    let rt0 = Infinity, rt1 = -Infinity, rl0 = Infinity, rl1 = -Infinity;
+    for (const s of track) {
+      const lt = Math.log10(s.Teff_K), ll = Math.log10(s.L_lsun);
+      if (lt < rt0) rt0 = lt; if (lt > rt1) rt1 = lt;
+      if (ll < rl0) rl0 = ll; if (ll > rl1) rl1 = ll;
+    }
+    const PT = 0.15, PL = 0.3;   // margin past an overflowing edge (room for the marker dot)
+    bT0 = rt0 < LOGT_MIN ? rt0 - PT : LOGT_MIN;
+    bT1 = rt1 > LOGT_MAX ? rt1 + PT : LOGT_MAX;
+    bL0 = rl0 < LOGL_MIN ? rl0 - PL : LOGL_MIN;
+    bL1 = rl1 > LOGL_MAX ? rl1 + PL : LOGL_MAX;
+    const tExp = bT0 < LOGT_MIN - 1e-6 || bT1 > LOGT_MAX + 1e-6;
+    const lExp = bL0 < LOGL_MIN - 1e-6 || bL1 > LOGL_MAX + 1e-6;
+    gridT = tExp ? genTicks(bT0, bT1, niceStepT(bT1 - bT0)) : GRID_T;
+    gridL = lExp ? genTicks(bL0, bL1, niceStepL(bL1 - bL0)) : GRID_L;
+  }
+
+  function setTrack(t) {
+    track = t && t.length ? t : null;
+    if (!endgameMode) applyLivingBounds();   // never clobber endgame bounds
+    draw();
+  }
   function update(state) { marker = state; draw(); }
   function setOverlay(on) { showOverlay = !!on; draw(); }
   // The living-mode endgame preview — pass the WD cooling states, or null to clear it
@@ -300,24 +368,25 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     if (!endgameMode) draw();
   }
 
-  // Enter/leave an endgame view. setEndgame(states, kind) swaps in the wide axes and the
-  // endgame track; kind picks the bounds + gridlines — "wd" (cool→hot→faint cooling) vs
-  // "wr" (hot, luminous stripped sub-track). clearEndgame() restores the living bounds.
-  function setEndgame(states, kind = "wd") {
+  // Enter/leave an endgame view. setEndgame(states) AUTO-FITS the axes to the endgame
+  // journey — fitting the wide, mass-dependent WD-cooling / WR-stripping track plus the
+  // faint living context track drawn under it, so neither clips regardless of progenitor
+  // mass/[Fe/H] (the item-6 fix: no fragile fixed ceiling). Gridlines regenerate from the
+  // live bounds. `kind` ("wd"/"wr") is accepted for API symmetry but no longer needed for
+  // framing — auto-fit is kind-agnostic. clearEndgame() restores the living bounds.
+  function setEndgame(states, _kind = "wd") {
     endgameMode = true;
-    endgameKind = kind === "wr" ? "wr" : "wd";
     endgameTrack = states && states.length ? states : null;
-    if (endgameKind === "wr") {
-      bT0 = LOGT_MIN_WR; bT1 = LOGT_MAX_WR; bL0 = LOGL_MIN_WR; bL1 = LOGL_MAX_WR;
-    } else {
-      bT0 = LOGT_MIN_EG; bT1 = LOGT_MAX_EG; bL0 = LOGL_MIN_EG; bL1 = LOGL_MAX_EG;
-    }
+    const b = fitBounds(endgameTrack, track);
+    bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
+    gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
+    gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
     draw();
   }
   function clearEndgame() {
     endgameMode = false;
     endgameTrack = null;
-    bT0 = LOGT_MIN; bT1 = LOGT_MAX; bL0 = LOGL_MIN; bL1 = LOGL_MAX;
+    applyLivingBounds();   // restore the living frame (re-fit, in case a massive star is selected)
     draw();
   }
 
