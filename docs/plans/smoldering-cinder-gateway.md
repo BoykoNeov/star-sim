@@ -287,7 +287,36 @@ replaces the comp panel — decide at build time.)**
 **Verify:** Playwright across the cooling sequence (hot blue central star → cold
 red cinder). **Depends:** Chunk 2.
 
-### Chunk 4 — WR mode shell + HR + composition (reuses the gateway)
+### Chunk 4 — WR mode shell + HR + composition (reuses the gateway) — ✅ DONE
+**Status:** shipped (frontend-only; 137 pytest unchanged; 31/31 Playwright on the real
+served UI at 1440 + 390 px). A `→ Continue: Wolf–Rayet` button appears at the age-slider
+limit when the snapped star classifies WR (threshold-gated by the Chunk-1 classifier);
+click → reversible **`wr-mode`** (shares the gateway scaffolding with WD: `exitEndgame`,
+shared `lastEgMass/Feh`, `tryResnap` dispatcher, 3-way event handlers). In the mode the
+age slider becomes an **index-linear scrub** over the φ9 sub-track (simpler than WD's
+3-zone pulse map — the WR sub-track is one clean monotonic run) with a **WN→WC transition
+landmark** (first row with surface Z ≥ 0.4; absent for WN-only stars like 35 M☉ @ +0.5);
+mass/[Fe/H] **stay live** (re-snap → a different WR; SN/WD/none revert with a note). The
+**key reuse**: the composition panel uses its **NORMAL burning-abundance views** (not a
+WD-style custom cross-section) — the WR sub-track has a real EEP axis with an evolving
+surface, so the WN→WC→WO stripping story falls out of the existing bulk/cno views from
+real data (`comp.setTrack(states)` + `comp.update`, no `setEndgame`; the comp toggle stays
+visible). HR gets **WR-specific bounds** (logT 3.6–5.5 ≈ 4 kK–316 kK, logL 4.3–7.0 — WR
+is far more luminous than the WD endgame, 300 M☉ peaks at logL 6.80) via `setEndgame(states,
+"wr")`. Classification (`classify.js`) reads the **WN/WC/WO subtype from the surface
+composition** (data-driven: He-dominant+N → WN, H-present → WNh, C/O-dominant → WC, hottest
++ O-strong → WO). 3D star = a smooth blazing-hot sphere (gDeg=0 — granulation/corona off;
+a **deliberate Chunk-5 placeholder** for the wind shader; verified it doesn't read as
+broken). Spectrum = honest placeholder (WR wind-emission spectra are Chunk 7). SED keeps
+the blackbody but **suppresses the coronal X-ray band entirely** (`{endgame:"wr"}` — a WR
+is wind-driven, not a convective dynamo; the band legend entries are hidden too — don't
+label a non-feature). **Per the advisor, the un-modeled gap is narrated at the END**
+(the end-of-scrub caption says "next is core-collapse… not modeled") — the mirror of the
+WD's PN-ejection-at-entry, because the WR stripping itself IS modeled. The living→WR seam
+was verified continuous before coding (60 M☉: living CHeB R=36.5/Teff=31kK → WR
+R=33.4/Teff=32kK; the GATE_SHOW=0.999 + age-snap-to-1.0 guarantees the gateway only shows
+at the true endpoint, so no radius pop — same safety as WD).
+
 **Goal:** the WR side of the gateway, on-hand data.
 **Do:** the WR gateway branch (threshold-gated by feh, from Chunk 1); WR mode
 rebinds **age → scrub the WR sub-track**, **mass stays live** (re-snap, but only
@@ -298,8 +327,9 @@ honest placeholder. **Verify:** Playwright — a 60 M☉ star, cross into WR, se
 stripped-surface composition and the hot HR position; reversibility holds.
 **Depends:** Chunks 1–2 (gateway scaffolding).
 
-### Chunk 5 — WR 3D wind shader
-**Goal:** the optically-thick-wind look (closes the on-hand-data work).
+### Chunk 5 — WR 3D wind shader (next)
+**Goal:** the optically-thick-wind look (closes the on-hand-data work). Replaces Chunk 4's
+smooth blazing-hot-sphere placeholder (`star.update(s,{endgame:"wr"})`, currently gDeg=0).
 **Do:** a wind shader — radial outflow / electron-scattering haze, a bright hot
 core, an emission-line glow halo; no granulation; evocative/labeled. **Verify:**
 Playwright (WN vs WC/WO flavor if feasible). **Depends:** Chunk 4.

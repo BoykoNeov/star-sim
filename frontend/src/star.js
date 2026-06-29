@@ -310,7 +310,8 @@ export function createStar(canvas) {
   // blue-white → white → yellow → red as it cools over Gyr) under limb darkening.
   // With no opts it is the normal living star (gate = 1 -> granulation + corona intact).
   function update(state, opts) {
-    const wd = !!(opts && opts.endgame === "wd");
+    const eg = opts && opts.endgame;       // "wd" (cooling sphere) | "wr" (stripped core)
+    const wd = eg === "wd", wr = eg === "wr";
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
@@ -322,7 +323,13 @@ export function createStar(canvas) {
     // makes the gateway a CONTINUATION, not a cut: the thermally-pulsing AGB giant the
     // endgame opens on still boils and still glows (just like the EAGB giant the user
     // just left), and only the cooling remnant goes smooth and glowless.
-    const gDeg = wd ? Math.max(0, Math.min(1, (4 - state.logg) / 3)) : 1.0;
+    // WR (Chunk 4): a smooth, glowless hot sphere — a deliberate PLACEHOLDER for the
+    // Chunk-5 optically-thick-wind shader. Granulation and corona are wrong for a
+    // stripped, wind-driven core (it's not convective and has no dynamo corona), so gate
+    // both fully off (gDeg=0); the blackbody color carries the blazing hot look for now.
+    const gDeg = wr ? 0.0
+      : wd ? Math.max(0, Math.min(1, (4 - state.logg) / 3))
+      : 1.0;
     surfaceMat.uniforms.uGran.value = gDeg;
 
     const rad = displayRadius(state.R_rsun);

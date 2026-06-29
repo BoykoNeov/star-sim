@@ -40,6 +40,7 @@ const els = {
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
+  gatewayWr: document.getElementById("gateway-wr"),
   gatewaySn: document.getElementById("gateway-sn"),
   endgameBar: document.getElementById("endgame-bar"),
   endgameBack: document.getElementById("endgame-back"),
@@ -232,12 +233,13 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
 // endgame snaps to ONE real grid track (never interpolated — §6), so the WD scrub is
 // SIMPLER than the live path: it picks states[i] from the pre-fetched /endgame result
 // and feeds the consumers directly — no /state fetch, no window build, no phase snap.
-let mode = "live";              // "live" | "wd"
+let mode = "live";              // "live" | "wd" | "wr"
 let endgame = null;             // the latest /endgame result (type, states, masses…)
 let endgameKey = null;          // the requested (mass|feh) the `endgame` data is for
 let endgameToken = 0;           // latest-wins guard for /endgame fetches
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
-let lastWDMass = 1, lastWDFeh = 0;   // last accepted WD progenitor (for the revert)
+let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
+let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
 let pinAgeToEnd = false;        // one-shot: land the next track refresh at the very end
 
 // The gateway button appears only once the star is scrubbed to the VERY end of its
@@ -314,6 +316,56 @@ function rebuildWDTicks() {
     { pos01: 1, label: "cold WD" },
   ]);
   els.ageTicks.innerHTML = "";   // the WD snap uses its own targets, not the datalist
+}
+
+// --- the Wolf–Rayet endgame scrub (Chunk 4) ----------------------------------
+// Unlike the WD cooling sequence (a 3-zone piecewise map dodging the chaotic thermal
+// pulses), the WR sub-track is ONE clean, dense, monotonically-stripping run of phase-9
+// rows, so the scrub is plain index-linear — every real WR row gets equal travel. The
+// one landmark is the WN→WC transition: where core-helium burning surfaces carbon and
+// oxygen and the stripped surface flips from helium-dominant (nitrogen sequence) to
+// C/O-dominant (carbon/oxygen sequence). Derived from the data (first row whose surface
+// metals dominate, Z_surf ≥ 0.4); wc = -1 for a star that stays WN to the end (measured:
+// ~35 M☉ at [Fe/H]=+0.5 never reaches WC).
+function wrZones(states) {
+  let wc = -1;
+  for (let i = 0; i < states.length; i++) {
+    if ((states[i].Z_surf ?? 0) >= 0.4) { wc = i; break; }
+  }
+  return { wc, last: states.length - 1 };
+}
+
+// slider fraction (0..1) -> WR state index (plain index-linear, see wrZones).
+function wrIndexFromFraction(frac, z) {
+  return Math.round(clamp01(frac) * z.last);
+}
+
+// Snap the WR scrub to its landmarks (onset / WN→WC transition / hottest stripped end).
+function snapWRFraction(raw) {
+  if (!endgame || !endgame.states.length) return clamp01(raw);
+  const z = wrZones(endgame.states);
+  const targets = [0, 1];
+  if (z.wc > 0 && z.last > 0) targets.push(z.wc / z.last);
+  const thresh = 0.015;
+  let best = raw, bestD = thresh;
+  for (const t of targets) {
+    const d = Math.abs(raw - t);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return clamp01(best);
+}
+
+// The WR landmark ticks: the WN onset, the WN→WC transition (only if the star reaches it),
+// and the hottest stripped core. Few and well separated — no stagger needed.
+function rebuildWRTicks() {
+  if (!endgame || !endgame.states.length) return;
+  const z = wrZones(endgame.states);
+  const marks = [{ pos01: 0, label: "WN (He surface)" }];
+  if (z.wc > 0 && z.last > 0)
+    marks.push({ pos01: z.wc / z.last, label: "WC/WO (C·O surface)" });
+  marks.push({ pos01: 1, label: "hottest core" });
+  buildTickStrip(els.ageMarks, marks);
+  els.ageTicks.innerHTML = "";   // the WR snap uses its own targets, not the datalist
 }
 
 // A transient note in the endgame bar (e.g. after a mass re-snap left the WD range).
@@ -552,6 +604,11 @@ const PHASE_TIP = {
   "post-AGB": "Post-AGB — the bared, contracting stellar core: it heats to ~100 000 K " +
     "as a planetary-nebula central star, then cools for billions of years into a " +
     "degenerate white dwarf (a cold, Earth-sized cinder).",
+  WR: "Wolf–Rayet — a very massive star whose powerful winds have stripped its hydrogen " +
+    "envelope, baring the hot helium- and carbon-burning core (climbing toward ~250 000 K). " +
+    "The exposed surface tells the WN→WC→WO story: helium with nitrogen, then carbon and " +
+    "oxygen. Shown only inside the Wolf–Rayet endgame (snapped to one real track). After " +
+    "this the core collapses to a neutron star or black hole — which this simulator doesn't model.",
 };
 const phaseTip = (phase) =>
   PHASE_TIP[phase] ||
@@ -852,6 +909,55 @@ function renderWDReadout(s, z) {
     .join("");
 }
 
+// The Wolf–Rayet readout — the progenitor + the stripping story. The surface mass
+// fractions ARE the WN→WC→WO sequence (hydrogen gone, helium then carbon/oxygen
+// exposed), so they get pride of place; the final mass is the fully-stripped endpoint
+// (the rest carried off by winds), after which the core collapses (not simulated). No
+// cooling-age / remnant-mass rows (those are the WD's) — a WR doesn't leave a WD.
+function renderWRReadout(s) {
+  const ms = s.metals_surf || {};
+  const rows = [
+    ["Progenitor",
+      "the initial main-sequence mass of this Wolf–Rayet (snapped to the nearest real grid track — never interpolated)",
+      `${fmt(s.mass_init_msun)} M☉`],
+    ["[Fe/H]",
+      "metallicity of the progenitor (snapped to the nearest grid value). More metals drive stronger winds, so the envelope strips — and the WR phase begins — at a lower mass",
+      fmt(s.feh_init, 2)],
+    ["Final mass",
+      "the fully-stripped mass at the end of the Wolf–Rayet phase — far below the progenitor's, the rest carried off by powerful winds. After this the core collapses to a neutron star or black hole (not simulated)",
+      endgame && endgame.final_mass_msun != null ? `${fmt(endgame.final_mass_msun)} M☉` : "—"],
+    ["Phase",
+      "WR: the Wolf–Rayet phase — the stripped, blazing helium/carbon-burning core, badly exposed by winds. Its subtype (WN/WC/WO) is shown under the 3D star and read from the surface composition",
+      s.phase],
+    ["Age",
+      "total age since birth on the zero-age main sequence — a massive star reaches the Wolf–Rayet phase in only a few million years",
+      gyr(s.age_yr)],
+    ["L",
+      "luminosity in Suns — Wolf–Rayet stars are extremely luminous (10⁵–10⁶ L☉) despite their small stripped radii",
+      `${fmt(s.L_lsun)} L☉`],
+    ["Teff",
+      "effective (surface) temperature — the bared core climbs toward ~250,000 K as the stripping deepens (far hotter than any main-sequence star)",
+      `${fmt(s.Teff_K, 4)} K`],
+    ["R",
+      "radius in solar radii — the stripped core shrinks from a few R☉ to sub-solar as the envelope is peeled away",
+      `${fmt(s.R_rsun)} R☉`],
+    ["log g",
+      "surface gravity, log₁₀ cgs — rising as the compact core is bared",
+      fmt(s.logg, 3)],
+    ["X / Y / Z surface",
+      "surface mass fractions: hydrogen (X) / helium (Y) / metals (Z). This IS the Wolf–Rayet sequence: hydrogen vanishes (WN), then helium burning surfaces carbon and oxygen so Z climbs (WC/WO)",
+      `${fmt(s.X_surf)} / ${fmt(s.Y_surf)} / ${fmt(s.Z_surf, 2)}`],
+    ["surface C / N / O",
+      "surface carbon / nitrogen / oxygen mass fractions — the spectral fingerprints: nitrogen marks the WN (nitrogen) sequence, carbon and oxygen the WC/WO (carbon/oxygen) sequence",
+      `${fmt(ms.C ?? 0, 2)} / ${fmt(ms.N ?? 0, 2)} / ${fmt(ms.O ?? 0, 2)}`],
+  ];
+  els.readout.innerHTML = rows
+    .map(([k, d, v]) =>
+      `<div class="row"><div class="term">${k} ${help(d)}</div>` +
+      `<div class="v">${v}</div></div>`)
+    .join("");
+}
+
 // Render the current white-dwarf endgame state (a pure function of the pre-fetched
 // `endgame.states` + `wdFraction` — no fetch). The 3D star, scale bar, HR marker and
 // composition take the StellarState as-is; classification/SED/spectrum are told it's
@@ -896,22 +1002,78 @@ function refreshWD() {
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
 }
 
+// Render the current Wolf–Rayet endgame state (a pure function of the pre-fetched
+// `endgame.states` + `wrFraction` — no fetch, mirrors refreshWD). The composition panel
+// uses its NORMAL burning-abundance views (the WR sub-track is a real EEP axis with an
+// evolving surface — the WN→WC→WO story falls out of the data), so it's driven via the
+// usual setTrack (in enterWR) + update here, not the WD structure view. The 3D star is a
+// smooth hot sphere (the Chunk-5 wind shader is later); the spectrum is an honest
+// placeholder (WR wind-emission spectra are Chunk 7); the SED drops the coronal band.
+function refreshWR() {
+  if (!endgame || !endgame.states.length) return;
+  const z = wrZones(endgame.states);
+  const i = Math.max(0, Math.min(endgame.states.length - 1, wrIndexFromFraction(wrFraction, z)));
+  const s = endgame.states[i];
+
+  star.update(s, { endgame: "wr" });   // smooth blazing-hot sphere (Chunk-5 wind shader later)
+  classification.update(s, "wr");      // WN/WC/WO subtype, read from the surface composition
+  scale.update(s);
+  hr.update(s);
+  comp.update(s);                       // normal views over the WR sub-track (stripped surface)
+  sed.update(s, { endgame: "wr" });     // blackbody only — no coronal band (wind, not dynamo)
+  spectrum.showPlaceholder(
+    "Wolf–Rayet wind-emission spectra aren't in the spectral grid yet.");
+  renderWRReadout(s);
+
+  els.status.style.color = teffToCSS(s.Teff_K);
+  els.status.innerHTML =
+    tipSpan("WR endgame",
+      "The reversible Wolf–Rayet endgame: a scrubbable sequence past the normal track, " +
+      "snapped to one real grid track — the stripped, blazing core of a massive star. " +
+      "Slide ‘Back to the living star’ to leave.") +
+    " · " + tipSpan(s.phase, phaseTip(s.phase)) +
+    (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+
+  // The caption names the current act and, at the hot end, narrates the un-simulated gap
+  // — the core-collapse supernova that follows the WR phase (the honest mirror of the WD
+  // gateway's PN-ejection note; here the un-modeled step is the ENDPOINT, not the entry).
+  const total = gyr(s.age_yr);
+  let cap;
+  if (i >= z.last)
+    cap = `Hottest stripped core (~${Math.round(s.Teff_K / 1000)} kK) — next is ` +
+      `core-collapse to a neutron star or black hole, which this simulator doesn't model ` +
+      `· age ${total}.`;
+  else if ((s.Z_surf ?? 0) >= 0.4)
+    cap = `Carbon/oxygen surface (WC/WO) — core-helium burning has surfaced carbon and ` +
+      `oxygen · age ${total} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  else if ((s.X_surf ?? 0) > 0.1)
+    cap = `Hydrogen-rich helium surface (WNh) — winds are peeling away the last of the ` +
+      `hydrogen envelope · age ${total} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  else
+    cap = `Helium surface (WN) — the hydrogen envelope is gone, baring the helium core ` +
+      `· age ${total} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
+}
+
 // Show/hide the gateway button (or the supernova dead-end note) — only when in the
 // living mode AND scrubbed to ~the end of the star's life AND we have endgame data
-// matching the current (mass, [Fe/H]). WR is Chunk 4 (no button yet); "none" → nothing.
+// matching the current (mass, [Fe/H]). WD / WR each get a "Continue" button; the
+// core-collapse gap (SN) gets an honest note; "none" → nothing.
 function updateGateway() {
   const eg = (endgame && endgameKey === egKey()) ? endgame : null;
   const atEnd = mode === "live" && ageFraction >= GATE_SHOW && eg;
   const showWd = !!(atEnd && eg.type === "WD" && eg.states.length);
+  const showWr = !!(atEnd && eg.type === "WR" && eg.states.length);
   const showSn = !!(atEnd && eg.type === "SN");
   els.gatewayWd.hidden = !showWd;
+  els.gatewayWr.hidden = !showWr;
   if (showSn) {
     els.gatewaySn.innerHTML =
       `<b>Core collapse.</b> A ${fmt(eg.mass_init_msun)} M☉ star ends as a supernova, ` +
       `leaving a neutron star or black hole — a remnant this simulator doesn't model.`;
   }
   els.gatewaySn.hidden = !showSn;
-  els.gateway.hidden = !(showWd || showSn);
+  els.gateway.hidden = !(showWd || showWr || showSn);
 }
 
 // Fetch /endgame as soon as a new track lands, so the living HR can show a faint
@@ -971,7 +1133,7 @@ function enterWD() {
   // Invalidate any in-flight live fetch so it can't land and clobber the WD render.
   reqToken++; trackToken++;
   document.body.classList.add("wd-mode");
-  lastWDMass = massValue; lastWDFeh = Number(els.feh.value);
+  lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
   els.gateway.hidden = true;
   els.endgameBar.hidden = false;
@@ -983,24 +1145,48 @@ function enterWD() {
   refreshWD();
 }
 
-// Leave the endgame, reversibly — back to the living star at the end of its track.
-function exitWD() {
+// Enter the reversible Wolf–Rayet endgame from the gateway button (mirrors enterWD).
+// The composition panel uses its NORMAL burning-abundance views (the WN→WC→WO surface
+// story is real data on a real EEP axis), so it's fed via setTrack here — NOT the WD
+// structure view (no comp.setEndgame).
+function enterWR() {
+  if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
+  mode = "wr";
+  // Invalidate any in-flight live fetch so it can't land and clobber the WR render.
+  reqToken++; trackToken++;
+  document.body.classList.add("wr-mode");
+  lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
+  setWDResnapNote("");
+  els.gateway.hidden = true;
+  els.endgameBar.hidden = false;
+  hr.setEndgame(endgame.states, "wr");
+  comp.setTrack(endgame.states);   // normal core/surface views over the WR sub-track
+  rebuildWRTicks();
+  wrFraction = 0;                   // start at the WR onset — scrub forward to the hot end
+  els.age.value = wrFraction;
+  refreshWR();
+}
+
+// Leave the endgame (WD or WR), reversibly — back to the living star at the end of its
+// track. Shared by both modes: the only mode-specific consumer state is the comp panel's
+// WD structure flag (clearEndgame is a no-op for WR, which used the normal views).
+function exitEndgame() {
   mode = "live";
-  document.body.classList.remove("wd-mode");
+  document.body.classList.remove("wd-mode", "wr-mode");
   els.endgameBar.hidden = true;
   setWDResnapNote("");
   hr.clearEndgame();
   comp.clearEndgame();
   endgame = null; endgameKey = null;
-  // Return to the LIVING version of the white-dwarf progenitor we were viewing
-  // (lastWDMass/Feh) — not whatever transient value massValue holds. This is robust to
+  // Return to the LIVING version of the endgame progenitor we were viewing
+  // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
   // the focus/blur race where a still-focused mass box re-commits a reverted-away value
   // on the click that triggers this exit. Sync the controls to it.
-  massValue = lastWDMass;
-  els.feh.value = lastWDFeh;
+  massValue = lastEgMass;
+  els.feh.value = lastEgFeh;
   els.mass.value = clamp01(sliderFromMass(massValue));
   setNum(els.massNum, fmt(massValue));
-  setNum(els.fehNum, lastWDFeh.toFixed(2));
+  setNum(els.fehNum, lastEgFeh.toFixed(2));
   pinAgeToEnd = true;   // land the rebuilt track at its very end
   // feh/mass may have re-snapped in WD mode, so refresh the mass range too before the
   // track; refreshMassRangeThenTrack() rebuilds the live track + age window + marker.
@@ -1021,7 +1207,7 @@ async function tryWDResnap() {
   if (tok !== endgameToken || mode !== "wd") return;
   if (eg.type === "WD" && eg.states.length) {
     endgame = eg; endgameKey = egKey();
-    lastWDMass = mass; lastWDFeh = feh;
+    lastEgMass = mass; lastEgFeh = feh;
     setWDResnapNote("");
     hr.setEndgame(eg.states);
     comp.setEndgame(eg.states);
@@ -1029,20 +1215,64 @@ async function tryWDResnap() {
     refreshWD();
   } else {
     // Not a white-dwarf progenitor — revert to the last WD star.
-    massValue = lastWDMass;
-    els.feh.value = lastWDFeh;
+    massValue = lastEgMass;
+    els.feh.value = lastEgFeh;
     els.mass.value = clamp01(sliderFromMass(massValue));
     setNum(els.massNum, fmt(massValue));
-    setNum(els.fehNum, lastWDFeh.toFixed(2));
+    setNum(els.fehNum, lastEgFeh.toFixed(2));
     setWDResnapNote(eg.type === "SN"
       ? `A ${fmt(eg.mass_init_msun)} M☉ star core-collapses (supernova), not a white ` +
-        `dwarf — reverted to ${fmt(lastWDMass)} M☉.`
+        `dwarf — reverted to ${fmt(lastEgMass)} M☉.`
       : eg.type === "WR"
         ? `That star strips to a Wolf–Rayet, not a white dwarf — reverted to ` +
-          `${fmt(lastWDMass)} M☉.`
-        : `No white-dwarf endgame for that star — reverted to ${fmt(lastWDMass)} M☉.`);
+          `${fmt(lastEgMass)} M☉.`
+        : `No white-dwarf endgame for that star — reverted to ${fmt(lastEgMass)} M☉.`);
     refreshWD();
   }
+}
+
+// Re-snap the WR progenitor after a mass/[Fe/H] change inside the endgame (mirrors
+// tryWDResnap). If the new progenitor still strips to a Wolf–Rayet, swap in its
+// sub-track (keeping the scrub fraction). If it now ends as a white dwarf or
+// core-collapses (SN), there is no WR — revert to the last WR progenitor and say so.
+async function tryWRResnap() {
+  if (mode !== "wr") return;
+  const tok = ++endgameToken;
+  const mass = massValue, feh = Number(els.feh.value);
+  let eg;
+  try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`); }
+  catch { return; }
+  if (tok !== endgameToken || mode !== "wr") return;
+  if (eg.type === "WR" && eg.states.length) {
+    endgame = eg; endgameKey = egKey();
+    lastEgMass = mass; lastEgFeh = feh;
+    setWDResnapNote("");
+    hr.setEndgame(eg.states, "wr");
+    comp.setTrack(eg.states);
+    rebuildWRTicks();
+    refreshWR();
+  } else {
+    // Not a Wolf–Rayet progenitor — revert to the last WR star.
+    massValue = lastEgMass;
+    els.feh.value = lastEgFeh;
+    els.mass.value = clamp01(sliderFromMass(massValue));
+    setNum(els.massNum, fmt(massValue));
+    setNum(els.fehNum, lastEgFeh.toFixed(2));
+    setWDResnapNote(eg.type === "SN"
+      ? `A ${fmt(eg.mass_init_msun)} M☉ star core-collapses (supernova) without a ` +
+        `Wolf–Rayet phase — reverted to ${fmt(lastEgMass)} M☉.`
+      : eg.type === "WD"
+        ? `That star ends as a white dwarf, not a Wolf–Rayet — reverted to ` +
+          `${fmt(lastEgMass)} M☉.`
+        : `No Wolf–Rayet endgame for that star — reverted to ${fmt(lastEgMass)} M☉.`);
+    refreshWR();
+  }
+}
+
+// Dispatch a mass/[Fe/H] re-snap to the active endgame mode.
+function tryResnap() {
+  if (mode === "wd") return tryWDResnap();
+  if (mode === "wr") return tryWRResnap();
 }
 
 async function refresh() {
@@ -1219,33 +1449,39 @@ async function init() {
   const debouncedTrack = debounce(refreshTrack, SLIDER_FETCH_DELAY_MS);
   const debouncedMassRangeTrack = debounce(
     refreshMassRangeThenTrack, SLIDER_FETCH_DELAY_MS);
-  // Inside the WD endgame, a mass/[Fe/H] drag re-snaps the progenitor (a different
+  // Inside an endgame (WD or WR), a mass/[Fe/H] drag re-snaps the progenitor (a different
   // remnant) instead of rebuilding the living track. The cheap thumb/number-box update
-  // is shared; only the deferred fetch differs by mode.
-  const debouncedWDResnap = debounce(tryWDResnap, SLIDER_FETCH_DELAY_MS);
+  // is shared; only the deferred fetch differs by mode (tryResnap dispatches by mode).
+  const debouncedEgResnap = debounce(tryResnap, SLIDER_FETCH_DELAY_MS);
   els.mass.addEventListener("input", () => {
     const r = massFromSliderInput(Number(els.mass.value));
     els.mass.value = r.pos;
     massValue = r.mass;
     setNum(els.massNum, fmt(massValue));
-    (mode === "wd" ? debouncedWDResnap : debouncedTrack)();
+    (mode !== "live" ? debouncedEgResnap : debouncedTrack)();
   });
   els.mass.addEventListener("change", () =>
-    (mode === "wd" ? debouncedWDResnap : debouncedTrack).flush());
+    (mode !== "live" ? debouncedEgResnap : debouncedTrack).flush());
   els.feh.addEventListener("input", () => {
     els.feh.value = snap(Number(els.feh.value), fehTickPos, fehMin, fehMax);
     setNum(els.fehNum, Number(els.feh.value).toFixed(2));
-    (mode === "wd" ? debouncedWDResnap : debouncedMassRangeTrack)();
+    (mode !== "live" ? debouncedEgResnap : debouncedMassRangeTrack)();
   });
   els.feh.addEventListener("change", () =>
-    (mode === "wd" ? debouncedWDResnap : debouncedMassRangeTrack).flush());
+    (mode !== "live" ? debouncedEgResnap : debouncedMassRangeTrack).flush());
   els.age.addEventListener("input", () => {
-    // In the WD endgame the age slider is the cooling scrubber (a pure pick from the
+    // In an endgame the age slider is the endgame scrubber (a pure pick from the
     // pre-fetched states — no fetch). Branch here, before the living-star age logic.
     if (mode === "wd") {
       wdFraction = snapWDFraction(Number(els.age.value));
       els.age.value = wdFraction;
       refreshWD();
+      return;
+    }
+    if (mode === "wr") {
+      wrFraction = snapWRFraction(Number(els.age.value));
+      els.age.value = wrFraction;
+      refreshWR();
       return;
     }
     // NOT debounced, on purpose. The /state it fetches costs the same backend window
@@ -1277,17 +1513,17 @@ async function init() {
     if (!isFinite(m)) return;
     massValue = Math.min(Math.max(m, validMassMin), validMassMax);
     els.mass.value = clamp01(sliderFromMass(massValue));
-    (mode === "wd" ? tryWDResnap : refreshTrack)();
+    (mode !== "live" ? tryResnap : refreshTrack)();
   });
   els.fehNum.addEventListener("change", () => {
     if (els.fehNum.value.trim() === "") return;
     const f = Number(els.fehNum.value);
     if (!isFinite(f)) return;
     els.feh.value = Math.min(Math.max(f, fehMin), fehMax);
-    (mode === "wd" ? tryWDResnap : refreshMassRangeThenTrack)();
+    (mode !== "live" ? tryResnap : refreshMassRangeThenTrack)();
   });
   els.ageNum.addEventListener("change", () => {
-    if (mode === "wd") return;   // the age box is hidden in the WD endgame
+    if (mode !== "live") return;   // the age box is hidden in the endgame modes
     if (els.ageNum.value.trim() === "" || !(ageMax > ageMin)) return;
     const gy = Number(els.ageNum.value);
     if (!isFinite(gy)) return;
@@ -1298,10 +1534,11 @@ async function init() {
     updateLiveGateway();
   });
 
-  // The stellar-endgame gateway: enter the WD endgame from the button at the slider
+  // The stellar-endgame gateway: enter the WD or WR endgame from the button at the slider
   // limit; the bar's "Back" button leaves it (reversible — Locked decision #1).
   if (els.gatewayWd) els.gatewayWd.addEventListener("click", enterWD);
-  if (els.endgameBack) els.endgameBack.addEventListener("click", exitWD);
+  if (els.gatewayWr) els.gatewayWr.addEventListener("click", enterWR);
+  if (els.endgameBack) els.endgameBack.addEventListener("click", exitEndgame);
 
   await refreshMassRangeThenTrack();
 }

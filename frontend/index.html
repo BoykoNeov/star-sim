@@ -103,22 +103,34 @@
     <section class="panel controls-panel" data-panel-id="controls">
       <h2>Controls</h2>
 
-      <!-- Shown only inside the white-dwarf endgame (the reversible gateway mode). It
-           narrates the step the simulation does NOT model — the planetary-nebula
-           ejection that bridges the dying giant to its bare cooling core — and carries
-           the way back to the living star. -->
+      <!-- Shown only inside an endgame (the reversible gateway mode — white dwarf or
+           Wolf–Rayet). It narrates the step the simulation does NOT model and carries the
+           way back to the living star. The WD/WR title + narration are toggled by the
+           body.wd-mode / body.wr-mode class (CSS). For the WD the un-modeled gap is at
+           ENTRY (the planetary-nebula ejection); for the WR the stripping IS modeled and
+           the un-modeled gap is at the END (the core-collapse supernova). -->
       <div id="endgame-bar" class="endgame-bar" hidden>
         <div class="endgame-bar-top">
-          <span class="endgame-title">White-dwarf endgame</span>
+          <span class="endgame-title endgame-title-wd">White-dwarf endgame</span>
+          <span class="endgame-title endgame-title-wr">Wolf–Rayet endgame</span>
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
-        <p class="endgame-narrate" id="endgame-narrate">
+        <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
           The star has shed its outer layers as a <b>planetary nebula</b> — a step this
           simulator doesn't model — leaving the hot, bare core. You're now scrubbing that
           core's afterlife: the final <b>thermal pulses</b>, the brief blaze as a
           <b>~100&nbsp;kK central star</b>, then billions of years <b>cooling</b> to a
           cold, dense cinder. Mass and [Fe/H] stay live (they re-snap the progenitor to a
           different remnant).
+        </p>
+        <p class="endgame-narrate endgame-narrate-wr">
+          Powerful stellar winds have stripped this massive star's outer layers — a process
+          the track <b>does</b> model — baring its hot, helium- and carbon-burning core: a
+          <b>Wolf–Rayet</b> star. Scrub to watch the surface peel from hydrogen to helium
+          (<b>WN</b>) to carbon and oxygen (<b>WC/WO</b>) as the bare core climbs toward
+          <b>~250,000&nbsp;K</b>. Mass and [Fe/H] stay live (they re-snap to a different
+          Wolf–Rayet). What follows — the <b>core-collapse supernova</b> — this simulator
+          doesn't model.
         </p>
         <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
       </div>
@@ -146,6 +158,7 @@
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>
+        <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
         <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">
@@ -163,6 +176,7 @@
            /endgame classifier. -->
       <div id="gateway" class="gateway" hidden>
         <button id="gateway-wd" class="gateway-btn" type="button" hidden>→ Continue: White&nbsp;Dwarf</button>
+        <button id="gateway-wr" class="gateway-btn" type="button" hidden>→ Continue: Wolf–Rayet</button>
         <p id="gateway-sn" class="gateway-note" hidden></p>
       </div>
 
@@ -208,8 +222,8 @@
         <span><i style="background:linear-gradient(90deg,#7a00ff,#00b3ff,#33dd33,#ffdd00,#ff3300)"></i>visible band (a sliver of the whole)</span>
         <span><span class="tip" tabindex="0" data-tip="λ_max · T = 2.898×10⁷ Å·K (Wien's displacement law for Fλ). The wavelength where the blackbody is brightest. It moves into the ultraviolet for hot stars and into the infrared for cool ones — which is why hot stars look blue and cool stars red. Shown as the dashed gold line.">Wien peak</span></span>
         <span><span class="tip" tabindex="0" data-tip="The high-energy floor and the radio tail are where the blackbody stops describing a real star. A star emits essentially no THERMAL light in X-rays/γ-rays — the curve underflows to zero and runs along the bottom. Real stellar X-ray and γ-ray light is non-thermal: it comes from million-degree coronal plasma, magnetic reconnection and flares — and the coral activity band (the coral legend entry) overlays the order-of-magnitude range it spans. At the other end, real radio emission from the chromosphere and corona sits far ABOVE the blackbody's Rayleigh–Jeans tail. Both edges are evocative, not predictive — the same caveat as the 3D star's corona.">non-thermal edges (X-ray/γ · radio)</span></span>
-        <span><i style="background:repeating-linear-gradient(45deg,rgba(255,140,110,0.6) 0 2px,rgba(255,140,110,0.12) 2px 5px)"></i><span class="tip" tabindex="0" data-tip="The coronal soft-X-ray ACTIVITY band — the non-thermal X-rays the photospheric blackbody can't show. Cool stars (F/G/K/M) run a magnetic dynamo whose X-ray output, L_X/L_bol, is set by ROTATION: fast rotators saturate at about 10⁻³, slower ones fall as Rossby⁻². By default we draw a BAND (10⁻⁷…10⁻³) — where in it a star sits depends on rotation. Supply rotation and the band collapses to the blue LINE: for a cool main-sequence star it is derived from age by gyrochronology, or you can pin it with the rotation slider (a ±dex fuzz remains, from real scatter and the activity cycle). Hot O/B stars have no dynamo: their X-rays collapse to the narrow wind-shock value ~10⁻⁷. A and early-F stars fall in an X-ray gap (no band). Güdel–Benz (L_X/L_R ≈ 10¹⁵·⁵ Hz) maps the X-rays to a radio correlate, marked at cm waves — it sits below this per-wavelength window because radio is intrinsically faint in Fλ. γ-rays stay empty (flare-only). Evocative, not predictive — the same honesty as the 3D corona.">coronal X-ray + Güdel–Benz radio (L_X/L_bol)</span></span>
-        <span><i style="background:rgba(150,210,255,0.95)"></i><span class="tip" tabindex="0" data-tip="The blue line inside the coral band is this star's rotation→activity LEVEL — the band collapsed to a single L_X/L_bol once rotation is supplied (Wright 2011: L_X/L_bol from the Rossby number Ro = P_rot/τ_conv). For a cool main-sequence star the period is DERIVED from age by gyrochronology (so scrubbing age slides the line); the rotation slider lets you pin it yourself. It keeps a ±dex fuzz (real scatter + the activity cycle), and appears ONLY where a convective dynamo exists — never for hot stars, the A/early-F gap, or giants.">rotation→activity line (age-derived / set)</span></span>
+        <span class="sed-nonthermal-legend"><i style="background:repeating-linear-gradient(45deg,rgba(255,140,110,0.6) 0 2px,rgba(255,140,110,0.12) 2px 5px)"></i><span class="tip" tabindex="0" data-tip="The coronal soft-X-ray ACTIVITY band — the non-thermal X-rays the photospheric blackbody can't show. Cool stars (F/G/K/M) run a magnetic dynamo whose X-ray output, L_X/L_bol, is set by ROTATION: fast rotators saturate at about 10⁻³, slower ones fall as Rossby⁻². By default we draw a BAND (10⁻⁷…10⁻³) — where in it a star sits depends on rotation. Supply rotation and the band collapses to the blue LINE: for a cool main-sequence star it is derived from age by gyrochronology, or you can pin it with the rotation slider (a ±dex fuzz remains, from real scatter and the activity cycle). Hot O/B stars have no dynamo: their X-rays collapse to the narrow wind-shock value ~10⁻⁷. A and early-F stars fall in an X-ray gap (no band). Güdel–Benz (L_X/L_R ≈ 10¹⁵·⁵ Hz) maps the X-rays to a radio correlate, marked at cm waves — it sits below this per-wavelength window because radio is intrinsically faint in Fλ. γ-rays stay empty (flare-only). Evocative, not predictive — the same honesty as the 3D corona.">coronal X-ray + Güdel–Benz radio (L_X/L_bol)</span></span>
+        <span class="sed-nonthermal-legend"><i style="background:rgba(150,210,255,0.95)"></i><span class="tip" tabindex="0" data-tip="The blue line inside the coral band is this star's rotation→activity LEVEL — the band collapsed to a single L_X/L_bol once rotation is supplied (Wright 2011: L_X/L_bol from the Rossby number Ro = P_rot/τ_conv). For a cool main-sequence star the period is DERIVED from age by gyrochronology (so scrubbing age slides the line); the rotation slider lets you pin it yourself. It keeps a ±dex fuzz (real scatter + the activity cycle), and appears ONLY where a convective dynamo exists — never for hot stars, the A/early-F gap, or giants.">rotation→activity line (age-derived / set)</span></span>
       </div>
     </section>
 

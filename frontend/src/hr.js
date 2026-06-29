@@ -20,12 +20,24 @@ const LOGT_MIN_EG = 3.35;
 const LOGT_MAX_EG = 5.7;    // ~500 kK — fits the hottest central stars (394 kK at 6.5 M☉)
 const LOGL_MIN_EG = -5.6;
 const LOGL_MAX_EG = 4.5;
-// Per-mode gridline values (Teff in log10 K, L in log10 L☉) — the endgame view needs
-// hotter Teff and fainter L ticks than the living view.
+// Wider bounds for the WOLF–RAYET ENDGAME view: a WR star is the stripped, blazing core
+// of a massive star — far HOTTER (the stripped surface climbs to ~250 kK, log T ≈ 5.4)
+// and far MORE LUMINOUS (log L ≈ 5.6–6.8; the 300 M☉ onset peaks at log L 6.80) than a
+// white dwarf, so the WD endgame's faint-L ceiling (4.5) would clip the whole WR track
+// off the top. The cool side stays open enough to show the immediate-pre-WR giant in the
+// faint living-track context (the cool CHeB excursion reaches log T ≈ 3.9).
+const LOGT_MIN_WR = 3.6;    // ~4 kK   (right edge, shows the cool pre-WR giant for context)
+const LOGT_MAX_WR = 5.5;    // ~316 kK (left edge, fits the hottest stripped WO core)
+const LOGL_MIN_WR = 4.3;
+const LOGL_MAX_WR = 7.0;    // headroom above the 300 M☉ onset (log L 6.80)
+// Per-mode gridline values (Teff in log10 K, L in log10 L☉) — the endgame views need
+// hotter Teff and (WD) fainter / (WR) brighter L ticks than the living view.
 const GRID_T = [4.5, 4.0, 3.7, 3.5];
 const GRID_L = [-3, 0, 3, 6];
 const GRID_T_EG = [5.5, 5.0, 4.5, 4.0, 3.5];
 const GRID_L_EG = [-5, -2, 1, 4];
+const GRID_T_WR = [5.4, 5.0, 4.5, 4.0];
+const GRID_L_WR = [5, 6, 7];
 // Asymmetric left pad: the y-axis needs two lanes side by side — the rotated
 // "L / L☉" title in the far-left lane, the 1e-3..1e6 tick numbers in the lane
 // just inside it — so they stop overlapping. Top/right/bottom stay at PAD.
@@ -100,7 +112,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
 
     // Teff gridlines (label in kK), centered under each line.
     ctx.textAlign = "center";
-    for (const logT of (endgameMode ? GRID_T_EG : GRID_T)) {
+    for (const logT of (endgameMode ? (endgameKind === "wr" ? GRID_T_WR : GRID_T_EG) : GRID_T)) {
       const x = xOf(logT);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
@@ -111,7 +123,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // L gridlines — tick numbers right-aligned in the lane just left of the
     // frame, so they never collide with the rotated axis title further left.
     ctx.textAlign = "right";
-    for (const logL of (endgameMode ? GRID_L_EG : GRID_L)) {
+    for (const logL of (endgameMode ? (endgameKind === "wr" ? GRID_L_WR : GRID_L_EG) : GRID_L)) {
       const y = yOf(logL);
       ctx.globalAlpha = 0.35;
       ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD, y); ctx.stroke();
@@ -131,8 +143,9 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let track = null;        // array of StellarState (age-independent, set per mass/feh)
   let marker = null;       // current StellarState (moves as age scrubs)
   let showOverlay = false; // variable-star zones (off by default — opt-in view)
-  let endgameMode = false; // WD endgame view: wide axes + the cooling track
-  let endgameTrack = null; // the endgame StellarStates (the cooling sequence)
+  let endgameMode = false; // endgame view: wide axes + the endgame track
+  let endgameKind = "wd";  // "wd" (cooling track) | "wr" (stripping sub-track) — picks bounds/gridlines
+  let endgameTrack = null; // the endgame StellarStates (the cooling / stripping sequence)
   let previewTrack = null; // LIVING-mode faint preview of where a WD-bound star is headed
 
   // Fill + dashed outline the current path with a zone's colors.
@@ -287,12 +300,18 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     if (!endgameMode) draw();
   }
 
-  // Enter/leave the white-dwarf endgame view. setEndgame() swaps in the wide axes and
-  // the cooling track; clearEndgame() restores the living-star bounds + track.
-  function setEndgame(states) {
+  // Enter/leave an endgame view. setEndgame(states, kind) swaps in the wide axes and the
+  // endgame track; kind picks the bounds + gridlines — "wd" (cool→hot→faint cooling) vs
+  // "wr" (hot, luminous stripped sub-track). clearEndgame() restores the living bounds.
+  function setEndgame(states, kind = "wd") {
     endgameMode = true;
+    endgameKind = kind === "wr" ? "wr" : "wd";
     endgameTrack = states && states.length ? states : null;
-    bT0 = LOGT_MIN_EG; bT1 = LOGT_MAX_EG; bL0 = LOGL_MIN_EG; bL1 = LOGL_MAX_EG;
+    if (endgameKind === "wr") {
+      bT0 = LOGT_MIN_WR; bT1 = LOGT_MAX_WR; bL0 = LOGL_MIN_WR; bL1 = LOGL_MAX_WR;
+    } else {
+      bT0 = LOGT_MIN_EG; bT1 = LOGT_MAX_EG; bL0 = LOGL_MIN_EG; bL1 = LOGL_MAX_EG;
+    }
     draw();
   }
   function clearEndgame() {

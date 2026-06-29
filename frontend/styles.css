@@ -494,6 +494,12 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
 }
 .endgame-title { font-weight: 650; color: var(--accent); }
+/* The bar's title + narration come in a WD and a WR variant; the body mode class
+   reveals exactly one (the WR un-modeled gap is at the END — core-collapse — so its
+   text differs from the WD's PN-ejection-at-entry framing). */
+.endgame-title-wd, .endgame-title-wr { display: none; }
+body.wd-mode .endgame-title-wd { display: inline; }
+body.wr-mode .endgame-title-wr { display: inline; }
 .endgame-back {
   font: inherit; font-size: 12.5px; cursor: pointer; color: var(--muted);
   background: transparent; border: 1px solid var(--line); border-radius: 6px;
@@ -502,33 +508,45 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 .endgame-back:hover { color: var(--ink); border-color: var(--accent); }
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
+.endgame-narrate-wd, .endgame-narrate-wr { display: none; }
+body.wd-mode .endgame-narrate-wd { display: block; }
+body.wr-mode .endgame-narrate-wr { display: block; }
 
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
   display: none; color: var(--accent); font-size: 12.5px; min-height: 1.4em;
 }
 
-/* The age label swaps its live "… Gyr" affordance for a WD "cooling time" tag. */
-.age-wd { display: none; color: var(--accent); }
+/* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling
+   time / WR stripping sequence). */
+.age-wd, .age-wr { display: none; color: var(--accent); }
 
-/* In the white-dwarf endgame: the age input becomes a cooling scrubber (no number
-   entry), the cooling caption shows, and the SED's rotation control is hidden (a
-   white dwarf has no convective dynamo to drive it). */
-body.wd-mode .age-live { display: none; }
+/* In an endgame: the age input becomes a scrubber (no number entry), the endgame
+   caption shows, and the SED's rotation control is hidden (neither a degenerate WD
+   nor a wind-driven WR has the cool convective dynamo that control models). */
+body.wd-mode .age-live, body.wr-mode .age-live { display: none; }
 body.wd-mode .age-wd { display: inline; }
-body.wd-mode .endgame-age-caption { display: block; }
-body.wd-mode #sed-rot { display: none; }
+body.wr-mode .age-wr { display: inline; }
+body.wd-mode .endgame-age-caption,
+body.wr-mode .endgame-age-caption { display: block; }
+body.wd-mode #sed-rot, body.wr-mode #sed-rot { display: none; }
+/* WR draws NO coronal X-ray band or rotation→activity line (a wind, not a dynamo), so
+   hide those two SED legend entries — don't label a non-feature. (The WD endgame still
+   draws a faded band, so it keeps the legend; only WR hides it.) */
+body.wr-mode .sed-nonthermal-legend { display: none; }
 /* The variable-star overlay is a LIVING-star HR feature (the classical instability
    strip; white-dwarf pulsators like ZZ Ceti are a different mechanism), and the HR
    panel is the WD cooling track in this mode — so hide the toggle + its legend, the
    same way #sed-rot is hidden. Without this the toggle stayed clickable but drew
    nothing (hr.js draw() skips the overlay in endgame mode), leaving a dead button +
    an orphaned legend. The overlay's on/off state is preserved and re-shown on exit. */
-body.wd-mode .hr-modes,
-body.wd-mode .legend-vars { display: none; }
-/* The composition panel becomes the white-dwarf STRUCTURE view in the endgame: its
+body.wd-mode .hr-modes, body.wr-mode .hr-modes,
+body.wd-mode .legend-vars, body.wr-mode .legend-vars { display: none; }
+/* The composition panel becomes the white-dwarf STRUCTURE view in the WD endgame: its
    burning-abundance mode toggle and legends are meaningless for a degenerate remnant
-   (the structure cross-section draws its own labels), so hide them. */
+   (the structure cross-section draws its own labels), so hide them. The WR endgame is
+   the opposite — its surface composition IS the WN→WC→WO story, so it KEEPS the normal
+   burning-abundance views (the toggle + legends stay visible; no wr-mode rule here). */
 body.wd-mode .comp-modes,
 body.wd-mode .comp-panel .legend { display: none; }
 /* In the white-dwarf endgame the Lane–Emden panel finally earns its keep: a white

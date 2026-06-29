@@ -89,6 +89,29 @@ function wdLabel(state) {
   return { tag: "WD", name: `${heat}white dwarf` };
 }
 
+// The Wolf–Rayet endgame is the stripped, blazing core of a massive star — not an
+// O–M / I–V main-sequence type either. The WR SUBTYPE is read from the surface
+// composition (a StellarState field), data-driven and honest: a helium-dominant
+// surface with nitrogen is the nitrogen sequence (WN); once helium burning surfaces
+// carbon and oxygen the surface flips to the carbon/oxygen sequence (WC), and the very
+// hottest, most-stripped end with strong oxygen is the WO branch. (Hydrogen still at
+// the surface marks a late, H-rich WN — "WNh".) This is SCHEMATIC spectral typing from
+// abundances, not real emission-line ratios; the 3D-star ? help says so.
+function wrLabel(state) {
+  const X = state.X_surf ?? 0, Z = state.Z_surf ?? 0;
+  const ms = state.metals_surf || {};
+  const cO = (ms.C ?? 0) + (ms.O ?? 0);
+  if (Z < 0.4 || cO < 0.1) {                         // helium-dominant surface → WN
+    return X > 0.1
+      ? { tag: "WNh", name: "hydrogen-rich Wolf–Rayet (nitrogen sequence)" }
+      : { tag: "WN", name: "Wolf–Rayet, nitrogen sequence" };
+  }
+  // carbon/oxygen-dominant surface → WC, or WO at the hottest, oxygen-strong end
+  if (state.Teff_K >= 200000 && (ms.O ?? 0) > 0.2)
+    return { tag: "WO", name: "Wolf–Rayet, oxygen sequence" };
+  return { tag: "WC", name: "Wolf–Rayet, carbon sequence" };
+}
+
 // Build the two child spans once; update() only rewrites their text + the type color.
 export function createClassification(el) {
   if (!el) return { update() {} };
@@ -97,11 +120,11 @@ export function createClassification(el) {
   const nameEl = el.querySelector(".sc-name");
 
   return {
-    // mode === "wd": show the endgame label instead of the MK type.
+    // mode === "wd"/"wr": show the endgame label instead of the MK type.
     update(state, mode) {
       if (!state || state.Teff_K == null) return;
-      if (mode === "wd") {
-        const w = wdLabel(state);
+      if (mode === "wd" || mode === "wr") {
+        const w = mode === "wr" ? wrLabel(state) : wdLabel(state);
         typeEl.textContent = w.tag;
         typeEl.style.color = teffToCSS(state.Teff_K);
         nameEl.textContent = w.name;

@@ -217,6 +217,12 @@ export function createSED(canvas) {
   // gate → 0 there guarantees it). The blackbody curve is always fine (the hot central
   // star peaks in the UV, the cold cinder in the IR). Set via update(state,{endgame}).
   let endgameMode = false;
+  // WR endgame: suppress the coronal X-ray overlay ENTIRELY — a Wolf–Rayet is wind-driven,
+  // not a cool convective dynamo, so its non-thermal emission is wind free–free radio
+  // (SED Chunk 2), never a coronal band. (The WD path above keeps a degeneracy-gated band;
+  // WR is a different physical object that must not borrow it. The blackbody continuum is
+  // honest as-is — a stripped hot core peaks in the far-UV / soft X-ray.)
+  let endgameWR = false;
   // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
   // gyro-valid domain); userProt = a manual slider override (null = follow the
   // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
@@ -230,7 +236,8 @@ export function createSED(canvas) {
 
   function update(state, opts) {
     if (!state || state.Teff_K == null) return;
-    const eg = !!(opts && opts.endgame);
+    const egKind = opts && opts.endgame;   // true/"wd" (WD) | "wr" (Wolf–Rayet)
+    const eg = !!egKind;
     // The redraw key (Chunk 3): logg gates the band (dwarf dynamo vs cool-giant
     // suppressed corona); age/phase/mass drive the gyrochronology line; [Fe/H] only
     // matters as part of the "is this a new star?" test for the override reset.
@@ -242,6 +249,7 @@ export function createSED(canvas) {
     if (eg === endgameMode && state.Teff_K === teff && g === logg && a === age &&
         ph === phase && m === mass && fe === feh) return;
     endgameMode = eg;
+    endgameWR = egKind === "wr";
     // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
     // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
     if (m !== mass || fe !== feh) userProt = null;
@@ -293,10 +301,11 @@ export function createSED(canvas) {
     // across the gateway) and it dies with the dynamo as the remnant degenerates.
     if (!endgameMode) {
       drawActivity(lamPeak);
-    } else {
+    } else if (!endgameWR) {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
-      if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // endgame: dying-giant band only
+      if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // WD endgame: dying-giant band only
     }
+    // WR: no coronal overlay at all (wind, not dynamo) — just the blackbody continuum.
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
   }

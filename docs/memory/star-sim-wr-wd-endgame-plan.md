@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell) & 3 (WD 3D shader + structure panel) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
+description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; smooth-hot-sphere 3D placeholder for Chunk 5; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
 metadata:
   type: project
 ---
@@ -227,8 +227,49 @@ the prominent `endgame-age-caption` ("· total age N Gyr since ZAMS") where the 
 bundled Chromium incl. **enter→exit-WD → preview reappears** on the living HR; 20 M☉ (SN) shows no preview;
 saturated/slow checks; Sun anchor 1.07/5834 unregressed.
 
-**Remaining: Chunks 4–7** (WR mode shell + HR-to-250kK + stripped-surface composition, then the WR 3D
-wind shader, then the data-gated WR/WD spectra above).
+**CHUNK 4 DONE (WR mode shell + HR + composition; frontend-only, pytest UNCHANGED 137; 31/31 Playwright
+on the real served UI at 1440 + 390 px).** A **`→ Continue: Wolf–Rayet`** button at the age-slider limit
+when the snapped star classifies WR (threshold-gated by Chunk 1's classifier) → reversible **`wr-mode`**.
+The WR side SHARES the WD gateway scaffolding: `exitWD`→**`exitEndgame`** (handles both), `lastWDMass/Feh`→
+shared **`lastEgMass/Feh`**, a **`tryResnap()` dispatcher**, and **3-way** event handlers (`mode !== "live"
+? egResnap : track`). What's WR-specific:
+- **Scrub = plain index-linear** over the φ9 sub-track (`wrIndexFromFraction = round(frac·last)`), NOT the
+  WD 3-zone pulse map — the WR sub-track is ONE clean monotonic stripping run (no chaotic pulses to dodge).
+  One landmark: the **WN→WC transition** (`wrZones`: first row with surface **Z_surf ≥ 0.4**), with a snap
+  target there. **wc = -1 for WN-only stars** (measured: 35 M☉ @ +0.5 ends Y_surf 0.955 — never reaches WC);
+  the tick logic drops the WC tick then (verified).
+- **THE KEY REUSE (advisor-endorsed): the composition panel uses its NORMAL burning-abundance views, NOT a
+  WD-style custom cross-section.** The WR sub-track has a real EEP axis with an evolving surface, so the
+  WN→WC→WO stripping story falls out of the existing bulk/cno views from REAL DATA — `comp.setTrack(states)`
+  + `comp.update(s)`, never `comp.setEndgame`; the comp mode toggle STAYS visible (no `body.wd-mode`-style
+  hide). Both less code and more honest than authoring artwork. (Core: He→C/O burning; surface: H vanishes,
+  He then C/O metals take over — both visible at once.)
+- **HR WR-specific bounds** via generalized **`hr.setEndgame(states, kind)`**: logT 3.6–5.5 (≈4 kK–316 kK),
+  **logL 4.3–7.0** — WR is FAR more luminous than the WD endgame (the WD's logL ceiling 4.5 would clip the
+  whole WR track; measured **300 M☉ peaks at logL 6.80**, the onset). `endgameKind` picks bounds+gridlines.
+- **WN/WC/WO subtype from the surface composition** (`classify.js` `wrLabel`, mode `"wr"`): Z_surf<0.4 → WN
+  (X_surf>0.1 → **WNh**, H still present); C/O-dominant → WC; hottest (Teff≥200 kK) + O>0.2 → WO. Data-driven,
+  schematic-labeled.
+- **3D = smooth blazing-hot sphere** (`star.update(s,{endgame:"wr"})` → gDeg=0, granulation+corona off) — a
+  **deliberate Chunk-5 placeholder** for the wind shader (verified at 390 px it reads as a hot luminous star,
+  not broken). **SED suppresses the coronal band ENTIRELY** (`{endgame:"wr"}` → `endgameWR` skips
+  `drawActivity` — a WR is wind-driven, not a convective dynamo; UNLIKE WD which keeps a gDeg-faded band) AND
+  hides the two `.sed-nonthermal-legend` entries (don't label a non-feature). Spectrum = honest placeholder.
+- **ADVISOR-CRITICAL framings, both honored:** (1) **verify the living→WR seam BEFORE coding** (the WD chunk's
+  worst bug was a gateway radius pop the happy-path screenshot missed): dumped `track(m,feh)[-1]` vs
+  `endgame.states[0]` for 60/50/40/300/35 M☉ — all CONTINUOUS (60 M☉: living CHeB R=36.5/Teff=31kK → WR
+  R=33.4/Teff=32kK), and GATE_SHOW=0.999 + the age-snap (any frac ≥0.985 → exactly 1.0) means the gateway
+  shows ONLY at the true endpoint → no pop, same safety as WD. (2) **the un-modeled gap is at the END for WR,
+  not entry** (the WR stripping IS modeled — it's the track's mass loss) → narrate it in the **end-of-scrub
+  caption** ("Hottest stripped core ~249 kK — next is core-collapse… not modeled"), the mirror of the WD's
+  PN-ejection-at-entry. Don't clone the WD bar text (separate WD/WR title+narrate spans toggled by body class).
+- Verified incl. the **successful WR→WR re-snap** (Locked #2 — the advisor caught my first test only covered
+  the revert): 60→100 swaps the sub-track (final mass 23.6→33.2, progenitor 100, ticks rebuild, scrub still
+  maps, NO revert note), then 100→20 (SN) reverts to 100 with a note. Plus WN-only (35 @ +0.5: no WC tick,
+  stays WN at the hot end, core-collapse caption), Sun anchor unregressed, 0 JS errors.
+
+**Remaining: Chunks 5–7** (WR 3D wind shader — replaces Chunk 4's smooth-sphere placeholder — then the
+data-gated WR/WD spectra above).
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

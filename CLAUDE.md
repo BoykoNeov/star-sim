@@ -136,8 +136,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `EndgameResult` dataclass, snaps both mass+feh, data-derived classify (φ9→WR /
   φ6-or-logg>7→WD / φ5-onset→SN / else none). WD path = a reversible gateway button
   at the slider limit → log-cooling-age scrubber + WD 3D shader + structure panel +
-  mass–radius re-snap. **Chunks 1–3 built; the WR branch + WD spectra are later
-  chunks.** [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`.
+  mass–radius re-snap. WR path (Chunk 4) = the matching `→ Continue: Wolf–Rayet` button
+  → reversible `wr-mode`: index-linear scrub over the φ9 sub-track (WN→WC→WO landmark),
+  HR axes to ~316 kK / logL 7, the **normal comp views** (the stripped surface IS the
+  story — no custom cross-section), WN/WC/WO subtype from surface composition, mass-stays-
+  live re-snap, end caption narrates the un-modeled core-collapse. **Chunks 1–4 built; the
+  WR 3D wind shader (Chunk 5) + WR/WD spectra (Chunks 6–7) are later chunks.**
+  [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
