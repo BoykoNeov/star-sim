@@ -49,6 +49,39 @@ cells dissolve and reform (solar) and shear can never exceed one lifetime.
 Re-verified coherent over a full minute. See `granulation()`/`genGranule()` in
 star.js — do NOT revert to the simple accumulating shear.
 
+**The granulation moiré/grid fix (later session, advisor-guided, frontend-only):**
+the user saw two unnatural artifacts on the 3D star — a **rectangular grid** and
+**moiré/static** — which are two different failures at opposite ends of the
+granule-frequency range, confirmed by a 4-star harness (giant/sun/M-dwarf/compact)
+shot at native res:
+- **Grid** (worst on a low-`uCells` supergiant): the old `fract(sin(dot(...)))`
+  hash left each Worley cell's feature offset *correlated along the object axes*,
+  so a "handful of enormous cells" lined up in rows/columns and the cubic lattice
+  read as a grid. NOT sphere tessellation (the discriminator: a tessellation grid
+  would be a curved lat/long graticule converging at the poles — this was straight
+  axis-aligned cells). Fix: swap to a sin-free **Dave Hoskins `hash33`** → offsets
+  decorrelate → even a few big cells scatter organically.
+- **Moiré** (worst on a high-`uCells` compact dwarf, ~90 cells × the 2.7× second
+  octave on a tiny disk): sub-pixel granules beat against the pixel grid. Fix:
+  **per-octave analytic antialiasing** in `genGranule` — fade each octave toward
+  the Worley-F1 mean (`WMEAN=0.54`) once its frequency `F·fw ≳ 0.5`, where
+  `fw = length(fwidth(vObjPos))` is the object-space pixel footprint. Needs
+  `extensions: { derivatives: true }` on the surfaceMat (core in WebGL2; emits the
+  `GL_OES_standard_derivatives` pragma on WebGL1). Gotchas: (1) **per-octave, not
+  one fade on the sum** — keying the fade off the finer 2.7× octave over-fades the
+  resolvable coarse octave and smooths an M dwarf completely (the coarse ~5px cells
+  are above Nyquist — keep them); (2) fade toward the *mean*, not 0, so the
+  smoothed disk keeps the same brightness (both-faded → `f=WMEAN` exactly,
+  neither-faded → byte-identical to the old field); (3) analytic frequency, NOT
+  `fwidth(f)` — the latter spikes on the Worley cell-edge ridges and would erode
+  the dark intergranular lanes. Bonus: `fw` blows up at the foreshortened limb, so
+  the same term cleans the disk edge, and being resolution-adaptive it does more
+  fading on a small panel, less on a large one. Verified safe alongside the WD
+  `uGran` gate (`uGran=0` forces `granule=1.0`, AA inert; the TPAGB-giant frame at
+  `uGran>0` keeps organic granulation). Stills suffice — the mesh never rotates
+  (`uOmega·time` is in-shader), so `fwidth(vObjPos)` is time-constant and faded
+  regions can't shimmer.
+
 **Verification method (no JS test harness):** headless Chromium via
 `playwright-core` (browsers were already cached at
 `%LOCALAPPDATA%/ms-playwright/chromium-1223/chrome-win64/chrome.exe`; launch with

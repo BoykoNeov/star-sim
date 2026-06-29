@@ -96,12 +96,17 @@ varying vec3 vViewPos;
 
 ${GLSL_LIN2SRGB}
 
-// Hash a lattice point to a vec3 in 0..1 (iq-style).
+// Hash a lattice point to a vec3 in 0..1 — a sin-free hash (Dave Hoskins'
+// hash33). The classic fract(sin(dot(...))*k) hash loses precision in sin() of
+// large arguments, and its linear dot-product inputs leave each cell's feature
+// offset CORRELATED along the object axes — so at low cell counts (a supergiant's
+// "handful of enormous cells") the Worley centres line up in rows/columns and the
+// cubic lattice reads as a rectangular grid. This decorrelates the per-cell
+// offsets, so even a few big cells scatter organically instead of tiling.
 vec3 hash3(vec3 p) {
-  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
-           dot(p, vec3(269.5, 183.3, 246.1)),
-           dot(p, vec3(113.5, 271.9, 124.6)));
-  return fract(sin(p) * 43758.5453123);
+  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+  p += dot(p, p.yxz + 33.33);
+  return fract((p.xxy + p.yxx) * p.zyx);
 }
 
 // 3D Worley F1: distance to the nearest feature point, the points slowly
@@ -126,12 +131,26 @@ float worleyF1(vec3 x, float t) {
 // by ang about the pole, the cell layout reseeded per generation gen so
 // successive generations are unrelated (granules fully reform). F1 ~0 at cell
 // centers (bright granules), larger toward the intergranular lanes (dark).
-float genGranule(vec3 p, float ang, float gen) {
+//
+// Each octave is antialiased independently against fw — the object-space size of
+// one screen pixel (length(fwidth(vObjPos))). An octave at frequency F resolves
+// only while a pixel spans well under one of its cells (F·fw ≲ 0.5); past that it
+// can only beat against the pixel grid into moiré, so we fade it toward the Worley
+// mean (≈0.54 → the smooth mean surface). Per-octave, not one fade on the sum: the
+// fine 2.7× octave sub-pixels first, so on a mid star (an M dwarf) it dissolves
+// while the coarse octave stays crisp; only on a compact dwarf, or at the
+// foreshortened limb where fw blows up, do both octaves smooth out. Conserving the
+// mean (mix toward WMEAN, not 0) keeps the smoothed disk the same brightness as a
+// boiling one — no pop as detail fades.
+float genGranule(vec3 p, float ang, float gen, float fw) {
   float ca = cos(ang), sa = sin(ang);
   vec3 q = vec3(p.x * ca - p.z * sa, p.y, p.x * sa + p.z * ca);
   vec3 seed = vec3(gen * 17.0, gen * 11.0, gen * 5.0);   // new layout each cycle
-  float f  = worleyF1((q + seed) * uCells, gen * 10.0 + uTime * 0.3);
-  f += 0.5 * worleyF1((q + seed) * uCells * 2.7, gen * 13.0 + uTime * 0.45);
+  const float WMEAN = 0.54;
+  float a1 = 1.0 - smoothstep(0.5, 1.1, fw * uCells);
+  float a2 = 1.0 - smoothstep(0.5, 1.1, fw * uCells * 2.7);
+  float f  = mix(WMEAN, worleyF1((q + seed) * uCells, gen * 10.0 + uTime * 0.3), a1);
+  f += 0.5 * mix(WMEAN, worleyF1((q + seed) * uCells * 2.7, gen * 13.0 + uTime * 0.45), a2);
   return f / 1.5;
 }
 
@@ -142,7 +161,7 @@ float genGranule(vec3 p, float ang, float gen) {
 // two generations offset by half a lifetime are cross-faded (triangle weights
 // that sum to 1) so cells dissolve and reform — solar, and streak-proof, since
 // the shear never accumulates past one lifetime.
-float granulation(vec3 p0, float time) {
+float granulation(vec3 p0, float time, float fw) {
   float rigid = uOmega * time;                           // continuous, all latitudes
   float sinLat = clamp(p0.y, -1.0, 1.0);
   float diffRate = -uOmega * uShear * sinLat * sinLat;   // latitude-dependent deviation
@@ -151,8 +170,8 @@ float granulation(vec3 p0, float time) {
   float gA = floor(tt),        gB = floor(tt + 0.5);
   float wA = 1.0 - abs(2.0 * sA - 1.0);
   float wB = 1.0 - abs(2.0 * sB - 1.0);
-  float fA = genGranule(p0, rigid + diffRate * (sA - 0.5) * uLife, gA);
-  float fB = genGranule(p0, rigid + diffRate * (sB - 0.5) * uLife, gB);
+  float fA = genGranule(p0, rigid + diffRate * (sA - 0.5) * uLife, gA, fw);
+  float fB = genGranule(p0, rigid + diffRate * (sB - 0.5) * uLife, gB, fw);
   return (wA * fA + wB * fB) / max(1e-3, wA + wB);
 }
 
@@ -163,7 +182,12 @@ void main() {
   // look here, not a shortcut). uGran=1 keeps the full living-star granulation.
   // (Crystallization is a CORE phenomenon, shown in the structure panel — never on
   // this gaseous surface, which has no lattice.)
-  float f = granulation(vObjPos, uTime);
+  // fw = object-space size of one screen pixel on the unit sphere; granulation()
+  // uses it to antialias each Worley octave (fade sub-pixel boil to the smooth mean
+  // instead of moiré — see genGranule). Analytic frequency, not fwidth(f): the
+  // latter spikes on the Worley cell-edge ridges and would erode the dark lanes.
+  float fw = length(fwidth(vObjPos));
+  float f = granulation(vObjPos, uTime, fw);
   float lanes = clamp(f / 0.9, 0.0, 1.0);
   float granule = 1.0 - uContrast * lanes * uGran;
 
@@ -227,6 +251,10 @@ export function createStar(canvas) {
   const surfaceMat = new THREE.ShaderMaterial({
     vertexShader: SURFACE_VERT,
     fragmentShader: SURFACE_FRAG,
+    // fwidth() in the surface shader needs screen-space derivatives. Core in
+    // WebGL2; on WebGL1 this flag makes three.js emit the GL_OES_standard_derivatives
+    // #extension pragma. Used to antialias sub-pixel granulation (see SURFACE_FRAG).
+    extensions: { derivatives: true },
     uniforms: {
       uColor: { value: new THREE.Color(1, 1, 1) },
       uTime: { value: 0 },
