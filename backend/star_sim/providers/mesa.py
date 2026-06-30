@@ -357,23 +357,24 @@ class MESAProvider:
             "feh": {"min": float(self._fehs[0]), "max": float(self._fehs[-1])},
         }
 
-    def mass_range(self, feh: float) -> tuple[float, float]:
+    def mass_range(self, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         """Discrete mass span at the [Fe/H] bucket nearest `feh`. The domain is
         **non-rectangular** in general (different masses per Z), so this is per-Z,
         not global. `feh` snaps to the nearest grid value; out of the grid's
-        [Fe/H] span it raises (no extrapolation, §6)."""
+        [Fe/H] span it raises (no extrapolation, §6). `vvcrit` is accepted for
+        Protocol parity and ignored — the offline MESA runs are non-rotating."""
         self._ensure_loaded()
         key = self._snap_feh(feh)
         m = self._masses_by_feh[key]
         return float(m[0]), float(m[-1])
 
-    def age_range(self, mass: float, feh: float) -> tuple[float, float]:
+    def age_range(self, mass: float, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         self._ensure_loaded()
         t = self._snap(mass, feh)
         return float(t.age[0]), float(t.age[-1])
 
     # -- the one method that matters ------------------------------------------
-    def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
+    def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._ensure_loaded()
         t = self._snap(mass, feh)
         age = float(min(max(age_yr, t.age[0]), t.age[-1]))  # never extrapolate in age
@@ -381,14 +382,15 @@ class MESAProvider:
         frac = float(np.interp(age, t.age, rows))           # age -> fractional row
         return self._state_from_track(t, frac)
 
-    def track(self, mass: float, feh: float) -> list[StellarState]:
+    def track(self, mass: float, feh: float, vvcrit: float = 0.0) -> list[StellarState]:
         """Every exposed row of the snapped run as a StellarState (§3), ordered by
-        EEP. No age inversion: the run's rows already are the EEP sequence."""
+        EEP. No age inversion: the run's rows already are the EEP sequence.
+        `vvcrit` ignored (the offline MESA runs are non-rotating)."""
         self._ensure_loaded()
         t = self._snap(mass, feh)
         return [self._state_from_track(t, float(i)) for i in range(t.age.size)]
 
-    def endgame(self, mass: float, feh: float) -> EndgameResult:
+    def endgame(self, mass: float, feh: float, vvcrit: float = 0.0) -> EndgameResult:
         """MESA tutorial runs stop on/near the MS, so there is no exposed stellar
         endgame: return type="none" (the §3-agnostic route then shows no gateway).
         The capability lives on the provider boundary; only MISTProvider has data for

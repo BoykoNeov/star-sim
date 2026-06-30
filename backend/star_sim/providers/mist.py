@@ -215,7 +215,14 @@ DEFAULT_MASSES = (
 # single real track and never interpolates across mass/[Fe/H] (§6), so nothing reads
 # a *blended* current mass. Same cache reason as the prior bumps: old v8 caches lack
 # the two new columns, so the bump forces one reparse.
-CACHE_VERSION = 9
+# v10 (rotation axis) stored the grid's authoritative **rotation rate** (`vvcrit`,
+# read from each track's header `rot` value — the same hint-vs-authoritative pattern
+# the [Fe/H] axis uses) alongside the cached `feh`. No new per-row columns: rotation
+# is a *grid-selection* axis (the rotating grid is a different set of tracks), so the
+# provider partitions grids into vvcrit buckets and snaps between them (never blends —
+# MIST publishes only {0.0, 0.4}, no third grid to interpolate toward). The bump is
+# needed because the cache schema gained the scalar `vvcrit`; old v9 caches lack it.
+CACHE_VERSION = 10
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
@@ -232,6 +239,10 @@ _TRACK_COLS = (
 # collapses a true grid point to a no-blend short-circuit (the Sun must hit the
 # solar grid exactly, not blend across it).
 _FEH_TOL = 1e-3
+
+# v/vcrit bucket-match tolerance: MIST publishes only {0.0, 0.4}, far apart, so this
+# only identifies which discrete rotation bucket a request snaps to (never a blend).
+_VVCRIT_TOL = 0.05
 
 # Surface gravity (cgs dex) above which the endgame's last row counts as a
 # degenerate white dwarf. A real WD sits at log g ~7-9; normal/AGB stars never
@@ -326,8 +337,31 @@ class _Grid:
     """
 
     feh: float
+    vvcrit: float
     masses: np.ndarray
     tracks: list[_Track]
+    zams_row: int
+
+
+@dataclass
+class _Axis:
+    """All [Fe/H] grids at one rotation rate — the unit the rotation axis snaps to.
+
+    Rotation (`vvcrit`) is a *grid-selection* axis, not an interpolation axis: MIST
+    publishes only {0.0, 0.4}, so the provider partitions its grids into one `_Axis`
+    per rotation rate and **snaps** between them (no third grid to interpolate
+    toward), while the [Fe/H] axis still interpolates *within* an axis exactly as
+    before. Each axis carries its own bracketing state (the `fehs` array, the mass
+    bounding box, the shared ZAMS row) so the feh helpers operate on whichever axis
+    the request selected — and the default vvcrit=0.0 axis reproduces the
+    pre-rotation behavior bit-for-bit.
+    """
+
+    vvcrit: float
+    grids: list[_Grid]          # ascending by feh
+    fehs: np.ndarray
+    mass_min: float
+    mass_max: float
     zams_row: int
 
 
@@ -342,6 +376,20 @@ def _feh_from_path(path: str) -> float | None:
         return None
     val = int(m.group(2)) / 100.0
     return -val if m.group(1) == "m" else val
+
+
+def _vvcrit_from_path(path: str) -> float | None:
+    """`.../feh_p000_afe_p0_vvcrit0.4/eeps` -> 0.4  (a cheap selection hint).
+
+    Mirrors `_feh_from_path`: only a *hint* for grouping dirs into rotation
+    buckets. The authoritative v/vcrit comes from each track's header `rot` value
+    (see `_parse_track_file`). Defaults to 0.0 (non-rotating) when the dir name
+    carries no vvcrit token, so a pre-rotation data layout still reads as 0.0.
+    """
+    m = re.search(r"vvcrit([\d.]+)", str(path))
+    if not m:
+        return None
+    return float(m.group(1))
 
 
 def _find_eep_dirs(data_dir: Path) -> list[Path]:
@@ -399,12 +447,13 @@ def _phase_window(phase: np.ndarray) -> tuple[int, int] | None:
     return zams, track_end
 
 
-def _parse_track_file(path: str) -> tuple[_Track, float] | None:
-    """Parse one `.track.eep` into a windowed `_Track` + its grid [Fe/H].
+def _parse_track_file(path: str) -> tuple[_Track, float, float] | None:
+    """Parse one `.track.eep` into a windowed `_Track` + its grid ([Fe/H], v/vcrit).
 
     Returns None if the track has no usable MS->CHeB block (low-mass tracks with
-    no post-ZAMS row, or a malformed file). The [Fe/H] is read from the file's own
-    `abun` block — the authoritative value, not the dir-name hint.
+    no post-ZAMS row, or a malformed file). Both [Fe/H] (the `abun` block) and v/vcrit
+    (the header `rot` value) are read from the file itself — the authoritative values,
+    not the dir-name hints.
     """
     eep = rmm.EEP(path, verbose=False)
     e = eep.eeps
@@ -469,28 +518,31 @@ def _parse_track_file(path: str) -> tuple[_Track, float] | None:
         zams_row=zams_row,
         track_end=track_end,
     )
-    return track, float(eep.abun["[Fe/H]"])
+    return track, float(eep.abun["[Fe/H]"]), float(eep.rot)
 
 
-def _parse_all_tracks(eep_dir: Path) -> tuple[list[_Track], float]:
+def _parse_all_tracks(eep_dir: Path) -> tuple[list[_Track], float, float]:
     """Parse *every* track in one metallicity dir (the full grid). The slow path.
 
-    Returns (tracks sorted ascending by mass, grid [Fe/H]). Skips any file with no
-    usable window. This is what the `.npz` cache front-ends — call it only on a
-    cache miss.
+    Returns (tracks sorted ascending by mass, grid [Fe/H], grid v/vcrit). Skips any
+    file with no usable window. This is what the `.npz` cache front-ends — call it
+    only on a cache miss.
     """
     tracks: list[_Track] = []
     feh: float | None = None
+    vvcrit: float | None = None
     for f in sorted(glob.glob(str(eep_dir / "*.track.eep"))):
         res = _parse_track_file(f)
         if res is None:
             continue
-        track, fh = res
+        track, fh, vc = res
         if feh is None:
             feh = fh
+        if vvcrit is None:
+            vvcrit = vc
         tracks.append(track)
     tracks.sort(key=lambda t: t.minit)
-    return tracks, (feh if feh is not None else 0.0)
+    return tracks, (feh if feh is not None else 0.0), (vvcrit if vvcrit is not None else 0.0)
 
 
 def _grid_fingerprint(eep_dir: Path) -> str:
@@ -515,7 +567,7 @@ def _cache_path(eep_dir: Path) -> Path:
     return eep_dir / CACHE_FILENAME
 
 
-def _write_cache(path: Path, tracks: list[_Track], feh: float, fingerprint: str) -> None:
+def _write_cache(path: Path, tracks: list[_Track], feh: float, vvcrit: float, fingerprint: str) -> None:
     """Write the parsed grid to a per-grid `.npz` atomically (temp + os.replace).
 
     Variable-length tracks are stored as one concatenated flat array per column
@@ -526,6 +578,7 @@ def _write_cache(path: Path, tracks: list[_Track], feh: float, fingerprint: str)
     data: dict[str, np.ndarray] = {
         "fingerprint": np.array(fingerprint),
         "feh": np.array(float(feh)),
+        "vvcrit": np.array(float(vvcrit)),
         "minit": np.array([t.minit for t in tracks], dtype=np.float64),
         "zams_row": np.array([t.zams_row for t in tracks], dtype=np.int64),
         "track_end": np.array([t.track_end for t in tracks], dtype=np.int64),
@@ -539,7 +592,7 @@ def _write_cache(path: Path, tracks: list[_Track], feh: float, fingerprint: str)
     os.replace(tmp, path)
 
 
-def _read_cache(path: Path, fingerprint: str) -> tuple[list[_Track], float] | None:
+def _read_cache(path: Path, fingerprint: str) -> tuple[list[_Track], float, float] | None:
     """Reconstruct the parsed grid from its `.npz`, or None on miss/mismatch.
 
     Returns None (caller reparses) when the file is absent, the fingerprint
@@ -552,6 +605,7 @@ def _read_cache(path: Path, fingerprint: str) -> tuple[list[_Track], float] | No
             if str(npz["fingerprint"]) != fingerprint:
                 return None
             feh = float(npz["feh"])
+            vvcrit = float(npz["vvcrit"])
             minit = npz["minit"]
             zams = npz["zams_row"]
             tend = npz["track_end"]
@@ -573,15 +627,15 @@ def _read_cache(path: Path, fingerprint: str) -> tuple[list[_Track], float] | No
                 **sliced,
             )
         )
-    return tracks, feh
+    return tracks, feh, vvcrit
 
 
-def _load_all_tracks(eep_dir: Path) -> tuple[list[_Track], float]:
+def _load_all_tracks(eep_dir: Path) -> tuple[list[_Track], float, float]:
     """Full grid for one metallicity dir, from the `.npz` cache if it's fresh.
 
     Cache hit -> sub-second. Miss (no cache, stale fingerprint, or corrupt file)
     -> reparse every track (~20 s) and write the cache back (best-effort: a failed
-    write never blocks serving).
+    write never blocks serving). Returns (tracks, [Fe/H], v/vcrit).
     """
     fingerprint = _grid_fingerprint(eep_dir)
     path = _cache_path(eep_dir)
@@ -589,13 +643,13 @@ def _load_all_tracks(eep_dir: Path) -> tuple[list[_Track], float]:
     if cached is not None:
         return cached
 
-    tracks, feh = _parse_all_tracks(eep_dir)
+    tracks, feh, vvcrit = _parse_all_tracks(eep_dir)
     if tracks:
         try:
-            _write_cache(path, tracks, feh, fingerprint)
+            _write_cache(path, tracks, feh, vvcrit, fingerprint)
         except Exception:
             pass  # cache is an optimization; never let a write error break a load
-    return tracks, feh
+    return tracks, feh, vvcrit
 
 
 def _load_grid(eep_dir: Path, want_masses: tuple[float, ...] | None) -> _Grid | None:
@@ -606,7 +660,7 @@ def _load_grid(eep_dir: Path, want_masses: tuple[float, ...] | None) -> _Grid | 
     (opt-in, snap-to-grid). Either way it checks the EEP-alignment invariant (one
     shared ZAMS row) before handing the grid downstream.
     """
-    all_tracks, feh = _load_all_tracks(eep_dir)
+    all_tracks, feh, vvcrit = _load_all_tracks(eep_dir)
     if not all_tracks:
         return None
 
@@ -635,6 +689,7 @@ def _load_grid(eep_dir: Path, want_masses: tuple[float, ...] | None) -> _Grid | 
 
     return _Grid(
         feh=float(feh),
+        vvcrit=float(vvcrit),
         masses=np.array([t.minit for t in tracks]),
         tracks=tracks,
         zams_row=tracks[0].zams_row,
@@ -668,11 +723,12 @@ class MISTProvider:
         # metallicity out as ground truth, and by the API to curate the axis.
         self._want_fehs = tuple(fehs) if fehs is not None else None
         self._loaded = False
-        self._grids: list[_Grid] = []
-        self._fehs: np.ndarray | None = None
-        self._mass_lo: float = 0.0
-        self._mass_hi: float = 0.0
-        self._zams_row: int = 0
+        # One `_Axis` per rotation rate (vvcrit bucket). The default axis (0.0, or
+        # the lowest available) is what every existing query uses; a rotating axis
+        # is selected only when a request passes vvcrit != 0.0.
+        self._axes: dict[float, _Axis] = {}
+        self._vvcrits: np.ndarray | None = None
+        self._default_vvcrit: float = 0.0
 
     # -- lazy data load --------------------------------------------------------
     def _ensure_loaded(self) -> None:
@@ -699,68 +755,122 @@ class MISTProvider:
         if not grids:
             raise ProviderDataMissing(_FETCH_HINT.format(data_dir=self._data_dir))
 
-        grids.sort(key=lambda g: g.feh)
+        # Partition grids into rotation buckets (snap axis), then build one `_Axis`
+        # per bucket. Keying by vvcrit is what un-collides two grids at the same
+        # [Fe/H] but different rotation (e.g. the solar vvcrit0.0 and vvcrit0.4 dirs
+        # both report [Fe/H]=0.0): without it they'd form a degenerate duplicate
+        # point on the metallicity axis and silently contaminate the interpolation.
+        buckets: dict[float, list[_Grid]] = {}
+        for g in grids:
+            buckets.setdefault(round(g.vvcrit, 3), []).append(g)
 
-        # EEP alignment must hold across metallicity too, not just across mass:
-        # row N is the same phase for every grid, or the [Fe/H] blend is garbage.
+        self._axes = {vc: self._build_axis(vc, gs) for vc, gs in buckets.items()}
+        self._vvcrits = np.array(sorted(self._axes))
+        # Default to non-rotating (0.0) if present — so the live provider is
+        # unchanged — else the lowest rotation rate on disk.
+        self._default_vvcrit = (
+            0.0 if any(math.isclose(vc, 0.0, abs_tol=_VVCRIT_TOL) for vc in self._axes)
+            else float(self._vvcrits[0])
+        )
+        self._loaded = True
+
+    @staticmethod
+    def _build_axis(vvcrit: float, grids: list[_Grid]) -> _Axis:
+        """Assemble one rotation bucket's [Fe/H] grids into an `_Axis`.
+
+        Sorts by [Fe/H] and re-checks the EEP-alignment invariant *within the
+        bucket* (row N is the same phase for every grid, or the [Fe/H] blend is
+        garbage). The mass bounding box is the union across the bucket's grids; a
+        specific [Fe/H] can be narrower — see `mass_range()`.
+        """
+        grids = sorted(grids, key=lambda g: g.feh)
         zams_rows = {g.zams_row for g in grids}
         if len(zams_rows) != 1:
             raise ProviderDataMissing(
-                f"MIST metallicity grids disagree on the ZAMS row ({sorted(zams_rows)}); "
-                "EEP alignment is broken — refusing to interpolate across [Fe/H]."
+                f"MIST metallicity grids (vvcrit={vvcrit}) disagree on the ZAMS row "
+                f"({sorted(zams_rows)}); EEP alignment is broken — refusing to "
+                "interpolate across [Fe/H]."
             )
+        return _Axis(
+            vvcrit=float(vvcrit),
+            grids=grids,
+            fehs=np.array([g.feh for g in grids]),
+            mass_min=float(min(g.masses[0] for g in grids)),
+            mass_max=float(max(g.masses[-1] for g in grids)),
+            zams_row=grids[0].zams_row,
+        )
 
-        self._grids = grids
-        self._fehs = np.array([g.feh for g in grids])
-        # Bounding box for the UI's static mass slider (the UNION across grids).
-        # The valid span at a *specific* [Fe/H] can be narrower — see mass_range():
-        # super-solar low-mass M-dwarfs outlive the simulated grid, so the highest
-        # metallicities lack evolved tracks below ~0.5 M_sun. That dead corner is
-        # excluded per-[Fe/H], not by shrinking the whole box (which would discard
-        # the §10 red dwarf we *do* have at solar/sub-solar [Fe/H]).
-        self._mass_min = float(min(g.masses[0] for g in grids))
-        self._mass_max = float(max(g.masses[-1] for g in grids))
-        self._zams_row = grids[0].zams_row
-        self._loaded = True
+    def _axis(self, vvcrit: float | None = None) -> _Axis:
+        """Snap a requested rotation rate to the nearest available `_Axis`.
+
+        `None` (the default for every existing call site) selects the default axis
+        (non-rotating). Rotation is a discrete 2-point grid, so we snap, never
+        interpolate (§6): there is no third grid to blend toward.
+        """
+        self._ensure_loaded()
+        assert self._vvcrits is not None
+        want = self._default_vvcrit if vvcrit is None else float(vvcrit)
+        key = float(self._vvcrits[int(np.argmin(np.abs(self._vvcrits - want)))])
+        return self._axes[key]
+
+    @property
+    def _grids(self) -> list[_Grid]:
+        """The default (non-rotating) axis's [Fe/H] grids.
+
+        Back-compat for white-box callers/tests that introspected `_grids` before
+        the rotation axis split the load into per-vvcrit `_Axis` buckets. The live
+        spine selects an axis explicitly via `_axis(vvcrit)`; this is just the
+        default-axis view.
+        """
+        return self._axis().grids
+
+    @property
+    def _fehs(self) -> np.ndarray:
+        """The default (non-rotating) axis's [Fe/H] values (back-compat, see `_grids`)."""
+        return self._axis().fehs
 
     # -- UI metadata -----------------------------------------------------------
     def parameter_ranges(self) -> dict:
         self._ensure_loaded()
-        assert self._fehs is not None
+        assert self._vvcrits is not None
+        ax = self._axis()                        # the default (non-rotating) axis
         return {
             # Bounding box; mass_range(feh) tightens it where the grid is sparse.
-            "mass_msun": {"min": self._mass_min, "max": self._mass_max},
+            "mass_msun": {"min": ax.mass_min, "max": ax.mass_max},
             # A single point when only one grid is on disk (slider pinned); a real
             # span once a second metallicity is fetched.
-            "feh": {"min": float(self._fehs[0]), "max": float(self._fehs[-1])},
+            "feh": {"min": float(ax.fehs[0]), "max": float(ax.fehs[-1])},
+            # The rotation rates on disk (≥2 ⇒ the frontend can offer the toggle;
+            # the per-(mass,feh) honesty gate is Chunk 2). mass/feh ranges are the
+            # default axis's — the rotating grid shares the same coverage.
+            "vvcrit": {"available": [float(v) for v in self._vvcrits]},
         }
 
-    def mass_range(self, feh: float) -> tuple[float, float]:
+    def mass_range(self, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         """Valid mass span at this [Fe/H] — the intersection of the bracketing
         grids' mass coverage. Narrower than the bounding box where a metallicity
         lacks evolved low-mass tracks (the dead corner). Raises if [Fe/H] itself
-        is off-grid (no extrapolation, §6)."""
-        self._ensure_loaded()
-        assert self._fehs is not None
-        self._check_feh(feh)
-        j_lo, j_hi, _ = self._bracket_feh(feh)
-        g_lo, g_hi = self._grids[j_lo], self._grids[j_hi]
+        is off-grid (no extrapolation, §6). `vvcrit` snaps to a rotation bucket."""
+        ax = self._axis(vvcrit)
+        self._check_feh(ax, feh)
+        j_lo, j_hi, _ = self._bracket_feh(ax, feh)
+        g_lo, g_hi = ax.grids[j_lo], ax.grids[j_hi]
         lo = max(float(g_lo.masses[0]), float(g_hi.masses[0]))
         hi = min(float(g_lo.masses[-1]), float(g_hi.masses[-1]))
         return lo, hi
 
-    def age_range(self, mass: float, feh: float) -> tuple[float, float]:
-        self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
-        age_win = self._interp_window(mass, feh)["age"]
+    def age_range(self, mass: float, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
+        ax = self._axis(vvcrit)
+        self._check_mass_feh(ax, mass, feh)
+        age_win = self._interp_window(ax, mass, feh)["age"]
         return (float(age_win[0]), float(age_win[-1]))
 
     # -- the one method that matters ------------------------------------------
-    def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
-        self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
+    def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
+        ax = self._axis(vvcrit)
+        self._check_mass_feh(ax, mass, feh)
 
-        win = self._interp_window(mass, feh)
+        win = self._interp_window(ax, mass, feh)
         age_win = win["age"]
         # age never extrapolates past the exposed window (ZAMS .. end of CHeB).
         age = float(min(max(age_yr, age_win[0]), age_win[-1]))
@@ -770,25 +880,26 @@ class MISTProvider:
         # "convert age to EEP, then interpolate there" step.
         rows = np.arange(age_win.size, dtype=float)
         frac = float(np.interp(age, age_win, rows))
-        return self._state_from_row(win, frac, mass, feh)
+        return self._state_from_row(ax, win, frac, mass, feh)
 
-    def track(self, mass: float, feh: float) -> list[StellarState]:
+    def track(self, mass: float, feh: float, vvcrit: float = 0.0) -> list[StellarState]:
         """Every exposed EEP row at (mass, [Fe/H]) as a StellarState (§3).
 
         No age inversion here: the window's rows already *are* the EEPs (ZAMS ..
         end of CHeB), so we emit one state per integer row. Age is strictly
         increasing across this span — including the He flash, which MIST resolves
         into monotonically-aging rows — so the list is cleanly ordered by EEP for
-        the HR track and the composition panel's EEP axis.
+        the HR track and the composition panel's EEP axis. `vvcrit` snaps to a
+        rotation bucket (default 0.0 = the non-rotating grid).
         """
-        self._ensure_loaded()
-        self._check_mass_feh(mass, feh)
-        win = self._interp_window(mass, feh)
+        ax = self._axis(vvcrit)
+        self._check_mass_feh(ax, mass, feh)
+        win = self._interp_window(ax, mass, feh)
         n = int(win["age"].size)
-        return [self._state_from_row(win, float(i), mass, feh) for i in range(n)]
+        return [self._state_from_row(ax, win, float(i), mass, feh) for i in range(n)]
 
     # -- the stellar endgame (WR/WD gateway) — snap-to-track, never interpolate (§6) --
-    def endgame(self, mass: float, feh: float) -> EndgameResult:
+    def endgame(self, mass: float, feh: float, vvcrit: float = 0.0) -> EndgameResult:
         """The post-window endgame at (mass, [Fe/H]) — see the Protocol docstring.
 
         Snaps to the nearest real grid track (no cross-mass/[Fe/H] interpolation),
@@ -811,9 +922,9 @@ class MISTProvider:
           * none — no exposed endgame at all (e.g. a low-mass star still alive at the
                   grid's end, whose `track_end` is already its last row). states = [].
         """
-        self._ensure_loaded()
-        j = self._snap_feh_index(feh)               # raises if [Fe/H] is off-grid (§6)
-        grid = self._grids[j]
+        ax = self._axis(vvcrit)
+        j = self._snap_feh_index(ax, feh)           # raises if [Fe/H] is off-grid (§6)
+        grid = ax.grids[j]
         masses = grid.masses
         if not (masses[0] <= mass <= masses[-1]):
             raise ParameterOutOfRange(
@@ -843,7 +954,7 @@ class MISTProvider:
             win = {col: getattr(track, col)[r0 : r_last + 1] for col in _TRACK_COLS}
             states = [
                 self._state_from_row(
-                    win, float(i), snapped_mass, snapped_feh, eep_origin=r0
+                    ax, win, float(i), snapped_mass, snapped_feh, eep_origin=r0
                 )
                 for i in range(int(win["age"].size))
             ]
@@ -857,15 +968,14 @@ class MISTProvider:
             states=states,
         )
 
-    def _snap_feh_index(self, feh: float) -> int:
-        """Index of the grid [Fe/H] nearest `feh` (the endgame snaps, never blends).
+    def _snap_feh_index(self, axis: _Axis, feh: float) -> int:
+        """Index of the axis [Fe/H] nearest `feh` (the endgame snaps, never blends).
 
-        Raises if `feh` is outside the grid's [Fe/H] span — no extrapolation (§6) —
+        Raises if `feh` is outside the axis's [Fe/H] span — no extrapolation (§6) —
         then snaps in-range to the nearest grid metallicity (its true value is what
         the result reports, mirroring the snapped-mass honesty)."""
-        self._check_feh(feh)
-        assert self._fehs is not None
-        return int(np.argmin(np.abs(self._fehs - feh)))
+        self._check_feh(axis, feh)
+        return int(np.argmin(np.abs(axis.fehs - feh)))
 
     @staticmethod
     def _wr_threshold(grid: _Grid) -> float | None:
@@ -883,6 +993,7 @@ class MISTProvider:
 
     def _state_from_row(
         self,
+        axis: _Axis,
         win: dict,
         frac: float,
         mass: float,
@@ -896,9 +1007,9 @@ class MISTProvider:
         `endgame` (an unblended single-track slice past the window), so they can
         never drift, and so `win`'s provider-internal keys never escape past this
         boundary (§3). `eep_origin` is the absolute MIST row of `win`'s first row:
-        the normal window starts at the ZAMS row (the default); the endgame passes
-        its own origin (the first post-window row) so its states report their true,
-        continuing EEP rather than restarting at ZAMS.
+        the normal window starts at the axis's ZAMS row (the default); the endgame
+        passes its own origin (the first post-window row) so its states report their
+        true, continuing EEP rather than restarting at ZAMS.
         """
         rows = np.arange(win["age"].size, dtype=float)
         age = float(np.interp(frac, rows, win["age"]))
@@ -959,12 +1070,14 @@ class MISTProvider:
         phase = _PHASE_NAMES.get(phase_code, f"phase{phase_code}")
 
         # EEP is the (1-based) row number; row r == EEP r+1 across all masses. The
-        # normal window's origin is the ZAMS row; the endgame passes its own.
-        origin = self._zams_row if eep_origin is None else eep_origin
+        # normal window's origin is the axis's ZAMS row; the endgame passes its own.
+        origin = axis.zams_row if eep_origin is None else eep_origin
         eep = float(origin + frac + 1.0)
 
         # visual proxy (§7), explicitly evocative: cool stars more chromospherically
-        # active than hot ones. v/vcrit=0.0 grid -> no modeled rotation.
+        # active than hot ones. `v_rot_kms` stays None for now even on a rotating
+        # axis — surfacing the selected rotation as a real value is the payoff chunk
+        # (Chunk 3); the axis already reshapes the track, which is the science.
         activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
 
         return StellarState(
@@ -986,19 +1099,22 @@ class MISTProvider:
         )
 
     # -- EEP-fixed 2D (mass × [Fe/H]) interpolation (the core of §6) -----------
-    def _interp_window(self, mass: float, feh: float) -> dict:
+    def _interp_window(self, axis: _Axis, mass: float, feh: float) -> dict:
         """Fully (mass, [Fe/H])-interpolated track window over [ZAMS .. end of CHeB].
 
-        Outer loop is metallicity (§6 step 1): bracket [Fe/H], mass-interpolate
-        each bracketing grid at fixed EEP (step 2), then blend the two grids
-        (step 4) — again at fixed row index, never across age. Returns per-quantity
-        arrays on a common row grid; `state_at`/`age_range` invert `age` once.
+        Outer loop is metallicity (§6 step 1): bracket [Fe/H] within the selected
+        rotation `axis`, mass-interpolate each bracketing grid at fixed EEP (step 2),
+        then blend the two grids (step 4) — again at fixed row index, never across
+        age. Rotation never enters here: it picked the axis, and within a vvcrit
+        bucket the blend is identical to the pre-rotation behavior. Returns
+        per-quantity arrays on a common row grid; `state_at`/`age_range` invert
+        `age` once.
         """
-        j_lo, j_hi, wz = self._bracket_feh(feh)
-        win_lo = self._grid_window(self._grids[j_lo], mass)
+        j_lo, j_hi, wz = self._bracket_feh(axis, feh)
+        win_lo = self._grid_window(axis.grids[j_lo], mass)
         if j_lo == j_hi or wz == 0.0:
             return win_lo
-        win_hi = self._grid_window(self._grids[j_hi], mass)
+        win_hi = self._grid_window(axis.grids[j_hi], mass)
         return _blend_windows(win_lo, win_hi, wz)
 
     def _grid_window(self, grid: _Grid, mass: float) -> dict:
@@ -1065,15 +1181,14 @@ class MISTProvider:
             "phase": (lo.phase if w < 0.5 else hi.phase)[sl],
         }
 
-    def _bracket_feh(self, feh: float) -> tuple[int, int, float]:
-        """Indices of the two grid [Fe/H] values bracketing `feh`, and the weight.
+    def _bracket_feh(self, axis: _Axis, feh: float) -> tuple[int, int, float]:
+        """Indices of the two axis [Fe/H] values bracketing `feh`, and the weight.
 
         Mirrors `_bracket` (mass) but uses `isclose` for the exact-hit test:
         grid metallicities are tenths of a dex, and the Sun ([Fe/H]=0) must
         short-circuit to the solar grid with no blend (the §10 anchor).
         """
-        assert self._fehs is not None
-        fehs = self._fehs
+        fehs = axis.fehs
         if fehs.size == 1:
             return 0, 0, 0.0
         if feh <= fehs[0]:
@@ -1091,9 +1206,8 @@ class MISTProvider:
         return i_lo, i_hi, float(w)
 
     # -- validation ------------------------------------------------------------
-    def _check_feh(self, feh: float) -> None:
-        assert self._fehs is not None
-        feh_lo, feh_hi = float(self._fehs[0]), float(self._fehs[-1])
+    def _check_feh(self, axis: _Axis, feh: float) -> None:
+        feh_lo, feh_hi = float(axis.fehs[0]), float(axis.fehs[-1])
         if feh_lo - _FEH_TOL <= feh <= feh_hi + _FEH_TOL:
             return
         if feh_lo == feh_hi:
@@ -1106,10 +1220,10 @@ class MISTProvider:
             f"[Fe/H] {feh} outside the MIST grid [{feh_lo}, {feh_hi}]"
         )
 
-    def _check_mass_feh(self, mass: float, feh: float) -> None:
+    def _check_mass_feh(self, axis: _Axis, mass: float, feh: float) -> None:
         # feh first (mass_range needs a valid [Fe/H]); then the per-[Fe/H] span,
         # which excludes the dead low-mass / super-solar corner.
-        m_lo, m_hi = self.mass_range(feh)
+        m_lo, m_hi = self.mass_range(feh, axis.vvcrit)
         if not (m_lo <= mass <= m_hi):
             raise ParameterOutOfRange(
                 f"mass {mass} M_sun outside the MIST grid at [Fe/H]={feh} "

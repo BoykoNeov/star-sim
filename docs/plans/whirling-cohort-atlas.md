@@ -30,8 +30,11 @@ tier.
   resolves `MIST_v2.5_feh_p000_afe_p0_vvcrit0.4_EEPS.txz` on the live server
   (verified this session). So rotation-as-real-data is *available*, not
   hypothetical. The fetch tool already takes `--vvcrit` (`fetch_mist.py`).
-- **Nothing rotating is on disk.** `data/` holds only `vvcrit0.0` grids (five
-  metallicities, m100→p050). The live `PROVIDER` has never seen a rotating track.
+- **One rotating grid is now on disk** (fetched this session for the gate):
+  `feh_p000_afe_p0_vvcrit0.4` (171 tracks). The other four metallicities are still
+  non-rotating only. **All 12 feh codes publish a `vvcrit0.4` tarball** (verified via
+  `discover_tarball_url` with no download), so the rotation axis can match the
+  existing m100/m075/m050/p000/p050 set whenever we fetch the remaining four.
 - **The provider does NOT carry rotation as an axis.** `_feh_from_path` keys grids
   by `[Fe/H]` only (`feh_([mp])(\d{3})`); `_find_eep_dirs` globs every dir with
   `*.track.eep`. Two grids at the same feh but different vvcrit (`..._vvcrit0.0` vs
@@ -48,13 +51,33 @@ tier.
   rotational line broadening (v sin i) is only visible above **~125 km/s** — fast
   rotators (Be/A/B, 200–300 km/s) show it; Sun/typical G–K (a few km/s) are
   correctly sub-pixel. This bounds the v sin i idea below.
-- **NOT verified (the one build-gate):** whether v2.5 **ramps rotation in by mass.**
-  MIST v1.2's `vvcrit=0.4` set imposed rotation only above ~1.2–1.8 M☉ (low-mass
-  stars magnetically brake, so a fixed initial spin is unphysical there). If v2.5
-  does the same, the rotation axis **does nothing at 1 M☉** and bites only in the
-  intermediate/massive (i.e. WR) regime — still honest, but it means "slider" is not
-  a clean uniform-v/vcrit knob. **Cheap settle:** fetch the 0.4 grid once, diff a
-  1 M☉ track against the 0.0 one; identical ⇒ rotation is ramped.
+- **VERIFIED (the build-gate, settled this session): v2.5 ramps rotation in by mass.**
+  Diffing the same-mass track between `vvcrit0.0` and `vvcrit0.4` at solar [Fe/H]:
+  **bit-identical at ≤ 1.20 M☉** (max|Δ| = 0 across log Teff, log L, age, surface
+  N/He/C, every EEP), **diverges at ≥ 1.25 M☉** — i.e. the turn-on is the classic
+  **~1.2 M☉ Kraft break** (envelopes go convective→radiative, magnetic braking shuts
+  off, so a fixed initial spin becomes physical). So the rotation control **does
+  literally nothing at the Sun** and is honest only above ~1.2 M☉. The payoff is real
+  where it bites: at 20 M☉ the **MS surface N¹⁴ rises ~5×** (0.0008→0.0044) and surface
+  He enriches on the main sequence (the Hunter-diagram signature). Consequences for the
+  build: the control must be a **two-state toggle that data-derives its own active
+  domain** (meaningful only where a rotating grid exists *and* the rotating track
+  differs from the non-rotating one at the selected mass — below threshold the tracks
+  are bit-identical, so "rotation negligible for this star" is a true, checkable
+  statement), **not** a slider implying continuous v/vcrit.
+- **Mass footprint is identical** across vvcrit (both grids: 171 tracks, 0.1–300 M☉),
+  and **EEP counts align per mass** (1721/1721, 808/808). So adding rotation stays a
+  **2D (mass × feh) domain per bucket** — no 3D non-rectangular `mass_range`, and
+  blend-then-invert works unchanged *within* a vvcrit bucket. The honest move is
+  snap/toggle **between** buckets (no third grid to interpolate toward).
+- **The collision is now live and MUST be fixed first.** With the 0.4 grid on disk,
+  `_feh_from_path` keys both the `vvcrit0.0` and `vvcrit0.4` solar grids to `feh=0.0`
+  → `provider._fehs = [-1, -0.75, -0.5, 0.0, 0.0, 0.5]`, a duplicate/degenerate axis
+  point. `pytest` still passes (the §10 Sun anchor is 1.0 M☉ → bit-identical → can't
+  detect it), but intermediate-mass solar tracks are silently contaminated. Keying by
+  `(feh, vvcrit)` is therefore **required to restore correctness**, not just a feature.
+- **`StellarState` already carries `v_rot_kms`** — a field to surface the selected
+  rotation through the spine without a new field (today it is unused/0 for MIST).
 
 ## The physics — how rotation reshapes a star (the multi-parameter answer)
 
@@ -216,6 +239,49 @@ axis**. Sketch (to be turned into a chunked plan if chosen):
   toggle is on, changing which masses reach WR. The SED Chunk-3 rotation slider is a
   *different* control (it pins activity/X-ray, a derived non-thermal quantity); see
   the cross-cutting note on whether to unify them.
+
+## The rotation axis — chunked build plan (gate settled, ready to implement)
+
+The gate is verified (rotation is mass-ramped at ~1.2 M☉; see Measured grounding),
+so the sketch above becomes this chunked plan. Honesty spine throughout: the control
+is a **two-state toggle** that **data-derives its own active domain**, never a slider.
+
+- **Chunk 1 — provider keying `(feh, vvcrit)` + restore correctness. ✅ DONE.** Grids
+  partition into one `_Axis` per rotation rate, keyed by `(feh, vvcrit)`: vvcrit parsed
+  from the dir name (`_vvcrit_from_path`, hint) and confirmed against each track's
+  authoritative header `rot` value, stored in the cache (so `CACHE_VERSION` bumped 9→10).
+  The provider **snaps** between vvcrit buckets and interpolates mass×[Fe/H] *within* a
+  bucket (the `_bracket_feh`/`_interp_window`/`_state_from_row` helpers now take an
+  `_Axis`). `track()/state_at()/endgame()/mass_range()/age_range()` gained `vvcrit=0.0`
+  (default = non-rotating → the live spine is byte-unchanged); the Protocol + Stub + MESA
+  carry it too (Stub/MESA accept-and-ignore). `parameter_ranges()` now exposes
+  `vvcrit: {available: [...]}`. Back-compat `_grids`/`_fehs` properties return the default
+  axis for the white-box tests. **The real gate** (a test that *fails* on the old keying):
+  the off-grid-feh contamination check — `track(3.0, feh=0.25, vvcrit=0.0)` must blend the
+  *non-rotating* solar+p050 tracks; the duplicate-0.0 bug would have bracketed the
+  *rotating* solar grid (20% different N here). The naive feh=0.0 grid-point check does
+  NOT discriminate (the buggy bracket also lands non-rotating-first) — advisor-caught.
+  178 pytest (+8 in `test_rotation_axis.py`; `requires_mist_rotation` marker).
+- **Chunk 2 — the data-derived active domain + the toggle's honesty gate.** A
+  `rotation_available(mass, feh)` (or similar) that returns true only where (a) a rotating
+  grid exists at that feh and (b) the rotating track measurably differs from the
+  non-rotating one at that mass (below the Kraft break they are bit-identical → "negligible").
+  This is the one rule that makes the toggle honest at the Sun (inert, with a "rotation
+  negligible below ~1.2 M☉" note) and off-solar (absent where no rotating grid is fetched).
+- **Chunk 3 — the frontend toggle + the payoff render.** A non-rotating/rotating toggle
+  near the [Fe/H] control; greyed with the explanatory note where `rotation_available` is
+  false. Prove the payoff comes through the runtime path before shipping the control
+  (project "don't label a non-feature" rule): the **MS surface N/He enrichment** in the
+  comp panel (rotating vs non at ~20 M☉), the **HR track shift**, and the **low-Z CHE blue
+  divergence** (needs the m100/m200 rotating grids — the headline lives at low Z, not solar).
+- **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities** (m100/m075/
+  m050/p050 at vvcrit0.4) so the toggle is honest across the existing feh axis, and to
+  unlock the low-Z CHE payoff. ~180 MB each; can land before or interleaved with Chunk 3.
+- **Open decision before Chunk 3 (UI):** unify the vvcrit toggle with the existing SED
+  Chunk-3 rotation/activity slider, or keep them separate? They are the same physical
+  parameter at two fidelities (vvcrit selects the *track*, real for all masses in the grid;
+  the SED slider pins *activity/X-ray*, age-derivable only for cool MS stars) with different
+  validity domains. See cross-cutting Q2 below. Does not gate Chunks 1–2.
 
 ## Cross-cutting design questions (decide before building any of these)
 

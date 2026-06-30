@@ -98,8 +98,16 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   mass grid **0.1–300 M☉** per metallicity, window **ZAMS → end of early-AGB**
   (TPAGB thermal pulses hard-stopped — §6 "messy, defer"). Non-rectangular valid
   domain (`mass_range(feh)` tightens the floor for [Fe/H]>0). Per-grid
-  `_parsed_tracks.npz` parse cache (**`CACHE_VERSION` 9**; ~60–110 s cold reparse on
-  a bump, ~0.35 s warm). [[star-sim-mist-provider]], [[star-sim-composition-panel]].
+  `_parsed_tracks.npz` parse cache (**`CACHE_VERSION` 10**; ~50–110 s cold reparse on
+  a bump, ~0.35 s warm). A **third selection axis — rotation `vvcrit`** — is now on
+  the boundary (Chunk 1 of the rotation feature): grids partition into one `_Axis`
+  per rotation rate keyed by `(feh, vvcrit)`, the provider **snaps** between buckets
+  (MIST ships only {0.0, 0.4}, no third grid to blend) and interpolates mass×[Fe/H]
+  *within* a bucket. `track()/state_at()/endgame()/mass_range()/age_range()` take
+  `vvcrit=0.0` (default = non-rotating, so the live spine is byte-unchanged); rotation
+  is **mass-ramped at the ~1.2 M☉ Kraft break** (bit-identical below it). Not yet
+  wired to the frontend (Chunks 2–4). [[star-sim-rotation-subpop-atlas]],
+  [[star-sim-mist-provider]], [[star-sim-composition-panel]].
 - `MESAProvider` — the **second real provider** (offline MESA `history.data`, a
   different on-disk format behind the same boundary), used to **validate MIST**.
   Discrete-grid, snap-to-nearest, **multi-metallicity by snapping** (no

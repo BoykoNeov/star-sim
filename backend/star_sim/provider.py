@@ -78,25 +78,28 @@ class StellarStateProvider(Protocol):
         """
         ...
 
-    def mass_range(self, feh: float) -> tuple[float, float]:
+    def mass_range(self, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         """(min_mass, max_mass) for the mass slider at this [Fe/H].
 
         The valid mass span can depend on metallicity (a provider's grid may not
         cover every mass at every [Fe/H]). The UI calls this per [Fe/H] so it can
         clamp the mass slider and never request an out-of-grid point — without
         knowing *why* the span tightens (§3: no provider internals leak out).
+
+        `vvcrit` selects a rotation grid (see `track`); providers without a
+        rotating grid accept it for parity and ignore it.
         """
         ...
 
-    def age_range(self, mass: float, feh: float) -> tuple[float, float]:
+    def age_range(self, mass: float, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         """(min_age_yr, max_age_yr) for the time scrubber at this (mass, feh)."""
         ...
 
-    def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
+    def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         """The one method that matters: (mass, [Fe/H], age) -> StellarState."""
         ...
 
-    def track(self, mass: float, feh: float) -> list[StellarState]:
+    def track(self, mass: float, feh: float, vvcrit: float = 0.0) -> list[StellarState]:
         """The full evolutionary track at (mass, [Fe/H]) — a list of StellarStates
         ordered by EEP (ZAMS -> the exposed-window end).
 
@@ -105,10 +108,18 @@ class StellarStateProvider(Protocol):
         is a `StellarState` exactly as `state_at` would return at that point, so
         consumers never see a provider's track columns (§3 — returning the raw
         interpolation window would leak provider internals).
+
+        `vvcrit` selects the stellar **rotation rate** (v/vcrit) — a discrete
+        grid-selection axis, not a continuous blend. A provider may publish more
+        than one rotation grid (e.g. MIST's non-rotating 0.0 and rotating 0.4):
+        the request **snaps** to the nearest available rate (rotation reshapes the
+        whole track above the magnetic-braking limit, so there is no third grid to
+        interpolate toward). Default 0.0 = non-rotating, so existing callers are
+        unaffected; a provider with no rotating data ignores it.
         """
         ...
 
-    def endgame(self, mass: float, feh: float) -> EndgameResult:
+    def endgame(self, mass: float, feh: float, vvcrit: float = 0.0) -> EndgameResult:
         """The stellar endgame past the normal `track()` window — the WR/WD gateway.
 
         The exposed `track()`/`state_at()` window stops at the end of the early-AGB

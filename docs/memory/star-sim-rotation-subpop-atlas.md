@@ -1,6 +1,6 @@
 ---
 name: star-sim-rotation-subpop-atlas
-description: Star Sim — captured discussion (not built) of a rotation axis + other subpopulation controls; user said "nothing is out of scope."
+description: Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunk 1 (provider (feh,vvcrit) keying) BUILT, Chunks 2-4 remain. User said "nothing is out of scope."
 metadata:
   type: project
 ---
@@ -14,21 +14,61 @@ is out of scope"** — so the old spec §2/§9 walls (no binary engine, no live
 solver) are now recorded as candidate directions *with a cost*, not forbidden.
 Honesty tiering stays (tier by what data backs it, not by what we wish it showed).
 
-**Verified this session (re-check if grids change):**
-- MIST v2.5 rotating grid EXISTS: `discover_tarball_url(vvcrit="0.4")` resolves
-  `MIST_v2.5_..._vvcrit0.4_EEPS.txz` on the live server. So rotation = real data.
-- On disk: only `vvcrit0.0` (5 metallicities). Provider keys grids by `[Fe/H]`
-  only (`_feh_from_path`) → two vvcrit dirs at same feh would COLLIDE; rotation is
-  NOT carried as an axis. Adding it = a third backend axis (provider work mirroring
-  the `[Fe/H]` add).
-- Surface N (`Ns`) already plumbed → rotating tracks would show **MS** surface-N/He
-  enrichment (Hunter diagram), which we don't show today (only post-MS dredge-up).
-- Bake resolution ≈ R 2400 → v sin i line broadening visible only above ~125 km/s
-  (fast rotators yes, Sun no).
-- **NOT verified (the build gate):** does v2.5 ramp rotation in by mass? (v1.2
-  imposed vvcrit=0.4 only above ~1.2–1.8 M☉ — low-mass stars brake.) If so the
-  rotation axis does NOTHING at 1 M☉, bites only in the WR regime. Cheap settle:
-  fetch the 0.4 grid, diff a 1 M☉ track vs 0.0; identical ⇒ ramped.
+**BUILD GATE SETTLED this session (the headline result):** MIST v2.5 **ramps
+rotation in by mass.** Diffed same-mass `vvcrit0.0` vs `vvcrit0.4` tracks at solar
+[Fe/H]: **bit-identical at ≤1.20 M☉** (max|Δ|=0 across log Teff/L, age, surface
+N/He/C, every EEP), **diverges at ≥1.25 M☉** — the turn-on is the **~1.2 M☉ Kraft
+break** (convective→radiative envelope; magnetic braking shuts off → a fixed spin
+becomes physical). So the rotation control **does nothing at the Sun**; it's a
+massive-star/WR feature. Payoff confirmed where it bites: 20 M☉ **MS surface N¹⁴ up
+~5×** (0.0008→0.0044) + MS He enrichment (Hunter signature). ⇒ build a **two-state
+toggle that data-derives its own active domain** (meaningful only where a rotating
+grid exists AND the rotating track differs at that mass — bit-identical below the
+break = honest "negligible"), NOT a slider.
+
+**Other measured facts (re-check if grids change):**
+- **All 12 feh codes publish a `vvcrit0.4` tarball** (`discover_tarball_url`, no
+  download). On disk now: `feh_p000_..._vvcrit0.4` (171 tracks, fetched for the gate)
+  + the original 5 non-rotating grids. To match the feh axis, fetch m100/m075/m050/
+  p050 at 0.4 (~180 MB each). **Low-Z (m100/m200) is the highest-value grid** — CHE
+  blue divergence is a low-Z + high-rotation effect; the headline lives at low Z.
+- **Mass footprint identical** across vvcrit (both 171 tracks, 0.1–300 M☉) + **EEP
+  counts align per mass** (1721/1721, 808/808) ⇒ stays a **2D (mass×feh) domain per
+  bucket** (no 3D non-rectangular `mass_range`); blend-then-invert unchanged *within*
+  a bucket; snap/toggle *between* buckets.
+- **COLLISION IS LIVE — must fix first.** With the 0.4 grid on disk, `_feh_from_path`
+  keys both solar grids to feh=0.0 → `_fehs=[-1,-0.75,-0.5,0,0,0.5]`, a degenerate
+  axis point. `pytest` STILL PASSES (the §10 Sun anchor is 1.0 M☉ → bit-identical →
+  can't detect it) but intermediate-mass solar tracks are silently contaminated.
+  Keying by `(feh, vvcrit)` is **required to restore correctness**, not just a feature.
+- **`StellarState` already has `v_rot_kms`** (unused/0 for MIST today) — surface the
+  selected rotation through the spine without a new field.
+- Bake resolution ≈ R 2400 → v sin i broadening visible only above ~125 km/s.
+
+**Chunked plan (in the plan doc, gate settled):**
+- **Chunk 1 — BUILT.** Provider keys grids by `(feh, vvcrit)`: partitions into one
+  `_Axis` per rotation rate (vvcrit from dir name + authoritative track header `rot`,
+  cached → `CACHE_VERSION` 9→10), **snaps between vvcrit buckets** and interpolates
+  mass×[Fe/H] *within* a bucket (feh helpers `_bracket_feh`/`_interp_window`/
+  `_state_from_row` now take an `_Axis`). `track()/state_at()/endgame()/mass_range()/
+  age_range()` gained `vvcrit=0.0` (default non-rotating → live spine byte-unchanged);
+  Protocol + Stub + MESA carry it (Stub/MESA accept-and-ignore). `parameter_ranges()`
+  exposes `vvcrit:{available:[...]}`. Back-compat `_grids`/`_fehs` properties = default
+  axis. **The real gate is the off-grid-feh test**, NOT the feh=0.0 grid-point one:
+  `track(3.0, feh=0.25, vvcrit=0.0)` must blend non-rot solar+p050; the duplicate-0.0
+  bug would bracket the *rotating* solar grid (20% N diff). The feh=0.0 check does NOT
+  discriminate the bug (buggy bracket lands non-rotating-first by sort order) —
+  **advisor-caught; don't regress to it.** 178 pytest (+8 `test_rotation_axis.py`,
+  `requires_mist_rotation` marker). api.py untouched (Chunk 3 wires the query param).
+- **Chunk 2** = data-derived active domain + toggle honesty gate (`rotation_available
+  (mass,feh)`: true only where a rotating grid exists AND the rotating track differs at
+  that mass — bit-identical below ~1.2 M☉ = honest "negligible").
+- **Chunk 3** = frontend toggle + prove the payoff renders (comp N/He at ~20 M☉, HR
+  shift, low-Z CHE). **Open UI decision:** unify with the SED Chunk-3 rotation slider or
+  keep separate (same parameter, two fidelities). **`StellarState.v_rot_kms` still None**
+  even on a rotating axis — surfacing the real value is this chunk's payoff.
+- **Chunk 4** = fetch remaining rotating metallicities (m100/m075/m050/p050 vvcrit0.4;
+  ~180 MB each; m100 unlocks the low-Z CHE headline). One rotating grid (p000) on disk.
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime

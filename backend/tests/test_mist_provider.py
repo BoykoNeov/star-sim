@@ -399,12 +399,13 @@ def test_parsed_track_cache_roundtrip_fidelity(provider):
     provider._ensure_loaded()   # writes each grid's _parsed_tracks.npz
     eep_dir = _find_eep_dirs(DATA_DIR)[0]
 
-    fresh, fresh_feh = _parse_all_tracks(eep_dir)
+    fresh, fresh_feh, fresh_vvcrit = _parse_all_tracks(eep_dir)
     reconstructed = _read_cache(_cache_path(eep_dir), _grid_fingerprint(eep_dir))
     assert reconstructed is not None, "cache should exist and its fingerprint match"
-    cached, cached_feh = reconstructed
+    cached, cached_feh, cached_vvcrit = reconstructed
 
     assert cached_feh == fresh_feh
+    assert cached_vvcrit == fresh_vvcrit
     assert len(cached) == len(fresh)
     for a, b in zip(fresh, cached):
         assert a.minit == b.minit

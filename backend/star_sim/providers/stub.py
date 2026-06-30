@@ -97,18 +97,21 @@ class StubProvider:
             "feh": {"min": FEH_MIN, "max": FEH_MAX},
         }
 
-    def mass_range(self, feh: float) -> tuple[float, float]:
-        """Full mass span — the stub's analytic grid is rectangular in (mass, feh)."""
+    def mass_range(self, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
+        """Full mass span — the stub's analytic grid is rectangular in (mass, feh).
+
+        `vvcrit` is accepted for Protocol parity and ignored: the stub models no
+        rotation (it is physically *flavored*, not a model — spec §7)."""
         return (MASS_MIN, MASS_MAX)
 
-    def age_range(self, mass: float, feh: float) -> tuple[float, float]:
+    def age_range(self, mass: float, feh: float, vvcrit: float = 0.0) -> tuple[float, float]:
         self._check_mass_feh(mass, feh)
         # Crude main-sequence lifetime: t ~ 10 Gyr * M^-2.5 (Sun -> 10 Gyr).
         t_ms = 1.0e10 * mass**-2.5
         return (0.0, t_ms)
 
     # -- the one method that matters ------------------------------------------
-    def state_at(self, mass: float, feh: float, age_yr: float) -> StellarState:
+    def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._check_mass_feh(mass, feh)
 
         _, t_ms = self.age_range(mass, feh)
@@ -154,17 +157,17 @@ class StubProvider:
             activity=activity,
         )
 
-    def track(self, mass: float, feh: float) -> list[StellarState]:
+    def track(self, mass: float, feh: float, vvcrit: float = 0.0) -> list[StellarState]:
         """The stub's whole life is the main sequence (ZAMS -> TAMS), so sample it
         uniformly in age. EEP is linear in age here, so even-age == even-EEP; the
         composition panel's EEP axis lands on a regular grid. `state_at` does all
-        the real work — this just walks it."""
+        the real work — this just walks it. `vvcrit` ignored (no modeled rotation)."""
         self._check_mass_feh(mass, feh)
         _, t_ms = self.age_range(mass, feh)
         n = 60
         return [self.state_at(mass, feh, t_ms * i / (n - 1)) for i in range(n)]
 
-    def endgame(self, mass: float, feh: float) -> EndgameResult:
+    def endgame(self, mass: float, feh: float, vvcrit: float = 0.0) -> EndgameResult:
         """The stub knows only the main sequence, so it exposes no endgame
         (type="none"); the gateway shows nothing. Keeps the stub a complete
         StellarStateProvider behind the §3 boundary."""

@@ -12,7 +12,13 @@ from __future__ import annotations
 import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
-from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
+from star_sim.providers.mist import (
+    DATA_DIR,
+    _feh_from_path,
+    _find_eep_dir,
+    _find_eep_dirs,
+    _vvcrit_from_path,
+)
 from star_sim.spectra import (
     GRID_FILENAME,
     SPECTRA_DATA_DIR,
@@ -49,6 +55,14 @@ def mist_fehs_available() -> set[float]:
     }
 
 
+def mist_vvcrits_available() -> set[float]:
+    """v/vcrit rotation rates whose grids are present on disk (from the dir names)."""
+    return {
+        vc for d in _find_eep_dirs(DATA_DIR)
+        if (vc := _vvcrit_from_path(d)) is not None
+    }
+
+
 requires_mist_data = pytest.mark.skipif(
     not mist_data_available(),
     reason="MIST grids not fetched — run: python -m star_sim.fetch_mist",
@@ -59,6 +73,14 @@ requires_mist_data = pytest.mark.skipif(
 requires_mist_multifeh = pytest.mark.skipif(
     len(mist_fehs_available()) < 2,
     reason="needs >=2 MIST metallicity grids — e.g. `python -m star_sim.fetch_mist --feh m050`",
+)
+
+# The rotation-axis tests need both a non-rotating and a rotating grid at the same
+# [Fe/H] (the bucket the contamination check compares). Fetch the rotating solar
+# grid with `python -m star_sim.fetch_mist --vvcrit 0.4`.
+requires_mist_rotation = pytest.mark.skipif(
+    len(mist_vvcrits_available()) < 2,
+    reason="needs a rotating MIST grid — run `python -m star_sim.fetch_mist --vvcrit 0.4`",
 )
 
 _HELDOUT_FEHS = {-0.5, 0.0, 0.5}
