@@ -100,14 +100,26 @@ scratchpad (`sn_gate.py`, `sn_lightcurve.py`); re-run against `feh_*/eeps/*.trac
    `he ≥ c ≥ o ≥ 0`, all `< final_mass`. ⇒ clean **ejecta/remnant split** available
    (with the cache bump). Very-massive φ3-enders carry `o_core=0` (no explicit O core
    built at window end) — use `c_core` as the CO-core proxy there.
-4. **Progenitors are red supergiants** (final-phase median R₀ ≈ 400–1100 R☉ for the
-   φ5 enders) → IIP plateau physics applies. **R₀ = final-phase-median radius**, not
-   the terminal EEP row (R_last/R_prev5 median 1.0 but drops to ⅓ in the worst case —
-   the terminal row is a low-gravity artifact for some tracks).
-5. **Canonical curve lands in regime** (15 M☉ solar: M_fin 11.98, M_ej 10.6, R₀ 696,
-   M_Ni 0.06, E 1e51): **plateau 1.5×10⁴² erg/s / 133 d**, radioactive tail
-   6×10⁴¹→6×10⁴⁰ over 50→300 d, **Co-tail slope 0.00976 mag/day** (= analytic =
-   textbook 0.0098). Peak/plateau/slope all PASS.
+4. **The φ5 bulk (~7–30 M☉) are red supergiants** (final-phase R ≈ 400–1100 R☉) →
+   IIP plateau physics applies. **But the bucket is NOT uniformly RSG** (advisor-
+   caught): a **compact very-massive low-Z tail** (140–160 M☉ φ3-enders, R ≈ 75–260
+   R☉, `o_core=0`) is not a red supergiant, so the Popov/KW *IIP plateau* model does
+   **not** cleanly apply there — Chunk 1 scopes the plateau to the RSG bulk and routes
+   the compact tail to an honest fallback (no-plateau / labeled).
+   **R₀ is an OPEN calibration knob, NOT settled by the gate.** The final-phase-median
+   underestimates the pre-collapse radius (it averages in the compact pre-RSG CHeB
+   rows — 15 M☉: R_last=R_max=912 but R_fpMed=696), and a larger true R₀ pushes t_p
+   *longer* (∝R₀^{1/6}). The terminal EEP row is a low-gravity artifact for *some*
+   tracks (R_last/R_prev5 drops to ⅓ in the worst case) but is R_max for others — so
+   the robust R₀ estimator (terminal vs max-near-end vs final-phase-median) is a
+   Chunk-1 calibration decision, not "gate-confirmed."
+5. **Canonical curve lands in regime** (15 M☉ solar: M_fin 11.98, M_ej 10.6,
+   R₀≈696–912, M_Ni 0.06, E 1e51): **plateau 1.5×10⁴² erg/s, t_p 133 d**, radioactive
+   tail 6×10⁴¹→6×10⁴⁰ over 50→300 d, **Co-tail slope 0.00976 mag/day** (= analytic =
+   textbook 0.0098). The gate confirmed *a* curve lands in regime; t_p 133 d ran ~30%
+   past typical observed IIP (~100 d, and past the quoted 80–120 d) — recorded as the
+   **Tier-2 duration/level uncertainty** (sensitive to R₀, T_ion, κ), not a clean
+   prediction. The Tier-1 Co-tail slope carries the predictive weight.
 
 **Gate verdict: shape-GO, scale-via-slider** (exactly the advisor's bet, the
 SED-Chunk-2 pattern). Constants cited in the implementation: Nadyozhin(1994) decay
@@ -138,8 +150,13 @@ fed by progenitor scalars from `endgame()`.
   light-curve object (time grid in days; L_total = plateau ⊕ radioactive tail) +
   `list[StellarState]` photosphere samples (homologous R(t)=v·t, v from E_K/M_ej;
   Teff/L from the photosphere). Tier-1 Co tail + Tier-2 Popov/KW plateau + Tier-3
-  M_Ni scaling, all from Chunk 0's validated formulae. Remnant type (NS/BH/failed)
-  from a labeled CO-core / mass cut (Chunk 5 refines).
+  M_Ni scaling, all from Chunk 0's validated formulae. **Scope the plateau to the RSG
+  bulk** (R₀ in the RSG range); the **compact very-massive low-Z tail gets an honest
+  no-plateau fallback** (a labeled radioactive-only curve — the plateau model assumes
+  a RSG envelope it doesn't have). **Pick the R₀ estimator here** (the open calibration
+  knob from the gate — terminal vs max-near-end vs final-phase-median; the final-phase-
+  median underestimates). Remnant type (NS/BH/failed) from a labeled CO-core / mass cut
+  (Chunk 5 refines).
 - **`/supernova` route** (bypasses `PROVIDER`; calls `PROVIDER.endgame()` internally
   for the progenitor, then the sibling) returning the light curve + states + scalars
   (type, M_ej, M_Ni default+range, E_K, remnant, peak L, plateau dur).
@@ -160,8 +177,12 @@ explosion time scrubber** (days→months→years, log); the **M_Ni slider** (Tie
 labeled) + canonical default; **observed-SN overlays** (real photometry, Chunk-1
 data — SN 1987A tail, SN 1999em plateau) as the honest anchor; mass/[Fe/H] stay live
 (re-snap → a different progenitor; WD/WR/none revert with a note). The 3D/SED/scale/
-readout take the photosphere `StellarState`. Narrate the un-modeled bounce at *entry*
-(the explosion mechanism is the gap, mirroring WD's PN-ejection note).
+readout take the photosphere `StellarState`, **but via explicit mode signals — NOT
+naive reuse** (the WD/WR discipline): `logg` is meaningless for freely-expanding ejecta
+(a logg≈−5 photosphere would trip the existing consumers' `clamp((4−logg)/3)` gate and
+render a *boiling fireball* with full granulation/corona). Pass an explicit
+`{endgame:"sn"}` so the 3D/SED branch on the mode, not on `logg`. Narrate the un-modeled
+bounce at *entry* (the explosion mechanism is the gap, mirroring WD's PN-ejection note).
 **Verify:** Playwright at 1440 + 390 px. **Depends:** Chunk 1.
 
 ### Chunk 3 — 3D expanding fireball → remnant (sketch)
@@ -198,7 +219,16 @@ honest and visually striking. **Depends:** Chunks 1–3.
   observed-SN overlays; never imply peak L is predicted.
 - **NS/BH is not a clean threshold.** Mitigation = label the cut a deliberate
   simplification; add the failed-SN branch.
-- **R₀ terminal-row artifact.** Mitigation = final-phase-median R₀ (gate-confirmed).
+- **R₀ definition is unsettled** (the gate did NOT confirm one). Final-phase-median
+  underestimates (averages in compact pre-RSG rows); the terminal row is an artifact
+  for some tracks but R_max for others. Mitigation = pick/calibrate the estimator in
+  Chunk 1 against observed plateau durations; it drives t_p (∝R₀^{1/6}).
+- **Plateau model is RSG-only.** The compact very-massive low-Z tail (140–160 M☉ φ3-
+  enders) has no RSG envelope → no clean plateau. Mitigation = labeled radioactive-
+  only fallback for that tail; don't force a plateau where the physics doesn't hold.
+- **`logg` is meaningless for ejecta.** The existing 3D/SED consumers gate on
+  `clamp((4−logg)/3)` → a logg≈−5 photosphere = a boiling-fireball false render.
+  Mitigation = explicit `{endgame:"sn"}` mode signals (the WD/WR precedent), not reuse.
 - **Plateau model ±dex in level** (KW normalization, T_ion/κ assumptions). Mitigation
   = honest labeling; the Tier-1 tail slope carries the predictive weight.
 - **Observed-photometry licensing/format.** Pull from OSC / published tables, cite,
