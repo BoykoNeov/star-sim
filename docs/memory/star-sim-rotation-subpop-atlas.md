@@ -102,13 +102,26 @@ break = honest "negligible"), NOT a slider.
   encoded the *incomplete* axis** (`test_rotation_status_absent_where_no_grid` + the API route test,
   both asserting `has_grid` False at +0.5) **flipped to the completed truth** (+0.5 present; absence
   re-tested at +0.75, beyond the axis). 192 pytest. Data is gitignored (`data/feh_*_vvcrit0.4/`).
-  **Deferred gap (advisor-flagged, beyond Chunk 4's pure-data scope):** there is no
-  "lies-between-metallicities" interpolation test for the *rotating* axis the way there is for
-  the non-rotating one — payoff was verified *at* grid points (20 M☉, three feh), but an
-  intermediate rotating feh (e.g. −0.6, now interpolating real m050↔m075 instead of the old
-  coarse m100↔p000 dex) isn't pinned. The natural next test if the rotating axis ever needs
-  full parity with non-rotating. Note-and-defer (the "lies-between" scenario it guarded —
-  valid-feh-with-no-rotating-grid — is now data-impossible since the two axes are coextensive).
+  **Deferred gap — NOW CLOSED (post-Chunk-4 follow-up).** The missing within-bucket [Fe/H]
+  interpolation coverage on the rotating axis is filled: **two new `test_rotation_axis.py`
+  tests** mirror the non-rotating pair (`test_mist_provider`):
+  `test_feh_interpolation_lies_between_metallicities_rotating` (structural lies-between at
+  vvcrit=0.4, first rotating bracket −1.0/−0.75, mass 3.0) and
+  `test_feh_interpolation_tracks_held_out_grid_rotating` (hold out rotating p000, interpolate
+  feh=0/vvcrit=0.4 from rotating m050/p050, compare to the real rotating p000 3.0 track —
+  measured L median 0.7%, Teff 1.8%). **Advisor's key correction (heeded):** lies-between alone
+  is a *weak discriminator* here — rotation's logL/Teff signature is far subtler than its
+  surface-N one (only ~1/25 age samples diverge in logL, ~16/25 in log Teff at this bracket), so
+  blend-then-invert convexity (axis-agnostic code) makes it pass *by construction* the moment the
+  non-rotating one does. So: (1) the **held-out accuracy test is the one with teeth** (catches
+  blend-weight/feh-mapping/rotating-grid drift; non-rotating interp vs the rotating truth is
+  ~2.6% = 3.6× worse, so a contamination bug collapses the rot/non-rot ratio to 1 → the `>2×`
+  clause fails); (2) lies-between **also carries a contamination-style discrimination clause**
+  (on log-Teff-divergent rows the interp must sit closer to the *rotating* blend). Both gated
+  **mass 3.0 (above the Kraft break)** — at 1.0 M☉ the rotating track is bit-identical so the
+  test would silently degenerate. Raw reader targets `...vvcrit0.4` *explicitly* (a feh-only
+  glob silently grabs the non-rotating dir). New conftest markers
+  `requires_mist_rotation_multifeh` / `requires_mist_rotation_heldout_feh`. **194 pytest** (+2).
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime

@@ -19,6 +19,8 @@ Skipped unless the rotating grid is fetched (conftest.requires_mist_rotation).
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -32,7 +34,9 @@ from star_sim.providers.mist import DATA_DIR
 from .conftest import (
     requires_mist_heldout_feh,
     requires_mist_rotation,
+    requires_mist_rotation_heldout_feh,
     requires_mist_rotation_lowz,
+    requires_mist_rotation_multifeh,
 )
 
 pytestmark = requires_mist_rotation
@@ -54,6 +58,24 @@ def _raw_surface_n(vvcrit_dir: str, mass_tag: str) -> np.ndarray:
         + np.asarray(e["surface_n13"], float)
         + np.asarray(e["surface_n15"], float)
     )
+
+
+def _feh_code(feh: float) -> str:
+    """0.0 -> 'p000', -0.75 -> 'm075', 0.5 -> 'p050' (MIST dir-name [Fe/H] code)."""
+    return ("m" if feh < 0 else "p") + f"{round(abs(feh) * 100):03d}"
+
+
+def _raw_track(feh: float, vvcrit: float, mass_tag: str = "00300M"):
+    """Read one raw `.track.eep` for an explicit (feh, vvcrit) grid — test ground
+    truth for the within-bucket [Fe/H] interpolation checks.
+
+    Unlike `test_mist_provider._real_track`, this targets the rotation rate
+    *explicitly* (`...vvcrit{vvcrit}`): with both vvcrit grids on disk a feh-only
+    glob would silently return the non-rotating dir, so a rotating-axis test must
+    name the rotating dir (as `_raw_surface_n` does)."""
+    vv = f"{vvcrit:.1f}"
+    path = DATA_DIR / f"feh_{_feh_code(feh)}_afe_p0_vvcrit{vv}" / "eeps" / f"{mass_tag}.track.eep"
+    return rmm.EEP(str(path), verbose=False).eeps
 
 
 def _provider_n_at_eep(states, target_eep: float) -> float:
@@ -188,6 +210,112 @@ def test_vvcrit_snaps_to_nearest_bucket(provider):
     # a wildly out-of-range value also snaps (no extrapolation, no error)
     far = provider.track(mass=3.0, feh=0.0, vvcrit=9.0)
     assert _provider_n_at_eep(far, 551.0) == _provider_n_at_eep(on, 551.0)
+
+
+# --- the [Fe/H] axis *within* the rotating bucket (vvcrit=0.4) ----------------
+# The rotation axis snaps between buckets, but [Fe/H] still interpolates *within* a
+# bucket. test_mist_provider has lies-between + held-out feh tests for the
+# non-rotating axis; these are their vvcrit=0.4 analogs, so the rotating axis's
+# within-bucket [Fe/H] interpolation gets the same validation (an advisor-flagged gap
+# after rotation Chunk 4 filled the rotating [Fe/H] span).
+
+
+@requires_mist_rotation_multifeh
+def test_feh_interpolation_lies_between_metallicities_rotating(provider):
+    """The §6/§10 lies-between property, but *within the rotating bucket*: at a fixed
+    EEP an interpolated [Fe/H] on the vvcrit=0.4 axis must lie between its bracketing
+    rotating grids on the HR diagram — the analog of
+    test_mist_provider.test_feh_interpolation_lies_between_metallicities.
+
+    The [Fe/H] interpolation is shared blend-then-invert code (the `_Axis` just swaps
+    which grids it holds), so this bound is structurally guaranteed on either axis;
+    the point is that it holds with the *rotating* grids actually selected. But
+    lies-between alone is a weak discriminator here: rotation's logL/Teff signature is
+    far subtler than its surface-N one, so over most rows a contaminated *non-rotating*
+    blend would still land inside the rotating bracket+slack (measured: only ~1/25 age
+    samples diverge in logL, but ~16/25 in log Teff at the -1.0/-0.75 bracket). So we
+    add the contamination-style check (cf. test_off_grid_feh_blend_uses_non_rotating_bucket):
+    on the rows where the rotating and non-rotating blends genuinely diverge in log
+    Teff, the interpolated point must sit closer to the *rotating* blend — proving the
+    vvcrit=0.4 grids, not their non-rotating twins, drove the interpolation.
+
+    Mass 3.0 (a grid point, so only [Fe/H] is interpolated) is above the ~1.2 M_sun
+    Kraft break on purpose: at 1.0 M_sun the rotating track is bit-identical to the
+    non-rotating one, so the whole test would silently degenerate to the non-rotating
+    case.
+    """
+    provider._ensure_loaded()
+    fehs = provider._axes[0.4].fehs               # the rotating axis's own [Fe/H] span
+    f_lo, f_hi = float(fehs[0]), float(fehs[1])   # first rotating bracket
+    f_mid = 0.5 * (f_lo + f_hi)
+    rl, rh = _raw_track(f_lo, 0.4), _raw_track(f_hi, 0.4)   # rotating brackets
+    nl, nh = _raw_track(f_lo, 0.0), _raw_track(f_hi, 0.0)   # their non-rotating twins
+
+    lo, hi = provider.age_range(3.0, f_mid, vvcrit=0.4)
+    discriminated = 0
+    for frac in np.linspace(0.05, 0.95, 25):
+        st = provider.state_at(3.0, f_mid, lo + frac * (hi - lo), vvcrit=0.4)
+        row = int(round(st.eep)) - 1
+        logL, logT = math.log10(st.L_lsun), math.log10(st.Teff_K)
+        # 1) structural lies-between against the rotating bracket
+        assert min(rl["log_L"][row], rh["log_L"][row]) - 0.03 <= logL <= max(rl["log_L"][row], rh["log_L"][row]) + 0.03
+        assert min(rl["log_Teff"][row], rh["log_Teff"][row]) - 0.01 <= logT <= max(rl["log_Teff"][row], rh["log_Teff"][row]) + 0.01
+        # 2) discrimination: where the buckets diverge, the interp tracks the rotating one
+        rot_blend = 0.5 * (rl["log_Teff"][row] + rh["log_Teff"][row])
+        nonrot_blend = 0.5 * (nl["log_Teff"][row] + nh["log_Teff"][row])
+        if abs(rot_blend - nonrot_blend) > 0.01:
+            assert abs(logT - rot_blend) < abs(logT - nonrot_blend)
+            discriminated += 1
+    # the discrimination clause must actually have fired (else lies-between is vacuous)
+    assert discriminated >= 5    # measured 16
+
+
+@requires_mist_rotation_heldout_feh
+def test_feh_interpolation_tracks_held_out_grid_rotating():
+    """Hold the *rotating* solar grid out: interpolate at [Fe/H]=0 / vvcrit=0.4 from
+    only the rotating m050/p050 grids and check it reproduces the real *rotating* p000
+    run — the analog of test_mist_provider.test_feh_interpolation_tracks_held_out_grid,
+    and the test with teeth. Unlike lies-between (a structural convexity bound),
+    accuracy against a held-out grid catches blend-weight, feh-mapping, and
+    rotating-grid-specific drift.
+
+    Mass 3.0 is above the Kraft break (so rotation genuinely bites — at 1.0 M_sun the
+    rotating and non-rotating grids are identical and the test couldn't tell the axes
+    apart). Tolerances are *measured on the rotating axis*, not copied from the
+    non-rotating test: L median ~0.7%, Teff median ~1.8%. The larger Teff error than
+    the non-rotating 1.0 M_sun case reflects the steeper 3.0 M_sun He-ignition
+    morphology across a full 1.0-dex bracket (a few rows are much worse, so — like the
+    non-rotating test — we assert on the median).
+
+    The clause with teeth is the relative one: interpolating the *non-rotating*
+    m050/p050 grids and comparing to the same rotating p000 ground truth gives ~2.6%
+    median L-error (3.6x worse). A contamination bug that read the wrong axis would
+    make the rotating and non-rotating paths *identical*, collapsing that ratio to 1 —
+    so the `> 2x` assertion fails exactly when the axis selection is broken, a thing no
+    absolute tolerance alone can police.
+    """
+    p = MISTProvider(fehs=(-0.5, 0.5))          # rotating solar grid deliberately excluded
+    real = _raw_track(0.0, 0.4)                  # ground truth: the real rotating p000 3.0 track
+
+    def _median_errs(vvcrit: float) -> tuple[float, float]:
+        lo, hi = p.age_range(3.0, 0.0, vvcrit=vvcrit)
+        L_errs, T_errs = [], []
+        for frac in np.linspace(0.05, 0.95, 25):
+            st = p.state_at(3.0, 0.0, lo + frac * (hi - lo), vvcrit=vvcrit)
+            row = int(round(st.eep)) - 1
+            L_real, T_real = 10 ** real["log_L"][row], 10 ** real["log_Teff"][row]
+            L_errs.append(abs(st.L_lsun - L_real) / L_real)
+            T_errs.append(abs(st.Teff_K - T_real) / T_real)
+        return float(np.median(L_errs)), float(np.median(T_errs))
+
+    L_med, T_med = _median_errs(0.4)
+    assert L_med < 0.02     # measured 0.7%
+    assert T_med < 0.03     # measured 1.8%
+
+    # teeth: reading the non-rotating bucket misses the rotating truth by ~3.6x
+    # (measured 2.6% vs 0.7%) — and a contamination bug would make these equal.
+    L_med_nonrot, _ = _median_errs(0.0)
+    assert L_med_nonrot > 2.0 * L_med
 
 
 # --- Chunk 2: the data-derived rotation honesty gate (rotation_status) ---------

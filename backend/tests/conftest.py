@@ -84,6 +84,17 @@ requires_mist_rotation = pytest.mark.skipif(
 )
 
 
+def mist_rotation_fehs_available() -> set[float]:
+    """[Fe/H] values that have a *rotating* (vvcrit>0) grid on disk — the metallicity
+    span of the rotating axis, which the within-bucket [Fe/H] interpolation tests
+    need (≥2 to bracket, the m050/p000/p050 trio to hold one out)."""
+    return {
+        fh for d in _find_eep_dirs(DATA_DIR)
+        if (vc := _vvcrit_from_path(d)) is not None and vc > 0.0
+        and (fh := _feh_from_path(d)) is not None
+    }
+
+
 def mist_rotation_lowz_available() -> bool:
     """True if a *low-Z* rotating grid (m100, [Fe/H]=-1.0) is on disk — the grid
     that carries the CHE / low-metallicity rotation payoff."""
@@ -91,6 +102,15 @@ def mist_rotation_lowz_available() -> bool:
         _vvcrit_from_path(d) and _vvcrit_from_path(d) > 0.0 and _feh_from_path(d) == -1.0
         for d in _find_eep_dirs(DATA_DIR)
     )
+
+
+# The within-bucket [Fe/H] interpolation tests on the *rotating* axis need >=2
+# rotating metallicity grids to bracket (mirrors requires_mist_multifeh, but for the
+# vvcrit=0.4 axis). Fetch e.g. `python -m star_sim.fetch_mist --vvcrit 0.4 --feh m075`.
+requires_mist_rotation_multifeh = pytest.mark.skipif(
+    len(mist_rotation_fehs_available()) < 2,
+    reason="needs >=2 rotating MIST metallicity grids — e.g. `--vvcrit 0.4 --feh m075`",
+)
 
 
 # The low-Z rotation tests need the rotating m100 grid (CHE lives at low Z).
@@ -103,6 +123,14 @@ _HELDOUT_FEHS = {-0.5, 0.0, 0.5}
 requires_mist_heldout_feh = pytest.mark.skipif(
     not _HELDOUT_FEHS.issubset(mist_fehs_available()),
     reason="needs the m050/p000/p050 grids — fetch with `--feh m050` and `--feh p050`",
+)
+
+# The held-out [Fe/H] accuracy test on the rotating axis needs the rotating
+# m050/p000/p050 trio (p000 rotating is the ground truth the others bracket) — the
+# vvcrit=0.4 analog of requires_mist_heldout_feh.
+requires_mist_rotation_heldout_feh = pytest.mark.skipif(
+    not _HELDOUT_FEHS.issubset(mist_rotation_fehs_available()),
+    reason="needs the rotating m050/p000/p050 grids — fetch with `--vvcrit 0.4 --feh m050,p050`",
 )
 
 # MESAProvider needs offline MESA history.data runs (fetched via

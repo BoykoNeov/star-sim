@@ -216,9 +216,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **192 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **194 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
-  Teff≈5834 K at 4.6 Gyr).
+  Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
+  interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
+  non-rotating ones — gated by `requires_mist_rotation_multifeh` /
+  `requires_mist_rotation_heldout_feh`.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything
