@@ -22,6 +22,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from fastapi.testclient import TestClient
+
+from star_sim.api import app
 from star_sim.providers import MISTProvider
 from star_sim.providers._vendor import read_mist_models as rmm
 from star_sim.providers.mist import DATA_DIR
@@ -252,3 +255,54 @@ def test_rotation_status_works_at_low_z(provider):
     assert st["has_grid"] is True
     assert st["active"] is True
     assert st["threshold_msun"] is not None
+
+
+# --- Chunk 3: surface rotation velocity (v_rot_kms) + the API wiring -----------
+
+def test_rotation_velocity_surfaced_through_state(provider):
+    """The Chunk-3 payoff: v_rot_kms is now a real StellarState field, not a stub.
+    The non-rotating axis is honestly 0 km/s (the model isn't spinning); the rotating
+    axis carries the real, large equatorial velocity at the massive end."""
+    s0 = provider.track(20.0, 0.0, vvcrit=0.0)
+    s4 = provider.track(20.0, 0.0, vvcrit=0.4)
+    assert all(s.v_rot_kms == 0.0 for s in s0), "non-rotating grid must report 0 km/s"
+    assert max(s.v_rot_kms for s in s4) > 100.0, "rotating massive star must spin fast"
+
+
+def test_rotation_velocity_consistent_with_the_honesty_gate(provider):
+    """Below the Kraft break MIST zeroes rotation entirely (not just the mixing), so
+    v_rot_kms is 0 on BOTH grids at 1.0 M_sun — the readout never shows a spinning star
+    whose track the gate calls a no-op. Above the break the rotating velocity is real."""
+    s0 = provider.track(1.0, 0.0, vvcrit=0.0)
+    s4 = provider.track(1.0, 0.0, vvcrit=0.4)
+    assert max(s.v_rot_kms for s in s0) == 0.0
+    assert max(s.v_rot_kms for s in s4) == 0.0           # inert below the break, velocity too
+    s_active = provider.track(3.0, 0.0, vvcrit=0.4)
+    assert max(s.v_rot_kms for s in s_active) > 0.0       # real spin above it
+
+
+def test_api_track_vvcrit_param_selects_the_rotating_bucket():
+    """The /track route threads vvcrit to the provider: the rotating bucket returns a
+    different track (MS surface-N enrichment) than the default non-rotating one, and
+    surfaces the real v_rot_kms — proving the axis reaches the API edge (§4)."""
+    client = TestClient(app)
+    base = client.get("/track", params={"mass": 20.0, "feh": 0.0}).json()
+    rot = client.get("/track", params={"mass": 20.0, "feh": 0.0, "vvcrit": 0.4}).json()
+    assert client.get("/track", params={"mass": 20.0, "feh": 0.0}).status_code == 200
+    # same EEP shape, different physics
+    assert len(base) == len(rot)
+    k = len(base) // 3   # mid-MS-ish
+    assert rot[k]["metals_surf"]["N"] > base[k]["metals_surf"]["N"]
+    assert max(r["v_rot_kms"] for r in rot) > 100.0
+    assert all(b["v_rot_kms"] == 0.0 for b in base)
+
+
+def test_api_rotation_status_route():
+    """The /rotation_status route exposes the honesty gate to the frontend, going
+    through PROVIDER so it stays §3-clean. Shape + the three regimes."""
+    client = TestClient(app)
+    body = client.get("/rotation_status", params={"mass": 1.0, "feh": 0.0}).json()
+    assert set(body) == {"has_grid", "threshold_msun", "active"}
+    assert body["has_grid"] is True and body["active"] is False        # inert at the Sun
+    assert client.get("/rotation_status", params={"mass": 20.0, "feh": 0.0}).json()["active"] is True
+    assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.5}).json()["has_grid"] is False

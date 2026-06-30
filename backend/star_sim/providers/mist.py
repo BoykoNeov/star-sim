@@ -222,13 +222,20 @@ DEFAULT_MASSES = (
 # provider partitions grids into vvcrit buckets and snaps between them (never blends —
 # MIST publishes only {0.0, 0.4}, no third grid to interpolate toward). The bump is
 # needed because the cache schema gained the scalar `vvcrit`; old v9 caches lack it.
-CACHE_VERSION = 10
+# v11 (rotation Chunk 3) added the per-row **surface rotation velocity** (`surf_avg_v_rot`,
+# km/s) — surfaced as `StellarState.v_rot_kms`, the rotation payoff the chunk promised.
+# It is the model's own surface speed: ~0 on the non-rotating grid (honestly "not
+# spinning"), and the real, *evolving* equatorial velocity on the rotating grid (high on
+# the ZAMS, falling as the star expands / brakes). Unlike Mcur/Mdot (endgame-only, snapped)
+# it IS interpolated across mass/[Fe/H] like the other living-state quantities. Old v10
+# caches lack the column, so the bump forces one reparse.
+CACHE_VERSION = 11
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
 # so the format is pure numeric arrays — no pickle.
 _TRACK_COLS = (
-    "age", "logL", "logT", "logR", "logg", "Mcur", "Mdot",
+    "age", "logL", "logT", "logR", "logg", "Mcur", "Mdot", "Vrot",
     "Xs", "Ys", "Xc", "Yc",
     "Lis", "Bes", "Cs", "Ns", "Os", "Fs", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
     "Lic", "Bec", "Cc", "Nc", "Oc", "Fc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
@@ -271,6 +278,7 @@ class _Track:
     # blended across mass/[Fe/H]: the endgame snaps to one real track, never interpolates.
     Mcur: np.ndarray       # current mass [M_sun] (star_mass) — < minit once winds strip
     Mdot: np.ndarray       # mass-loss rate [M_sun/yr] (star_mdot; signed, <= 0)
+    Vrot: np.ndarray       # surface rotation velocity [km/s] (surf_avg_v_rot); ~0 non-rotating
     Xs: np.ndarray         # surface H mass fraction
     Ys: np.ndarray         # surface He mass fraction (he4 + he3)
     Xc: np.ndarray         # center H mass fraction
@@ -476,6 +484,7 @@ def _parse_track_file(path: str) -> tuple[_Track, float, float] | None:
         logg=np.asarray(e["log_g"], dtype=float),
         Mcur=np.asarray(e["star_mass"], dtype=float),
         Mdot=np.asarray(e["star_mdot"], dtype=float),
+        Vrot=np.asarray(e["surf_avg_v_rot"], dtype=float),
         Xs=np.asarray(e["surface_h1"], dtype=float),
         Ys=np.asarray(e["surface_he4"], dtype=float)
         + np.asarray(e["surface_he3"], dtype=float),
@@ -1154,10 +1163,15 @@ class MISTProvider:
         origin = axis.zams_row if eep_origin is None else eep_origin
         eep = float(origin + frac + 1.0)
 
+        # Surface rotation velocity (km/s) — the rotation payoff (Chunk 3). It is the
+        # MODEL's own surface speed for the selected axis: ~0 on the non-rotating grid,
+        # and the real evolving equatorial velocity on the rotating one (high near the
+        # ZAMS, falling as the star swells / brakes). A genuine StellarState field now,
+        # not a stub. None only if the column is somehow absent (degrades gracefully).
+        v_rot = float(np.interp(frac, rows, win["Vrot"])) if "Vrot" in win else None
+
         # visual proxy (§7), explicitly evocative: cool stars more chromospherically
-        # active than hot ones. `v_rot_kms` stays None for now even on a rotating
-        # axis — surfacing the selected rotation as a real value is the payoff chunk
-        # (Chunk 3); the axis already reshapes the track, which is the science.
+        # active than hot ones.
         activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
 
         return StellarState(
@@ -1174,7 +1188,7 @@ class MISTProvider:
             X_core=x_c, Y_core=y_c, Z_core=z_c,
             metals_surf=metals_surf,
             metals_core=metals_core,
-            v_rot_kms=None,
+            v_rot_kms=v_rot,
             activity=activity,
         )
 
@@ -1221,6 +1235,9 @@ class MISTProvider:
             "logT": mix(lo.logT, hi.logT),
             "logR": mix(lo.logR, hi.logR),
             "logg": mix(lo.logg, hi.logg),
+            # Surface rotation velocity is a living-state quantity (unlike Mcur/Mdot, which
+            # the endgame snaps), so it interpolates across mass at fixed EEP like the rest.
+            "Vrot": mix(lo.Vrot, hi.Vrot),
             "Xs": mix(lo.Xs, hi.Xs),
             "Ys": mix(lo.Ys, hi.Ys),
             "Xc": mix(lo.Xc, hi.Xc),
@@ -1346,7 +1363,7 @@ def _blend_windows(a: dict, b: dict, w: float) -> dict:
         "age": 10.0 ** ((1.0 - w) * np.log10(a["age"][:n]) + w * np.log10(b["age"][:n])),
         "phase": (a["phase"] if w < 0.5 else b["phase"])[:n],
     }
-    for k in ("logL", "logT", "logR", "logg",
+    for k in ("logL", "logT", "logR", "logg", "Vrot",
               "Xs", "Ys", "Xc", "Yc",
               "Lis", "Bes", "Cs", "Ns", "Os", "Fs", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
               "Lic", "Bec", "Cc", "Nc", "Oc", "Fc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec"):

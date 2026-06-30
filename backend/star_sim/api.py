@@ -82,14 +82,16 @@ def ranges() -> dict:
 @app.get("/mass_range")
 def mass_range(
     feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
 ) -> dict:
     """Valid mass span at this [Fe/H] so the UI can clamp the mass slider.
 
     The (mass, [Fe/H]) domain isn't rectangular — some metallicities lack
     low-mass tracks — so this can be narrower than /ranges' bounding box.
+    `vvcrit` snaps to a rotation bucket (default 0.0 = non-rotating).
     """
     try:
-        lo, hi = PROVIDER.mass_range(feh)
+        lo, hi = PROVIDER.mass_range(feh, vvcrit)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
@@ -101,9 +103,10 @@ def mass_range(
 def age_range(
     mass: float = Query(..., description="initial mass / M_sun"),
     feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
 ) -> dict:
     try:
-        lo, hi = PROVIDER.age_range(mass, feh)
+        lo, hi = PROVIDER.age_range(mass, feh, vvcrit)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
@@ -116,10 +119,11 @@ def state(
     mass: float = Query(..., description="initial mass / M_sun"),
     feh: float = Query(..., description="initial [Fe/H]"),
     age: float = Query(..., description="current age / yr"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
 ) -> dict:
     """(mass, [Fe/H], age) -> StellarState, serialized exactly as the §3 dataclass."""
     try:
-        st = PROVIDER.state_at(mass, feh, age)
+        st = PROVIDER.state_at(mass, feh, age, vvcrit)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
@@ -131,13 +135,16 @@ def state(
 def track(
     mass: float = Query(..., description="initial mass / M_sun"),
     feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
 ) -> list[dict]:
     """(mass, [Fe/H]) -> the full evolutionary track: a list of StellarState dicts
     ordered by EEP. Age-independent, so the HR diagram and composition panel fetch
     it once per (mass, [Fe/H]) and move their marker as age scrubs. Same per-element
-    shape as /state — the API still adds no fields of its own (§3, §4)."""
+    shape as /state — the API still adds no fields of its own (§3, §4). `vvcrit`
+    snaps to a rotation bucket (default 0.0 = non-rotating); the rotating track
+    carries the same shape with the surface enrichment / HR shift baked in."""
     try:
-        states = PROVIDER.track(mass, feh)
+        states = PROVIDER.track(mass, feh, vvcrit)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
@@ -149,6 +156,7 @@ def track(
 def endgame(
     mass: float = Query(..., description="initial mass / M_sun"),
     feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
     meta: bool = Query(
         False,
         description="type-only fast path: drop the heavy `states` list and return just "
@@ -177,7 +185,7 @@ def endgame(
     track (so cold latency is unchanged), we just don't serialize/ship the 1 MB. The
     full fetch (no `meta=`) still backs the HR preview + the warm gateway-enter cache."""
     try:
-        result = PROVIDER.endgame(mass, feh)
+        result = PROVIDER.endgame(mass, feh, vvcrit)
     except ParameterOutOfRange as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ProviderDataMissing as exc:
@@ -187,6 +195,31 @@ def endgame(
         d["has_states"] = bool(d["states"])
         d["states"] = []
     return d
+
+
+@app.get("/rotation_status")
+def rotation_status(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+) -> dict:
+    """Whether the rotation control is *meaningful* at (mass, [Fe/H]) — the
+    data-derived honesty gate the frontend reads to render the rotation toggle
+    (docs/plans/whirling-cohort-atlas.md, Chunk 3).
+
+    Goes through `PROVIDER` (a provider with no rotating grid answers has_grid=False,
+    so the route stays §3-clean). Shape:
+        {"has_grid": bool,             # a rotating grid covers this [Fe/H]
+         "threshold_msun": float|None, # rotation-onset (Kraft-break) mass, data-derived
+         "active": bool}               # has_grid AND mass >= threshold
+
+    `active` is False where toggling rotation would change nothing (below the
+    magnetic-braking limit the rotating and non-rotating tracks are bit-identical),
+    so the UI greys the toggle as an honest no-op there; `has_grid` False hides it
+    entirely (no rotating grid fetched at this metallicity)."""
+    try:
+        return PROVIDER.rotation_status(mass, feh)
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
 
 
 @app.get("/polytrope")
