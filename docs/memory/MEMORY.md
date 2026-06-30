@@ -15,7 +15,6 @@
 - [Star Simulator Phase 3 Lane–Emden](star-sim-phase3-lane-emden.md) — §8 static polytrope panel: sibling not provider, `/polytrope` bypasses PROVIDER, DOP853+θ=0 event, closed-form + Chandrasekhar validation. Phase 3.
 - [Star Simulator Phase 4 CNO](star-sim-phase4-cno.md) — per-element composition: `metals_surf`/`metals_core` dicts (state.py untouched), MIST isotope-summed threading through sixteen elements (cache v2→v8); three comp.js views incl. log-scale + light panel. Gotchas: Fe diffusion, Na/Li not inert, boron radioactive, Cr/Mn/Ni absent, verify off-grid feh blend, Playwright headless. Phase 4.
 - [Star Simulator Phase 4 MESAProvider](star-sim-phase4-mesa.md) — second real provider (MESA history.data), discrete-grid multi-Z-by-snapping, no cross-interp; measured MESA-vs-MIST cross-val matched on Z+Xc; self-run solar bucket via Docker MESA. Opt-in.
-- [No parallel agents without permission](no-parallel-agents-without-permission.md) — standing preference: never launch multiple agents in parallel without the user's explicit order or asking permission first.
 - [Always commit and push](always-commit-push.md) — standing preference: finish substantive changes by committing AND pushing unprompted.
 - [Session-end ritual](session-end-ritual.md) — at batch/session end: update memory + docs, commit, push.
 - [Star Simulator GitHub repo](star-sim-github-repo.md) — public repo location + how it was created.
