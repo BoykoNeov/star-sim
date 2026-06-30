@@ -13,7 +13,7 @@ import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
 from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
-from star_sim.spectra import GRID_FILENAME, SPECTRA_DATA_DIR
+from star_sim.spectra import GRID_FILENAME, SPECTRA_DATA_DIR, WD_GRID_FILENAME
 
 
 def mist_data_available() -> bool:
@@ -101,4 +101,17 @@ def spectra_data_available() -> bool:
 requires_spectra_data = pytest.mark.skipif(
     not spectra_data_available(),
     reason="spectrum grid not baked — see backend/docs/msg_spectra_build_recipe.md",
+)
+
+
+def wd_spectra_data_available() -> bool:
+    return (SPECTRA_DATA_DIR / WD_GRID_FILENAME).is_file()
+
+
+# The /wd_spectrum (Koester DA) tests need the baked white-dwarf cube — fetched +
+# baked on the host (never committed): `python -m star_sim.fetch_koester` then
+# `python scripts/bake_wd_spectra.py` (endgame Chunk 6).
+requires_wd_spectra_data = pytest.mark.skipif(
+    not wd_spectra_data_available(),
+    reason="WD spectrum grid not baked — run fetch_koester + scripts/bake_wd_spectra.py",
 )

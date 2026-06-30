@@ -380,6 +380,7 @@ Playwright (WN vs WC/WO flavor if feasible). **Depends:** Chunk 4.
 > *real* spectra (which show the honest placeholder).
 
 ### Chunk 6 — WD spectra (data-gated; depends on Chunk 0)
+**Split into 6a (Koester DA — BUILT) + 6b (TMAP hot WD/CSPN — deferred).**
 **Goal:** real WD spectra (the tractable spectrum — hydrostatic, plane-parallel).
 **Do:** fetch Koester/TMAP; write the **bake reader/converter** (new code — not
 pymsg) → bake a **WD cube at logg 7–9** (a *separate* cube; you can't splice
@@ -390,14 +391,32 @@ temperature/logg-gated line guides. Replace the placeholder.
 numbers): Balmer depth vs Teff, DA vs DB, logg dependence. **Fallback:** if
 Chunk 0 is a no-go, keep the labeled placeholder and document it.
 **Depends:** Chunks 0, 3.
-**Known polish (deferred here on purpose):** in the endgame the spectrum panel shows the
-WD placeholder ("White-dwarf atmospheres (log g 7–9) aren't in the spectral grid yet")
-**for the whole scrub, including the TPAGB-giant rows** at the start — where it's actually
-false (a ~3600 K giant *does* have a real spectrum in the baked grid). It's a Chunk-2
-decision (`refreshWD` calls `showPlaceholder` unconditionally) and the spectrum is this
-chunk's domain, so leave it. When wiring the WD spectrum here, make the placeholder/route
-phase-aware: show the real giant spectrum during TPAGB, the WD spectrum (or placeholder)
-only once degenerate.
+
+**✅ 6a — Koester DA: BUILT.** Host-only vertical (no Docker/pymsg — Koester models are
+plain ASCII): `star_sim/fetch_koester.py` (SSAP bulk-fetch of ~1066 models) →
+`scripts/bake_wd_spectra.py` (rectangular 82 Teff × 13 log g cube → `wd_spectra_grid.npz`,
+**asserts rectangular, no void-fill**) → `spectra.py` `wd_spectrum_data` → `/wd_spectrum`
+route → `frontend/src/spectrum.js` `updateWD`. **DA = pressure-broadened Balmer**, the
+Balmer guides tagged `balmer:true` (drawn for DA, hidden for DC). Two honest edges grounded
+in the data: **DC** below the ~5000 K Koester floor (an honest Planck continuum at the real
+Teff — no H lines painted on a cold cinder), and the **80000 K ceiling = no-model frame**
+for the ~107 kK central star (reuses the existing `teffAboveGrid()` path). Pure-H → no
+[Fe/H] axis (`feh_varies:false`). 15 tests in `test_wd_spectra.py` (measured through the
+runtime). Build recipe: `backend/docs/msg_spectra_build_recipe.md §8`.
+
+**⏳ 6b — TMAP hot WD / CSPN: DEFERRED.** The ~50–190 kK CSPN/hottest-WD regime (the
+§7 "conditional GO") that fills the >80000 K no-model gap. NLTE H+He, an LTE↔NLTE seam at
+~50–80 kK with the OSTAR/CAP18-style measured-seam care, the ×π×10⁸ TMAP unit gotcha,
+vacuum λ. Splices as the hot, high-log g slab of the *same* separate WD cube. Tracked in
+`ROADMAP.md`.
+
+**Known polish — RESOLVED in 6a.** The Chunk-2 placeholder (`refreshWD` called
+`showPlaceholder` unconditionally, so the TPAGB-giant rows at the start of the WD scrub
+*wrongly* showed "no WD spectrum" when a ~3600 K giant **does** have a real spectrum) is
+fixed: `refreshWD` is now **phase-aware by surface gravity** — log g ≥ 6.0 → `updateWD`
+(the Koester cube), else `update` (the main cube), so the giant rows show their real
+spectrum and the WD cube engages only once degenerate. The 6.0 threshold sits in the
+empty main(≤5)/Koester(≥6.5) gravity gap, so the cube switch is invisible.
 
 ### Chunk 7 — WR spectra (data-gated, hardest; depends on Chunk 0)
 **Goal:** real WR emission spectra.

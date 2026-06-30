@@ -414,3 +414,55 @@ log g 7–9 before committing (TheoSSA on-demand is no polite bulk fallback). (3
 cube is disjoint** from the existing cube (separate cube + endgame branch, not a Teff
 splice — a design choice, not a blocker). (4) **unit/λ gotchas (LOW)** — TMAP ×π×10⁸,
 air-vs-vacuum per grid, PoWR opacity-edge mask — confirm from one real header each.
+
+## 8. Building the Koester DA WD cube (Chunk 6a — BUILT)
+
+Chunk 6's **Koester DA half (6a) is done**; the TMAP hot-WD/CSPN half (6b) is deferred
+(still the §7 "conditional GO"). Unlike the main cube, this needs **no Docker / pymsg /
+Fortran** — the Koester models are plain 2-col ASCII, so the whole vertical runs on the
+**host** with numpy/scipy only. Two commands:
+
+```bash
+# (host, from backend/) one-time fetch of ~1066 Koester DA models into
+# data/spectra/grids/koester/ (skip-existing, retrying, 6-way parallel; ~tens of MB)
+python -m star_sim.fetch_koester
+# bake them into a separate (Teff, log g) cube -> data/spectra/wd_spectra_grid.npz
+python scripts/bake_wd_spectra.py
+```
+
+Then the runtime (`star_sim/spectra.py` `wd_spectrum_data`) serves `/wd_spectrum`, a
+**second** spectrum sibling beside `/spectrum`; `pytest backend/tests/test_wd_spectra.py`
+gates it (`requires_wd_spectra_data` marker skips the data-gated half if the cube is
+absent). The frontend switches the panel to the WD cube by surface gravity —
+`refreshWD` calls `spectrum.updateWD` when **log g ≥ 6.0**, else the normal
+`spectrum.update` (so the TPAGB-giant rows at the start of the WD scrub show their
+*real* giant spectrum from the main cube, closing the Chunk-2 "known polish" gap).
+
+**Verified facts (confirm from a real header / measured through the runtime — do not
+re-derive from assumptions):**
+
+- **Koester grid is rectangular, no voids:** **82 Teff nodes (5000–80000 K) × 13 log g
+  nodes (6.5–9.5 in 0.25 steps) = 1066 models.** The bake **asserts** rectangularity and
+  does **no void-fill** (unlike the MSG cubes — every cube entry is a real Koester model).
+- **Pure hydrogen → no [Fe/H] axis.** `feh_varies` is always `false`; the panel says
+  "Pure hydrogen, so [Fe/H] doesn't apply" rather than "solar."
+- **Air wavelengths** (like the main cube), confirmed: the DA Balmer minima land within
+  0.05 Å of the air line positions, so the panel's x-axis and line guides line up exactly
+  when it switches cubes. Baked onto the **same 3000–9000 Å @ 2.5 Å** bin grid.
+- **DC honesty edge (below the ~5000 K Koester floor):** a real cooling DA loses its
+  Balmer lines (measured Hα depth ~9% at 5000 K vs ~61% at 13 kK), so below the floor the
+  runtime returns an **honest Planck blackbody continuum** at the *requested* Teff (tagged
+  `regime="DC"`, `teff` NOT clamped), never the 5000 K line-bearing spectrum painted onto
+  a cold cinder. Same "don't label a non-feature" discipline as VO-7400 / invisible-Na.
+- **80000 K ceiling = intentional no-model, not a bug.** The ~107 kK post-AGB central star
+  is above Koester; `wd_spectrum_data` reports `teff_requested > teff_max` and the panel's
+  existing `teffAboveGrid()` path draws the honest "no model" frame. **That gap is exactly
+  what TMAP fills in Chunk 6b** — left as tracked scope, not patched over.
+- **`BAKE_VERSION` is now coupled across THREE files**, all must match or the runtime
+  rejects the cube: `star_sim/spectra.py`, `scripts/bake_spectra.py`, **and**
+  `scripts/bake_wd_spectra.py` (the WD cube uses the same axis-generic `.npz` schema and is
+  read by the same `_Spectra` class, so it shares the version). Bump all three together.
+
+The cube is gitignored (`data/spectra/wd_spectra_grid.npz`, like every other baked grid),
+so these two commands are the only reproducibility path — re-run after a `BAKE_VERSION`
+bump.

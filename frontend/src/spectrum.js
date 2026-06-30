@@ -60,18 +60,20 @@ const VIS_LO = 3800, VIS_HI = 7800;
 // λ range AND within the star's [minTeff, maxTeff] gate show.
 const COL_HE = "rgba(150,205,255,0.55)";   // a cool-blue tint marks the hot-star He guides
 const COL_MOL = "rgba(255,170,105,0.5)";   // a warm tint marks the cool-star molecular bands
+// `balmer: true` marks the hydrogen Balmer series — the ONLY features of a pure-H
+// DA white dwarf, so the WD endgame draws just these (no metals/He/molecular bands).
 const LINES = [
   { lam: 3933, label: "Ca K" },
   { lam: 3968, label: "Ca H" },
-  { lam: 4102, label: "Hδ" },
-  { lam: 4340, label: "Hγ" },
+  { lam: 4102, label: "Hδ", balmer: true },
+  { lam: 4340, label: "Hγ", balmer: true },
   { lam: 4471, label: "He I", minTeff: 10000, col: COL_HE },   // neutral He — B/A and hotter
   { lam: 4686, label: "He II", minTeff: 30000, col: COL_HE },  // ionized He — O stars (the OSTAR splice regime; below 30000 K it's ~continuum)
-  { lam: 4861, label: "Hβ" },
+  { lam: 4861, label: "Hβ", balmer: true },
   { lam: 5167, label: "TiO", maxTeff: 4000, col: COL_MOL },    // TiO γ′ bandhead (near Mg b) — mid/late M
   { lam: 5893, label: "Na D" },
   { lam: 6159, label: "TiO", maxTeff: 4300, col: COL_MOL },    // TiO γ bandhead — late K / M onward
-  { lam: 6563, label: "Hα" },
+  { lam: 6563, label: "Hα", balmer: true },
   { lam: 7053, label: "TiO", maxTeff: 4300, col: COL_MOL },    // TiO ε bandhead — the strongest red TiO trough in M
 ];
 
@@ -138,6 +140,48 @@ export function createSpectrum({ api }) {
     lastKey = key;
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => fetchSpectrum(teff, logg, feh ?? 0), 90);
+  }
+
+  // The WD endgame's white-dwarf spectrum: a SECOND backend cube (Koester DA, log g
+  // 6.5–9.5, pure hydrogen) served at /wd_spectrum. The WD panel calls this only for
+  // the DEGENERATE remnant (high log g); the TPAGB-giant rows at the start of the
+  // cooling scrub still have a real main-cube spectrum and go through update() above
+  // (so the false "no model" placeholder no longer covers the giant phase). The draw
+  // path is shared with update(); the response's `isWD`/`regime` flags steer the
+  // guides (Balmer-only for DA, none for the cold DC continuum) and the captions.
+  async function fetchWD(teff, logg) {
+    const mine = ++token;
+    try {
+      const res = await fetch(`${api}/wd_spectrum?teff=${teff}&logg=${logg}`);
+      if (!res.ok) throw new Error(`/wd_spectrum -> ${res.status}`);
+      const d = await res.json();
+      if (mine !== token) return;
+      d.isWD = true;          // steer draw()/guides/caption onto the WD branch
+      data = d;
+      draw();
+      renderCaption();
+    } catch {
+      if (mine !== token) return;
+      if (!data && caption) {
+        caption.textContent =
+          "White-dwarf spectrum unavailable — the Koester DA grid may not be baked " +
+          "yet (python -m star_sim.fetch_koester; python scripts/bake_wd_spectra.py).";
+      }
+    }
+  }
+
+  function updateWD(state) {
+    if (!state) return;
+    placeholderMsg = null;
+    const teff = state.Teff_K, logg = state.logg;
+    if (teff == null || logg == null) return;
+    // A distinct key prefix from update()'s, so switching between cubes always
+    // refetches (and a live star can never dedup-skip a WD frame, or vice versa).
+    const key = `wd|${Math.round(teff)}|${logg.toFixed(2)}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => fetchWD(teff, logg), 90);
   }
 
   // Show an honest "no spectral model for this regime yet" frame instead of a
@@ -242,12 +286,19 @@ export function createSpectrum({ api }) {
     // Temperature-gated guides show only where they physically matter: a `minTeff`
     // line (the He guides) appears only when the star is that hot, a `maxTeff` line
     // (the TiO/VO molecular bands) only when it is that cool.
+    // A cold DC white dwarf is a featureless continuum (Balmer faded) — no guides.
+    if (data.isWD && data.regime === "DC") { ctx.textAlign = "left"; return; }
+
     ctx.lineWidth = 1;
     let lastLabelX = -1e9;
     for (const ln of LINES) {
       if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
-      if (ln.minTeff && data.teff < ln.minTeff) continue;   // hot-star lines: only when hot
-      if (ln.maxTeff && data.teff > ln.maxTeff) continue;   // cool-star bands: only when cool
+      if (data.isWD) {
+        if (!ln.balmer) continue;            // a DA is pure H: only the Balmer series
+      } else {
+        if (ln.minTeff && data.teff < ln.minTeff) continue;   // hot-star lines: only when hot
+        if (ln.maxTeff && data.teff > ln.maxTeff) continue;   // cool-star bands: only when cool
+      }
       const x = xOf(ln.lam);
       ctx.strokeStyle = ln.col || "rgba(231,236,245,0.35)";
       ctx.setLineDash([2, 4]);
@@ -311,8 +362,11 @@ export function createSpectrum({ api }) {
     ctx.fillText("No spectral model for this temperature", cx, cy - 8);
     ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
     ctx.fillText(
-      `Our model atmospheres reach ${Math.round(data.teff_max)} K — ` +
-      `this star is ≈ ${Math.round(data.teff_requested)} K.`,
+      data.isWD
+        ? `Our DA models reach ${Math.round(data.teff_max)} K — the hot central ` +
+          `star is ≈ ${Math.round(data.teff_requested)} K (a hot-WD model is Chunk 6b).`
+        : `Our model atmospheres reach ${Math.round(data.teff_max)} K — ` +
+          `this star is ≈ ${Math.round(data.teff_requested)} K.`,
       cx, cy + 13,
     );
     ctx.textAlign = "left";
@@ -339,9 +393,24 @@ export function createSpectrum({ api }) {
   function renderCaption() {
     if (!caption || !data) return;
     if (teffAboveGrid()) {
-      caption.textContent =
-        `Teff ≈ ${Math.round(data.teff_requested)} K is beyond our hottest ` +
-        `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
+      caption.textContent = data.isWD
+        ? `Teff ≈ ${Math.round(data.teff_requested)} K — the planetary-nebula central ` +
+          `star is hotter than our DA models (${Math.round(data.teff_max)} K); a hot-WD/` +
+          `CSPN model (TMAP) isn't wired in yet (endgame Chunk 6b).`
+        : `Teff ≈ ${Math.round(data.teff_requested)} K is beyond our hottest ` +
+          `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
+      return;
+    }
+    // The WD endgame: a DA's pressure-broadened Balmer lines, or — once the cinder
+    // has cooled past the model floor — the featureless DC continuum. Pure hydrogen,
+    // so [Fe/H] is meaningless (not merely "solar"), which the caption says plainly.
+    if (data.isWD) {
+      const t = Math.round(data.teff), g = Number(data.logg).toFixed(2);
+      caption.textContent = data.regime === "DC"
+        ? `Cold DC white dwarf · Teff ${t} K · log g ${g} — below ~5000 K the hydrogen ` +
+          `Balmer lines have faded; the spectrum is a featureless (blackbody) continuum.`
+        : `White dwarf (DA) · Teff ${t} K · log g ${g} — broad, pressure-broadened ` +
+          `hydrogen Balmer lines (Koester DA models). Pure hydrogen, so [Fe/H] doesn't apply.`;
       return;
     }
     const t = Math.round(data.teff);
@@ -364,5 +433,5 @@ export function createSpectrum({ api }) {
     renderCaption();
   }
 
-  return { update, showPlaceholder, resize };
+  return { update, updateWD, showPlaceholder, resize };
 }

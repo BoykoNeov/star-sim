@@ -1037,8 +1037,15 @@ function refreshWD() {
   hr.update(s);
   comp.update(s);                       // WD structure cross-section (comp is in endgame mode)
   sed.update(s, { endgame: true });
-  spectrum.showPlaceholder(
-    "White-dwarf atmospheres (log g 7–9) aren't in the spectral grid yet.");
+  // Phase-aware spectrum (Chunk 6): a TPAGB giant / contracting post-AGB star (low
+  // surface gravity) still has a real MAIN-cube spectrum, so route it through the
+  // normal live consumer; only the DEGENERATE remnant (log g ≥ 6 — past the main
+  // cube's gravity ceiling and into the Koester DA cube) goes to /wd_spectrum. The
+  // 6.0 boundary sits in the main(≤5)/Koester(≥6.5) gap, which coincides with the
+  // ~100 kK central-star spike where BOTH cubes show the honest "no model" frame —
+  // so the giant↔WD switch is invisible (verified against the real endgame track).
+  if (s.logg != null && s.logg >= 6.0) spectrum.updateWD(s);
+  else spectrum.update(s);
   renderWDReadout(s, z);
 
   els.status.style.color = teffToCSS(s.Teff_K);

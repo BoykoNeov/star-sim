@@ -24,7 +24,7 @@ from .provider import (
     ProviderDataMissing,
     StellarStateProvider,
 )
-from .spectra import SpectraDataMissing, spectrum_data
+from .spectra import SpectraDataMissing, spectrum_data, wd_spectrum_data
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -234,6 +234,31 @@ def spectrum(
     missing provider grid)."""
     try:
         return spectrum_data(teff, logg, feh)
+    except SpectraDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/wd_spectrum")
+def wd_spectrum(
+    teff: float = Query(..., ge=1000.0, le=200000.0, description="effective temperature / K"),
+    logg: float = Query(..., ge=3.0, le=10.0, description="surface gravity, cgs dex"),
+) -> dict:
+    """(Teff, log g) -> a white-dwarf synthetic spectrum (endgame Chunk 6).
+
+    A SECOND spectrum sibling, like `/spectrum`: it reads the separate Koester DA
+    cube (log g 6.5–9.5, pure hydrogen — no `[Fe/H]` axis), because a white dwarf's
+    gravity is disjoint from the main-sequence atmosphere grid (0–5) and can't share
+    its cube. The WD endgame's *consumer* (the spectrum panel) decides when to call
+    this vs `/spectrum`, by surface gravity: a TPAGB giant (low log g) still has a
+    real main-cube spectrum; only the degenerate remnant routes here.
+
+    The `Query` bounds are wide so a re-snapped remnant never trips a 422;
+    `wd_spectrum_data` clamps to the cube and handles the two honest edges itself —
+    a DC blackbody continuum below the ~5000 K Koester floor (the cold cinder has
+    lost its Balmer lines), and the existing `teff_max` no-model path above 80000 K
+    (the ~107 kK central star, until TMAP lands in Chunk 6b). 503 if not yet baked."""
+    try:
+        return wd_spectrum_data(teff, logg)
     except SpectraDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

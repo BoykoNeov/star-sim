@@ -1,8 +1,10 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) & 5 (WR 3D optically-thick-wind shader: WIND_FRAG additive halo over the opaque sphere — limb-brightened electron-scattering haze + outward-advected value-noise filaments, Z_surf density cue WN→WC/WO, honest Teff color NOT a chemistry hue, intensity ramps by X_surf strippedness (≈off at WNh entry → blazes up as H strips: no entry pop, the continuation-not-cut discipline) × a clamped-L tie NOT a measured Ṁ; FIT-TO-FRAME extent recomputed each frame because the WR scrub opens on a huge R≈33 star that would clip; uTime wiring trap) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption.
-metadata:
+description: "Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) & 5 (WR 3D optically-thick-wind shader: WIND_FRAG additive halo over the opaque sphere — limb-brightened electron-scattering haze + outward-advected value-noise filaments, Z_surf density cue WN→WC/WO, honest Teff color NOT a chemistry hue, intensity ramps by X_surf strippedness (≈off at WNh entry → blazes up as H strips: no entry pop, the continuation-not-cut discipline) × a clamped-L tie NOT a measured Ṁ; FIT-TO-FRAME extent recomputed each frame because the WR scrub opens on a huge R≈33 star that would clip; uTime wiring trap) BUILT, plus CHUNK 6a (Koester DA WD spectra: a SECOND spectrum sibling /wd_spectrum, a separate rectangular host-baked Teff×logg cube — 82×13, pure-H so no [Fe/H], NO Docker/pymsg via fetch_koester.py+bake_wd_spectra.py; DC Planck-continuum below the ~5000 K floor + 80 kK no-model honesty edges; phase-aware logg≥6.0 cube switch fixing the Chunk-3 TPAGB-giant-placeholder polish; BAKE_VERSION now coupled across THREE files; 137→153 tests; 6b TMAP hot-WD/CSPN deferred), plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption."
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 21a0b8fa-fa38-49c1-9e10-eaa9aea3a27a
 ---
 
 The user wants **full** Wolf–Rayet (WR) and white-dwarf (WD) support — at the
@@ -317,7 +319,52 @@ carbon/oxygen WC/WO), intensity from a gentle **clamped `L`** tie — explicitly
   unregressed, **0 real JS errors** (only Playwright's own WebGL `ReadPixels` GPU-stall perf warnings from
   screenshotting a WebGL canvas — benign, not from the page).
 
-**Remaining: Chunks 6–7** (the data-gated WR/WD spectra above — Koester/TMAP for WD, PoWR for WR).
+**CHUNK 6a DONE (Koester DA WD spectra; backend + frontend, pytest 137→153, +15 `test_wd_spectra.py`;
+Playwright bundled-Chromium pass at 1440 + 390 px, 0 JS errors).** The first real endgame spectrum — the
+tractable, hydrostatic one. **Host-only vertical, NO Docker/pymsg/Fortran** (Koester models are plain
+2-col ASCII, unlike the MSG `.h5` grids the main cube needs). Two commands rebuild it:
+`python -m star_sim.fetch_koester` (SSAP bulk-fetch ~1066 models) + `python scripts/bake_wd_spectra.py`.
+- **A SECOND spectrum sibling** `/wd_spectrum` (beside `/spectrum`), bypassing `PROVIDER` like every
+  spectrum route. New files: `star_sim/fetch_koester.py`, `scripts/bake_wd_spectra.py`,
+  `tests/test_wd_spectra.py`; edits in `spectra.py` (`wd_spectrum_data`, `_load_wd`, `_planck_lambda`,
+  `WD_GRID_FILENAME`, separate `_WD_CACHE`), `api.py` (the route, 503 on missing cube), `conftest.py`
+  (`requires_wd_spectra_data`), `frontend/src/spectrum.js` (`fetchWD`/`updateWD`, `balmer:true` guides),
+  `frontend/src/main.js` (`refreshWD` switch).
+- **A SEPARATE rectangular cube, no void-fill** — the Koester DA grid is complete: **82 Teff (5000–80000 K)
+  × 13 log g (6.5–9.5 / 0.25) = 1066 models**, pure hydrogen so **no [Fe/H] axis** (`feh_varies:false` →
+  "Pure hydrogen, so [Fe/H] doesn't apply"). The bake **asserts** rectangularity (unlike the MSG cubes'
+  39%-void three-pass fill); same axis-generic `.npz` schema so the runtime reuses `_Spectra` verbatim (a
+  2-axis Teff×log g cube, like the original solar `sg-demo`). Baked onto the **same 3000–9000 Å @ 2.5 Å**
+  grid as the main cube; **air wavelengths** confirmed (Balmer minima within 0.05 Å of air positions), so
+  the x-axis/guides don't jump when the panel switches cubes.
+- **TWO honest edges, both measured through the runtime, both the "don't label a non-feature" discipline:**
+  (1) **DC below the ~5000 K Koester floor** — a real cooling DA loses its Balmer lines (measured Hα ~9% at
+  5000 K vs ~61% at 13 kK), so below the floor `wd_spectrum_data` returns an **honest Planck blackbody
+  continuum at the REQUESTED Teff (NOT clamped)**, tagged `regime="DC"` — never the 5000 K line-bearing
+  spectrum painted onto a 2393 K cinder (that would add H lines it lacks AND give a too-blue slope).
+  (2) **80000 K ceiling = intentional no-model** — the ~107 kK post-AGB central star is past Koester;
+  reports `teff_requested > teff_max` and the panel's existing `teffAboveGrid()` path draws the honest
+  "no model" frame. **That gap is exactly what TMAP fills in 6b** — tracked, not patched.
+- **Phase-aware cube switch by surface gravity, fixing the Chunk-3 "Tracked for Chunk 6" polish:** the
+  Chunk-2 `refreshWD` showed the WD placeholder for the WHOLE scrub incl. the TPAGB-giant rows where it's
+  FALSE (a ~3600 K giant HAS a real spectrum). Now `refreshWD` switches on **log g ≥ 6.0 → `updateWD`** (the
+  Koester cube), **else `spectrum.update`** (the main cube) — so giant rows show their real spectrum and the
+  WD cube engages only once degenerate. The 6.0 threshold sits in the EMPTY main(≤5)/Koester(≥6.5) gravity
+  gap (= the no-model central-star spike), so the switch is invisible.
+- **`BAKE_VERSION` is now coupled across THREE files** (was two): `spectra.py`, `scripts/bake_spectra.py`,
+  **and** `scripts/bake_wd_spectra.py` — the WD cube shares the schema + `_Spectra` reader, so it shares the
+  version; bump all three together or the runtime rejects the cube.
+- **Tests measured through the runtime path** (not raw grid numbers): Balmer-peaks-at-intermediate-Teff
+  (Hβ ~0.52 at 11 kK, fades ≥0.08 both ways), higher-log g → shallower core (Stark broadening, the WD
+  spectroscopic-gravity basis), cold-cinder-is-DC (regime DC, Hα<0.02, red>blue), hot-central-star reports
+  teff_max=80000. Plus always-on route-contract tests (422 bounds, hot-star-no-422, 503-not-baked) a fresh
+  checkout keeps. Build recipe: `backend/docs/msg_spectra_build_recipe.md §8`.
+- **Scope:** did Koester DA (6a) only. **TMAP hot-WD/CSPN (6b) deferred** — the §7 "conditional GO"; fills
+  the >80000 K no-model gap (NLTE H+He 50–190 kK, LTE↔NLTE seam, ×π×10⁸ unit gotcha, vacuum λ; splices as
+  the hot slab of the SAME WD cube). Tracked in `ROADMAP.md`.
+
+**Remaining: Chunk 6b (TMAP hot WD/CSPN) + Chunk 7 (WR spectra, PoWR).** Chunk 6a (Koester DA) is the
+first endgame spectrum shipped.
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

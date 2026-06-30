@@ -38,6 +38,12 @@ SPECTRA_DATA_DIR = Path(
     os.environ.get("STAR_SIM_SPECTRA_DIR", _REPO_ROOT / "data" / "spectra")
 )
 GRID_FILENAME = "spectra_grid.npz"
+# The white-dwarf cube (endgame Chunk 6): a SEPARATE Koester DA cube at log g
+# 6.5–9.5 — disjoint from the main cube's 0–5, pure hydrogen (no [Fe/H] axis) — so
+# it cannot splice onto the main grid. Same axis-generic .npz schema though, so the
+# runtime reuses `_Spectra` verbatim (a 2-axis Teff×log g cube, like the original
+# solar `sg-demo`). Baked on the host by scripts/bake_wd_spectra.py (no pymsg).
+WD_GRID_FILENAME = "wd_spectra_grid.npz"
 
 _BAKE_HINT = (
     "Spectrum grid not baked. Build it once in the MSG container and copy it to "
@@ -111,6 +117,7 @@ class _Spectra:
 
 
 _CACHE: _Spectra | None = None
+_WD_CACHE: _Spectra | None = None
 
 
 def _load() -> _Spectra:
@@ -121,6 +128,22 @@ def _load() -> _Spectra:
             raise SpectraDataMissing(_BAKE_HINT.format(path=path))
         _CACHE = _Spectra(path)
     return _CACHE
+
+
+def _load_wd() -> _Spectra:
+    """The white-dwarf cube, loaded once (separate cache from the main cube)."""
+    global _WD_CACHE
+    if _WD_CACHE is None:
+        path = SPECTRA_DATA_DIR / WD_GRID_FILENAME
+        if not path.is_file():
+            raise SpectraDataMissing(
+                f"White-dwarf spectrum grid not baked. Fetch + bake it once:\n"
+                f"    python -m star_sim.fetch_koester\n"
+                f"    python scripts/bake_wd_spectra.py   # -> {path}\n"
+                f"(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 6)."
+            )
+        _WD_CACHE = _Spectra(path)
+    return _WD_CACHE
 
 
 def spectrum_data(
@@ -182,6 +205,81 @@ def spectrum_data(
         "teff_min": teff_min,
         "teff_max": teff_max,
         "feh_varies": s.feh_varies,
+        "flux_unit": s.flux_unit,
+        "grid_name": s.grid_name,
+    }
+
+
+def _planck_lambda(lam_ang: np.ndarray, teff: float) -> np.ndarray:
+    """Planck B_λ(λ, T) SHAPE (relative — the panel normalises to its own peak), λ
+    in Å. B_λ ∝ λ⁻⁵ / (exp(c₂/λT) − 1), c₂ = hc/k = 1.438777e8 Å·K."""
+    c2 = 1.438777e8
+    x = c2 / (np.maximum(lam_ang, 1.0) * max(teff, 1.0))
+    return lam_ang ** -5.0 / np.expm1(x)
+
+
+def wd_spectrum_data(teff: float, logg: float, *, n_display: int | None = None) -> dict:
+    """The white-dwarf spectrum the `/wd_spectrum` endpoint serves — a sibling of
+    `spectrum_data`, reading the SEPARATE Koester DA cube (log g 6.5–9.5, pure H).
+
+    Two honest edges, both grounded in the data (measured through this path):
+
+    - **Cold cinder (Teff below the Koester floor, ~5000 K) → DC continuum.** A real
+      cooling DA loses its Balmer lines and becomes a featureless DC white dwarf
+      (Hα is only ~9% deep at the 5000 K floor, vs ~61% at 13 kK). Clamping the
+      5000 K Koester spectrum onto a 2393 K cinder would paint H lines it no longer
+      has *and* give the wrong (too-blue) continuum slope, so below the floor we
+      return an honest Planck blackbody continuum at the requested Teff, tagged
+      `regime="DC"`. This is the same "don't label a non-feature" discipline as the
+      VO-7400 / invisible-Na decisions elsewhere.
+    - **Hot central star (Teff above the Koester ceiling, 80000 K) → no model.** The
+      ~107 kK post-AGB central star is past Koester; we return the clamped ceiling
+      spectrum plus the true `teff_max`, and the panel's existing `teffAboveGrid()`
+      path draws the honest "no model for this temperature" frame (that gap is what
+      TMAP fills in Chunk 6b). No special-casing needed here.
+
+    Returns the same JSON shape as `spectrum_data` (so the panel can largely share a
+    draw path) plus `regime` ∈ {"DA", "DC"}. `feh_varies` is always false (a DA is
+    pure hydrogen — [Fe/H] is meaningless, not merely "solar").
+    """
+    s = _load_wd()
+    ti = s.axis_keys.index("teff")
+    gi = s.axis_keys.index("logg")
+    teff_min, teff_max = s.bounds[ti]
+    glo, ghi = s.bounds[gi]
+    lam = s.lam
+
+    if teff < teff_min:
+        # DA → DC: honest blackbody continuum, not a clamped (line-bearing) spectrum.
+        flux = _planck_lambda(lam, teff)
+        peak = float(flux.max())
+        if peak > 0:
+            flux = flux / peak
+        used_teff = float(teff)
+        used_logg = float(min(max(logg, glo), ghi))
+        regime = "DC"
+    else:
+        flux, used = s.evaluate({"teff": teff, "logg": logg})
+        used_teff = used["teff"]
+        used_logg = used["logg"]
+        regime = "DA"
+
+    if n_display is not None and n_display < lam.size:
+        new_lam = np.linspace(lam[0], lam[-1], n_display)
+        flux = np.interp(new_lam, lam, flux)
+        lam = new_lam
+
+    return {
+        "wavelength": lam.tolist(),
+        "flux": flux.tolist(),
+        "teff": used_teff,
+        "logg": used_logg,
+        "feh": 0.0,
+        "teff_requested": float(teff),
+        "teff_min": teff_min,
+        "teff_max": teff_max,
+        "feh_varies": False,
+        "regime": regime,
         "flux_unit": s.flux_unit,
         "grid_name": s.grid_name,
     }

@@ -147,9 +147,17 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   (smooth WN → clumpy WC/WO), color = honest Teff blackbody (no chemistry hue — it'd
   contradict the spectrum placeholder), intensity a gentle clamped `L` tie (NOT a measured
   Ṁ). **Fit-to-frame extent** (`applyWindScale`, recomputed each frame) — the WR scrub opens
-  on a huge R≈33 R☉ star, so a constant extent would clip the viewport. **Chunks 1–5 built;
-  the WR/WD spectra (Chunks 6–7) are later chunks.**
-  [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`.
+  on a huge R≈33 R☉ star, so a constant extent would clip the viewport. WD spectra (Chunk
+  **6a**) = a **second** spectrum sibling `/wd_spectrum`: a separate rectangular Koester DA
+  cube (82 Teff × 13 log g, pure-H so no [Fe/H], host-baked — no Docker/pymsg via
+  `fetch_koester.py` + `scripts/bake_wd_spectra.py`), `spectrum.js` `updateWD` switched in by
+  surface gravity (`refreshWD`: log g ≥ 6.0 → WD cube, else main cube, so TPAGB-giant rows
+  show their real spectrum). Two honest edges: **DC** Planck continuum below the ~5000 K
+  floor (no Balmer painted on a cold cinder), **no-model frame** above the 80 kK ceiling (the
+  gap TMAP fills in 6b). **Chunks 1–5 + 6a built; WR spectra (Chunk 7) and TMAP hot-WD/CSPN
+  (Chunk 6b) are later chunks.** [[star-sim-wr-wd-endgame-plan]]; plan
+  `docs/plans/smoldering-cinder-gateway.md`, WD-spectra recipe
+  `backend/docs/msg_spectra_build_recipe.md §8`.
 
 ### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -172,7 +180,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **137 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **153 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr).
 
