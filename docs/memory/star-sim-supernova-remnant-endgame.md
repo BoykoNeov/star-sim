@@ -46,6 +46,14 @@ measured verdict + Chunk 1's built state; the plan is the design source of truth
   `L_total` the plateau cutoff bleeds in and steepens it to 0.01023, so the clean anchor needs
   the component, not the total. Light-curve physics unit-tested deterministically (no grids);
   the runtime path (endgame→scalars→sibling→route) tested through the real provider.
+- **DEFERRED to Chunk 2 (user-decided):** the **observed-photometry anchor** for Tier-1.
+  As built, Tier-1 is verified only against the *analytic* ⁵⁶Co formula (self-consistent,
+  NOT yet against real SN 1987A photometry) — which the user's locked constraint #5 ("pull
+  real photometry and cite") and the gate script ("OSC tables = a Chunk-1 deliverable") both
+  require. Advisor flagged it as a silently-resolved gap; surfaced to the user, who chose to
+  land it **with the Chunk-2 overlays** (where the curves are drawn/compared on-screen). So
+  **Chunk 2 owns showing the analytic 0.00975 matching SN 1987A's measured tail, cited** —
+  the "observed-SN overlays" item is that deferred deliverable, not optional polish.
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean

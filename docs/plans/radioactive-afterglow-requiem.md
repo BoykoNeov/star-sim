@@ -189,6 +189,15 @@ type="II" for the H-retained branch; the route returns `none`/honest empty for a
 WD/WR/none progenitor; M_Ni scales peak linearly.
 **Depends:** Chunk 0.
 
+**Deferred to Chunk 2 (user-decided at build time):** the **observed-photometry
+anchor** for Tier-1. As built, Tier-1 is verified against the *analytic* ⁵⁶Co formula
+(2.5/ln10/τ_Co = 0.00975) — self-consistent, but not yet against real SN 1987A
+photometry, which the user's locked constraint #5 ("pull real photometry and cite")
+and the gate script ("OSC tables are a Chunk-1 deliverable") both call for. The user
+chose to land it **with the Chunk-2 overlays** (where the curves are actually drawn and
+compared on-screen), so Chunk 2 now carries that obligation — see its "observed-SN
+overlays" item, which is the deferred deliverable, NOT optional polish.
+
 ### Chunk 2 — Frontend: SN gateway + mode shell + light-curve panel
 **Goal:** a reversible "→ Continue: Supernova" gateway and the L-vs-time panel (the
 observable), reusing the WD/WR scaffolding.
@@ -197,8 +206,10 @@ end-of-life, like WD/WR; the SN note still foreshadows from ZAMS); reversible
 `sn-mode`; **repurpose the HR panel to L-vs-time** in SN mode (the established WD/WR
 pattern — the observable light curve, with the L-Teff trace secondary); a **post-
 explosion time scrubber** (days→months→years, log); the **M_Ni slider** (Tier-3,
-labeled) + canonical default; **observed-SN overlays** (real photometry, Chunk-1
-data — SN 1987A tail, SN 1999em plateau) as the honest anchor; mass/[Fe/H] stay live
+labeled) + canonical default; **observed-SN overlays** (real photometry — SN 1987A
+tail, SN 1999em plateau — **the Tier-1 anchor deferred from Chunk 1**, satisfying
+constraint #5: the analytic ⁵⁶Co slope must be shown matching SN 1987A's *measured*
+tail, cited, not just its own formula) as the honest anchor; mass/[Fe/H] stay live
 (re-snap → a different progenitor; WD/WR/none revert with a note). The 3D/SED/scale/
 readout take the photosphere `StellarState`, **but via explicit mode signals — NOT
 naive reuse** (the WD/WR discipline): `logg` is meaningless for freely-expanding ejecta
