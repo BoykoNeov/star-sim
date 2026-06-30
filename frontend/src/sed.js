@@ -854,9 +854,11 @@ export function createSED(canvas) {
       `(${where}). ${act} γ-rays stay empty. Evocative, not predictive.`;
   }
 
-  // Whether the rotation→activity LINE is honest for the current marker (cool main-
-  // sequence dynamo). The unified Rotation control (main.js) reads this to show the
-  // period-slider facet only where it's meaningful — the slider DOM lives in the
-  // Controls panel now (rotation Chunk 3 unify), but the model + line stay here.
+  // Whether the rotation→activity LINE is honest for the CURRENT marker (cool main-
+  // sequence dynamo). This is the age-dependent per-marker gate; sed.js uses it itself
+  // (rot.sync() greys the relocated period slider off the MS). Exposed as an accessor.
+  // NOTE: main.js gates the period facet's *visibility* on the age-INDEPENDENT cool-MS
+  // family instead (so it doesn't reflow above the Age slider mid-scrub), letting this
+  // per-marker gate only grey/enable the slider — see coolDynamoFamily there.
   return { update, resize, rotationAllowed: () => dynamoLineAllowed() };
 }

@@ -302,6 +302,19 @@ let rotationOn = false;
 let rotStatus = { has_grid: false, threshold_msun: null, active: false };
 const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
 
+// Whether this star is in the cool main-sequence DYNAMO FAMILY — i.e. its track has any
+// cool MS row (Teff < 6500 K). This gates the rotation-PERIOD facet's VISIBILITY, and it
+// is age-INDEPENDENT (a property of the whole track = mass/[Fe/H]), NOT of the marker.
+// Critical for no-jitter: the facet sits right above the Age slider, so if visibility
+// tracked the marker's per-age dynamo state (sed.rotationAllowed) it would hide/show
+// mid-scrub and the Age thumb would jump under the cursor. Instead the facet stays put for
+// the whole scrub and sed.js's rot.sync() GREYS it for the ages/phases where the dynamo
+// isn't active (off the MS) — visibility stable, enabled-state honest.
+const COOL_MS_TEFF = 6500;
+const coolDynamoFamily = () =>
+  !!currentTrack && currentTrack.some(
+    (s) => s.phase === "MS" && s.Teff_K != null && s.Teff_K < COOL_MS_TEFF);
+
 let endgame = null;             // the latest /endgame result (type, states, masses…)
 let endgameKey = null;          // the requested (mass|feh) the `endgame` data is for
 let endgameToken = 0;           // latest-wins guard for /endgame fetches
@@ -1253,7 +1266,10 @@ function updateRotControl() {
   if (mode !== "live") { c.hidden = true; return; }
   const showToggle = !!rotStatus.has_grid;
   const active = !!rotStatus.active;
-  const showPeriod = typeof sed.rotationAllowed === "function" && sed.rotationAllowed();
+  // VISIBILITY of the period facet = the cool-MS family (stable across an age scrub, so no
+  // mid-drag reflow above the Age slider); sed.js greys it per-age via rot.sync(). Both
+  // facets are now track-stable, so updateRotControl() on an age scrub never changes height.
+  const showPeriod = coolDynamoFamily();
   c.hidden = !(showToggle || showPeriod);
   // -- track facet --
   els.rotToggleRow.hidden = !showToggle;
