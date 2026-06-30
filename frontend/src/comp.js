@@ -426,21 +426,37 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     if (!m || !m.final_mass_msun) { drawSNNote(); return; }
     const PAD = 12;
 
-    // the four real mass coordinates (M_sun), clamped nested-monotone (he ≥ co ≥ rem)
+    // the real mass coordinates (M_sun). he ≥ co are nested; the remnant is NOT capped at
+    // the CO core (Chunk 5): as fallback grows it eats inward through the C/O, then He, then
+    // H — so the copper band shrinks GRADUALLY instead of vanishing at the old CO=7 cliff.
     const Mtot = m.final_mass_msun;
     const heC = Math.min(Math.max(m.he_core_msun ?? 0, 0), Mtot);
     const coC = Math.min(Math.max(m.co_core_msun ?? 0, 0), heC);
-    const rem = Math.min(Math.max(m.remnant_mass_msun ?? 0, 0), coC);
+    const rem = Math.min(Math.max(m.remnant_mass_msun ?? 0, 0), Mtot);
     const isNS = m.remnant_type === "NS";
-    const mni = Math.max(0, m.m_ni_msun ?? 0);
-    const hasCOEjecta = (coC - rem) > 0.12;   // BH (rem≈coC) ejects only He+H → no heavy band
+    const failed = !!m.failed_sn;             // direct collapse: the star implodes, ~no ejecta
+    const mni = Math.max(0, m.m_ni_ejected_msun ?? 0);   // EJECTED Ni (dims→0 under fallback)
+    // a band is ejected only where it lies OUTSIDE the (grown) remnant
+    const mCO = Math.max(0, coC - rem);       // C/O + heavier ejecta
+    const mHe = Math.max(0, heC - Math.max(rem, coC));
+    const mH = Math.max(0, Mtot - Math.max(rem, heC));
+    const hasCOEjecta = mCO > 0.05;           // heavy core ejected? (false once fallback eats it)
+    const hasHeEjecta = mHe > 0.05;
+    // a failed SN swallows nearly everything — the onion is almost all void, so the caption
+    // earns an extra clause explaining why there's no bright explosion (it'd otherwise read
+    // as a broken render). The continuum is the same one the light curve and 3D use.
+    const caption = failed
+      ? SN_ONION_CAPTION + " This core is so massive that fallback is essentially total — " +
+        "almost nothing escapes, the ⁵⁶Ni is swallowed, and the star implodes straight to a " +
+        "black hole with no bright supernova (it 'winks out')."
+      : SN_ONION_CAPTION;
 
     // layout (mirrors drawWD): disk on the left, label column on the right, a DYNAMIC
     // caption reserve at the bottom — its wrapped line count grows as the canvas narrows,
     // so a fixed reserve would clip the last line on a phone-width panel.
     const titleH = 24, capLh = 11;
     ctx.font = "10px system-ui, sans-serif";
-    const capH = wrapText(SN_ONION_CAPTION, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
+    const capH = wrapText(caption, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
     const top = PAD + titleH, bot = H - PAD - capH;
     const LW = Math.max(150, W * 0.42);
     const diskAreaW = W - PAD - PAD - LW;
@@ -458,9 +474,10 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     const COL_REM = isNS ? "#aab6cc" : "#070810";
     const COL_NI = "#8effc0";
 
-    // shells outer→inner, nested fills (inner fills paint over the outer)
-    ctx.fillStyle = COL_H;  circle(Rd);              // H envelope (he_core→total)
-    ctx.fillStyle = COL_HE; circle(rOf(heC));        // He shell (co_core→he_core)
+    // shells outer→inner, nested fills (inner fills paint over the outer); the remnant is
+    // drawn LAST, so a grown (fallback) remnant overwrites the C/O and He it has swallowed.
+    ctx.fillStyle = COL_H;  circle(Rd);              // H envelope (outer disk)
+    ctx.fillStyle = COL_HE; circle(rOf(heC));        // He shell (overdrawn if rem > heC)
     if (hasCOEjecta) {
       ctx.fillStyle = COL_CO; circle(rOf(coC));      // C/O + heavier ejecta (remnant→co_core)
       // faint SCHEMATIC interior dividers (Si / O–Ne — no model boundary)
@@ -485,20 +502,29 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
       ctx.strokeStyle = "rgba(150,130,255,0.55)"; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(cx, cy, rRem, 0, Math.PI * 2); ctx.stroke();
     }
-    if (mni > 0) {   // ⁵⁶Ni: exaggerated bright ring at the inner ejecta boundary (not to scale)
-      ctx.strokeStyle = COL_NI; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, rRem + 2, 0, Math.PI * 2); ctx.stroke();
+    if (mni > 0.0005) {   // ⁵⁶Ni: exaggerated bright ring at the inner ejecta boundary (not to
+      ctx.strokeStyle = COL_NI; ctx.lineWidth = 2.5;   // scale). Fallback swallows it → no ring
+      ctx.beginPath(); ctx.arc(cx, cy, rRem + 2, 0, Math.PI * 2); ctx.stroke();   // on a failed SN
     }
 
-    // thin separators between the real shells
+    // thin separators at the VISIBLE shell boundaries (a swallowed band has none)
     ctx.strokeStyle = "rgba(8,10,18,0.45)"; ctx.lineWidth = 1;
-    for (const r of [Rd, rOf(heC), hasCOEjecta ? rOf(coC) : rRem]) {
+    const seps = [Rd];
+    if (hasHeEjecta) seps.push(rOf(heC));
+    if (hasCOEjecta) seps.push(rOf(coC));
+    seps.push(rRem);
+    for (const r of seps) {
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
     }
 
-    // --- title + type/remnant tag ---
+    // --- title + type/remnant tag --- (narrow canvases drop the "Type II ·" prefix and
+    // abbreviate so the right-aligned tag can't collide with the title pill — the phone-width
+    // failed tag "Type II · → black hole (direct collapse)" overran the title otherwise).
     labelPill("pre-collapse onion shell", PAD, PAD);
-    const tag = `Type ${m.type || "II"} · → ${isNS ? "neutron star" : "black hole"}`;
+    const narrow = W < 360;
+    const remName = failed ? (narrow ? "BH (failed)" : "black hole (direct collapse)")
+      : isNS ? "neutron star" : "black hole";
+    const tag = (narrow ? "→ " : `Type ${m.type || "II"} · → `) + remName;
     ctx.font = "600 12px system-ui, sans-serif";
     ctx.fillStyle = isNS ? "#bcd0ff" : "#b9aaff"; ctx.textAlign = "right";
     ctx.fillText(tag, W - PAD, PAD + 12);
@@ -509,19 +535,24 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     // each entry shows fewer sublines — the caveats fold into the always-shown caption rather
     // than overflowing INTO it (the labels overrunning the caption was the phone-width bug).
     // lines[0] is the mass (kept first); lines[1] is the caveat (shown only on a tall band).
+    // ejected masses are the VISIBLE bands (outside the grown remnant) — mH/mHe/mCO above.
     const f1 = (v) => (v >= 10 ? v.toFixed(0) : v.toFixed(1));
-    const mH = Mtot - heC, mHe = heC - coC, mCO = coC - rem;
     const entries = [];
     if (mH > 0.05) entries.push([COL_H, "H envelope", [`${f1(mH)} M☉ · ejected`]]);
-    if (mHe > 0.05) entries.push([COL_HE, "He shell", [`${f1(mHe)} M☉ · ejected`]]);
+    if (hasHeEjecta) entries.push([COL_HE, "He shell", [`${f1(mHe)} M☉ · ejected`]]);
     if (hasCOEjecta)
       entries.push([COL_CO, "C/O → Si shells",
         [`${f1(mCO)} M☉ · ejected`, "inner Si/O–Ne schematic"]]);
-    if (mni > 0)
+    if (mni > 0.0005)
       entries.push([COL_NI, "⁵⁶Ni (light-curve fuel)",
         [`${mni.toFixed(3)} M☉ · ejected`, "exaggerated — your slider"]]);
-    entries.push([COL_REM, isNS ? "Fe core → neutron star" : "C/O core → black hole",
-      [`${f1(rem)} M☉ · collapsed`, isNS ? "degenerate remnant" : "swallows the C/O core"]]);
+    // the remnant label tracks the fallback continuum: a degenerate NS, a fallback BH that
+    // ejected an envelope, or a direct collapse that swallowed (almost) the whole star.
+    const remTitle = failed ? "→ black hole (direct collapse)"
+      : isNS ? "Fe core → neutron star" : "C/O core → black hole";
+    const remSub = failed ? "the whole star implodes — it winks out"
+      : isNS ? "degenerate remnant" : "core + fallback envelope";
+    entries.push([COL_REM, remTitle, [`${f1(rem)} M☉ · collapsed`, remSub]]);
 
     const lx = W - PAD - LW + 2;
     const availH = bot - (top + 4);
@@ -544,7 +575,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
     // --- honesty caption (wrapped; capH reserved its exact line count above) ---
     ctx.fillStyle = "#7e879a"; ctx.font = "10px system-ui, sans-serif";
-    wrapText(SN_ONION_CAPTION, PAD, bot + 12, W - 2 * PAD, capLh);
+    wrapText(caption, PAD, bot + 12, W - 2 * PAD, capLh);
   }
 
   // Defensive fallback if the onion is asked to draw before the model lands.

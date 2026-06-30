@@ -284,6 +284,7 @@ export function createSED(canvas) {
   // SN endgame: like WR, the expanding ejecta photosphere is no dynamo corona — suppress
   // the coronal X-ray band entirely; only the (honest) blackbody continuum is drawn.
   let endgameSN = false;
+  let endgameSNFailed = false;   // a failed direct collapse: the photosphere does NOT expand
   // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
   // gyro-valid domain); userProt = a manual slider override (null = follow the
   // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
@@ -314,6 +315,7 @@ export function createSED(canvas) {
     endgameMode = eg;
     endgameWR = egKind === "wr";
     endgameSN = egKind === "sn";
+    endgameSNFailed = endgameSN && !!(opts && opts.failed);
     // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
     // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
     if (m !== mass || fe !== feh) userProt = null;
@@ -935,11 +937,15 @@ export function createSED(canvas) {
     // NOT a white dwarf. One fixed sentence for the whole WR scrub (Teff aside), like WD,
     // so scrubbing within the mode can't resize the panel.
     if (endgameSN) {
-      caption.textContent =
-        `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
-        `(${where}). This is the expanding supernova photosphere cooling as it grows — a ` +
-        `freely-expanding ejecta shell, not a dynamo, so no coronal band. The light curve ` +
-        `(not this blackbody) is the observable. γ-rays stay empty. Evocative, not predictive.`;
+      caption.textContent = endgameSNFailed
+        ? `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} (${where}). ` +
+          `This is a FAILED supernova: the supergiant implodes to a black hole with almost no ` +
+          `explosion, so the photosphere doesn't expand — it just dims and winks out. No dynamo, ` +
+          `no coronal band; γ-rays stay empty. Evocative, not predictive.`
+        : `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
+          `(${where}). This is the expanding supernova photosphere cooling as it grows — a ` +
+          `freely-expanding ejecta shell, not a dynamo, so no coronal band. The light curve ` +
+          `(not this blackbody) is the observable. γ-rays stay empty. Evocative, not predictive.`;
       return;
     }
     if (endgameWR) {

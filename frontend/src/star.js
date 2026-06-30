@@ -675,16 +675,22 @@ export function createStar(canvas) {
       fireballMat.uniforms.uColor.value.setRGB(r, g, b);
       const fade = Math.max(0, Math.min(1, (opts && opts.snFade) ?? 0));
       const grow = Math.max(0.2, Math.min(1.5, (opts && opts.snGrow) ?? 1));
+      const failed = !!(opts && opts.failed);
       fireballMat.uniforms.uFade.value = fade;
       // A gentle, clamped luminosity tie so the brightest moments read brighter — evocative,
-      // NOT a measured photometric scale (the light-curve panel carries the real L).
+      // NOT a measured photometric scale (the light-curve panel carries the real L). A FAILED
+      // SN (direct collapse) barely glows: a dim red supergiant that fades straight to black —
+      // the "disappearing supergiant" (N6946-BH1) — so we knock its intensity right down.
       const logL = Math.log10(Math.max(1, state.L_lsun));
-      fireballMat.uniforms.uIntensity.value = 0.6 + 0.4 * Math.max(0, Math.min(1, (logL - 5) / 4));
+      const dim = failed ? 0.3 : 1.0;
+      fireballMat.uniforms.uIntensity.value =
+        dim * (0.6 + 0.4 * Math.max(0, Math.min(1, (logL - 5) / 4)));
       fireball.scale.setScalar(rad * grow);
 
-      // The remnant: a neutron star emerges as a tiny hot dot once the ejecta thin; a black
-      // hole / failed SN shows nothing at all (the frame goes dark as the fireball fades —
-      // the star "winks out"). The dot ramps in over the last of the fade so it emerges, not pops.
+      // The remnant: a neutron star emerges as a tiny hot dot once the ejecta thin. A black
+      // hole shows no dot — but a FALLBACK BH still drove a (real, if fainter) supernova, so the
+      // bright fireball plays first and only THEN the frame goes dark; only a FAILED direct
+      // collapse truly "winks out" with no bright phase (handled by `dim` above + main.js's fade).
       const isNS = !!(opts && opts.remnant === "NS");
       remnant.visible = isNS;
       // Ramp from fade 0.6 (where refreshSN's "a neutron star emerges" caption appears) to 1,

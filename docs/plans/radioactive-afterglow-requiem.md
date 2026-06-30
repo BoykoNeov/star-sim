@@ -298,19 +298,39 @@ mode redrew NS→BH).
 
 **Depends:** Chunk 2.
 
-### Chunk 5 — Remnant branch: NS / BH / failed-SN (sketch)
-The remnant as a **labeled, deliberately-simplified mass cut** (CO-core / progenitor
-mass), explicitly *not* a crisp prediction (reality = "islands of explodability",
-non-monotonic compactness). Add the **direct-collapse-to-BH / failed-SN** branch —
-some massive progenitors give little/no optical display ("the star just winks out"),
-honest and visually striking. **Depends:** Chunks 1–3.
+### Chunk 5 — Remnant branch: NS / BH / failed-SN ✅ DONE
+**Built (backend + frontend; 220 pytest green — +5 SN tests; Playwright-verified at 1440 + 390 px,
+zero console errors).** The hard CO=7 cut became a **labeled fallback continuum** that softens the
+old cliff in the light curve AND the onion in one stroke, and added the **direct-collapse / failed-SN**
+branch. One smoothstep `φ(co_core) = smoothstep(CO_NS_MAX=7, CO_DIRECT=12, co_core)` drives three
+things: the remnant grows `M_NS + (M_final−M_NS)·φ` (a proto-NS → heavier via fallback), the ejecta
+`M_ej = M_final − M_remnant` shrink smoothly to ~0, and the **ejected** ⁵⁶Ni `= M_Ni·(1−φ)` dims (the
+deepest ash falls back first). **Two advisor blockers, both fixed:**
+- **The NS↔BH label flips at the remnant mass crossing the NS-max (~2.5 M☉), NOT at CO=7** — otherwise
+  a near-threshold "black hole" sits in the observed NS↔BH mass gap (~1.4–2 M☉) and reads as a bug.
+  CO=7 is just "fallback onset." (This **reclassified the Chunk-3 demo: 30 M☉ solar (CO 7.68) is now a
+  heavy NS ~2.16 M☉, not a BH.** New demos: BH-fallback = 40 M☉/[Fe/H]=−0.5; failed = 50 M☉/[Fe/H]=−1.0.)
+- **A failed SN must NOT reuse the homologous-expansion photosphere** — `v=√(2E/M_ej)` blows up as M_ej→floor
+  (an AU-swelling photosphere is the opposite of "winks out") and ejected Ni→0 → `log(0)` breaks the panel.
+  Branch it: the states stay at the progenitor radius R₀ and just **dim** (the "disappearing supergiant",
+  N6946-BH1); the served curve uses a tiny floored Ni so it's positive but ~3 dex below a real IIP.
+**Measured reachability (the Chunk-3 discipline — failed branch is NOT dead code):** the SN-bucket CO core
+caps at **~14.2 M☉** (50 M☉, [Fe/H]=−1.0) because heavier stars strip to WR; CO_DIRECT=12 makes the failed
+cases the genuinely extreme 50 M☉ low-Z tail (M_ej≈0.1). **3D reconciliation (a Chunk-3 inconsistency fixed):**
+Chunk 3 made *all* BH "wink out", but a fallback BH ejected a real (if fainter) envelope → it should NOT;
+now NS → bright fireball + dot, **BH-fallback → bright fireball → fades to a dark invisible remnant (no dot,
+not a wink-out)**, **failed → dim grey ball → black (winks out)**. New served fields `fallback_fraction`,
+`failed_sn`, `m_ni_ejected_msun`; the onion lets the remnant eat inward through C/O→He→H (no clamp at the CO
+core), the ring uses the *ejected* Ni (gone for a failed SN), and a failed onion is ≈ all void. Captions/readout/
+classify/SED all branch on `failed`. New backend constants: `CO_DIRECT`, `NS_MAX_MSUN`, `M_EJ_FAIL`,
+`NI_EJECT_FLOOR`, `V_PHOT_MAX_KMS`.
 
-**Note (from Chunk 4):** the CO=7.0 NS/BH cut is now a **visual cliff in two places** — the
-light curve's M_ej discontinuity *and* the Chunk-4 onion (the copper C/O+heavy band collapses
-into the void in one step as mass crosses the cut). Both faithfully mirror the model's hard
-mass cut, but it's exactly the "islands of explodability" artifact this chunk softens — so
-smooth the onion's discontinuity together with the light curve's (and the ⁵⁶Ni ring: a true
-failed-SN should dim/zero the ejected Ni, the asymmetry Chunk 4 deliberately deferred here).
+**Original sketch (retained):** the remnant as a **labeled, deliberately-simplified mass cut** (CO-core /
+progenitor mass), explicitly *not* a crisp prediction (reality = "islands of explodability", non-monotonic
+compactness). Add the **direct-collapse-to-BH / failed-SN** branch — some massive progenitors give little/no
+optical display ("the star just winks out"), honest and visually striking. **Depends:** Chunks 1–3. The CO=7.0
+cut was a **visual cliff in two places** (light-curve M_ej discontinuity + the Chunk-4 onion copper-band collapse);
+both are now softened by the continuum, and the ⁵⁶Ni ring dims/zeroes for a failed SN (the asymmetry Chunk 4 deferred).
 
 ### Follow-on (not v1) — Ib/c via the WR endpoint; SN spectra
 - **Ib/c stripped-envelope SNe** chain off the **WR** scrub endpoint (the stripped

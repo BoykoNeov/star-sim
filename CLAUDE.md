@@ -261,9 +261,21 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   the onion visibly LACKS the copper C/O+heavy band, only He+H eject); ⁵⁶Ni an **exaggerated** slider-tied ring (not to
   scale, kept on BH too — consistent with the light curve). Static across the time scrub (`comp.update` no-op in SN mode),
   redraws on the ⁵⁶Ni-slider / mass-re-snap (both verified live: 0.06→0.25, NS↔BH). Phone-width label-overflow bug caught
-  + fixed (even-spacing fit, caveats fold into the always-shown caption). 215 pytest (backend untouched), zero console
-  errors at 1440 + 390 px. **Chunk 5 (NS/BH/failed-SN branch refinement, incl. softening the onion's shared CO-cut
-  discontinuity) NOT yet built.** [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
+  + fixed (even-spacing fit, caveats fold into the always-shown caption). **Chunk 5 BUILT (remnant branch NS/BH/failed-SN
+  + cliff softening; backend + frontend — the SN arc is COMPLETE):** the hard CO=7 NS/BH cut became a **labeled fallback
+  continuum** `φ=smoothstep(CO_NS_MAX=7, CO_DIRECT=12, co_core)` that softens the old cliff in the light curve AND the
+  onion in one stroke — the remnant grows `M_NS+(M_final−M_NS)·φ`, the ejecta `M_ej=M_final−M_remnant` shrink smoothly
+  to ~0, and the **ejected** ⁵⁶Ni `=M_Ni·(1−φ)` dims (deepest ash falls back first); new served fields `fallback_fraction`/
+  `failed_sn`/`m_ni_ejected_msun`. **Two advisor blockers, fixed:** (1) the **NS↔BH label flips where the remnant crosses
+  NS_MAX~2.5 M☉, NOT at CO=7** (else a near-threshold "BH" sits in the observed mass gap and reads as a bug) — so **30 M☉
+  solar (CO 7.68) is now a heavy NS ~2.16, not a BH**; new demos BH-fallback 40 M☉/[Fe/H]−0.5, failed 50 M☉/[Fe/H]−1.0;
+  (2) a **failed SN does NOT reuse the homologous photosphere** (`v=√(2E/M_ej)` blows up, ejected Ni→0 → log(0)) — its
+  states stay at R₀ and DIM, the "disappearing supergiant", and the served curve uses a tiny floored Ni (positive, ~3 dex
+  below a real IIP). **3D reconciled** (a Chunk-3 inconsistency — Chunk 3 made *all* BH wink out): NS→fireball+dot,
+  **BH-fallback→fireball→dark invisible remnant (no dot, not a wink-out)**, **failed→dim→black (winks out)**. Onion drops
+  the rem≤CO clamp (remnant eats C/O→He→H, no cliff), ring uses ejected Ni, failed onion ≈ all void + winks-out caption;
+  `hr.js` violet failed-SN banner; readout "% fell back" + "direct collapse"; classify/SED branch on `failed`. 220 pytest,
+  zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -295,19 +307,23 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **215 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **220 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
   non-rotating ones — gated by `requires_mist_rotation_multifeh` /
   `requires_mist_rotation_heldout_feh`. The mass-loss-rate (`Mdot`) threading for the
   SED wind tail adds 4 §10 tests (present & ≤0; grows MS→AGB and up the OB sequence;
-  carried through the feh-blend, lies-between & ≤0). The SN Chunk 1 adds 15
-  (`test_supernova.py`): the Tier-1 ⁵⁶Co slope on the served `L_radio` component, the
+  carried through the feh-blend, lies-between & ≤0). The SN sibling has **20** tests
+  (`test_supernova.py`): Chunk 1's Tier-1 ⁵⁶Co slope on the served `L_radio` component, the
   Tier-3 M_Ni-scales-the-tail linearity, the plateau⊕tail handoff, the no-plateau
   fallback, the NS/BH split, the SN-branch-only progenitor scalars, and the `/supernova`
-  route (SN payload + non-SN honest-empty + 422). Light-curve physics is unit-tested
-  deterministically; the endgame→sibling→route path through the real provider.
+  route (SN payload + non-SN honest-empty + 422); plus **Chunk 5's +5**: the fallback BH
+  (remnant grows past the proto-NS, still erupts), the remnant/ejecta **continuity across the
+  old CO=7 cut** (no cliff), the monotone fallback gradient, the **failed/direct-collapse**
+  branch (M_ej<M_EJ_FAIL, ejected Ni→0, no plateau, faint-positive curve, non-expanding R₀
+  photosphere), and Tier-3 linearity surviving the fallback dimming. Light-curve physics is
+  unit-tested deterministically; the endgame→sibling→route path through the real provider.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

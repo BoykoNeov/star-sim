@@ -1631,16 +1631,25 @@ function rebuildSNTicks() {
   els.ageTicks.innerHTML = "";   // the SN scrub uses its own snap targets, not the datalist
 }
 
-// The ⁵⁶Ni-slider note (used by configure + both handlers).
+// The ⁵⁶Ni-slider note (used by configure + both handlers). In a FAILED direct collapse the
+// synthesized nickel all falls back into the black hole, so the slider is inert — say so (a
+// control that visibly does nothing otherwise reads as broken).
 const mniNote = () =>
-  `⁵⁶Ni = ${fmt(mniValue)} M☉ — sets the brightness scale (canonical ${M_NI_DEFAULT}; ` +
-  `observed ${M_NI_MIN}–${M_NI_MAX}). The plateau shape doesn't move; only the tail height.`;
+  (snModel && snModel.failed_sn)
+    ? `Direct collapse — all of the synthesized ⁵⁶Ni falls back into the black hole, so this ` +
+      `slider has no effect here (the explosion failed; there is almost no light to scale).`
+    : `⁵⁶Ni = ${fmt(mniValue)} M☉ — sets the brightness scale (canonical ${M_NI_DEFAULT}; ` +
+      `observed ${M_NI_MIN}–${M_NI_MAX}). The plateau shape doesn't move; only the tail height.`;
 
-// Configure the ⁵⁶Ni slider from the current mniValue (log scale + round-yield ticks).
+// Configure the ⁵⁶Ni slider from the current mniValue (log scale + round-yield ticks). The
+// slider is disabled in a failed state (all Ni falls back → it would do nothing).
 function configureSNMni() {
+  const inert = !!(snModel && snModel.failed_sn);
   els.snMni.min = 0; els.snMni.max = 1; els.snMni.step = 0.001;
   els.snMni.value = posFromMni(mniValue);
+  els.snMni.disabled = inert;
   els.snMniNum.min = M_NI_MIN; els.snMniNum.max = M_NI_MAX; els.snMniNum.step = 0.001;
+  els.snMniNum.disabled = inert;
   setNum(els.snMniNum, fmt(mniValue));
   buildTickStrip(els.snMniMarks,
     MNI_TICKS.map((m) => ({ pos01: posFromMni(m), label: m === M_NI_DEFAULT ? `${m}★` : `${m}` })));
@@ -1651,6 +1660,8 @@ function configureSNMni() {
 // explosion scalars come from snModel; the L/Teff/R from the scrubbed photosphere state.
 function renderSNReadout(s) {
   const m = snModel;
+  const failed = !!m.failed_sn;
+  const phi = m.fallback_fraction ?? 0;
   const day = (s.age_yr ?? 0) * 365.25;
   const rows = [
     ["Progenitor",
@@ -1663,15 +1674,19 @@ function renderSNReadout(s) {
     ["Ejecta mass",
       "the mass thrown off in the explosion — the progenitor's final mass minus the compact remnant left behind",
       `${fmt(m.m_ej_msun)} M☉`],
-    ["⁵⁶Ni mass",
+    ["⁵⁶Ni synthesized",
       "the radioactive nickel forged in the explosion (the Tier-3 free knob) — its decay powers the tail, and the brightness scale rides on it. Drag the ⁵⁶Ni slider",
       `${fmt(m.m_ni_msun)} M☉`],
+    ["⁵⁶Ni ejected",
+      "how much of that nickel actually escapes. It is the deepest, innermost ash, so fallback onto the remnant swallows it first — for a heavy fallback black hole less escapes, and for a direct collapse essentially none does (the tail vanishes)",
+      `${fmt(m.m_ni_ejected_msun)} M☉${phi > 0.01 ? ` (${Math.round(phi * 100)}% fell back)` : ""}`],
     ["Explosion energy",
       "the kinetic energy of the ejecta — a canonical 10⁵¹ erg (the explosion mechanism that sets it isn't modeled)",
       `${fmt(m.e_kin_erg / 1e51)}×10⁵¹ erg`],
     ["Remnant",
-      "the compact object left at the centre — a neutron star, or a black hole for a heavy enough core (a deliberately-simplified mass cut)",
-      `${m.remnant_type} · ${fmt(m.remnant_mass_msun)} M☉`],
+      "the compact object left at the centre. A labeled fallback continuum on the CO-core mass (a compactness proxy), NOT a crisp prediction: a neutron star, a fallback black hole, or — past full collapse — a direct-collapse black hole that ejects almost nothing. Real explodability is non-monotonic ('islands')",
+      failed ? `black hole · ${fmt(m.remnant_mass_msun)} M☉ · direct collapse`
+             : `${m.remnant_type} · ${fmt(m.remnant_mass_msun)} M☉`],
     ["Time",
       "time since the explosion — the age slider above scrubs this",
       day >= 1 ? `${fmt(day)} d` : `${fmt(day * 24)} h`],
@@ -1689,7 +1704,7 @@ function renderSNReadout(s) {
       `${fmt(m.v_phot_kms)} km/s`],
   ];
   if (m.has_plateau) rows.push(["Plateau",
-    "the recombination plateau the IIP light curve sits on — its luminosity and duration come from your star's ejecta mass and radius (Tier-2: robust in shape, ±dex in level)",
+    "the recombination plateau the IIP light curve sits on — its luminosity and duration come from your star's ejecta mass and radius (Tier-2: robust in shape, ±dex in level). Heavier, more compact progenitors fall back more, so LESS ejecta gives a brighter, shorter plateau — until fallback becomes total and the explosion fails entirely (a direct collapse, no light). That bright-then-dark step at the threshold is a real explosion-vs-failure transition, not a smooth dimming",
     `${fmt(m.plateau_L_erg_s / 3.828e33)} L☉ · ${fmt(m.plateau_duration_days)} d`]);
   els.readout.innerHTML = rows
     .map(([k, d, v]) =>
@@ -1713,14 +1728,18 @@ function refreshSN() {
   // the NS dot vs the BH "winks out" (no dot). All evocative except the photosphere Teff color.
   const day = (s.age_yr ?? 0) * 365.25;
   const dayFrac = clamp01(day / snMaxDay());
-  const snGrow = 0.4 + 0.6 * smoothstep01(0, 0.14, dayFrac);
-  const snFade = smoothstep01(0.55, 1.0, dayFrac);
-  star.update(s, { endgame: "sn", remnant: snModel.remnant_type, snGrow, snFade });
-  classification.update(s, "sn");      // expanding-photosphere label, read from Teff
+  const failed = !!snModel.failed_sn;
+  // A normal SN expands then dissipates (grow → fade). A FAILED direct collapse does NOT
+  // expand — it implodes — so we skip the "expanding" beat (a small steady ball) and let it
+  // fade from the start: a dim supergiant that simply winks out (star.js dims it too).
+  const snGrow = failed ? 0.5 : 0.4 + 0.6 * smoothstep01(0, 0.14, dayFrac);
+  const snFade = failed ? smoothstep01(0.0, 0.6, dayFrac) : smoothstep01(0.55, 1.0, dayFrac);
+  star.update(s, { endgame: "sn", remnant: snModel.remnant_type, failed, snGrow, snFade });
+  classification.update(s, "sn", { failed });   // expanding-photosphere label (failed → direct-collapse)
   scale.update(s);                     // true size — the photosphere swells to ~AU scale
   hr.update(s);                        // the marker on the light curve (hr is in SN mode)
   comp.update(s);                      // no-op in SN mode (the onion is static, set by applySNModel)
-  sed.update(s, { endgame: "sn" });    // blackbody continuum only (no coronal band)
+  sed.update(s, { endgame: "sn", failed });   // blackbody only (failed → non-expanding caption)
   renderSNReadout(s);
 
   els.status.style.color = teffToCSS(s.Teff_K);
@@ -1733,12 +1752,19 @@ function refreshSN() {
     (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
 
   let cap;
-  if (snFade > 0.6) {
-    // The ejecta have thinned: the 3D dissipates to the compact remnant (an NS dot, or a
-    // black hole that leaves the frame dark — "winks out"). Evocative, labeled as such.
+  if (failed) {
+    // Direct collapse: no bright supernova at all — the progenitor implodes to a black hole
+    // and fades from view (the "disappearing supergiant"). There is no plateau, no tail.
+    cap = `Direct collapse — the core is so massive that fallback is total: almost no ⁵⁶Ni ` +
+      `escapes and there is no bright explosion. The supergiant implodes to a black hole and ` +
+      `simply winks out · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  } else if (snFade > 0.6) {
+    // The ejecta have thinned: the 3D dissipates to the compact remnant. A NEUTRON STAR
+    // emerges as a faint dot; a fallback BLACK HOLE drove a real (if fainter) supernova that
+    // now fades to a dark, invisible remnant — NOT a "wink out" (that's the failed case above).
     const rem = snModel.remnant_type === "NS"
       ? `a neutron star emerges as a faint hot point`
-      : `the black hole leaves nothing to see — the star winks out`;
+      : `a black hole formed at the centre — the supernova fades to a dark, invisible remnant`;
     cap = `Nebular phase — the ejecta thin and disperse; ${rem} (the 3D remnant is ` +
       `evocative) · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
   } else if (snModel.has_plateau && day <= snModel.plateau_duration_days)

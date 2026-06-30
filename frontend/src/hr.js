@@ -402,6 +402,17 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       drawSNCurve(toPts(lc.L_total_erg_s), "#e7ecf5", 2.2, null);
     }
 
+    // A failed direct collapse has no bright explosion — its curve is a faint floor far below
+    // the observed SNe overlays, which would read as a broken plot without a banner saying so.
+    if (snModel && snModel.failed_sn) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#b9aaff"; ctx.font = "600 12px system-ui, sans-serif";
+      ctx.fillText("Direct collapse — failed supernova: almost no light emitted", W / 2, PAD + 18);
+      ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
+      ctx.fillText("the star implodes to a black hole and winks out", W / 2, PAD + 34);
+      ctx.textAlign = "left";
+    }
+
     if (marker) {
       const day = (marker.age_yr ?? 0) * 365.25;
       const L = (marker.L_lsun ?? 0) * LSUN_ERG_S;

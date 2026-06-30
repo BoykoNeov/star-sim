@@ -117,7 +117,10 @@ function wrLabel(state) {
 // the state (Teff cooling as the shell grows): a hot early fireball, the recombination
 // photosphere through the plateau, then the cool, vast nebular phase. The "SN II" tag marks
 // the v1 SN branch (purely hydrogen-rich Type II — the stripped Ib/c is the WR endpoint).
-function snLabel(state) {
+function snLabel(state, failed) {
+  // A FAILED direct collapse is not an expanding fireball at all — it's a supergiant imploding
+  // to a black hole, so the Teff-keyed fireball/plateau/nebular narration doesn't apply.
+  if (failed) return { tag: "failed SN", name: "direct collapse — imploding to a black hole" };
   const t = state.Teff_K ?? 0;
   if (t >= 10000) return { tag: "SN II", name: "expanding fireball (hot photosphere)" };
   if (t >= 5000) return { tag: "SN II", name: "cooling photosphere — recombination plateau" };
@@ -133,10 +136,11 @@ export function createClassification(el) {
 
   return {
     // mode === "wd"/"wr"/"sn": show the endgame label instead of the MK type.
-    update(state, mode) {
+    update(state, mode, opts) {
       if (!state || state.Teff_K == null) return;
       if (mode === "wd" || mode === "wr" || mode === "sn") {
-        const w = mode === "wr" ? wrLabel(state) : mode === "sn" ? snLabel(state) : wdLabel(state);
+        const w = mode === "wr" ? wrLabel(state)
+          : mode === "sn" ? snLabel(state, !!(opts && opts.failed)) : wdLabel(state);
         typeEl.textContent = w.tag;
         typeEl.style.color = teffToCSS(state.Teff_K);
         nameEl.textContent = w.name;

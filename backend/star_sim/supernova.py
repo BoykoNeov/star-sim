@@ -84,12 +84,33 @@ T_ION = 6000.0              # K — hydrogen recombination-front temperature
 # very-massive low-Z tail at 75–260 R_sun, so 300 separates them cleanly.
 RSG_R0_MIN = 300.0          # R_sun
 
-# --- remnant mass cut (a deliberately-simplified label; Chunk 5 refines) -------
-# Reality is "islands of explodability" (non-monotonic compactness), not a crisp
-# threshold; this is a teaching cut on the CO-core mass, explicitly labeled.
-CO_NS_MAX = 7.0             # M_sun — CO core below → neutron star, above → black hole
-M_NS_MSUN = 1.4            # M_sun — canonical neutron-star mass (baryonic ~1.5; simplified)
-M_EJ_FLOOR = 0.1          # M_sun — keep ejecta strictly positive if a BH swallows the core
+# --- remnant: a labeled fallback continuum, NOT a hard cut (Chunk 5) -----------
+# Reality is "islands of explodability" (non-monotonic compactness; Sukhbold+2016,
+# Ertl+2016), not a crisp threshold. We model the AVERAGED trend with the CO-core mass
+# (a compactness proxy) as a smooth **fallback fraction** φ, explicitly labeled as a
+# deliberate teaching simplification. φ rises from 0 at the fallback onset to 1 at full
+# direct collapse, and drives three things at once (so the old hard CO=7 cut — a visual
+# cliff in the light curve AND the onion — softens in one stroke):
+#   * the remnant mass grows from a 1.4 M_sun proto-NS up toward the whole star (fallback);
+#   * the ejecta mass M_ej = M_final − M_remnant shrinks smoothly to ~0;
+#   * the EJECTED ⁵⁶Ni (the deepest, innermost ash) falls back first → dims to ~0.
+# The NS↔BH **label** flips where the remnant mass crosses the neutron-star maximum
+# (~2.5 M_sun), NOT at φ's onset — otherwise a near-threshold "black hole" would sit in
+# the observed NS↔BH mass gap (~2–5 M_sun) and read as a bug. So CO_NS_MAX is "fallback
+# onset", and a heavier core makes a heavy NS, then a BH, then (φ→1) a failed SN.
+CO_NS_MAX = 7.0            # M_sun — CO core where fallback BEGINS (NS↔BH transition onset)
+CO_DIRECT = 12.0          # M_sun — CO core where fallback is ~complete (direct collapse).
+                          # Measured: the SN-bucket CO core caps ~14.2 (50 M_sun, [Fe/H]=−1.0)
+                          # because heavier stars strip to WR — so the failed branch IS reachable.
+M_NS_MSUN = 1.4           # M_sun — proto-neutron-star mass (baryonic ~1.5; simplified)
+NS_MAX_MSUN = 2.5         # M_sun — max neutron-star mass; a heavier remnant is a black hole
+M_EJ_FLOOR = 0.1          # M_sun — keep ejecta numerically positive at full direct collapse
+M_EJ_FAIL = 2.0           # M_sun — below this ejecta mass the explosion fails: direct collapse
+                          # to a black hole, little/no optical display ("the star winks out").
+NI_EJECT_FLOOR = 1.0e-4   # M_sun — tiny positive floor on a failed SN's ejected ⁵⁶Ni, so its
+                          # faint curve stays positive (avoids log(0)) without implying a real SN.
+V_PHOT_MAX_KMS = 3.0e4    # km/s — cap the homologous velocity (a heavy-fallback M_ej→floor
+                          # would otherwise give an unphysically fast, AU-swelling photosphere)
 
 # --- light-curve time sampling ------------------------------------------------
 T_MIN_D = 0.5              # d — first sample (shock breakout/cooling deliberately omitted)
@@ -135,15 +156,19 @@ class SupernovaModel:
     pre_sn_radius_rsun: float
     # explosion parameters
     m_ej_msun: float
-    m_ni_msun: float              # the value used (after clamp to the observed range)
+    m_ni_msun: float              # the SYNTHESIZED ⁵⁶Ni (the slider value, after range clamp)
+    m_ni_ejected_msun: float      # the EJECTED ⁵⁶Ni after fallback (= m_ni·(1−φ); drives the
+                                  # radioactive tail + the onion ring; → ~0 for a failed SN)
     m_ni_default: float
     m_ni_min: float
     m_ni_max: float
     e_kin_erg: float
-    v_phot_kms: float             # characteristic ejecta velocity √(2E/M_ej)
-    # remnant (Chunk 5 refines)
-    remnant_type: str             # "NS" / "BH"
+    v_phot_kms: float             # characteristic ejecta velocity √(2E/M_ej) (capped)
+    # remnant — a labeled fallback continuum (Chunk 5), not a hard cut
+    remnant_type: str             # "NS" / "BH" (the label flips at the NS-max mass, not at CO=7)
     remnant_mass_msun: float
+    fallback_fraction: float      # φ ∈ [0,1] — 0 = no fallback, 1 = full direct collapse
+    failed_sn: bool               # direct collapse: M_ej < M_EJ_FAIL → little/no display
     # observables
     peak_L_erg_s: float
     plateau_L_erg_s: float | None
@@ -152,6 +177,16 @@ class SupernovaModel:
     light_curve: dict             # time_days + L_total/L_radio/L_plateau (erg/s) — lists
     states: list[StellarState] = field(default_factory=list)
     tiers: dict = field(default_factory=dict)
+
+
+def _smoothstep(a: float, b: float, x: float) -> float:
+    """Hermite smoothstep clamped to [0,1] — 0 at x≤a, 1 at x≥b, smooth in between.
+    The fallback fraction φ(co_core) uses it so the remnant/ejecta/Ni vary continuously
+    across the old hard CO cut (no cliff), the same easing the shaders use on the front end."""
+    if b <= a:
+        return 1.0 if x >= b else 0.0
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3.0 - 2.0 * t)
 
 
 def _radioactive_L(t_days: np.ndarray, m_ni_g: float) -> np.ndarray:
@@ -204,25 +239,37 @@ def supernova_model(
     e_kin = float(e_kin)
     e51 = e_kin / 1.0e51
 
-    # --- ejecta / remnant split (a labeled CO-core mass cut; Chunk 5 refines) ---
-    if p.co_core_msun < CO_NS_MAX:
-        remnant_type, remnant_mass = "NS", M_NS_MSUN
-    else:
-        remnant_type, remnant_mass = "BH", p.co_core_msun   # the CO core collapses to a BH
-    # never let the remnant exceed the star (keeps ejecta strictly positive).
+    # --- the fallback continuum (Chunk 5): one φ softens remnant / ejecta / Ni -----
+    # φ(co_core) eases 0→1 from the fallback onset (CO_NS_MAX) to full direct collapse
+    # (CO_DIRECT). The remnant grows from a 1.4 M_sun proto-NS toward the whole star as
+    # more material falls back; the LABEL flips at the NS-max mass (so we never show a
+    # mass-gap "black hole"); φ→1 (M_ej below M_EJ_FAIL) is a failed SN that winks out.
+    phi = _smoothstep(CO_NS_MAX, CO_DIRECT, p.co_core_msun)
+    remnant_mass = M_NS_MSUN + (p.final_mass_msun - M_NS_MSUN) * phi
+    # never let the remnant exceed the star (keeps ejecta numerically positive).
     remnant_mass = min(remnant_mass, p.final_mass_msun - M_EJ_FLOOR)
     m_ej = p.final_mass_msun - remnant_mass
+    remnant_type = "BH" if remnant_mass >= NS_MAX_MSUN else "NS"
+    failed = m_ej < M_EJ_FAIL                          # direct collapse — little/no display
+
+    # The ejected ⁵⁶Ni is the deepest ash, so it falls back FIRST: it dims as (1−φ), and a
+    # failed SN ejects essentially none. We REPORT that honest value (≈0 for a failed SN —
+    # the onion ring then shows ~no Ni) but drive the light curve off a tiny floored value,
+    # so a failed SN's faint curve stays strictly positive (no log(0) in the panel's y-fit).
+    m_ni_ejected = m_ni * (1.0 - phi)
+    m_ni_for_curve = max(m_ni_ejected, NI_EJECT_FLOOR)
 
     # --- homologous ejecta velocity √(2E/M_ej) (v ∝ r; sets the photosphere R(t)) ---
-    v_phot = math.sqrt(2.0 * e_kin / (m_ej * MSUN))    # cm/s
+    v_phot = min(math.sqrt(2.0 * e_kin / (m_ej * MSUN)), V_PHOT_MAX_KMS * 1.0e5)   # cm/s
 
     sn_type = "II" if p.h_retained else "Ib/c"         # the SN branch is purely II in v1
-    has_plateau = p.pre_sn_radius_rsun >= RSG_R0_MIN
+    # A failed SN has no shock-heated envelope to recombine → no plateau (and no real
+    # expansion); the compact very-massive low-Z tail (R₀<300) likewise has no RSG envelope.
+    has_plateau = (p.pre_sn_radius_rsun >= RSG_R0_MIN) and (not failed)
 
-    # --- the two-component light curve on a log time grid -----------------------
+    # --- the light curve on a log time grid -------------------------------------
     t = np.logspace(math.log10(T_MIN_D), math.log10(T_MAX_D), n_samples)   # days
-    m_ni_g = m_ni * MSUN
-    l_radio = _radioactive_L(t, m_ni_g)
+    l_radio = _radioactive_L(t, m_ni_for_curve * MSUN)
 
     if has_plateau:
         l_p, t_p = _plateau_kasen_woosley(e51, m_ej, p.pre_sn_radius_rsun)
@@ -237,24 +284,33 @@ def supernova_model(
         plateau_dur: float | None = float(t_p)
         l_plateau_out: list | None = [float(x) for x in l_plateau]
     else:
-        # No RSG envelope (the compact very-massive low-Z tail): the recombination
-        # plateau model doesn't apply, so an honest radioactive-only curve.
+        # No plateau: a failed SN, or the compact no-RSG-envelope tail — an honest
+        # radioactive-only curve (faint, near the floor, for a failed direct collapse).
         l_total = l_radio
         plateau_l = plateau_dur = l_plateau_out = None
 
     peak_l = float(np.max(l_total))
 
-    # --- homologous-photosphere StellarStates (R = v·t; Teff from L & R) ---------
+    # --- the photosphere StellarStates (the 3D / SED / scale consume these) -------
+    # A NORMAL SN expands homologously (R = v·t). A FAILED SN does NOT explode — it
+    # implodes — so reusing v·t would swell an AU-scale photosphere, the opposite of
+    # "winks out" (and v→∞ as M_ej→floor). Instead we render the failing red supergiant
+    # at its own radius R₀, fading as the faint curve dims (the "disappearing supergiant",
+    # e.g. N6946-BH1): a dim star that simply goes dark.
     m_ej_g = m_ej * MSUN
+    r0_cm = p.pre_sn_radius_rsun * RSUN
     if sn_type == "II":
         x_s, y_s, z_s = 0.70, 0.28, 0.02     # representative H-rich envelope (labeled
-    else:                                    # placeholder; Chunk 4 does the real ejecta
-        x_s, y_s, z_s = 0.0, 0.55, 0.45      # composition / onion shell)
+    else:                                    # placeholder; the onion panel does the real
+        x_s, y_s, z_s = 0.0, 0.55, 0.45      # ejecta composition — Chunk 4)
     states: list[StellarState] = []
     for i in range(n_samples):
         t_day = float(t[i])
-        r_cm = v_phot * (t_day * DAY_S)
         l_erg = float(l_total[i])
+        if failed:
+            r_cm = r0_cm                      # the failing supergiant — its own size, not expanding
+        else:
+            r_cm = v_phot * (t_day * DAY_S)   # homologous expansion
         teff = (l_erg / (4.0 * math.pi * r_cm * r_cm * SIGMA_SB)) ** 0.25
         # logg of freely-expanding ejecta is honestly tiny→negative (it is NOT a star's
         # surface gravity). Chunk 2 passes an explicit {endgame:"sn"} so the 3D/SED
@@ -285,16 +341,26 @@ def supernova_model(
         "L_radio_erg_s": [float(x) for x in l_radio],
         "L_plateau_erg_s": l_plateau_out,
     }
+    if failed:
+        tier2 = ("direct collapse — a fallback so heavy (CO core ≳ {:.0f} M☉) that the "
+                 "envelope can't escape: the star implodes to a black hole with almost no "
+                 "explosion. Little ⁵⁶Ni is ejected (it falls back first), so there is "
+                 "barely any light — the progenitor simply winks out.").format(CO_DIRECT)
+    elif has_plateau:
+        tier2 = ("plateau L & duration — shape from your star's M_ej & R₀ (MIST) + a "
+                 "canonical E and assumed κ; robust in shape, ±dex in level.")
+    else:
+        tier2 = ("no recombination plateau — this compact progenitor has no red-supergiant "
+                 "envelope, so the curve is radioactive-only (honest fallback).")
     tiers = {
         "tier1": "⁵⁶Co tail slope (0.00975 mag/day) — bulletproof, zero free parameters; "
                  "set only by τ_Co. The verification anchor (not the peak).",
-        "tier2": "plateau L & duration — shape from your star's M_ej & R₀ (MIST) + a "
-                 "canonical E and assumed κ; robust in shape, ±dex in level."
-                 if has_plateau else
-                 "no recombination plateau — this compact progenitor has no red-supergiant "
-                 "envelope, so the curve is radioactive-only (honest fallback).",
+        "tier2": tier2,
         "tier3": "peak/tail height ∝ M_Ni — set by the (unmodeled) explosion's nickel "
                  "yield, not derivable from the track. Drag it; see where real SNe land.",
+        "remnant": "NS / BH / failed-SN is a labeled fallback continuum on the CO-core mass "
+                   "(a compactness proxy), NOT a crisp prediction — real explodability is "
+                   "non-monotonic ('islands'). The mass cut is deliberately simplified.",
     }
 
     return SupernovaModel(
@@ -308,6 +374,7 @@ def supernova_model(
         pre_sn_radius_rsun=float(p.pre_sn_radius_rsun),
         m_ej_msun=float(m_ej),
         m_ni_msun=float(m_ni),
+        m_ni_ejected_msun=float(m_ni_ejected),
         m_ni_default=M_NI_DEFAULT,
         m_ni_min=M_NI_MIN,
         m_ni_max=M_NI_MAX,
@@ -315,6 +382,8 @@ def supernova_model(
         v_phot_kms=float(v_phot / 1.0e5),
         remnant_type=remnant_type,
         remnant_mass_msun=float(remnant_mass),
+        fallback_fraction=float(phi),
+        failed_sn=bool(failed),
         peak_L_erg_s=peak_l,
         plateau_L_erg_s=plateau_l,
         plateau_duration_days=plateau_dur,

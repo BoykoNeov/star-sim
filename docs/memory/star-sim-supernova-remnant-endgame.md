@@ -1,6 +1,6 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor) + Chunk 3 BUILT (3D expanding-fireball→remnant shader: star.js FIREBALL_FRAG + REMNANT_FRAG, cooling-Teff color the only honest cue, snGrow/snFade beats, NS hot-dot reveal vs BH winks-out — measured BH-on-SN at 30 M☉ solar) + Chunk 4 BUILT (frontend: comp.js drawSNOnion pre-collapse onion shell — real boundaries remnant/CO/He/total sized area∝mass, inner Si/Fe faint schematic since MIST ends before the iron core forms, honest NS-vs-BH contrast (BH swallows the CO core → no copper band), exaggerated slider-tied ⁵⁶Ni ring; no backend change), 215 pytest. Chunk 5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
+description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor) + Chunk 3 BUILT (3D expanding-fireball→remnant shader: star.js FIREBALL_FRAG + REMNANT_FRAG, cooling-Teff color the only honest cue, snGrow/snFade beats, NS hot-dot reveal vs BH winks-out — measured BH-on-SN at 30 M☉ solar) + Chunk 4 BUILT (frontend: comp.js drawSNOnion pre-collapse onion shell — real boundaries remnant/CO/He/total sized area∝mass, inner Si/Fe faint schematic since MIST ends before the iron core forms, honest NS-vs-BH contrast (BH swallows the CO core → no copper band), exaggerated slider-tied ⁵⁶Ni ring; no backend change) + Chunk 5 BUILT (remnant branch NS/BH/failed-SN: a labeled fallback continuum φ=smoothstep(CO 7→12) softens the old CO=7 cliff in the light curve AND the onion — remnant grows, ejecta+ejected-Ni shrink; the NS↔BH label flips at the remnant crossing NS_MAX~2.5 not at CO=7 — advisor blocker, so 30 M☉ solar is now a heavy NS not a BH; failed/direct-collapse SN does NOT expand — stays at R₀ and dims, the 'disappearing supergiant' — advisor blocker; 3D reconciled: NS dot / BH-fallback fades-no-dot / failed winks-out; new fields fallback_fraction/failed_sn/m_ni_ejected_msun), 220 pytest — the SN arc is COMPLETE. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
 metadata: 
   node_type: memory
   type: project
@@ -12,7 +12,8 @@ The user wants an endgame for **core-collapse supernovae + their compact remnant
 classifier reaches but leaves un-rendered (`type="SN", states=[]`).
 **Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunk 2 (frontend
 gateway + light-curve panel) BUILT; Chunk 3 (3D fireball→remnant) BUILT; Chunk 4
-(pre-collapse onion shell) BUILT; Chunk 5 next.**
+(pre-collapse onion shell) BUILT; Chunk 5 (remnant branch NS/BH/failed-SN + cliff
+softening) BUILT — the SN arc is COMPLETE.**
 Plan: `docs/plans/radioactive-afterglow-requiem.md` (sibling to
 `smoldering-cinder-gateway.md`). This file holds the locked constraints + the gate's
 measured verdict + Chunk 1/2's built state; the plan is the design source of truth.
@@ -185,6 +186,42 @@ untouched; Playwright-verified 1440 + 390 px, zero console errors):**
 - **The CO=7.0 NS/BH cut is now a visual cliff in TWO places** (the light curve's M_ej jump AND
   the onion's copper-band→void collapse) — both faithful to the model's hard mass cut, both the
   "islands of explodability" artifact Chunk 5 should soften together (noted in the plan).
+
+**Chunk 5 BUILT (remnant branch NS/BH/failed-SN + cliff softening; backend + frontend, 220 pytest
+green — +5 SN tests; Playwright-verified 1440 + 390 px, zero console errors):**
+- The hard CO=7 NS/BH cut became a **labeled fallback continuum** (`supernova.py`): one smoothstep
+  **φ = smoothstep(CO_NS_MAX=7, CO_DIRECT=12, co_core)** drives THREE softenings at once — remnant
+  `M_NS + (M_final−M_NS)·φ` (proto-NS grows via fallback), ejecta `M_ej = M_final − M_remnant` shrink
+  smoothly to ~0, **ejected** ⁵⁶Ni `= M_Ni·(1−φ)` dims (the deepest ash falls back first). New served
+  fields `fallback_fraction`, `failed_sn`, `m_ni_ejected_msun`; `m_ni_msun` stays the synthesized slider
+  value (the Tier-3 linearity still holds — doubling the slider doubles the ejected tail at fixed φ).
+  New constants `CO_DIRECT`, `NS_MAX_MSUN=2.5`, `M_EJ_FAIL=2.0`, `NI_EJECT_FLOOR=1e-4`, `V_PHOT_MAX_KMS`.
+- **Advisor blocker 1 (fixed): the NS↔BH LABEL flips where the remnant mass crosses NS_MAX (~2.5 M☉), NOT
+  at CO=7** — else a near-threshold "black hole" sits in the observed NS↔BH mass gap and reads as a bug.
+  CO=7 is "fallback onset." This **reclassified the Chunk-3 demo: 30 M☉ solar (CO 7.68) is now a heavy NS
+  ~2.16 M☉, NOT a BH.** New on-screen demos: **NS = 15 M☉/[Fe/H]0**, **BH-fallback = 40 M☉/[Fe/H]−0.5**
+  (rem 20.6, M_ej 8.8, a real fainter SN), **failed = 50 M☉/[Fe/H]−1.0** (CO 14.2, M_ej 0.1).
+- **Advisor blocker 2 (fixed): a failed SN must NOT reuse the homologous photosphere** — `v=√(2E/M_ej)`
+  blows up as M_ej→floor (an AU-swelling photosphere is the opposite of "winks out") and ejected Ni→0 →
+  `log(0)` breaks the panel y-fit. Branch it: the states stay at the progenitor radius **R₀ (constant) and
+  just DIM** — the "disappearing supergiant" (N6946-BH1); the served curve uses a tiny floored Ni so it's
+  strictly positive but ~3 dex below a real IIP (the reported `m_ni_ejected_msun` stays the honest ~0).
+- **Measured reachability (the Chunk-3 discipline — failed branch is NOT dead code):** the SN-bucket CO core
+  caps at **~14.2 M☉** (50 M☉, [Fe/H]=−1.0) because heavier stars strip to WR; CO_DIRECT=12 puts the failed
+  cases at the genuinely extreme 50 M☉ low-Z tail.
+- **The 3D reconciliation (a Chunk-3 inconsistency fixed):** Chunk 3 made *all* BH "wink out", but a fallback
+  BH ejected a real (if fainter) envelope → it should NOT. Now (verified on-screen): **NS → bright fireball +
+  blue-white dot**; **BH-fallback → bright fireball → fades to a dark, invisible remnant (no dot, NOT a
+  wink-out)**; **failed → a dim grey ball → black (winks out)**. `star.js` gained a `failed` opt (dims the
+  fireball ×0.3); `main.js refreshSN` skips the "expanding" grow beat + fades from the start for failed.
+- **Frontend (all branch on `failed`/the continuum):** `comp.js drawSNOnion` drops the `rem≤co_core` clamp
+  so the grown remnant eats inward through C/O→He→H (the copper band shrinks GRADUALLY, no cliff); the ⁵⁶Ni
+  ring uses the *ejected* Ni (gone for a failed SN); a failed onion is ≈ all void (only a thin H sliver) with
+  a "winks out" caption. `hr.js` draws a violet **"Direct collapse — failed supernova: almost no light
+  emitted"** banner over the faint curve. `main.js` readout adds **⁵⁶Ni ejected (+ "% fell back")** and a
+  **"black hole · direct collapse"** remnant label; captions reconcile winks-out (failed) vs dark-remnant
+  (BH-fallback). `classify.js` → "failed SN — direct collapse" (not "expanding fireball"); `sed.js` → a
+  non-expanding failed caption. The NS baseline onion is unchanged (no regression). Type Ia still NOT this arc.
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean

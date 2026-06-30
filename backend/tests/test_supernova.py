@@ -29,7 +29,9 @@ from star_sim.api import app
 from star_sim.providers import MISTProvider
 from star_sim.state import StellarState
 from star_sim.supernova import (
+    M_EJ_FAIL,
     M_NI_DEFAULT,
+    M_NS_MSUN,
     Progenitor,
     supernova_model,
 )
@@ -131,14 +133,82 @@ def test_type_ii_and_ejecta_remnant_split():
 
 
 def test_black_hole_remnant_for_a_heavy_co_core():
-    """A heavy CO core (> 7 M☉) collapses to a black hole; the ejecta stay strictly
-    positive (the remnant can't exceed the star). A labeled mass cut — Chunk 5 refines."""
+    """A heavy CO core falls back well past the neutron-star maximum → a black hole. The
+    remnant is the proto-NS PLUS the fallen-back envelope (Chunk-5 continuum, not the old
+    'remnant = whole CO core' step); the ejecta stay strictly positive and there is still
+    enough of them (M_ej ≥ M_EJ_FAIL) for a real, if fainter, supernova (not a failed one)."""
     heavy = Progenitor(40.0, 20.0, 16.0, 10.0, 800.0, True, 0.0)
     m = supernova_model(heavy)
     assert m.remnant_type == "BH"
-    assert m.remnant_mass_msun == pytest.approx(10.0)
-    assert m.m_ej_msun == pytest.approx(10.0)
-    assert m.m_ej_msun > 0.0
+    assert m.failed_sn is False
+    assert 0.0 < m.fallback_fraction < 1.0           # partway up the fallback ramp
+    # remnant = M_NS + (final − M_NS)·φ, so it sits between the proto-NS and the whole star
+    assert M_NS_MSUN < m.remnant_mass_msun < heavy.final_mass_msun
+    assert m.m_ej_msun == pytest.approx(heavy.final_mass_msun - m.remnant_mass_msun)
+    assert m.m_ej_msun > M_EJ_FAIL                    # still a (fainter) explosion
+
+
+def test_remnant_and_ejecta_are_continuous_across_the_old_cut():
+    """The Chunk-5 softening: straddling the old hard CO=7 cut no longer steps the ejecta
+    mass (it was a ~several-M☉ cliff in M_ej AND in the onion's copper band). With the same
+    envelope, a CO core just below and just above 7 give nearly-equal M_ej — continuous."""
+    below = supernova_model(Progenitor(25.0, 20.0, 12.0, 6.8, 700.0, True, 0.0))
+    above = supernova_model(Progenitor(25.0, 20.0, 12.0, 7.2, 700.0, True, 0.0))
+    assert abs(below.m_ej_msun - above.m_ej_msun) < 0.5   # old model jumped by ~5 M☉ here
+
+
+def test_fallback_grows_the_remnant_monotonically():
+    """Heavier CO core (more compact, more fallback) → a heavier remnant and less ejecta,
+    monotonically — the averaged trend behind the deliberately-simplified continuum."""
+    cores = [6.0, 8.0, 10.0, 11.5, 13.0]
+    ms = [supernova_model(Progenitor(40.0, 25.0, 18.0, c, 800.0, True, 0.0)) for c in cores]
+    rem = [m.remnant_mass_msun for m in ms]
+    ej = [m.m_ej_msun for m in ms]
+    assert rem == sorted(rem)                        # remnant grows with CO core
+    assert ej == sorted(ej, reverse=True)            # ejecta shrink
+
+
+# === the failed-SN / direct-collapse branch (Chunk 5) ===========================
+def test_failed_sn_direct_collapse_winks_out():
+    """A CO core at/above CO_DIRECT falls back almost entirely (M_ej < M_EJ_FAIL): a direct
+    collapse to a black hole with essentially no ejecta and no ejected ⁵⁶Ni — a failed SN.
+    No recombination plateau; the light curve is a faint floored positive (no log(0)), far
+    below a normal SN. The remnant is a black hole and the explosion is flagged failed."""
+    m = supernova_model(Progenitor(50.0, 37.0, 19.0, 14.2, 500.0, True, -1.0))
+    assert m.failed_sn is True
+    assert m.remnant_type == "BH"
+    assert m.fallback_fraction == pytest.approx(1.0, abs=1e-6)
+    assert m.m_ej_msun < 2.0                          # M_EJ_FAIL — almost nothing escapes
+    assert m.m_ni_ejected_msun == pytest.approx(0.0, abs=1e-3)   # Ni falls back first
+    assert m.has_plateau is False
+    _, l_total, _ = _arrs(m)
+    assert np.all(l_total > 0.0)                      # positive (floored) — no log(0)
+    assert l_total.max() < 1.0e41                     # ≳10× fainter than a normal IIP plateau
+
+
+def test_failed_sn_photosphere_does_not_expand():
+    """A failed SN implodes — it does NOT drive a homologous expansion (reusing R = v·t would
+    swell an AU-scale photosphere, the opposite of 'winks out'). The states stay at the
+    progenitor radius R₀ and just dim: the 'disappearing supergiant'."""
+    r0 = 500.0
+    m = supernova_model(Progenitor(50.0, 37.0, 19.0, 14.2, r0, True, -1.0))
+    radii = [s.R_rsun for s in m.states]
+    assert max(radii) - min(radii) < 1.0             # not expanding
+    assert radii[0] == pytest.approx(r0, rel=1e-6)   # the failing supergiant's own size
+
+
+def test_m_ni_scales_the_tail_for_a_fallback_black_hole():
+    """Tier-3 linearity survives the fallback continuum: for a (non-failed) fallback BH the
+    ejected ⁵⁶Ni is dimmed by (1−φ), but doubling the SLIDER still doubles the radioactive
+    tail (the per-progenitor φ is fixed). The complement of the φ=0 canonical case above."""
+    prog = Progenitor(40.0, 29.0, 14.0, 10.1, 832.0, True, -0.5)
+    a = supernova_model(prog, m_ni=0.06)
+    b = supernova_model(prog, m_ni=0.12)
+    assert 0.0 < a.fallback_fraction < 1.0 and not a.failed_sn
+    assert a.m_ni_ejected_msun < a.m_ni_msun         # fallback dimmed the ejected Ni
+    _, _, la = _arrs(a)
+    _, _, lb = _arrs(b)
+    assert np.allclose(lb / la, 2.0, rtol=1e-9)
 
 
 # === the no-plateau fallback (compact, no RSG envelope) =========================
