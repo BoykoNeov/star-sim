@@ -854,5 +854,9 @@ export function createSED(canvas) {
       `(${where}). ${act} γ-rays stay empty. Evocative, not predictive.`;
   }
 
-  return { update, resize };
+  // Whether the rotation→activity LINE is honest for the current marker (cool main-
+  // sequence dynamo). The unified Rotation control (main.js) reads this to show the
+  // period-slider facet only where it's meaningful — the slider DOM lives in the
+  // Controls panel now (rotation Chunk 3 unify), but the model + line stay here.
+  return { update, resize, rotationAllowed: () => dynamoLineAllowed() };
 }

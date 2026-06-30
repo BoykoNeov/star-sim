@@ -201,23 +201,34 @@ main {
 }
 @media (max-width: 480px) { .sed-rot-note { min-height: 2.8em; } }
 
-/* Rotation toggle (rotation Chunk 3) — a two-state control in the Controls panel,
-   below [Fe/H]. Greyed (disabled) where rotation is a data-derived no-op; hidden
-   entirely (the `hidden` attribute) where no rotating grid exists for the [Fe/H]. */
-.rot-control { margin: 14px 0 2px; }
-.rot-control.disabled { opacity: 0.5; }
-.rot-label {
+/* Rotation control (rotation Chunk 3) — ONE control in the Controls panel below
+   [Fe/H], with two regime-gated facets: the vvcrit TOGGLE (massive-star track) and
+   the rotation-PERIOD slider (cool-MS activity, moved here from the SED panel). Each
+   facet is shown only where it's honest; the whole control hides where neither is. */
+.rot-control { margin: 16px 0 2px; }
+.rot-head { font-size: 14px; color: var(--muted); margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
+/* Track facet: the vvcrit toggle. `.disabled` (set by main.js) greys it where rotation
+   is a data-derived no-op (below the Kraft break). */
+.rot-toggle-row {
   display: flex; align-items: center; gap: 8px;
-  font-size: 14px; color: var(--muted); cursor: pointer; margin: 0;
+  font-size: 13px; color: var(--muted); cursor: pointer; margin: 4px 0 0;
 }
-.rot-control.disabled .rot-label { cursor: default; }
-.rot-label > span { color: var(--ink); font-weight: 600; }
-.rot-label input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: inherit; }
+/* `display:flex` above would otherwise beat the UA [hidden]{display:none}, so the
+   JS `.hidden = true` (track facet off-grid) wouldn't hide the row — re-assert it. */
+.rot-toggle-row[hidden] { display: none; }
+.rot-toggle-row.disabled { opacity: 0.5; cursor: default; }
+.rot-toggle-row > span { color: var(--ink); font-weight: 600; }
+.rot-toggle-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: inherit; }
 .rot-vvcrit { color: var(--muted) !important; font-weight: 400 !important; font-size: 12px; }
-/* Reserve the note height so toggling on/off (different note lengths) never resizes
-   the controls panel and shoves the age slider. */
+/* Reserve the note height so toggling on/off never resizes the panel + shoves the age slider. */
 .rot-note { color: var(--accent); font-size: 12px; min-height: 1.4em; margin: 4px 0 0; }
 @media (max-width: 480px) { .rot-note { min-height: 2.8em; } }
+/* The relocated period slider: left-aligned + full-width here (it was centered/narrow
+   in the SED panel). Its label/note styling (.sed-rot*) is reused as-is. */
+.rot-control .sed-rot { max-width: none; margin: 8px 0 0; }
+.rot-control .sed-rot-note { text-align: left; }
+/* Pointer left in the SED panel after the slider moved to Controls. */
+.sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {

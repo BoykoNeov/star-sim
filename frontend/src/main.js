@@ -37,11 +37,14 @@ const els = {
   ageMarks: document.getElementById("age-marks"),
   readout: document.getElementById("readout"),
   status: document.getElementById("status"),
-  // Rotation toggle (rotation Chunk 3): the two-state non-rotating/rotating control
-  // below [Fe/H], with its data-derived honesty note.
+  // Rotation control (rotation Chunk 3): the unified control below [Fe/H]. Two facets —
+  // the vvcrit track TOGGLE (massive stars) and the period slider (cool-MS activity, the
+  // #sed-rot block moved here from the SED panel; sed.js still owns it by id).
   rotControl: document.getElementById("rot-control"),
+  rotToggleRow: document.getElementById("rot-toggle-row"),
   rotToggle: document.getElementById("rot-toggle"),
   rotNote: document.getElementById("rot-note"),
+  sedRot: document.getElementById("sed-rot"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -1230,29 +1233,48 @@ async function fetchRotStatus(mass, feh) {
   }
 }
 
-// Render the rotation control from `rotStatus` (+ the live mode): HIDDEN where no
-// rotating grid covers this [Fe/H] (honestly absent, not a dead toggle) or inside an
-// endgame; GREYED where rotation is a data-derived no-op (below the Kraft break, where
-// the rotating track is bit-identical); ENABLED where toggling actually changes the track.
+// Render the UNIFIED rotation control (rotation Chunk 3 unify) — one control, two
+// regime-gated facets, each shown only where it's honest (the user-settled design):
+//
+//   * Track facet (the vvcrit toggle): shown where a rotating grid covers this [Fe/H]
+//     (`has_grid`), GREYED where rotation is a data-derived no-op (below the Kraft break,
+//     where the rotating track is bit-identical — `!active`), ENABLED where toggling
+//     changes the track. Its effect is the evolutionary track (HR / composition).
+//   * Activity facet (the period slider, sed.js's #sed-rot): shown only in the cool
+//     main-sequence dynamo regime (`sed.rotationAllowed()`), where the rotation period
+//     sets the coronal X-ray line on the SED. sed.js owns the slider + draws the line.
+//
+// The two regimes barely overlap, so usually one facet shows; at the Sun BOTH do (the
+// track facet greyed/no-op, the activity facet live). The whole control hides inside an
+// endgame or where NEITHER facet is honest (e.g. a cool giant) — absent, not a dead knob.
 function updateRotControl() {
   const c = els.rotControl;
   if (!c) return;
-  if (mode !== "live" || !rotStatus.has_grid) { c.hidden = true; return; }
-  c.hidden = false;
-  els.rotToggle.checked = rotationOn;
+  if (mode !== "live") { c.hidden = true; return; }
+  const showToggle = !!rotStatus.has_grid;
   const active = !!rotStatus.active;
-  els.rotToggle.disabled = !active;
-  c.classList.toggle("disabled", !active);
-  if (!active) {
-    const thr = rotStatus.threshold_msun;
-    els.rotNote.textContent = thr
-      ? `Rotation is negligible below ~${fmt(thr)} M☉ (magnetic braking) — no effect on this star.`
-      : "Rotation is negligible for this star.";
-  } else {
-    els.rotNote.textContent = rotationOn
-      ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
-      : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
+  const showPeriod = typeof sed.rotationAllowed === "function" && sed.rotationAllowed();
+  c.hidden = !(showToggle || showPeriod);
+  // -- track facet --
+  els.rotToggleRow.hidden = !showToggle;
+  els.rotNote.hidden = !showToggle;
+  if (showToggle) {
+    els.rotToggle.checked = rotationOn;
+    els.rotToggle.disabled = !active;
+    els.rotToggleRow.classList.toggle("disabled", !active);
+    if (!active) {
+      const thr = rotStatus.threshold_msun;
+      els.rotNote.textContent = thr
+        ? `Track unchanged: rotation is negligible below ~${fmt(thr)} M☉ (magnetic braking).`
+        : "Track unchanged: rotation is negligible for this star.";
+    } else {
+      els.rotNote.textContent = rotationOn
+        ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
+        : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
+    }
   }
+  // -- activity facet -- (sed.js syncs the slider/note internally via rot.sync())
+  els.sedRot.hidden = !showPeriod;
 }
 
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
@@ -1557,6 +1579,10 @@ function refresh() {
   // across a mass change); only an explicit age scrub / typed value commits it.
   setNum(els.ageNum, gyrNum(s.age_yr));
   paintState(s);
+  // Re-evaluate the rotation control: the activity facet (cool-MS dynamo) appears/
+  // disappears as age scrubs the star onto/off the main sequence — sed.update() (in
+  // paintState) just refreshed sed.rotationAllowed(), so read it now.
+  updateRotControl();
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
