@@ -40,6 +40,30 @@ class EndgameResult:
         the WR phase (derived by scanning the grid, never hardcoded — the onset
         shifts with metallicity and is even slightly non-monotonic at low Z). None
         if no track at this [Fe/H] becomes a WR.
+
+    The last four are the **core-collapse progenitor scalars** — the inputs the
+    supernova sibling (`supernova.py` / `/supernova`) consumes to compute the
+    ⁵⁶Ni-powered light curve (docs/plans/radioactive-afterglow-requiem.md, Chunk 1).
+    They are §3-clean routing metadata exactly like the fields above (snapped
+    pre-collapse numbers, nothing about *where* the data came from), and are populated
+    **only for the `type="SN"` branch** — `None` for WD/WR/none and for every provider
+    that doesn't model the endgame (the stub, MESA), so a consumer reads "no SN
+    progenitor here" off the `None`:
+
+      * `pre_sn_radius_rsun` — the robust pre-collapse stellar radius R₀ (the RSG
+        envelope's photospheric scale, the Tier-2 plateau input). Taken as the
+        maximum radius over the final-phase rows *excluding the terminal EEP row*
+        (a low-gravity artifact that can spuriously inflate or shrink R), which
+        avoids both that artifact and the compact pre-RSG CHeB rows a median would
+        average in. None outside the SN branch.
+      * `he_core_msun` / `co_core_msun` — the helium- and CO-core masses at collapse
+        (the ejecta/remnant split + the NS/BH cut). `co_core_msun` is MIST's
+        `c_core_mass` used as the CO-core proxy (very-massive φ3-enders carry an
+        explicit `o_core_mass` of 0 at window end). None outside the SN branch.
+      * `h_retained` — whether the surface still holds a hydrogen envelope at collapse
+        (the SN spectral-type proxy: True ⇒ Type II, the only kind this branch
+        reaches — the stripped Ib/c progenitors classify as WR). None outside the SN
+        branch.
     """
 
     type: str
@@ -48,6 +72,11 @@ class EndgameResult:
     final_mass_msun: float | None = None
     wr_threshold_msun: float | None = None
     states: list[StellarState] = field(default_factory=list)
+    # core-collapse progenitor scalars (SN branch only; None otherwise) — see above
+    pre_sn_radius_rsun: float | None = None
+    he_core_msun: float | None = None
+    co_core_msun: float | None = None
+    h_retained: bool | None = None
 
 
 class ParameterOutOfRange(ValueError):

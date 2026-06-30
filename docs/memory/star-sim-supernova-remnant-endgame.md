@@ -1,17 +1,51 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: Core-collapse SN + NS/BH endgame arc — DESIGNED + chunked, Chunk 0 measure-first gate DONE (verdict shape-GO/scale-via-slider); plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type="SN" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova).
-metadata:
+description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route, 215 pytest). Chunks 2–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 1110aafc-b403-49c6-b0c6-a56da0da566b
 ---
 
 The user wants an endgame for **core-collapse supernovae + their compact remnants
 (neutron stars & black holes)** — the successor to the branch the current endgame
 classifier reaches but leaves un-rendered (`type="SN", states=[]`).
-**Status: DESIGNED + chunked. Chunk 0 (measure-first gate) DONE; Chunks 1–5 are
-specified/sketched, not yet built.** Plan: `docs/plans/radioactive-afterglow-requiem.md`
-(sibling to `smoldering-cinder-gateway.md`). This file holds the locked constraints +
-the gate's measured verdict; the plan is the design source of truth.
+**Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunks 2–5 next.**
+Plan: `docs/plans/radioactive-afterglow-requiem.md` (sibling to
+`smoldering-cinder-gateway.md`). This file holds the locked constraints + the gate's
+measured verdict + Chunk 1's built state; the plan is the design source of truth.
+
+**Chunk 1 BUILT (backend, 215 pytest green, no frontend):**
+- `EndgameResult` gained `pre_sn_radius_rsun`/`he_core_msun`/`co_core_msun`/`h_retained`,
+  populated by `MISTProvider.endgame()` **only on the SN branch** (None for WD/WR/none and
+  for Stub/MESA). `CACHE_VERSION` **11→12** parses `he_core_mass`/`c_core_mass`/`o_core_mass`
+  (the **Mcur pattern** — cached in `_TRACK_COLS`, read straight off the snapped track, NOT
+  blended in `_grid_window`/`_blend_windows`). `StellarState` untouched.
+- **R₀ estimator SETTLED (the open knob):** max radius over the final-phase (CHeB-onward)
+  rows **excluding the terminal EEP row** — a low-g artifact that can spuriously *inflate*
+  (g=GM/R²) **or** shrink R, so `max` could grab an inflated terminal; excluding it + max
+  (not the median, which the gate found underestimates by averaging in compact pre-RSG rows)
+  captures the RSG extent. t_p∝R₀^(1/6) is weak, so the estimate is robust.
+- `supernova.py` = a **pure sibling** (imports only `state.StellarState`, never the provider):
+  a frozen `Progenitor` input bundle (route builds it from the EndgameResult), gate-cited
+  constants, `supernova_model(progenitor, m_ni, e_kin)` → `SupernovaModel` (light curve +
+  photosphere `StellarState`s). Light curve = **`w·L_p·rise + (1−w)·L_radio`** (the blend
+  suppresses the t=0 ⁵⁶Ni deposition spike that a `max()` would surface as a false peak).
+  Photosphere `R=v·t` (homologous), Teff from Stefan-Boltzmann, `logg` honestly negative
+  (−5 late; the boiling-fireball gate is Chunk 2's `{endgame:"sn"}` signal). Remnant NS/BH
+  from a labeled CO-core cut (BH for CO>7 M☉), `M_ej = final − remnant`. No-plateau fallback
+  (radioactive-only) for compact R₀<300 progenitors (the gate's 140–160 M☉ low-Z tail).
+- `/supernova` route bypasses `PROVIDER` for the compute but calls `PROVIDER.endgame()` for
+  the progenitor; a non-SN progenitor → `is_supernova:false` + the real fate echoed, no curve.
+- **Two advisor-led test corrections, both validated by the measurement** (canonical 15 M☉
+  solar, real snapped: final 11.976, R₀ 911.5, CO 2.796 → NS 1.4, M_ej 10.58, plateau
+  **1.83e42/138.7 d**, Co-slope **0.00976**): (1) the Tier-3 test scales the radioactive
+  **TAIL**, not the peak — the IIP peak IS the plateau (`L_p`), which carries **no M_Ni term**,
+  so the plan's literal "peak ∝ M_Ni" would go RED on the canonical case; (2) the Tier-1
+  Co-slope is measured on the served **`L_radio` component** (0.00976 = analytic) — on
+  `L_total` the plateau cutoff bleeds in and steepens it to 0.01023, so the clean anchor needs
+  the component, not the total. Light-curve physics unit-tested deterministically (no grids);
+  the runtime path (endgame→scalars→sibling→route) tested through the real provider.
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean

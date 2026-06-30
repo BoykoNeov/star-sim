@@ -196,9 +196,37 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   *evolutionary* surface (Teff 150–262 kK ≈ T\*, far hotter/denser-wind than any *observed* WR
   — the evolutionary-vs-spectroscopic Teff gap), so the bulk shows an honest **no-model** frame.
   Snaps to nearest node (subtype WNE/WNL/WC from surface composition, metallicity gal/lmc/smc
-  from [Fe/H]). **Chunks 1–7 ALL BUILT — the endgame arc is complete.**
+  from [Fe/H]). **Chunks 1–7 ALL BUILT — the WR/WD endgame arc is complete.**
   [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`, spectra
   recipe `backend/docs/msg_spectra_build_recipe.md §7a/§8/§8b/§9`.
+
+### Supernova (core-collapse — fills the dead `type="SN"` branch; a **hybrid sibling**, not on the tracks)
+- The third fate. Unlike WD/WR (already on the MIST tracks), a supernova is a **computed
+  semi-analytic model** — the tracks end at collapse — so it's a **sibling** (`supernova.py`,
+  like `lane_emden`/`spectra`), with classification + progenitor scalars staying on the spine.
+  **Chunk 1 BUILT (backend vertical, no frontend):** `EndgameResult` gained the SN-branch-only
+  scalars `pre_sn_radius_rsun`/`he_core_msun`/`co_core_msun`/`h_retained` (`None` for WD/WR/none
+  and for Stub/MESA); `CACHE_VERSION` **11→12** parses `he_core_mass`/`c_core_mass`/`o_core_mass`
+  (the **Mcur pattern** — cached, read off the snapped track, never blended). **R₀ = max radius
+  over the final-phase rows EXCLUDING the terminal EEP row** (the open calibration knob, settled:
+  the low-g terminal artifact can spuriously inflate *or* shrink R; max beats the median, which
+  underestimates). `supernova.py` is a **pure sibling** (imports only `state.StellarState`,
+  never the provider): a frozen `Progenitor` input (the route builds it from the EndgameResult),
+  `supernova_model(progenitor, m_ni, e_kin)` → a `SupernovaModel` (light curve
+  **`w·L_p·rise + (1−w)·L_radio`** — the blend kills the t=0 ⁵⁶Ni deposition spike a `max()`
+  would surface — + homologous photosphere `StellarState`s `R=v·t`, Teff from Stefan-Boltzmann,
+  `logg` honestly negative). NS/BH from a labeled CO-core cut, `M_ej = final − remnant`;
+  no-plateau radioactive-only fallback for compact R₀<300 low-Z progenitors. `/supernova`
+  bypasses `PROVIDER` for the compute but calls `PROVIDER.endgame()` for the progenitor; a
+  non-SN progenitor → `is_supernova:false`, real fate echoed, no curve. **3-tier honesty:** Tier-1
+  ⁵⁶Co tail slope (bulletproof) · Tier-2 plateau shape from MIST M_ej/R₀ (±dex level) · Tier-3
+  peak/tail ∝ M_Ni (a **free slider**). **Two advisor test corrections, measurement-validated:**
+  the Tier-3 test scales the radioactive **tail** not the peak (the IIP peak IS the M_Ni-free
+  plateau `L_p`); the Tier-1 Co-slope is measured on the served **`L_radio` component** (0.00976)
+  — on `L_total` the plateau cutoff bleeds in and steepens it to 0.01023. Measured canonical 15 M☉:
+  plateau 1.83e42/138.7 d. **Chunks 2–5 (frontend gateway + L-vs-time panel, 3D fireball→remnant,
+  ejecta onion-shell, NS/BH/failed-SN branch) NOT yet built.** [[star-sim-supernova-remnant-endgame]];
+  plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -230,14 +258,19 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **200 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **215 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
   non-rotating ones — gated by `requires_mist_rotation_multifeh` /
   `requires_mist_rotation_heldout_feh`. The mass-loss-rate (`Mdot`) threading for the
   SED wind tail adds 4 §10 tests (present & ≤0; grows MS→AGB and up the OB sequence;
-  carried through the feh-blend, lies-between & ≤0).
+  carried through the feh-blend, lies-between & ≤0). The SN Chunk 1 adds 15
+  (`test_supernova.py`): the Tier-1 ⁵⁶Co slope on the served `L_radio` component, the
+  Tier-3 M_Ni-scales-the-tail linearity, the plateau⊕tail handoff, the no-plateau
+  fallback, the NS/BH split, the SN-branch-only progenitor scalars, and the `/supernova`
+  route (SN payload + non-SN honest-empty + 422). Light-curve physics is unit-tested
+  deterministically; the endgame→sibling→route path through the real provider.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

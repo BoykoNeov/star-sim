@@ -229,13 +229,22 @@ DEFAULT_MASSES = (
 # the ZAMS, falling as the star expands / brakes). Unlike Mcur/Mdot (endgame-only, snapped)
 # it IS interpolated across mass/[Fe/H] like the other living-state quantities. Old v10
 # caches lack the column, so the bump forces one reparse.
-CACHE_VERSION = 11
+# v12 (supernova endgame, Chunk 1) added the per-row **core masses** — `he_core_mass`,
+# `c_core_mass`, `o_core_mass` (M_sun) — the progenitor inputs the core-collapse SN sibling
+# needs (the ejecta/remnant split, the NS/BH cut, the pre-collapse radius is read off the
+# existing `logR`). Carried on every row so the cache holds them once, but — like Mcur/Mdot
+# — deliberately NOT mixed in `_grid_window`/`_blend_windows`: the endgame snaps to a single
+# real track (§6), so `endgame()` reads the core masses straight off the snapped `_Track`
+# and nothing downstream interpolates a *blended* core mass. Old v11 caches lack the three
+# columns, so the bump forces one reparse.
+CACHE_VERSION = 12
 CACHE_FILENAME = "_parsed_tracks.npz"
 # The per-EEP-row array columns of `_Track`, in a fixed order. Concatenated into
 # one flat array each in the cache (variable-length tracks -> `lengths` index),
 # so the format is pure numeric arrays — no pickle.
 _TRACK_COLS = (
     "age", "logL", "logT", "logR", "logg", "Mcur", "Mdot", "Vrot",
+    "HeCore", "CCore", "OCore",
     "Xs", "Ys", "Xc", "Yc",
     "Lis", "Bes", "Cs", "Ns", "Os", "Fs", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
     "Lic", "Bec", "Cc", "Nc", "Oc", "Fc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec",
@@ -268,6 +277,12 @@ _WD_LOGG = 7.0
 _CHEB_PHASE = 3          # FSPS phase code: core-helium burning (first post-RGB phase)
 _SN_FINAL_MASS_FLOOR = 1.4   # M_sun ~ the Chandrasekhar mass (max white-dwarf mass)
 
+# Surface hydrogen mass fraction above which a core-collapse progenitor still holds
+# an H envelope -> Type II (vs a stripped Ib/c). The SN bucket is purely H-rich
+# (measured surf-H 0.30-0.75 over the whole grid; the stripped stars classify as WR,
+# not SN), so 0.1 is a wide floor that cleanly reads "retains H" for every SN track.
+_SN_H_RETAINED = 0.1     # surface_h1 fraction threshold for "still has an H envelope"
+
 
 @dataclass
 class _Track:
@@ -290,6 +305,13 @@ class _Track:
     Mcur: np.ndarray       # current mass [M_sun] (star_mass) — < minit once winds strip
     Mdot: np.ndarray       # mass-loss rate [M_sun/yr] (star_mdot; signed, <= 0)
     Vrot: np.ndarray       # surface rotation velocity [km/s] (surf_avg_v_rot); ~0 non-rotating
+    # Core masses (the core-collapse SN progenitor inputs — see CACHE_VERSION v12). Read
+    # straight off the snapped track by `endgame()`; not blended across mass/[Fe/H] (like
+    # Mcur/Mdot). `OCore` is 0 at window end for very-massive φ3-enders (no explicit O core
+    # built yet), so the SN sibling uses `CCore` as the CO-core proxy.
+    HeCore: np.ndarray     # helium-core mass [M_sun] (he_core_mass)
+    CCore: np.ndarray      # carbon-core mass [M_sun] (c_core_mass; the CO-core proxy)
+    OCore: np.ndarray      # oxygen-core mass [M_sun] (o_core_mass; 0 at window end for some)
     Xs: np.ndarray         # surface H mass fraction
     Ys: np.ndarray         # surface He mass fraction (he4 + he3)
     Xc: np.ndarray         # center H mass fraction
@@ -496,6 +518,9 @@ def _parse_track_file(path: str) -> tuple[_Track, float, float] | None:
         Mcur=np.asarray(e["star_mass"], dtype=float),
         Mdot=np.asarray(e["star_mdot"], dtype=float),
         Vrot=np.asarray(e["surf_avg_v_rot"], dtype=float),
+        HeCore=np.asarray(e["he_core_mass"], dtype=float),
+        CCore=np.asarray(e["c_core_mass"], dtype=float),
+        OCore=np.asarray(e["o_core_mass"], dtype=float),
         Xs=np.asarray(e["surface_h1"], dtype=float),
         Ys=np.asarray(e["surface_he4"], dtype=float)
         + np.asarray(e["surface_he3"], dtype=float),
@@ -1070,6 +1095,11 @@ class MISTProvider:
                 for i in range(int(win["age"].size))
             ]
 
+        # Core-collapse progenitor scalars — the inputs the SN sibling consumes. Only
+        # the SN branch carries them (None elsewhere); they say nothing about where the
+        # data came from (§3), exactly like the routing fields above.
+        sn_scalars = self._sn_progenitor(track, r_last) if etype == "SN" else {}
+
         return EndgameResult(
             type=etype,
             mass_init_msun=snapped_mass,
@@ -1077,7 +1107,35 @@ class MISTProvider:
             final_mass_msun=final_mass,
             wr_threshold_msun=wr_threshold,
             states=states,
+            **sn_scalars,
         )
+
+    @staticmethod
+    def _sn_progenitor(track: _Track, r_last: int) -> dict:
+        """The core-collapse progenitor scalars off a snapped SN track (see EndgameResult).
+
+        R₀ (the Tier-2 plateau input) = the maximum radius over the final-phase rows
+        (CHeB onward) *excluding the terminal EEP row* — a low-gravity artifact that can
+        spuriously inflate or shrink the last row's radius (the gate measured R_last/R_prev
+        swinging from ⅓ to R_max across tracks). The max (not the median, which the gate
+        found underestimates by averaging in the compact pre-RSG CHeB rows) captures the
+        RSG envelope's pre-collapse extent; t_p ∝ R₀^(1/6) is weak, so the estimate is
+        robust. Falls back to the terminal row only if it is the lone final-phase row.
+
+        He/CO cores + the surface-H flag come straight off the collapse row (`r_last`).
+        `co_core_msun` is MIST's `c_core_mass` (the CO-core proxy — see CACHE_VERSION v12)."""
+        phase = track.phase
+        real = np.where(phase >= 0)[0]
+        fp = real[phase[real] >= _CHEB_PHASE]         # final-phase real rows (CHeB onward)
+        fp_inner = fp[fp != r_last]                   # drop the terminal artifact row
+        rows = fp_inner if fp_inner.size else (fp if fp.size else np.array([r_last]))
+        r0_rsun = float(np.max(10.0 ** track.logR[rows]))
+        return {
+            "pre_sn_radius_rsun": r0_rsun,
+            "he_core_msun": float(track.HeCore[r_last]),
+            "co_core_msun": float(track.CCore[r_last]),
+            "h_retained": bool(track.Xs[r_last] >= _SN_H_RETAINED),
+        }
 
     def _snap_feh_index(self, axis: _Axis, feh: float) -> int:
         """Index of the axis [Fe/H] nearest `feh` (the endgame snaps, never blends).

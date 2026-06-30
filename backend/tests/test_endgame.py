@@ -233,8 +233,13 @@ def test_api_endgame_payload_shape():
     assert set(body) == {
         "type", "mass_init_msun", "feh_init",
         "final_mass_msun", "wr_threshold_msun", "states",
+        # the core-collapse progenitor scalars (SN-branch only; null for this WD) —
+        # part of EndgameResult, so always serialized (docs/.../radioactive-afterglow-requiem.md)
+        "pre_sn_radius_rsun", "he_core_msun", "co_core_msun", "h_retained",
     }
     assert body["type"] == "WD"
+    # the SN scalars are null off the SN branch (a WD is not a core-collapse progenitor)
+    assert body["pre_sn_radius_rsun"] is None and body["h_retained"] is None
     assert isinstance(body["states"], list) and len(body["states"]) > 1
     assert all(set(row.keys()) == EXPECTED_KEYS for row in body["states"])
 

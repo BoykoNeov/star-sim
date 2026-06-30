@@ -137,7 +137,30 @@ tests) or a Playwright pass (frontend), per house style.
 See *Measured grounding* above. Verdict: shape-GO, scale-via-slider; SN branch is
 Type II only; core masses + R₀ available; canonical curve in regime.
 
-### Chunk 1 — Backend: the `supernova.py` sibling + progenitor scalars
+### Chunk 1 — Backend: the `supernova.py` sibling + progenitor scalars — ✅ DONE
+**Built (215 pytest green; measured through the runtime path):** `EndgameResult` gained
+`pre_sn_radius_rsun` / `he_core_msun` / `co_core_msun` / `h_retained` (SN branch only, `None`
+elsewhere); `CACHE_VERSION` 11→12 parses `he_core_mass`/`c_core_mass`/`o_core_mass` (the
+Mcur pattern — cached, read off the snapped track, never blended). `supernova.py` is a pure
+sibling (imports only `state.StellarState`); `/supernova` bypasses `PROVIDER` for the compute
+but calls `PROVIDER.endgame()` for the progenitor. **R₀ estimator settled = max radius over
+the final-phase rows EXCLUDING the terminal EEP row** (the low-g artifact can spuriously
+inflate *or* shrink it; the max beats the median, which the gate found underestimates).
+Light curve = `w·L_p·rise + (1−w)·L_radio` (the blend suppresses the t=0 deposition spike a
+`max()` would surface). **Measured canonical 15 M☉ solar (real snapped):** final 11.976,
+R₀ 911.5, CO core 2.796 → NS 1.4, M_ej 10.58, v_phot 3083 km/s, plateau **1.83×10⁴² erg/s /
+t_p 138.7 d**, Co-tail slope **0.00976 mag/day** (= analytic). **Two advisor-led test
+corrections, both validated by the measurement:** (1) the Tier-3 test scales the radioactive
+**tail**, not the peak — the IIP peak IS the plateau (`L_p`), which carries no M_Ni term, so
+"peak ∝ M_Ni" would go red on the canonical case; (2) the Tier-1 Co-slope is measured on the
+served `L_radio` **component** (0.00976) — on `L_total` the plateau cutoff bleeds in and
+steepens it to 0.01023, so the clean anchor needs the component. Solar SN bucket is all-RSG
+(R₀ 416–1163, no compact tail → the no-plateau fallback is unit-tested on a synthetic R₀<300
+compact low-Z progenitor, the gate's 140–160 M☉ low-Z case). Remnant NS/BH from a labeled CO
+cut (BH for CO > 7 M☉; solar SN crosses it at ~30 M☉). `logg` left honestly negative (−5 late;
+the boiling-fireball gate is Chunk 2's `{endgame:"sn"}` signal). Photosphere composition is a
+labeled H-rich placeholder (Chunk 4 does the real ejecta). **Original spec retained below.**
+
 **Goal:** the computed light curve + photosphere states, behind a new sibling route,
 fed by progenitor scalars from `endgame()`.
 **Do:**

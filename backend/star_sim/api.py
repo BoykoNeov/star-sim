@@ -30,6 +30,7 @@ from .spectra import (
     wd_spectrum_data,
     wr_spectrum_data,
 )
+from .supernova import Progenitor, supernova_model
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -220,6 +221,75 @@ def rotation_status(
         return PROVIDER.rotation_status(mass, feh)
     except ProviderDataMissing as exc:
         raise _provider_unavailable(exc) from exc
+
+
+@app.get("/supernova")
+def supernova(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
+    m_ni: float | None = Query(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="⁵⁶Ni mass / M_sun — the Tier-3 free knob (default 0.06; clamped to "
+        "the observed 0.001–0.3 range). Drives the radioactive tail/peak height.",
+    ),
+    e_kin: float = Query(
+        1.0e51, gt=0.0, description="explosion kinetic energy / erg (canonical 1e51)"
+    ),
+) -> dict:
+    """(mass, [Fe/H]) -> the computed core-collapse supernova: a ⁵⁶Ni-powered light curve
+    + homologous-expansion photosphere states (docs/plans/radioactive-afterglow-requiem.md).
+
+    Like `/polytrope` and `/spectrum`, the *computation* does **not** go through `PROVIDER`
+    — a supernova is a semi-analytic model, not a `StellarState` snapped to a track (the
+    MIST tracks end at collapse and carry no explosion data). But it is a **hybrid**: the
+    route first calls `PROVIDER.endgame()` to *classify* the star and read its progenitor
+    scalars (he/CO cores, pre-collapse R₀, surface-H), then hands those to the
+    `supernova.py` sibling. The §3 boundary holds: a non-SN progenitor (WD/WR/none, or any
+    provider that doesn't model the endgame) comes back `is_supernova=false` with the real
+    fate echoed and no curve — the gateway then shows the matching renderer instead.
+
+    The SN payload is the `SupernovaModel` serialized verbatim: the three-tier light curve
+    (`light_curve.L_total/L_radio/L_plateau` in erg/s vs `time_days`), the photosphere
+    `states` (exactly the §3 StellarState shape, for the 3D/SED/scale consumers), the
+    explosion scalars (M_ej, M_Ni default+range, E_K, v_phot, remnant), and the honesty
+    `tiers`. `m_ni` is the only free input (Tier-3); the plateau peak carries no M_Ni term."""
+    try:
+        eg = PROVIDER.endgame(mass, feh, vvcrit)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+
+    # Only the SN branch has a supernova to compute. WD / WR / none -> an honest empty
+    # payload echoing the real fate (the §3 boundary: a non-SN progenitor, or a provider
+    # with no endgame data, simply has no light curve here).
+    if eg.type != "SN" or eg.co_core_msun is None:
+        return {
+            "type": eg.type,
+            "is_supernova": False,
+            "mass_init_msun": eg.mass_init_msun,
+            "feh_init": eg.feh_init,
+            "light_curve": None,
+            "states": [],
+            "reason": f"{eg.type} progenitor — no core-collapse supernova at this (mass, [Fe/H]).",
+        }
+
+    prog = Progenitor(
+        mass_init_msun=eg.mass_init_msun,
+        final_mass_msun=eg.final_mass_msun,
+        he_core_msun=eg.he_core_msun,
+        co_core_msun=eg.co_core_msun,
+        pre_sn_radius_rsun=eg.pre_sn_radius_rsun,
+        h_retained=eg.h_retained,
+        feh_init=eg.feh_init,
+    )
+    model = supernova_model(prog, m_ni=m_ni, e_kin=e_kin)
+    d = asdict(model)            # recurses `states` into the §3 StellarState shape
+    d["is_supernova"] = True
+    return d
 
 
 @app.get("/polytrope")
