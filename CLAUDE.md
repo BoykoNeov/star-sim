@@ -195,13 +195,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`, spectra
   recipe `backend/docs/msg_spectra_build_recipe.md §7a/§8/§8b/§9`.
 
-### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
+### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
   bracket. Non-thermal overlay: a cool-star coronal X-ray band + Güdel–Benz radio
   (Chunk 1) that **collapses to a rotation→X-ray line** when rotation is supplied
-  (age-gyrochronology or a user slider; Chunk 3). **Chunks 1 & 3 built; Chunk 2
-  (wind free–free radio, the spine touch) remains.** [[star-sim-nonthermal-sed-plan]];
-  plan `docs/plans/magnetic-ember-broadcast.md`.
+  (age-gyrochronology or a user slider; Chunk 3). **Chunks 1, 2 & 3 ALL BUILT** — the
+  SED non-thermal arc is complete. **Chunk 2 = the hot-star wind thermal free–free
+  excess** (the one data-grounded tier): a solid teal-green λ⁻²·⁶ line from the real
+  mass-loss rate, drawn where it crests the photospheric floor (Wright–Barlow). It is
+  the SED's only **spine touch** — `mdot_msun_yr: float | None` is now on `StellarState`
+  (the `Mdot` `_Track` column blended LINEARLY like `Vrot`, **no `CACHE_VERSION` bump**;
+  Stub/MESA emit `None`). **Measure-first correction (advisor-led):** the feature is a
+  mid/far-IR → sub-mm excess for **EVOLVED hot supergiants** (peaks ~35–260 µm, dec
+  −8…−12), **NOT** the ZAMS-O "mm/radio" the plan's table claimed (that was ~4 dex too
+  bright + circular — fixed by anchoring the coefficient on ζ Pup + a proven BB norm,
+  not on the in-house number). Slope robust; level ±dex (v∞ bistability + clumping).
+  [[star-sim-nonthermal-sed-plan]]; plan `docs/plans/magnetic-ember-broadcast.md`.
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
@@ -216,12 +225,14 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **194 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **198 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
   non-rotating ones — gated by `requires_mist_rotation_multifeh` /
-  `requires_mist_rotation_heldout_feh`.
+  `requires_mist_rotation_heldout_feh`. The mass-loss-rate (`Mdot`) threading for the
+  SED wind tail adds 4 §10 tests (present & ≤0; grows MS→AGB and up the OB sequence;
+  carried through the feh-blend, lies-between & ≤0).
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

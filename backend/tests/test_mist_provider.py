@@ -721,3 +721,60 @@ def test_dead_corner_excluded_per_metallicity():
     assert p.state_at(0.1, 0.0, 0.0).Teff_K < 3500.0
     with pytest.raises(ParameterOutOfRange):
         p.state_at(0.1, 0.5, 0.0)              # the dead corner
+
+
+# --- mass-loss rate (Mdot) threading — the SED hot-wind free-free input -------
+# (Chunk 2 of docs/plans/magnetic-ember-broadcast.md: thread `star_mdot` through the
+# mass/[Fe/H] blend onto the spine as `mdot_msun_yr`, mirroring `Vrot`.)
+
+def test_mdot_present_and_signed(provider):
+    """Mdot is surfaced on every blended state and faithful to MIST's sign convention:
+    <= 0 (negative = mass *loss*), never positive. A 1.0 M_sun track's MS rows are
+    wind-free (exactly 0), but loss kicks in by the RGB/AGB, so the minimum is < 0."""
+    states = provider.track(1.0, 0.0)
+    assert all(s.mdot_msun_yr is not None for s in states)
+    assert all(s.mdot_msun_yr <= 0.0 for s in states), "Mdot is mass loss: must be <= 0"
+    assert min(s.mdot_msun_yr for s in states) < 0.0, "RGB/AGB wind must register a loss"
+
+
+def test_mdot_grows_across_the_hot_mass_sequence(provider):
+    """|Mdot| at ZAMS rises by orders of magnitude up the hot massive-star sequence —
+    the physical basis for the SED's hot-wind free-free tail (the radiatively-driven
+    wind strengthens steeply with luminosity). Measured ~7e-9 (15 M_sun) vs ~7e-7
+    (60 M_sun), a ~100x span."""
+    def zams_mdot(m: float) -> float:
+        return abs(provider.track(m, 0.0)[0].mdot_msun_yr)
+    assert zams_mdot(60.0) > 100.0 * zams_mdot(15.0)
+
+
+def test_mdot_grows_along_a_single_track_to_the_agb(provider):
+    """On one star the wind strengthens by orders of magnitude from the (near-zero) MS
+    to the cool, extended AGB — so the blended Mdot spans the dynamic range the SED
+    tail needs. The 5 M_sun MS is wind-free; its early-AGB wind is ~1e-6 (measured)."""
+    states = provider.track(5.0, 0.0)
+    zams_loss = abs(states[0].mdot_msun_yr)
+    peak_loss = max(abs(s.mdot_msun_yr) for s in states)
+    assert zams_loss < 1e-10            # the MS of a 5 M_sun is essentially wind-free
+    assert peak_loss > 1e-7             # ...the early-AGB wind is real and orders larger
+
+
+@requires_mist_multifeh
+def test_mdot_carried_through_feh_blend(provider):
+    """The feh-blend path must carry Mdot (the recurring feh=0 short-circuit gap): at
+    an off-grid [Fe/H] the blended mass-loss rate stays <= 0 and, being a convex
+    (linear) blend, lies between the two bracketing grids at every EEP. Uses a hot
+    20 M_sun star whose wind is strong on every row (so the bracket actually varies —
+    lower [Fe/H] -> weaker line-driven wind -> smaller |Mdot|)."""
+    provider._ensure_loaded()
+    fehs = provider._fehs
+    f_lo, f_hi = float(fehs[0]), float(fehs[1])     # first metallicity bracket
+    f_mid = 0.5 * (f_lo + f_hi)                      # off-grid -> exercises the blend
+    lo = provider.track(20.0, f_lo)                 # 20 is a grid mass -> raw windows
+    hi = provider.track(20.0, f_hi)
+    mid = provider.track(20.0, f_mid)
+    assert all(s.mdot_msun_yr <= 0.0 for s in mid), "blended loss must stay <= 0"
+    n = min(len(lo), len(hi), len(mid))             # EEP-aligned by row index
+    tol = 1e-12                                      # values ~1e-6; convex blend is exact
+    for i in range(0, n, max(1, n // 30)):
+        a, b, m = lo[i].mdot_msun_yr, hi[i].mdot_msun_yr, mid[i].mdot_msun_yr
+        assert min(a, b) - tol <= m <= max(a, b) + tol

@@ -1,6 +1,36 @@
 # Plan: Non-thermal SED layer — coronal soft-X-ray + radio (Phase 5)
 
-## Status: Chunks 1 & 3 BUILT (frontend-only, shipped + verified). Chunk 2 PLANNED.
+## Status: Chunks 1, 2 & 3 ALL BUILT (shipped + verified). The SED non-thermal arc is complete.
+
+**Chunk 2 as-built (the hot-star wind thermal free–free excess — mid/far-IR → sub-mm):**
+the ONE data-grounded, predictive piece. Backend = a small additive spine touch:
+`mdot_msun_yr: float | None` on `StellarState`, the `Mdot` `_Track` column now blended
+LINEARLY through `_grid_window`/`_blend_windows`/`_state_from_row` (mirroring `Vrot`
+exactly — sign-safe, no `CACHE_VERSION` bump), `EXPECTED_KEYS` + 4 new pytest §10 tests
+(present & ≤0; grows orders MS→AGB and up the OB mass sequence; carried through the
+feh-blend, lies-between & ≤0). 198 pytest. Frontend = `sed.js` draws a SOLID teal-green
+λ⁻²·⁶ line (the data-grounded tier vs the hatched coral band), placed by the absolute
+Wright–Barlow `L_ν,ff` ratioed against the blackbody's own peak luminosity, only where it
+EXCEEDS the photosphere AND redward of the Wien peak (the crossover IS the payoff; it exits
+the floor past ~1 mm — the clamp-and-exit idiom). Self-gating + a hot-ionized-wind gate
+(Teff ≥ 12 kK, significant |Ṁ|, living track only): an evolved hot supergiant shows a clear
+far-IR/sub-mm excess, a ZAMS O star a short near-floor segment, cool/dusty winds nothing.
+
+**The measure-first gate OVERTURNED the plan's own table (the load-bearing correction).**
+The earlier "MEASURED build plan" table below was **~4 dex too bright and mis-framed as a
+ZAMS-O mm feature** — a circular in-house number. Resolved against PRIMARY SOURCES, not
+calibrated to any in-house value (advisor-caught the circularity): the Wright & Barlow 1975
+coefficient at FACE value lands ζ Pup at ≈0.26 mJy @ 5 GHz vs ~1.5 observed — 0.7 dex low,
+the EXPECTED smooth-Vink-Ṁ-vs-clumped gap, **not** a unit error; the BB normalization checks
+to 0.2% (∫L_λ = 4πR²σT⁴ = MIST L; L_λ,peak·1.521·λ_peak = L_bol). So the placement is sound
+and **the real feature is an EVOLVED-hot-supergiant mid/far-IR → sub-mm excess (peaks
+~35–260 µm, dec −8…−12), NOT a ZAMS-O "mm radio" feature**. The LEVEL carries ±~dex (v∞
+across the ~21 kK bistability jump where v∞/v_esc drops ~2.6→1.3, + wind clumping); the
+SLOPE (λ⁻²·⁶) is the robust, teachable part — captioned as such. Verified via Playwright on
+the real served UI (Sun / A-gap / cool-giant = no line; ZAMS O = near-floor sliver; hot
+supergiant = clear far-IR excess), 0 JS errors, caption height spread **0 px** across all five.
+
+## Status (historical): Chunks 1 & 3 BUILT (frontend-only, shipped + verified). Chunk 2 PLANNED.
 
 **Chunk 3 as-built (collapse the band → line via rotation):** all in `frontend/src/sed.js`
 + the SED control markup/CSS/legend, **no backend/spine touch** (pytest unchanged 137).
@@ -211,6 +241,109 @@ The one data-grounded, predictive piece. **Requires exposing Ṁ on the spine.**
   `M`/`R`, or a fixed typical 2000 km/s for OB. Document the assumption in code +
   caption; absolute distance cancels under per-peak normalization (we plot `L_ν`,
   not a flux at a distance).
+
+#### Chunk 2 — MEASURED build plan (the "measure first" gate, like WR-spectra §7a) — ⚠️ SUPERSEDED BY THE AS-BUILT MEASUREMENT ABOVE
+
+> **⚠️ The table in this section was wrong (~4 dex too bright) and mis-framed.** It was a
+> *circular* in-house number (the same calc lineage it was meant to verify). The as-built
+> work re-derived the placement from primary sources (ζ Pup anchor + a proven BB
+> normalization — see the status block) and found the feature is an **evolved-hot-supergiant
+> mid/far-IR → sub-mm excess**, not a ZAMS-O mm feature. The CORRECTED, measured table
+> (real on-disk `star_mdot`, 2.6·v_esc, face-value Wright–Barlow, on this panel's per-peak
+> Fλ axis) is:
+>
+> | regime (the visible cases) | Ṁ (M☉/yr) | peak excess dec | peak λ | note |
+> |---|---|---|---|---|
+> | 25 M☉, evolved hot (22 kK, RGB/BSG) | ~3e-6 | −11.7 | ~260 µm | clears the floor in the far-IR |
+> | 40 M☉, hot supergiant (12 kK, EAGB) | ~2e-5 | −10.0 | ~180 µm | edge of the dusty-wind gate |
+> | 60 M☉, blue supergiant (22 kK, CHeB) | ~7e-5 | −8.4 | ~38 µm | the clearest excess |
+> | 85 M☉, blue supergiant (33 kK, CHeB) | ~8e-5 | −8.9 | ~35 µm | mid-IR onset |
+> | **ZAMS O (any, 30–50 kK)** | 2e-9…2e-6 | **−13.5…−16** | sub-mm | near/below the −14 floor — a sliver at most |
+>
+> So the live, visible feature is the **strong-wind EVOLVED hot star** (blue supergiants on
+> the CHeB/EAGB loops), peaking in the **mid/far-IR (35–260 µm)** — not the main sequence,
+> and not "radio." The cm–m radio still lands off the bottom. The rest of this section's
+> *build decisions* (below) are accurate and were followed; only the table + the "ZAMS-MS /
+> mm" framing were corrected.
+
+The ORIGINAL (wrong) table, kept for the record of the correction:
+
+| hot-MS star | Ṁ (M☉/yr) | wind clears BB floor **and** is in the 14-decade window | off-window past |
+|---|---|---|---|
+| ~60 M☉ (47 kK) | 7e-7 | 100 µm – ~3 mm  (−9.5 … −13.4 dex) ❌ ~4 dex too bright | ~1 cm |
+| ~40 M☉ (45 kK) | 6e-7 | 100 µm – ~3 mm ❌ | ~1 cm |
+| ~25 M☉ (39 kK) | 1e-7 | 100 µm – ~1 mm ❌ | ~3 mm |
+| ~15 M☉ (32 kK) | 7e-9 | only ~1 mm (barely above BB) ❌ | ~3 mm |
+
+The slope physics it cited is still right: the λ^−2.6 vs λ^−4 difference buys ~3–4 decades
+over the Rayleigh–Jeans floor (the same per-Hz→per-nm wall the Güdel–Benz radio hit), which
+is why the excess shows up in the **mid/far-IR → sub-mm**, never the cm–m radio. What it got
+wrong was the absolute LEVEL (the ~4-dex circular error) and the REGIME (ZAMS O vs evolved
+supergiant). The payoff is **real and predictive — relocated from "radio" to "mid/far-IR →
+sub-mm," and from the main sequence to evolved strong-wind hot stars.**
+
+**Settled build decisions (advisor-confirmed):**
+
+- **Backend (the small additive spine touch):**
+  - `mdot_msun_yr: float | None = None` on `StellarState` (an optional visual field
+    exactly like `v_rot_kms`/`activity`). Sign convention faithful to MIST: **≤ 0**
+    (negative = mass *loss*); the frontend takes `|Ṁ|`.
+  - Thread `Mdot` through the blend **with a plain LINEAR `mix`, mirroring `Vrot`
+    exactly** (the `mix` in `_grid_window`, the column tuple in `_blend_windows`,
+    `np.interp` in `_state_from_row`). Linear — NOT log-magnitude — is the right call:
+    adjacent grid-mass Ṁ differs < 0.3 dex so log-vs-linear is sub-visual in the *drawn*
+    (strong-wind hot) regime; linear is sign-safe (both ≤ 0 → blend ≤ 0 on both the mass
+    and [Fe/H] axes) and **sidesteps the log(0) hack** on the rows where Ṁ is exactly 0
+    (measured: the 1 M☉ track has 302 such rows — the MS has no wind).
+  - **No `CACHE_VERSION` bump** — `Mdot` is already a cached `_Track` column (v9); only
+    the in-memory blend + emit change. (Confirmed against `_TRACK_COLS`.)
+  - Stub/MESA: `mdot_msun_yr=None` (degrade gracefully; MESA `history.data` has
+    `star_mdot` — an optional later follow-up, not v1).
+  - `EXPECTED_KEYS` in `test_stub_provider.py` gains `"mdot_msun_yr"` (it's imported by
+    `test_endgame.py`, so that key-set test updates too).
+  - Tests (`requires_mist_data` / `requires_mist_multifeh`): Ṁ present & ≤ 0; grows by
+    orders of magnitude MS→AGB (and across the OB mass sequence); the **feh-blend path
+    carries it** at an off-grid [Fe/H] (the recurring feh=0 short-circuit gap) and the
+    blended value stays between the two bracketing grids and ≤ 0.
+
+- **Frontend (`sed.js`, the draw + the honest gate):**
+  - Draw the free–free excess as a **solid** line (the data-grounded tier vs the hatched
+    evocative band) on slope **Fλ ∝ λ^−2.6**, placed by the absolute Wright–Barlow
+    `L_ν,ff` ratioed against the blackbody's absolute peak `L_λ` (use `L_lsun` for the
+    bolometric scale; distance cancels — both are luminosities of the same star).
+  - **The crossover IS the payoff.** Render the line only where it *exceeds the BB curve*
+    at that λ and let it **exit the bottom** past the cm (the panel's existing
+    clamp-and-exit idiom — no fake line across the empty radio). The teaching point is the
+    wavelength where the wind free–free overtakes the photospheric floor (~1 mm for an O
+    star). Caption the slope (λ^−2.6) as the robust/teachable part; the absolute level
+    carries ±~dex.
+  - **Honesty gate = hot ionized wind only.** Draw the line for Teff ≳ 10–12 kK with
+    significant `|Ṁ|`. Cool giants / AGB (larger Ṁ, but a *dusty/molecular* wind that is
+    not a thermal ionized free–free emitter) get a **caption**, not the line — the same
+    narrow-GO honesty the project applies everywhere.
+  - **v∞ assumption:** `v∞ ≈ 2.6·v_esc` (Lamers & Cassinelli, the hot-star relation,
+    consistent with the hot-only gate), computed from `mass_init_msun` + `R_rsun` — state
+    explicitly that current (stripped) mass isn't on the blended spine, fine pre-stripping
+    for MS OB. Sensitivity is only ~0.3 dex (measured).
+  - **Clumping:** MIST's Ṁ is a *smooth-wind* (Vink) prescription, so feed it into the
+    *smooth-wind* WB formula with **no** clumping correction (internally consistent — do
+    NOT import `_WR_CLUMP_D`). One caption line notes real clumping-corrected Ṁ runs a bit
+    lower → the line is an upper-ish estimate.
+  - **γ stays empty.** Caption flips from "not drawn" to describing the mm/sub-mm excess;
+    kept **length-matched** to the other regime captions (the resize-jank guard). Legend
+    gains the solid-line entry (data-grounded tier, Ṁ source, v∞ + clumping caveats).
+  - WR-endgame mode is out of scope for v1 (its caption already says the free–free radio
+    "isn't drawn"); the living hot massive star on the normal track is where this draws.
+
+- **BUILD-TIME VERIFICATION (the one open number):** the absolute vertical placement of
+  the solid line hinges on the Wright–Barlow **23.2-mJy coefficient's unit convention**
+  (ν per-GHz vs per-10-GHz, v∞ km/s vs 1000 km/s, the μ / γ / Gaunt terms). A unit
+  mismatch shifts the line ~0.6 dex or a 4/3-power factor. This does **not** change the
+  mm-vs-radio conclusion (robust to factor-of-few), but **verify the exact coefficient +
+  its units against the primary source (Wright & Barlow 1975 / Panagia & Felli 1975)
+  before trusting where the line sits.** Regression check = the Playwright screenshot pass
+  (no JS harness) across an O star (excess visible ~mm), a B star, the A-gap, the Sun, and
+  a cool giant (caption only); the backend Ṁ threading gets real pytest §10 tests.
 
 ### Chunk 3 — collapse the band to a line: age-derived default + an activity/rotation slider (the synthesis) — ✅ BUILT (see status block above)
 

@@ -130,7 +130,7 @@ EXPECTED_KEYS = {
     "L_lsun", "Teff_K", "R_rsun", "logg",
     "X_surf", "Y_surf", "Z_surf", "X_core", "Y_core", "Z_core",
     "metals_surf", "metals_core",
-    "v_rot_kms", "activity",
+    "v_rot_kms", "activity", "mdot_msun_yr",
 }
 
 

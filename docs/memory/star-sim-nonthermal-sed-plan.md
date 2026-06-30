@@ -1,6 +1,6 @@
 ---
 name: star-sim-nonthermal-sed-plan
-description: "Non-thermal SED layer (CHUNKS 1 & 3 BUILT, Chunk 2 planned) — coronal soft-X-ray + Güdel–Benz radio band, then a rotation→X-ray LINE (gyrochronology + slider) collapsing it; hot-star wind radio is Chunk 2. The accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate. + the cool→gap band-descent line-clamp + saturation-cue fixes."
+description: "Non-thermal SED layer — ALL THREE CHUNKS BUILT: (1) coronal soft-X-ray + Güdel–Benz radio band, (3) a rotation→X-ray LINE (gyrochronology + slider) collapsing it, (2) the hot-star wind thermal free–free excess from real Ṁ (a small spine touch: mdot_msun_yr on StellarState). The accepted-science answer to \"model the gamma/radio floor\", with the activity-proxy honesty gate. KEY CORRECTION: Chunk 2 is a mid/far-IR→sub-mm excess for EVOLVED hot supergiants, NOT the ZAMS-O mm/radio the plan's table claimed (that was ~4 dex too bright, circular); resolved against primary sources (ζ Pup anchor + proven BB norm). + the cool→gap band-descent line-clamp + saturation-cue fixes."
 metadata: 
   node_type: memory
   type: project
@@ -12,6 +12,43 @@ shipped, the user asked: "can we also model" the non-thermal X-ray/γ/radio the
 blackbody floors out — "is there an accepted scientific model?" Plan:
 `docs/plans/magnetic-ember-broadcast.md` (whimsical name like
 [[star-sim-wr-wd-endgame-plan]]'s smoldering-cinder-gateway).
+
+**CHUNK 2 BUILT (the spine touch + `sed.js` draw, 198 pytest).** The hot-star wind thermal
+free–free excess — the ONE data-grounded, predictive tier. **Backend** = a small additive
+spine touch: `mdot_msun_yr: float | None` on `StellarState` (optional visual field like
+`v_rot_kms`/`activity`), the already-cached `Mdot` `_Track` column now blended **LINEARLY**
+through `_grid_window`/`_blend_windows`/`_state_from_row` (mirroring `Vrot` exactly — sign-safe
+≤0 on both axes, sidesteps a log(0) hack; **no `CACHE_VERSION` bump** — already cached at v9);
+`EXPECTED_KEYS` += `mdot_msun_yr` (also covers `test_endgame`); 4 new §10 tests (present & ≤0;
+grows orders MS→AGB and up the OB mass sequence; carried through the feh-blend, lies-between &
+≤0). **Frontend** = `sed.js` draws a SOLID teal-green λ⁻²·⁶ line (the data-grounded tier vs the
+hatched coral band), absolute Wright–Barlow `L_ν,ff = 4πD²S_ν` ratioed against the blackbody's
+OWN peak `L_λ,BB,peak = 4πR²·πB_λ(λpeak)` (R² included → shared axis, distance cancels), drawn
+ONLY where it exceeds the photosphere AND redward of the Wien peak (else it smears across the
+floored X-ray top — the load-bearing draw-gate bug, caught in Playwright). Self-gating + a
+hot-ionized-wind gate (Teff ≥ 12 kK, |Ṁ| ≥ 1e-9, living track only — cool/dusty winds get
+nothing, WR-endgame out of scope).
+
+**THE MEASURE-FIRST GATE OVERTURNED THE PLAN'S OWN TABLE (the headline correction, advisor-led).**
+The plan's "MEASURED build plan" table was **~4 dex too bright + mis-framed as a ZAMS-O mm
+feature** — a *circular* in-house number (same calc lineage it claimed to verify). The advisor
+flagged the circularity: **don't calibrate to the table; anchor on primary sources.** Resolved:
+(1) the Wright & Barlow 1975 coefficient at FACE value (23.2 mJy form, ν^0.6, Ṁ in 10⁻⁶ M☉/yr,
+v∞ km/s, ν GHz, D kpc, with γ/g/Z) lands **ζ Pup at ≈0.26 mJy @ 5 GHz vs ~1.5 observed — 0.7 dex
+low = the EXPECTED smooth-Vink-Ṁ-vs-clumped gap, NOT a unit error** (so the level is sound, the
+0.7 dex is the clumping caveat); (2) the **BB normalization is provably correct to 0.2%**
+(∫L_λ = 4πR²σT⁴ = MIST L; L_λ,peak·1.521·λpeak = L_bol). So the real feature is an **EVOLVED hot
+supergiant mid/far-IR → sub-mm excess** (blue supergiants on CHeB/EAGB loops; peaks ~35–260 µm,
+dec −8…−12; Ṁ up to ~7e-5), while ZAMS O stars sit **near/below the −14 floor** (a sliver at
+most). The cm–m radio stays off the bottom (the original "radio" framing was doubly wrong: wrong
+band AND wrong regime). **LEVEL ±~dex** (v∞ across the ~21 kK bistability jump where v∞/v_esc
+drops ~2.6→1.3, + clumping); **SLOPE λ⁻²·⁶ is robust/teachable** — captioned as such. **Reusable
+gotchas:** (a) never calibrate a free constant to the number you're trying to verify — anchor on
+an independent observation (ζ Pup); (b) a long-wavelength optically-thick model must be gated
+redward of the peak or it smears across a floored short-λ region; (c) a 0.7-dex miss vs an
+observation can be the *physics* (smooth vs clumped Ṁ), not a bug. Verified Playwright (bundled
+Chromium) on the real served UI: Sun / A-gap / cool-giant = no line; ZAMS O = near-floor sliver;
+hot supergiant = clear far-IR excess; **0 JS errors, caption height spread 0 px** across all five.
 
 **CHUNK 1 BUILT (frontend-only, `sed.js` + index.html legend/caption, NO spine touch,
 pytest unchanged 137).** The cool-star coronal X-ray + Güdel–Benz radio BAND. Two

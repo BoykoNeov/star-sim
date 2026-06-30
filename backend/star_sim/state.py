@@ -51,3 +51,6 @@ class StellarState:
     # --- optional / for visuals (may be derived, may be None early on) ------
     v_rot_kms: float | None = None   # surface rotation, if modeled
     activity: float | None = None    # 0..1 proxy driving corona brightness (§7)
+    mdot_msun_yr: float | None = None  # mass-loss rate [M_sun/yr], signed <= 0 (loss);
+                                       # drives the SED's hot-wind free-free tail. None
+                                       # for providers without it (degrade gracefully).

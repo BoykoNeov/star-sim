@@ -1170,6 +1170,11 @@ class MISTProvider:
         # not a stub. None only if the column is somehow absent (degrades gracefully).
         v_rot = float(np.interp(frac, rows, win["Vrot"])) if "Vrot" in win else None
 
+        # Mass-loss rate (M_sun/yr, signed <= 0). Linearly blended across mass/[Fe/H]
+        # (see `_grid_window`), surfaced for the SED's hot-wind free-free tail. The
+        # frontend takes |Mdot| and gates on hot Teff. None if the column is absent.
+        mdot = float(np.interp(frac, rows, win["Mdot"])) if "Mdot" in win else None
+
         # visual proxy (§7), explicitly evocative: cool stars more chromospherically
         # active than hot ones.
         activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
@@ -1190,6 +1195,7 @@ class MISTProvider:
             metals_core=metals_core,
             v_rot_kms=v_rot,
             activity=activity,
+            mdot_msun_yr=mdot,
         )
 
     # -- EEP-fixed 2D (mass × [Fe/H]) interpolation (the core of §6) -----------
@@ -1235,9 +1241,14 @@ class MISTProvider:
             "logT": mix(lo.logT, hi.logT),
             "logR": mix(lo.logR, hi.logR),
             "logg": mix(lo.logg, hi.logg),
-            # Surface rotation velocity is a living-state quantity (unlike Mcur/Mdot, which
+            # Surface rotation velocity is a living-state quantity (unlike Mcur, which
             # the endgame snaps), so it interpolates across mass at fixed EEP like the rest.
             "Vrot": mix(lo.Vrot, hi.Vrot),
+            # Mass-loss rate (signed, <= 0). Mixed LINEARLY like Vrot (sign-safe: both
+            # ends <= 0 -> blend <= 0; sidesteps a log(0) hack on the MS rows where Mdot
+            # is exactly 0). Drives the SED's hot-wind free-free tail; unlike Mcur it now
+            # IS interpolated across mass/[Fe/H] (the endgame still snaps a single track).
+            "Mdot": mix(lo.Mdot, hi.Mdot),
             "Xs": mix(lo.Xs, hi.Xs),
             "Ys": mix(lo.Ys, hi.Ys),
             "Xc": mix(lo.Xc, hi.Xc),
@@ -1363,7 +1374,7 @@ def _blend_windows(a: dict, b: dict, w: float) -> dict:
         "age": 10.0 ** ((1.0 - w) * np.log10(a["age"][:n]) + w * np.log10(b["age"][:n])),
         "phase": (a["phase"] if w < 0.5 else b["phase"])[:n],
     }
-    for k in ("logL", "logT", "logR", "logg", "Vrot",
+    for k in ("logL", "logT", "logR", "logg", "Vrot", "Mdot",
               "Xs", "Ys", "Xc", "Yc",
               "Lis", "Bes", "Cs", "Ns", "Os", "Fs", "Nes", "Nas", "Mgs", "Als", "Sis", "Ps", "Ss", "Cas", "Tis", "Fes",
               "Lic", "Bec", "Cc", "Nc", "Oc", "Fc", "Nec", "Nac", "Mgc", "Alc", "Sic", "Pc", "Sc", "Cac", "Tic", "Fec"):

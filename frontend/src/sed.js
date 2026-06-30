@@ -87,6 +87,60 @@ const GB_LOG_HZ = 15.5;                                 // log10(L_X / L_R), Hz
 const C_NM_S = 2.99792458e17;                           // speed of light, nm/s
 const LAM_RADIO = 6e7;                                  // nm ≈ 6 cm ≈ 5 GHz (the GB band)
 
+// ─── Chunk 2: hot-star wind thermal free–free excess (mid/far-IR → sub-mm) ──────
+// A radiatively-driven IONIZED wind emits optically-thick thermal free–free
+// (bremsstrahlung) with Fλ ∝ λ⁻²·⁶ — SHALLOWER than the photosphere's Rayleigh–Jeans
+// floor (λ⁻⁴), so it OVERTAKES the blackbody and rises above it at long wavelengths.
+// Unlike the coronal band (an evocative RANGE — no rotation/age), this is DATA-GROUNDED:
+// computed from the real on-disk mass-loss rate Ṁ (mdot_msun_yr, threaded onto the spine
+// in Chunk 2). Drawn as a SOLID line — the predictive tier — vs the hatched coral band.
+//
+// Wright & Barlow (1975) / Panagia & Felli (1975) flux of an isothermal, constant-
+// velocity, fully-ionized wind:
+//   S_ν = 23.2 (Ṁ₋₆/(μ v∞))^(4/3) ν_GHz^0.6 D_kpc⁻² γ^(2/3) g^(2/3) Z^(4/3)  [mJy]
+// (Ṁ in 10⁻⁶ M☉/yr, v∞ km/s, ν GHz, D kpc.) We want a LUMINOSITY (distance cancels under
+// per-peak normalization), so L_ν = 4πD²·S_ν at D = 1 kpc:
+//   L_ν,wind = K_LNU · (Ṁ₋₆/(μ v∞))^(4/3) · g^(2/3) · ν_GHz^0.6   [erg/s/Hz],
+//   K_LNU = 4π(kpc in cm)² · 23.2e-26.
+// Then L_λ = L_ν·c/λ², placed on the panel by ratio against the blackbody's OWN peak
+// luminosity L_λ,BB,peak = 4πR²·πB_λ(λpeak) (R² INCLUDED — the BB curve self-normalizes,
+// but the wind must reference the SAME absolute peak to share the axis: dec = 0 ≙ the BB
+// peak for both).
+//
+// MEASURE-FIRST VERIFICATION (the "one open number" the plan flagged — resolved against
+// primary sources, NOT calibrated to any in-house value):
+//   • Coefficient at FACE value lands ζ Pup at ≈0.26 mJy@5 GHz vs ~1.5 observed — 0.7 dex
+//     low, the EXPECTED smooth-Vink-Ṁ-vs-clumped-observation gap, not a unit error.
+//   • The BB normalization checks to 0.2% (∫L_λ = 4πR²σT⁴ = MIST L; L_λ,peak·1.521·λpeak
+//     = L_bol). So the placement is sound and the plan's old table was ~4 dex too bright.
+//   • The visible excess is a mid/far-IR → sub-mm feature (peaks ~35–260 µm) for EVOLVED
+//     hot supergiants (strong winds, Ṁ up to ~7e-5); ZAMS O stars sit near/below the floor.
+//     The SELF-GATING draw (only where wind > BB, exit at the floor) yields exactly that
+//     with no regime special-casing.
+// The LEVEL carries ±~dex (v∞ across the ~21 kK bistability jump where v∞/v_esc drops from
+// ~2.6 toward ~1.3, + wind clumping); the SLOPE (λ⁻²·⁶) is the robust, teachable part.
+const WIND_TEFF_MIN = 12000;        // below this the wind is dusty/molecular, not ionized free–free
+const WIND_MDOT_MIN = 1e-9;         // |Ṁ| (M☉/yr) below which there is no meaningful wind
+const WIND_MU = 1.4, WIND_Z = 1, WIND_GAMMA = 1;   // ionized OB-wind composition (μ per ion, charge, e⁻/ion)
+const WIND_NU_REF_GHZ = 230;        // fix the Gaunt factor at this ν → a clean λ⁻²·⁶ slope
+const VINF_OVER_VESC = 2.6;         // Lamers & Cassinelli hot-star ratio (level ±dex — see note)
+// cgs constants for the absolute L_λ,wind / L_λ,BB,peak ratio.
+const CGS_G = 6.674e-8, CGS_MSUN = 1.989e33, CGS_RSUN = 6.957e10, CGS_KPC = 3.086e21;
+const CGS_H = 6.626e-27, CGS_C = 2.998e10, CGS_K = 1.381e-16;
+const WIND_K_LNU = 4 * Math.PI * CGS_KPC ** 2 * 23.2e-26;   // L_ν = K·X  [erg/s/Hz] at D = 1 kpc
+const COL_WIND = "rgba(130,222,176,0.95)";                  // teal-green: the data-grounded tier
+
+// Free–free Gaunt factor (Wright & Barlow): g_ν = 9.77(1 + 0.13·log₁₀(T_e^1.5/(Zν))).
+function gauntFF(nuGHz, Te) {
+  return 9.77 * (1 + 0.13 * Math.log10(Te ** 1.5 / (WIND_Z * nuGHz)));
+}
+// Planck B_λ in cgs (erg s⁻¹ cm⁻² cm⁻¹ sr⁻¹) — the absolute form the wind ratio needs.
+function planckCgs(lamCm, T) {
+  const x = CGS_H * CGS_C / (lamCm * CGS_K * T);
+  if (x > 700) return 0;                                    // Wien underflow guard
+  return (2 * CGS_H * CGS_C ** 2 / lamCm ** 5) / Math.expm1(x);
+}
+
 // ─── Chunk 3: collapse the X-ray BAND to a LINE via rotation (gyrochronology) ───
 // The Chunk-1 band is wide only because ONE dimension is missing — rotation. The
 // rotation–activity dynamo (Wright 2011) fixes L_X/L_bol from the Rossby number
@@ -208,6 +262,10 @@ export function createSED(canvas) {
   plotW = W - PAD_L - PAD_R;
 
   let teff = null, logg = null, age = null, phase = null, mass = null, feh = null;
+  // Chunk 2 (wind free–free): the radius + mass-loss rate the tail needs. Both are
+  // marker-state quantities now on the spine (R_rsun always; mdot_msun_yr via the
+  // Mdot blend), so this stays a pure sibling — no fetch.
+  let rRsun = null, mdot = null;
   // Endgame (WD) mode: the non-thermal overlay is NOT suppressed outright — it is faded
   // by a degeneracy gate (the same (4−logg)/3 the 3D corona/granulation use), so the
   // thermally-pulsing AGB giant the endgame opens on keeps the (suppressed) coronal band
@@ -246,14 +304,17 @@ export function createSED(canvas) {
     const ph = state.phase ?? null;
     const m = state.mass_init_msun ?? null;
     const fe = state.feh_init ?? null;
+    const rr = state.R_rsun ?? null;
+    const md = state.mdot_msun_yr ?? null;   // signed <= 0 (mass loss); |·| used below
     if (eg === endgameMode && state.Teff_K === teff && g === logg && a === age &&
-        ph === phase && m === mass && fe === feh) return;
+        ph === phase && m === mass && fe === feh && rr === rRsun && md === mdot) return;
     endgameMode = eg;
     endgameWR = egKind === "wr";
     // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
     // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
     if (m !== mass || fe !== feh) userProt = null;
     teff = state.Teff_K; logg = g; age = a; phase = ph; mass = m; feh = fe;
+    rRsun = rr; mdot = md;
     recomputeRotation();
     draw();
     renderCaption();
@@ -301,6 +362,9 @@ export function createSED(canvas) {
     // across the gateway) and it dies with the dynamo as the remnant degenerates.
     if (!endgameMode) {
       drawActivity(lamPeak);
+      // The hot-star wind free–free excess (Chunk 2): the data-grounded solid line, drawn
+      // for a living hot massive star (gated inside; WR-endgame is out of scope for v1).
+      drawWindFreeFree(lamPeak);
     } else if (!endgameWR) {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
       if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // WD endgame: dying-giant band only
@@ -496,6 +560,74 @@ export function createSED(canvas) {
     ctx.textAlign = "center";
     ctx.fillText("Güdel–Benz radio", xr, yFloor - 5);
     ctx.textAlign = "left";
+    ctx.restore();
+  }
+
+  // ─── Chunk 2: the hot-star wind free–free tail (the data-grounded tier) ───────
+
+  // Build the wind's dec(λnm) closure for the current marker, or null when the gate is
+  // closed: cool/dusty wind (Teff < WIND_TEFF_MIN), negligible Ṁ, or missing R/mass.
+  // dec = log₁₀(L_λ,wind / L_λ,BB,peak) — the SAME axis as the blackbody curve (0 = peak).
+  // The Gaunt factor is fixed at WIND_NU_REF_GHZ so the line is a clean λ⁻²·⁶ slope.
+  function windDecFn(lamPeakNm) {
+    if (teff == null || teff < WIND_TEFF_MIN) return null;
+    if (mdot == null || rRsun == null || mass == null) return null;
+    const mdotAbs = Math.abs(mdot);
+    if (mdotAbs < WIND_MDOT_MIN) return null;
+    const R = rRsun * CGS_RSUN;
+    const vinf = VINF_OVER_VESC * Math.sqrt(2 * CGS_G * mass * CGS_MSUN / R) / 1e5;  // km/s
+    const g = gauntFF(WIND_NU_REF_GHZ, 0.5 * teff);    // wind T_e ≈ ½ Teff (standard, weak)
+    const md6 = mdotAbs / 1e-6;
+    const base = Math.pow(md6 / (WIND_MU * vinf), 4 / 3)
+      * Math.pow(WIND_GAMMA, 2 / 3) * Math.pow(g, 2 / 3) * Math.pow(WIND_Z, 4 / 3);
+    const Lbbpeak = 4 * Math.PI * R * R * Math.PI * planckCgs(lamPeakNm * 1e-7, teff);
+    return (lamNm) => {
+      const lamCm = lamNm * 1e-7;
+      const nuGHz = CGS_C / lamCm / 1e9;
+      const Lnu = WIND_K_LNU * base * Math.pow(nuGHz, 0.6);    // erg/s/Hz
+      const Llam = Lnu * CGS_C / (lamCm * lamCm);              // erg/s/cm
+      return Math.log10(Llam / Lbbpeak);
+    };
+  }
+
+  // Draw the wind free–free excess as a SOLID line, but ONLY where it exceeds the
+  // photospheric blackbody at that λ (the crossover IS the payoff) and stays in-window —
+  // letting it exit the bottom past the sub-mm (the panel's clamp-and-exit idiom, no fake
+  // line across the empty radio). Self-gating: a ZAMS O star draws ~nothing (its tail sits
+  // below the floor), an evolved hot supergiant draws a clear mid/far-IR → sub-mm excess.
+  function drawWindFreeFree(lamPeakNm) {
+    const dec = windDecFn(lamPeakNm);
+    if (!dec) return;
+    const logBpCgs = Math.log10(planckCgs(lamPeakNm * 1e-7, teff));  // BB self-norm reference
+    const N = 480;
+    ctx.save();
+    ctx.strokeStyle = COL_WIND; ctx.lineWidth = 1.8;
+    let drawing = false, best = null;                  // best = brightest drawn point (label anchor)
+    for (let i = 0; i < N; i++) {
+      const lam = 10 ** (LOG_LO + (i / (N - 1)) * (LOG_HI - LOG_LO));
+      const dW = dec(lam);
+      const b = planckCgs(lam * 1e-7, teff);
+      const dB = b > 0 ? Math.log10(b) - logBpCgs : -FLOOR_DECADES;   // the BB curve's dec at λ
+      // Only on the long-wavelength (Rayleigh–Jeans) side, where the optically-thick
+      // free–free model applies AND the excess is real: redward of the Wien peak, where
+      // the wind tops the photosphere and stays in-window. (Blueward, the BB has
+      // underflowed to the floor — "wind > floored BB" is meaningless, and the λ⁻²·⁶
+      // model doesn't hold in the X-ray/UV; without this it would smear across the top.)
+      const vis = lam > lamPeakNm && dW > dB && dW > -FLOOR_DECADES;
+      if (vis) {
+        const x = xOf(lam), y = yOf(Math.min(0, dW));
+        drawing ? ctx.lineTo(x, y) : (ctx.beginPath(), ctx.moveTo(x, y));
+        drawing = true;
+        if (!best || dW > best.dec) best = { dec: dW, x, y, lam };
+      } else if (drawing) { ctx.stroke(); drawing = false; }
+    }
+    if (drawing) ctx.stroke();
+    if (best) {
+      ctx.fillStyle = "#9fe9c6"; ctx.font = "9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("wind free–free (Ṁ)", best.x, best.y - 5);
+      ctx.textAlign = "left";
+    }
     ctx.restore();
   }
 
@@ -822,8 +954,17 @@ export function createSED(canvas) {
     const reg = regimeOf(teff, logg);
     let act;
     if (reg === "hot")
-      act = `Overlaid (coral): the X-ray band collapses to the narrow wind-shock ` +
-            `value L_X/L_bol ≈ 10⁻⁷ — hot O/B stars have no convective dynamo.`;
+      // Two non-thermal features now: the coronal X-ray collapses to the wind-shock value,
+      // AND (the Chunk-2 payoff) a SOLID mid/far-IR–sub-mm free–free excess from the dense
+      // ionized wind — drawn from the real Ṁ where it clears the floor (evolved supergiants;
+      // a ZAMS O star's is fainter). Slope λ⁻²·⁶ is robust; the level carries ±dex (v∞ +
+      // clumping). Kept ~length-matched to the other branches (the panel-resize guard).
+      // A GENERAL statement (not "the green line IS here"): the line is gated to strong
+      // winds (Teff ≥ 12 kK, significant Ṁ), so a hot weak-wind B star draws nothing — the
+      // caption must stay true with or without a drawn line (the "don't describe an absent
+      // feature" trap), in one length-matched sentence.
+      act = `Overlaid: X-rays collapse to the wind-shock ≈10⁻⁷ (no dynamo); a strong wind's ` +
+            `free–free excess (green, real Ṁ) crests the floor in the far-IR for supergiants — ±dex.`;
     else if (reg === "gap")
       act = `No band drawn: A and early-F stars sit in an X-ray gap — too hot for a ` +
             `convective dynamo, too cool for strong wind shocks to make X-rays.`;
