@@ -15,6 +15,7 @@ import { createClassification } from "./classify.js";
 import { makeSortable } from "./layout.js";
 import { initTooltips } from "./tooltip.js";
 import { teffToCSS } from "./color.js";
+import { OBSERVED_SNE } from "./sn.js";
 
 // Same origin when served by FastAPI (uvicorn); fall back to localhost:8000 when
 // index.html is opened directly via file://.
@@ -49,12 +50,19 @@ const els = {
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
   gatewayWr: document.getElementById("gateway-wr"),
-  gatewaySn: document.getElementById("gateway-sn"),
+  gatewaySn: document.getElementById("gateway-sn"),          // now a BUTTON (was the note)
+  gatewaySnNote: document.getElementById("gateway-sn-note"), // the foreshadowing note
   gatewayLoading: document.getElementById("gateway-loading"),
   endgameBar: document.getElementById("endgame-bar"),
   endgameBack: document.getElementById("endgame-back"),
   endgameResnapNote: document.getElementById("endgame-resnap-note"),
   endgameAgeCaption: document.getElementById("endgame-age-caption"),
+  // The ⁵⁶Ni-mass slider (SN endgame, Tier-3) — the one free knob of the light curve.
+  snControl: document.getElementById("sn-control"),
+  snMni: document.getElementById("sn-mni"),
+  snMniNum: document.getElementById("sn-mni-num"),
+  snMniMarks: document.getElementById("sn-mni-marks"),
+  snMniNote: document.getElementById("sn-mni-note"),
 };
 
 const star = createStar(document.getElementById("star-canvas"));
@@ -285,7 +293,7 @@ function posFromAge(age) {
 // endgame snaps to ONE real grid track (never interpolated — §6), so the WD scrub is
 // SIMPLER than the live path: it picks states[i] from the pre-fetched /endgame result
 // and feeds the consumers directly — no /state fetch, no window build, no phase snap.
-let mode = "live";              // "live" | "wd" | "wr"
+let mode = "live";              // "live" | "wd" | "wr" | "sn"
 // --- rotation axis (rotation Chunk 3) ----------------------------------------
 // `rotationOn` is the user's TOGGLE INTENT (persisted across mass/[Fe/H] changes, like
 // massValue): turning rotation on at a massive star and dragging the mass down keeps the
@@ -333,7 +341,27 @@ let endgameMetaToken = 0;       // latest-wins guard, SEPARATE from endgameToken
                                 // fetch's stabilized machinery (Chunk D) is left untouched
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
 let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
+// --- supernova endgame (SN Chunk 2) ------------------------------------------
+// Unlike WD/WR (which snap to a pre-fetched track and scrub states[i]), the SN endgame is a
+// COMPUTED model fetched from /supernova (the sibling route): a ⁵⁶Ni light curve + a set of
+// homologous-photosphere StellarStates on a log time grid. `snModel` is that result; the age
+// slider becomes a LINEAR-DAYS time scrubber (matching the light-curve panel's linear x-axis,
+// so the marker tracks the slider and the ⁵⁶Co tail stays straight); `mniValue` is the one
+// free knob (Tier-3), and changing it REFETCHES (debounced) — the plateau is ⁵⁶Ni-independent
+// and the photosphere Teff depends on L_total, so client-side scaling would be wrong.
+let snModel = null;             // the latest /supernova SupernovaModel
+let snFraction = 0;             // slider position 0..1 in the SN time scrubber (linear in days)
+let snToken = 0;                // latest-wins guard for /supernova fetches (enter + M_Ni + resnap)
 let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
+
+// The ⁵⁶Ni-mass control (Tier-3). Bounds are the observed range the backend clamps to; the
+// slider is LOG in M_Ni (it spans 0.001–0.3, ~2.5 decades). Canonical default 0.06.
+const M_NI_DEFAULT = 0.06, M_NI_MIN = 0.001, M_NI_MAX = 0.3;
+let mniValue = M_NI_DEFAULT;    // ⁵⁶Ni mass / M☉ — source of truth for the slider
+const mniLogMin = Math.log10(M_NI_MIN), mniLogMax = Math.log10(M_NI_MAX);
+const mniFromPos = (pos) => 10 ** (mniLogMin + clamp01(pos) * (mniLogMax - mniLogMin));
+const posFromMni = (m) => clamp01((Math.log10(m) - mniLogMin) / (mniLogMax - mniLogMin));
+const MNI_TICKS = [0.001, 0.01, 0.06, 0.1, 0.3];   // observed floor · low · canonical · high · ceiling
 let pinAgeToEnd = false;        // one-shot: land the next track refresh at the very end
 
 // The gateway button appears only once the star is scrubbed to the VERY end of its
@@ -709,6 +737,11 @@ const PHASE_TIP = {
     "The exposed surface tells the WN→WC→WO story: helium with nitrogen, then carbon and " +
     "oxygen. Shown only inside the Wolf–Rayet endgame (snapped to one real track). After " +
     "this the core collapses to a neutron star or black hole — which this simulator doesn't model.",
+  SN: "Supernova — the iron core of a massive star has collapsed and the star explodes. " +
+    "This is a COMPUTED semi-analytic model (the tracks end at collapse): a ⁵⁶Ni→⁵⁶Co→⁵⁶Fe " +
+    "radioactive light curve powering a homologously expanding ejecta photosphere. The " +
+    "explosion mechanism (the neutrino-driven bounce) is NOT modeled — only its aftermath. " +
+    "Shown inside the supernova endgame, with the brightness scale set by the ⁵⁶Ni slider.",
 };
 const phaseTip = (phase) =>
   PHASE_TIP[phase] ||
@@ -1203,6 +1236,7 @@ function updateGateway() {
   const isSn = fType === "SN";
   els.gatewayWd.hidden = !isWd;
   els.gatewayWr.hidden = !isWr;
+  els.gatewaySn.hidden = !isSn;
   // ENABLE gates on the FULL `eg` (not just `atEnd`): the button can now SHOW from the tiny
   // `egMeta` before the full fetch lands, but enterWD/WR read the full `endgame.states`, so
   // enabling on meta alone would make a click in the meta→full gap a silent no-op (a dead
@@ -1212,12 +1246,17 @@ function updateGateway() {
   // is actually present. Happy path is unchanged (full loaded seconds ago → eg present).
   els.gatewayWd.disabled = !atEnd || !eg;
   els.gatewayWr.disabled = !atEnd || !eg;
+  // SN differs: its model is NOT on the track (/endgame returns states=[]), so enterSN fetches
+  // /supernova on click — the button only needs the SN classification (from EITHER cache), so
+  // it enables on `atEnd` alone. The foreshadowing note shows from ZAMS (user-confirmed), now
+  // pointing at the renderable light curve rather than the old "remnant not modeled" dead-end.
+  els.gatewaySn.disabled = !atEnd;
+  els.gatewaySnNote.hidden = !isSn;
   if (isSn) {
-    els.gatewaySn.innerHTML =
-      `<b>Core collapse.</b> A ${fmt(fMass)} M☉ star ends as a supernova, ` +
-      `leaving a neutron star or black hole — a remnant this simulator doesn't model.`;
+    els.gatewaySnNote.innerHTML =
+      `<b>Core collapse.</b> A ${fmt(fMass)} M☉ star ends its life as a supernova. ` +
+      `Scrub to the end, then continue to watch the ⁵⁶Ni-powered light curve.`;
   }
-  els.gatewaySn.hidden = !isSn;
   // The "computing the star's fate…" placeholder shows exactly while a /endgame fetch is
   // IN FLIGHT and we don't yet have a resolved fate (from EITHER cache) for the current
   // (mass, [Fe/H]) — i.e. the brief gap after a mass/[Fe/H] change. Meta now resolves the
@@ -1437,12 +1476,14 @@ function enterWR() {
 // WD structure flag (clearEndgame is a no-op for WR, which used the normal views).
 function exitEndgame() {
   mode = "live";
-  document.body.classList.remove("wd-mode", "wr-mode");
+  document.body.classList.remove("wd-mode", "wr-mode", "sn-mode");
   els.endgameBar.hidden = true;
+  els.snControl.hidden = true;   // hide the ⁵⁶Ni slider (SN-only)
   setWDResnapNote("");
   hr.clearEndgame();
   comp.clearEndgame();
   endgame = null; endgameKey = null;
+  snModel = null; snToken++;     // drop the SN model + invalidate any in-flight /supernova fetch
   // Return to the LIVING version of the endgame progenitor we were viewing
   // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
   // the focus/blur race where a still-focused mass box re-commits a reverted-away value
@@ -1541,10 +1582,264 @@ async function tryWRResnap() {
   }
 }
 
+// --- the supernova endgame (SN Chunk 2) --------------------------------------
+// The SN scrub axis is LINEAR in days (not the WD's piecewise log-cooling map): the
+// light-curve panel's x-axis is linear days so the ⁵⁶Co tail stays straight (the Tier-1
+// anchor), and the scrubber matches it so the marker tracks the slider — the long
+// radioactive tail (where the ⁵⁶Ni story lives) gets the bulk of the travel, while the
+// fast early rise compresses (the states are log-spaced in time, so the tail still has
+// plenty of rows). Position 0 = the explosion; 1 = the last sample (~500 d).
+function snMaxDay() {
+  const t = snModel && snModel.light_curve && snModel.light_curve.time_days;
+  return t && t.length ? t[t.length - 1] : 500;
+}
+// slider fraction (0..1, linear in days) -> nearest photosphere-state index by time.
+function snStateIndex(frac) {
+  const t = snModel.light_curve.time_days;
+  const target = clamp01(frac) * snMaxDay();
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < t.length; i++) {
+    const d = Math.abs(t[i] - target);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+// Snap the SN scrub to its landmarks (explosion / plateau end / last sample).
+function snapSNFraction(raw) {
+  const maxDay = snMaxDay();
+  const targets = [0, 1];
+  if (snModel && snModel.has_plateau && snModel.plateau_duration_days)
+    targets.push(clamp01(snModel.plateau_duration_days / maxDay));
+  const thresh = 0.015;
+  let best = raw, bestD = thresh;
+  for (const t of targets) { const d = Math.abs(raw - t); if (d < bestD) { bestD = d; best = t; } }
+  return clamp01(best);
+}
+// The SN time-scrub landmark ticks: the explosion, the plateau end (only if the curve has
+// one), and the last sampled day. Few + well separated — no stagger.
+function rebuildSNTicks() {
+  if (!snModel || !snModel.light_curve) return;
+  const maxDay = snMaxDay();
+  const marks = [{ pos01: 0, label: "explosion" }];
+  if (snModel.has_plateau && snModel.plateau_duration_days)
+    marks.push({ pos01: clamp01(snModel.plateau_duration_days / maxDay),
+      label: `plateau end ~${Math.round(snModel.plateau_duration_days)} d` });
+  marks.push({ pos01: 1, label: `${Math.round(maxDay)} d` });
+  buildTickStrip(els.ageMarks, marks);
+  els.ageTicks.innerHTML = "";   // the SN scrub uses its own snap targets, not the datalist
+}
+
+// The ⁵⁶Ni-slider note (used by configure + both handlers).
+const mniNote = () =>
+  `⁵⁶Ni = ${fmt(mniValue)} M☉ — sets the brightness scale (canonical ${M_NI_DEFAULT}; ` +
+  `observed ${M_NI_MIN}–${M_NI_MAX}). The plateau shape doesn't move; only the tail height.`;
+
+// Configure the ⁵⁶Ni slider from the current mniValue (log scale + round-yield ticks).
+function configureSNMni() {
+  els.snMni.min = 0; els.snMni.max = 1; els.snMni.step = 0.001;
+  els.snMni.value = posFromMni(mniValue);
+  els.snMniNum.min = M_NI_MIN; els.snMniNum.max = M_NI_MAX; els.snMniNum.step = 0.001;
+  setNum(els.snMniNum, fmt(mniValue));
+  buildTickStrip(els.snMniMarks,
+    MNI_TICKS.map((m) => ({ pos01: posFromMni(m), label: m === M_NI_DEFAULT ? `${m}★` : `${m}` })));
+  els.snMniNote.textContent = mniNote();
+}
+
+// The supernova readout — the progenitor + the explosion + the current photosphere. The
+// explosion scalars come from snModel; the L/Teff/R from the scrubbed photosphere state.
+function renderSNReadout(s) {
+  const m = snModel;
+  const day = (s.age_yr ?? 0) * 365.25;
+  const rows = [
+    ["Progenitor",
+      "the initial main-sequence mass that core-collapsed (snapped to the nearest real grid track)",
+      `${fmt(m.mass_init_msun)} M☉`],
+    ["[Fe/H]", "metallicity of the progenitor (snapped to the nearest grid value)", fmt(m.feh_init, 2)],
+    ["Type",
+      "the supernova class. This branch is Type II — the progenitor kept its hydrogen envelope (a fully stripped star is the Wolf–Rayet endpoint, a Type Ib/c, a later feature)",
+      `SN ${m.type}`],
+    ["Ejecta mass",
+      "the mass thrown off in the explosion — the progenitor's final mass minus the compact remnant left behind",
+      `${fmt(m.m_ej_msun)} M☉`],
+    ["⁵⁶Ni mass",
+      "the radioactive nickel forged in the explosion (the Tier-3 free knob) — its decay powers the tail, and the brightness scale rides on it. Drag the ⁵⁶Ni slider",
+      `${fmt(m.m_ni_msun)} M☉`],
+    ["Explosion energy",
+      "the kinetic energy of the ejecta — a canonical 10⁵¹ erg (the explosion mechanism that sets it isn't modeled)",
+      `${fmt(m.e_kin_erg / 1e51)}×10⁵¹ erg`],
+    ["Remnant",
+      "the compact object left at the centre — a neutron star, or a black hole for a heavy enough core (a deliberately-simplified mass cut)",
+      `${m.remnant_type} · ${fmt(m.remnant_mass_msun)} M☉`],
+    ["Time",
+      "time since the explosion — the age slider above scrubs this",
+      day >= 1 ? `${fmt(day)} d` : `${fmt(day * 24)} h`],
+    ["L",
+      "bolometric luminosity of the expanding photosphere, in Suns — this is the light curve the panel plots",
+      `${fmt(s.L_lsun)} L☉`],
+    ["Teff",
+      "effective temperature of the photosphere — hot at first, cooling as the ejecta expand",
+      `${fmt(s.Teff_K, 4)} K`],
+    ["Photosphere R",
+      "radius of the expanding photosphere (R = v·t, homologous) — it swells to hundreds of AU within months (the true-size scale bar pins to the right)",
+      `${fmt(s.R_rsun)} R☉`],
+    ["Ejecta velocity",
+      "the characteristic homologous expansion speed √(2E/M_ej) — a few thousand km/s, set by the energy and the ejecta mass",
+      `${fmt(m.v_phot_kms)} km/s`],
+  ];
+  if (m.has_plateau) rows.push(["Plateau",
+    "the recombination plateau the IIP light curve sits on — its luminosity and duration come from your star's ejecta mass and radius (Tier-2: robust in shape, ±dex in level)",
+    `${fmt(m.plateau_L_erg_s / 3.828e33)} L☉ · ${fmt(m.plateau_duration_days)} d`]);
+  els.readout.innerHTML = rows
+    .map(([k, d, v]) =>
+      `<div class="row"><div class="term">${k} ${help(d)}</div>` +
+      `<div class="v">${v}</div></div>`)
+    .join("");
+}
+
+// Render the current supernova photosphere (a pure function of snModel + snFraction — no
+// fetch). The light-curve panel (hr in SN mode) + the 3D star / scale / SED / classification
+// / readout take the photosphere StellarState, but via the EXPLICIT {endgame:"sn"} signal
+// (the ejecta log g is meaningless), so the consumers branch on the mode, not on log g.
+function refreshSN() {
+  if (!snModel || !snModel.states || !snModel.states.length) return;
+  const i = snStateIndex(snFraction);
+  const s = snModel.states[i];
+
+  star.update(s, { endgame: "sn" });   // smooth glowing sphere (the fireball shader is Chunk 3)
+  classification.update(s, "sn");      // expanding-photosphere label, read from Teff
+  scale.update(s);                     // true size — the photosphere swells to ~AU scale
+  hr.update(s);                        // the marker on the light curve (hr is in SN mode)
+  comp.update(s);                      // the SN composition placeholder note (ignores the state)
+  sed.update(s, { endgame: "sn" });    // blackbody continuum only (no coronal band)
+  renderSNReadout(s);
+
+  els.status.style.color = teffToCSS(s.Teff_K);
+  els.status.innerHTML =
+    tipSpan("SN endgame",
+      "The core-collapse supernova endgame: a COMPUTED ⁵⁶Ni-powered light curve and an " +
+      "expanding ejecta photosphere (not a snapped track — the explosion is a model). Slide " +
+      "‘Back to the living star’ to leave.") +
+    " · " + tipSpan(`SN ${snModel.type}`, phaseTip("SN")) +
+    (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+
+  const day = (s.age_yr ?? 0) * 365.25;
+  let cap;
+  if (snModel.has_plateau && day <= snModel.plateau_duration_days)
+    cap = `Recombination plateau — the shock-heated hydrogen envelope recombines at roughly ` +
+      `constant luminosity · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  else
+    cap = `Radioactive tail — ⁵⁶Co decay powers the fading light curve (its slope is the ` +
+      `bullet-proof anchor) · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
+}
+
+// Apply a freshly-fetched SupernovaModel to the panels (shared by enter / M_Ni refetch /
+// re-snap): feed the light-curve panel + the composition placeholder + the spectrum
+// placeholder, configure the ⁵⁶Ni slider, rebuild the ticks, and paint the current scrub.
+function applySNModel(model) {
+  snModel = model;
+  hr.setSupernova(model, OBSERVED_SNE);
+  comp.setSupernova();
+  // SN spectra (P-Cygni absorption → nebular emission) aren't modeled — an honest
+  // placeholder, NOT the living model-atmosphere spectrum (wrong for freely-expanding ejecta,
+  // and the photosphere's negative log g would trip /spectrum anyway). Set once per model.
+  spectrum.showPlaceholder(
+    "Supernova spectra (P-Cygni lines, photospheric → nebular) aren't modeled yet — a later feature.");
+  configureSNMni();
+  rebuildSNTicks();
+  refreshSN();
+}
+
+// Fetch the computed /supernova model for the current (mass, [Fe/H], vvcrit) + a ⁵⁶Ni mass.
+// Returns the JSON (throws on a network/HTTP error). The route classifies via
+// PROVIDER.endgame() then runs the sibling — so a non-SN re-snap target comes back
+// is_supernova:false (the callers handle that).
+async function fetchSNModel(mni) {
+  const mass = massValue, feh = Number(els.feh.value);
+  return fetchJSON(`/supernova?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}&m_ni=${mni}`);
+}
+
+// Enter the reversible supernova endgame from the gateway button. UNLIKE enterWD/enterWR
+// (which render synchronously from the pre-fetched endgame.states), the SN model isn't on
+// the track — /endgame returns states=[] for SN — so this FETCHES /supernova on click, with
+// a loading caption + a latest-wins guard (a slow fetch can't paint after we've left).
+async function enterSN() {
+  mode = "sn";
+  updateRotControl();   // hide the rotation control inside the endgame (mode != live)
+  trackToken++;         // invalidate any in-flight live /track
+  document.body.classList.add("sn-mode");
+  lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
+  setWDResnapNote("");
+  els.gateway.hidden = true;
+  els.endgameBar.hidden = false;
+  els.snControl.hidden = false;
+  mniValue = M_NI_DEFAULT;
+  snFraction = 0;
+  els.age.value = snFraction;
+  els.endgameAgeCaption.textContent = "Computing the supernova light curve…";
+  const tok = ++snToken;
+  let model;
+  try { model = await fetchSNModel(mniValue); }
+  catch {
+    if (tok === snToken && mode === "sn")
+      els.endgameAgeCaption.textContent = "Could not compute the supernova light curve.";
+    return;
+  }
+  if (tok !== snToken || mode !== "sn") return;
+  if (!model.is_supernova) { exitEndgame(); return; }   // defensive (the gateway only enables for SN)
+  applySNModel(model);
+}
+
+// Refetch the light curve when the ⁵⁶Ni slider moves (mass/[Fe/H] fixed, so the progenitor
+// can't change — always still an SN). Debounced + latest-wins, like the track fetch.
+async function refetchSNMni() {
+  if (mode !== "sn") return;
+  const tok = ++snToken;
+  let model;
+  try { model = await fetchSNModel(mniValue); } catch { return; }
+  if (tok !== snToken || mode !== "sn" || !model.is_supernova) return;
+  applySNModel(model);
+}
+
+// Re-snap the SN progenitor after a mass/[Fe/H] change inside the endgame (mirrors
+// tryWDResnap/tryWRResnap). If the new progenitor still core-collapses, swap in its computed
+// model (keeping the ⁵⁶Ni + the scrub fraction). If it now ends as a white dwarf / strips to
+// a Wolf–Rayet / has no endgame, there is no supernova — revert and say so.
+async function trySNResnap() {
+  if (mode !== "sn") return;
+  const tok = ++snToken;
+  const mass = massValue, feh = Number(els.feh.value);
+  rotStatus = await fetchRotStatus(mass, feh);   // keep the rotation gate current as [Fe/H] drags
+  if (tok !== snToken || mode !== "sn") return;
+  let model;
+  try { model = await fetchSNModel(mniValue); } catch { return; }
+  if (tok !== snToken || mode !== "sn") return;
+  if (model.is_supernova) {
+    lastEgMass = mass; lastEgFeh = feh;
+    setWDResnapNote("");
+    applySNModel(model);
+  } else {
+    // Not a supernova progenitor — revert to the last SN star (snModel stays the old one).
+    massValue = lastEgMass;
+    els.feh.value = lastEgFeh;
+    els.mass.value = clamp01(sliderFromMass(massValue));
+    setNum(els.massNum, fmt(massValue));
+    setNum(els.fehNum, lastEgFeh.toFixed(2));
+    setWDResnapNote(model.type === "WD"
+      ? `That star ends as a white dwarf, not a supernova — reverted to ${fmt(lastEgMass)} M☉.`
+      : model.type === "WR"
+        ? `That star strips to a Wolf–Rayet (its core-collapse is a stripped-envelope SN, a ` +
+          `later feature) — reverted to ${fmt(lastEgMass)} M☉.`
+        : `No core-collapse supernova for that star — reverted to ${fmt(lastEgMass)} M☉.`);
+    refreshSN();
+  }
+}
+
 // Dispatch a mass/[Fe/H] re-snap to the active endgame mode.
 function tryResnap() {
   if (mode === "wd") return tryWDResnap();
   if (mode === "wr") return tryWRResnap();
+  if (mode === "sn") return trySNResnap();
 }
 
 // Paint every living consumer (the 3D star, HR, composition, scale, spectrum, SED,
@@ -1639,6 +1934,7 @@ async function refreshTrack() {
     endgame = null; endgameKey = null;
     endgameMeta = null; endgameMetaKey = null;
     els.gatewayWd.hidden = els.gatewayWr.hidden = els.gatewaySn.hidden = true;
+    els.gatewaySnNote.hidden = true;     // the SN foreshadowing note rides the button's reset
     endgameLoading = true;               // a fetch is about to fire (meta + full)
     els.gatewayLoading.hidden = false;   // show "computing…" now (covers the await refresh()
                                          // window before updateGateway runs), so the slot
@@ -1797,6 +2093,14 @@ async function init() {
       refreshWR();
       return;
     }
+    if (mode === "sn") {
+      // The SN time scrubber: a pure pick from the pre-computed photosphere states (no fetch),
+      // linear in days so the marker tracks the slider on the linear-time light-curve panel.
+      snFraction = snapSNFraction(Number(els.age.value));
+      els.age.value = snFraction;
+      refreshSN();
+      return;
+    }
     // NOT debounced, on purpose. The marker is now PICKED from the already-fetched
     // track (no fetch at all, Chunk E), so age-scrub frames are essentially free — and
     // age intermediates are *wanted*: scrubbing age is the "watch the star evolve"
@@ -1857,11 +2161,43 @@ async function init() {
     refreshTrack();
   });
 
-  // The stellar-endgame gateway: enter the WD or WR endgame from the button at the slider
+  // The stellar-endgame gateway: enter the WD / WR / SN endgame from the button at the slider
   // limit; the bar's "Back" button leaves it (reversible — Locked decision #1).
   if (els.gatewayWd) els.gatewayWd.addEventListener("click", enterWD);
   if (els.gatewayWr) els.gatewayWr.addEventListener("click", enterWR);
+  if (els.gatewaySn) els.gatewaySn.addEventListener("click", enterSN);
   if (els.endgameBack) els.endgameBack.addEventListener("click", exitEndgame);
+
+  // The ⁵⁶Ni-mass slider (SN endgame, Tier-3): moving it REFETCHES the light curve (the
+  // tail/peak rescale; mass/[Fe/H] fixed, so the progenitor can't change). Debounced +
+  // latest-wins, like the track fetch. The number box is the exact-entry escape hatch.
+  const debouncedSNMni = debounce(refetchSNMni, SLIDER_FETCH_DELAY_MS);
+  if (els.snMni) {
+    els.snMni.addEventListener("input", () => {
+      // snap to a round ⁵⁶Ni yield if close, else read the log position
+      const raw = Number(els.snMni.value);
+      let pos = raw, bestD = 0.02;
+      for (const m of MNI_TICKS) {
+        const p = posFromMni(m); const d = Math.abs(raw - p);
+        if (d < bestD) { bestD = d; pos = p; }
+      }
+      els.snMni.value = pos;
+      mniValue = mniFromPos(pos);
+      setNum(els.snMniNum, fmt(mniValue));
+      els.snMniNote.textContent = mniNote();
+      debouncedSNMni();
+    });
+    els.snMni.addEventListener("change", () => debouncedSNMni.flush());
+  }
+  if (els.snMniNum) els.snMniNum.addEventListener("change", () => {
+    if (mode !== "sn" || els.snMniNum.value.trim() === "") return;
+    const m = Number(els.snMniNum.value);
+    if (!isFinite(m)) return;
+    mniValue = Math.min(Math.max(m, M_NI_MIN), M_NI_MAX);
+    els.snMni.value = posFromMni(mniValue);
+    els.snMniNote.textContent = mniNote();
+    refetchSNMni();
+  });
 
   await refreshMassRangeThenTrack();
 }

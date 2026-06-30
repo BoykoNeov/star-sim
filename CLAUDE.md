@@ -54,7 +54,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mist_heldout_feh`, `requires_mesa_data`, `requires_mist_lowz`,
   `requires_spectra_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,spectrum,sed,scale,classify,color,canvas,layout,tooltip}.js`.
+  `src/{main,star,hr,comp,lane,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
+  `sn.js` is the SN endgame's cited observed-photometry dataset (SN 1987A ⁵⁶Co tail +
+  SN 1999em IIP plateau, published bolometric fits — the Tier-1 overlay anchor); `hr.js`
+  gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail).
   `layout.js` is the draggable/responsive **dashboard** layer (a reorder-in-flow
   sortable over the flex-wrap panel container, see [[star-sim-draggable-responsive-panels]]).
   `comp.js` is the §5.4 composition panel — **three** views via `setMode` (bulk
@@ -224,8 +227,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   the Tier-3 test scales the radioactive **tail** not the peak (the IIP peak IS the M_Ni-free
   plateau `L_p`); the Tier-1 Co-slope is measured on the served **`L_radio` component** (0.00976)
   — on `L_total` the plateau cutoff bleeds in and steepens it to 0.01023. Measured canonical 15 M☉:
-  plateau 1.83e42/138.7 d. **Chunks 2–5 (frontend gateway + L-vs-time panel, 3D fireball→remnant,
-  ejecta onion-shell, NS/BH/failed-SN branch) NOT yet built.** [[star-sim-supernova-remnant-endgame]];
+  plateau 1.83e42/138.7 d. **Chunk 2 BUILT (frontend gateway + light-curve panel):** a reversible
+  `sn-mode` mirroring WD/WR — the dead SN note becomes a `→ Continue: Supernova` gateway button
+  (enabled at end-of-life, still foreshadowed from ZAMS), the HR panel CSS-swaps its title to
+  **Supernova light curve** and `hr.setSupernova()` redraws it as **L vs LINEAR days** (the straight
+  ⁵⁶Co tail — a log-time axis would bend it), the age slider becomes a **linear-days time scrubber**
+  (`snStateIndex` → nearest homologous state), the ⁵⁶Ni-mass **`sn-control` slider** (Tier-3, 0.001–0.3,
+  debounced refetch) lifts the **tail not the plateau**, and the new **cited observed-photometry
+  overlays** (`sn.js` — SN 1987A ⁵⁶Co tail + SN 1999em IIP plateau, **published bolometric fits, not raw
+  photometry**, cited in a visible `.hr-sn-caption`) are the deferred **Tier-1 anchor**. Consumers
+  (3D/SED/comp/scale/readout/classify) get the photosphere StellarState via an explicit `{endgame:"sn"}`
+  signal (NOT naive reuse — `logg≈−5` ejecta would trip the boiling-fireball gate); `star.js` shows a
+  smooth glowing sphere (granulation/corona off — the fireball is Chunk 3), `comp.js`/`spectrum.js` honest
+  placeholders, entry narrates the un-modeled bounce. Mass/[Fe/H] stay live → re-snap (`trySNResnap`;
+  WD/WR/none revert with a note). Playwright-verified at 1440 + 390 px (zero console errors), 215 pytest
+  (backend untouched). **Chunks 3–5 (3D fireball→remnant, ejecta onion-shell, NS/BH/failed-SN branch)
+  NOT yet built.** [[star-sim-supernova-remnant-endgame]];
   plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)

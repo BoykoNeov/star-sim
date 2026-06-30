@@ -198,7 +198,24 @@ chose to land it **with the Chunk-2 overlays** (where the curves are actually dr
 compared on-screen), so Chunk 2 now carries that obligation — see its "observed-SN
 overlays" item, which is the deferred deliverable, NOT optional polish.
 
-### Chunk 2 — Frontend: SN gateway + mode shell + light-curve panel
+### Chunk 2 — Frontend: SN gateway + mode shell + light-curve panel ✅ DONE
+**Status (built):** reversible `sn-mode` mirroring WD/WR — the dead SN note is now a
+`→ Continue: Supernova` gateway button (enabled at end-of-life, foreshadowed from ZAMS);
+the HR panel CSS-swaps its title to **Supernova light curve** and `hr.setSupernova()`
+redraws it as **L vs LINEAR days** (the straight ⁵⁶Co tail — a log-time axis would bend it
+and break the Tier-1 visual check); the age slider becomes a **linear-days time scrubber**
+(`snStateIndex` → nearest homologous state); the ⁵⁶Ni-mass `sn-control` slider (Tier-3,
+0.001–0.3, debounced refetch) lifts the **tail not the plateau**; and the **cited
+observed-photometry overlays** (`frontend/src/sn.js` — SN 1987A ⁵⁶Co tail + SN 1999em IIP
+plateau, **published bolometric fits, not raw photometry**, cited in code AND a visible
+`.hr-sn-caption`) are the deferred **Tier-1 anchor** (constraint #5 met). Consumers
+(3D/SED/comp/scale/readout/classify) get the photosphere `StellarState` via an explicit
+`{endgame:"sn"}` signal (NOT naive reuse — the `logg≈−5` ejecta would trip the
+boiling-fireball gate); `star.js` shows a smooth glowing sphere (fireball is Chunk 3),
+`comp.js`/`spectrum.js` honest placeholders, entry narrates the un-modeled bounce.
+Mass/[Fe/H] stay live → re-snap (`trySNResnap`; WD/WR/none revert with a note).
+Playwright-verified at 1440 + 390 px (zero console errors); 215 pytest (backend untouched).
+
 **Goal:** a reversible "→ Continue: Supernova" gateway and the L-vs-time panel (the
 observable), reusing the WD/WR scaffolding.
 **Do:** replace the static SN note with the gateway button (enabled at the

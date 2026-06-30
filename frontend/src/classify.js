@@ -112,6 +112,18 @@ function wrLabel(state) {
   return { tag: "WC", name: "Wolf–Rayet, carbon sequence" };
 }
 
+// The supernova endgame is not a star at all but an expanding ejecta photosphere — no
+// O–M / I–V type. The label narrates where the photosphere is in its evolution, read from
+// the state (Teff cooling as the shell grows): a hot early fireball, the recombination
+// photosphere through the plateau, then the cool, vast nebular phase. The "SN II" tag marks
+// the v1 SN branch (purely hydrogen-rich Type II — the stripped Ib/c is the WR endpoint).
+function snLabel(state) {
+  const t = state.Teff_K ?? 0;
+  if (t >= 10000) return { tag: "SN II", name: "expanding fireball (hot photosphere)" };
+  if (t >= 5000) return { tag: "SN II", name: "cooling photosphere — recombination plateau" };
+  return { tag: "SN II", name: "cool, vast ejecta — nebular phase" };
+}
+
 // Build the two child spans once; update() only rewrites their text + the type color.
 export function createClassification(el) {
   if (!el) return { update() {} };
@@ -120,11 +132,11 @@ export function createClassification(el) {
   const nameEl = el.querySelector(".sc-name");
 
   return {
-    // mode === "wd"/"wr": show the endgame label instead of the MK type.
+    // mode === "wd"/"wr"/"sn": show the endgame label instead of the MK type.
     update(state, mode) {
       if (!state || state.Teff_K == null) return;
-      if (mode === "wd" || mode === "wr") {
-        const w = mode === "wr" ? wrLabel(state) : wdLabel(state);
+      if (mode === "wd" || mode === "wr" || mode === "sn") {
+        const w = mode === "wr" ? wrLabel(state) : mode === "sn" ? snLabel(state) : wdLabel(state);
         typeEl.textContent = w.tag;
         typeEl.style.color = teffToCSS(state.Teff_K);
         nameEl.textContent = w.name;

@@ -429,8 +429,8 @@ export function createStar(canvas) {
   // blue-white → white → yellow → red as it cools over Gyr) under limb darkening.
   // With no opts it is the normal living star (gate = 1 -> granulation + corona intact).
   function update(state, opts) {
-    const eg = opts && opts.endgame;       // "wd" (cooling sphere) | "wr" (stripped core)
-    const wd = eg === "wd", wr = eg === "wr";
+    const eg = opts && opts.endgame;       // "wd" (cooling sphere) | "wr" (stripped core) | "sn"
+    const wd = eg === "wd", wr = eg === "wr", sn = eg === "sn";
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
@@ -446,7 +446,12 @@ export function createStar(canvas) {
     // Chunk-5 optically-thick-wind shader. Granulation and corona are wrong for a
     // stripped, wind-driven core (it's not convective and has no dynamo corona), so gate
     // both fully off (gDeg=0); the blackbody color carries the blazing hot look for now.
-    const gDeg = wr ? 0.0
+    // SN (Chunk 2): the expanding ejecta photosphere is NOT a convective stellar surface
+    // and has no dynamo corona, so gate granulation AND corona fully off — a smooth glowing
+    // sphere coloured by the cooling Teff (an honest placeholder, like the WR sphere before
+    // its wind shader landed; the expanding-fireball shader is Chunk 3). This is the explicit
+    // {endgame:"sn"} signal the consumers branch on, NOT the meaningless ejecta log g.
+    const gDeg = (wr || sn) ? 0.0
       : wd ? Math.max(0, Math.min(1, (4 - state.logg) / 3))
       : 1.0;
     surfaceMat.uniforms.uGran.value = gDeg;

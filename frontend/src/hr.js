@@ -164,6 +164,20 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let endgameMode = false; // endgame view: auto-fit axes + the endgame track
   let endgameTrack = null; // the endgame StellarStates (the cooling / stripping sequence)
   let previewTrack = null; // LIVING-mode faint preview of where a WD-bound star is headed
+  // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
+  // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
+  // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
+  // bearing — ⁵⁶Co decay is exponential, so log L is LINEAR in linear time, giving the
+  // iconic STRAIGHT radioactive tail on which the Tier-1 slope (0.00975 mag/day) is
+  // visually verifiable against SN 1987A's measured tail. A log-time x-axis would bend the
+  // tail into a curve and the anchor would read as mush. So SN mode has its own coordinate
+  // transforms (xSN/ySN) and its own draw path (drawSupernova), separate from the HR axes.
+  let snMode = false;      // light-curve view (overrides endgameMode/living draw)
+  let snModel = null;      // the served SupernovaModel (light_curve + scalars)
+  let snObserved = null;   // the cited real-SN overlays (sn.js OBSERVED_SNE)
+  let snTmax = 500;        // x-axis extent, days
+  let snLlo = 40, snLhi = 43;   // y-axis extent, log10(L / erg s⁻¹)
+  const LSUN_ERG_S = 3.828e33;  // erg/s — to put the photosphere L_lsun on the erg/s axis
 
   // Fill + dashed outline the current path with a zone's colors.
   function fillZone(fill, stroke) {
@@ -304,7 +318,133 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.restore();
   }
 
+  // --- supernova light-curve view (linear days x / log erg/s y) -----------------------
+  const xSN = (day) => PAD_L + (day / snTmax) * (W - PAD_L - PAD);
+  const ySN = (logL) => H - PAD - (logL - snLlo) / (snLhi - snLlo) * (H - 2 * PAD);
+
+  // Draw a {t (days), L (erg/s)} polyline on the SN axes, clipped to the frame; L≤0 or an
+  // off-bottom value clamps to the floor so a fading tail runs along the axis (no gap).
+  function drawSNCurve(points, stroke, width, dash) {
+    if (!points || points.length < 2) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+    ctx.beginPath();
+    let started = false;
+    for (const p of points) {
+      if (p.t > snTmax + 1e-6) break;
+      const ll = p.L > 0 ? Math.log10(p.L) : snLlo;
+      const x = xSN(p.t), y = ySN(Math.max(snLlo, Math.min(snLhi, ll)));
+      started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+    }
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // The SN light-curve view: bolometric L (log erg/s) vs LINEAR days. The cited observed-SN
+  // overlays draw faint behind; then the model's L_total (solid) and its radioactive ⁵⁶Co
+  // component L_radio (dashed — the Tier-1 line, which should lie parallel to SN 1987A's
+  // measured tail); then the marker at the scrubbed time.
+  function drawSupernova() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#283149";
+    ctx.fillStyle = "#8a93a6";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+
+    ctx.textAlign = "center";
+    for (let d = 0; d <= snTmax + 1e-6; d += 100) {
+      const x = xSN(d);
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(`${d}`, x, H - PAD + 15);
+    }
+    ctx.textAlign = "right";
+    for (const logL of genTicks(snLlo, snLhi, niceStepL(snLhi - snLlo))) {
+      const y = ySN(logL);
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(`1e${logL}`, PAD_L - 6, y + 4);
+    }
+    ctx.textAlign = "center";
+    ctx.fillText("days since explosion", W / 2, H - 6);
+    ctx.save();
+    ctx.translate(12, H / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("L (erg/s)", 0, 0);
+    ctx.restore();
+    ctx.textAlign = "left";
+
+    if (snObserved) {
+      for (const o of snObserved) {
+        drawSNCurve(o.points, o.color, 1.6, [5, 4]);
+        const p0 = o.points.find((p) => p.t <= snTmax);
+        if (p0) {
+          const ll = Math.max(snLlo, Math.min(snLhi, Math.log10(p0.L)));
+          ctx.fillStyle = o.color;
+          ctx.font = "11px system-ui, sans-serif";
+          ctx.fillText(o.label, Math.min(W - PAD - 92, xSN(p0.t) + 6), ySN(ll) - 5);
+        }
+      }
+    }
+
+    const lc = snModel && snModel.light_curve;
+    if (lc) {
+      const toPts = (arr) => arr.map((L, i) => ({ t: lc.time_days[i], L }));
+      drawSNCurve(toPts(lc.L_radio_erg_s), "rgba(255,210,140,0.85)", 1.5, [3, 3]);
+      drawSNCurve(toPts(lc.L_total_erg_s), "#e7ecf5", 2.2, null);
+    }
+
+    if (marker) {
+      const day = (marker.age_yr ?? 0) * 365.25;
+      const L = (marker.L_lsun ?? 0) * LSUN_ERG_S;
+      const ll = Math.max(snLlo, Math.min(snLhi, L > 0 ? Math.log10(L) : snLlo));
+      const x = xSN(Math.max(0, Math.min(snTmax, day))), y = ySN(ll);
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fillStyle = teffToCSS(marker.Teff_K);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#e7ecf5";
+      ctx.stroke();
+    }
+  }
+
+  // Enter / refresh the SN light-curve view. Auto-fits the y-axis (log L) to enclose the
+  // model's L_total + L_radio AND the observed overlays, and the x-axis to the longest run.
+  // Re-called on an M_Ni refetch (the tail rescales) — re-fit each time, like setEndgame.
+  function setSupernova(model, observed) {
+    snMode = true;
+    snModel = model || null;
+    snObserved = observed && observed.length ? observed : null;
+    let lo = Infinity, hi = -Infinity, tmax = 0;
+    const consider = (L, t) => {
+      if (L > 0) { const v = Math.log10(L); if (v < lo) lo = v; if (v > hi) hi = v; }
+      if (t > tmax) tmax = t;
+    };
+    const lc = snModel && snModel.light_curve;
+    if (lc) for (let i = 0; i < lc.time_days.length; i++) {
+      consider(lc.L_total_erg_s[i], lc.time_days[i]);
+      consider(lc.L_radio_erg_s[i], lc.time_days[i]);
+    }
+    if (snObserved) for (const o of snObserved) for (const p of o.points) consider(p.L, p.t);
+    if (!isFinite(lo) || !isFinite(hi)) { lo = 40; hi = 43; }
+    lo = Math.max(lo, hi - 4);   // don't let a deep tail stretch the axis to nothing
+    snLlo = Math.floor(lo - 0.2);
+    snLhi = Math.ceil(hi + 0.2);
+    snTmax = Math.max(100, Math.ceil(tmax / 50) * 50);
+    draw();
+  }
+
   function draw() {
+    if (snMode) { drawSupernova(); return; }
     drawAxes();
     if (endgameMode) {
       drawEndgameTrack();
@@ -386,6 +526,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function clearEndgame() {
     endgameMode = false;
     endgameTrack = null;
+    snMode = false; snModel = null; snObserved = null;   // also leave the SN light-curve view
     applyLivingBounds();   // restore the living frame (re-fit, in case a massive star is selected)
     draw();
   }
@@ -398,5 +539,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, clearEndgame, resize };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setSupernova, clearEndgame, resize };
 }

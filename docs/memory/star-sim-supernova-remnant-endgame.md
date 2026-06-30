@@ -1,6 +1,6 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route, 215 pytest). Chunks 2–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
+description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor), 215 pytest. Chunks 3–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
 metadata: 
   node_type: memory
   type: project
@@ -10,10 +10,11 @@ metadata:
 The user wants an endgame for **core-collapse supernovae + their compact remnants
 (neutron stars & black holes)** — the successor to the branch the current endgame
 classifier reaches but leaves un-rendered (`type="SN", states=[]`).
-**Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunks 2–5 next.**
+**Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunk 2 (frontend
+gateway + light-curve panel) BUILT; Chunks 3–5 next.**
 Plan: `docs/plans/radioactive-afterglow-requiem.md` (sibling to
 `smoldering-cinder-gateway.md`). This file holds the locked constraints + the gate's
-measured verdict + Chunk 1's built state; the plan is the design source of truth.
+measured verdict + Chunk 1/2's built state; the plan is the design source of truth.
 
 **Chunk 1 BUILT (backend, 215 pytest green, no frontend):**
 - `EndgameResult` gained `pre_sn_radius_rsun`/`he_core_msun`/`co_core_msun`/`h_retained`,
@@ -46,14 +47,63 @@ measured verdict + Chunk 1's built state; the plan is the design source of truth
   `L_total` the plateau cutoff bleeds in and steepens it to 0.01023, so the clean anchor needs
   the component, not the total. Light-curve physics unit-tested deterministically (no grids);
   the runtime path (endgame→scalars→sibling→route) tested through the real provider.
-- **DEFERRED to Chunk 2 (user-decided):** the **observed-photometry anchor** for Tier-1.
-  As built, Tier-1 is verified only against the *analytic* ⁵⁶Co formula (self-consistent,
-  NOT yet against real SN 1987A photometry) — which the user's locked constraint #5 ("pull
-  real photometry and cite") and the gate script ("OSC tables = a Chunk-1 deliverable") both
-  require. Advisor flagged it as a silently-resolved gap; surfaced to the user, who chose to
-  land it **with the Chunk-2 overlays** (where the curves are drawn/compared on-screen). So
-  **Chunk 2 owns showing the analytic 0.00975 matching SN 1987A's measured tail, cited** —
-  the "observed-SN overlays" item is that deferred deliverable, not optional polish.
+- **The Tier-1 observed-photometry anchor (deferred from Chunk 1) is now LANDED in Chunk 2**
+  (`frontend/src/sn.js`) — see the Chunk 2 section below.
+
+**Chunk 2 BUILT (frontend gateway + light-curve panel, 215 pytest, backend untouched):**
+- A reversible **`sn-mode`** mirroring WD/WR. The static SN dead-end note becomes a
+  `→ Continue: Supernova` **gateway button** (`#gateway-sn`, enabled only at end-of-life,
+  `disabled=!atEnd` in `updateGateway`; the SN note still foreshadows from ZAMS). `enterSN`
+  (latest-wins `snToken`) fetches `/supernova`, `exitEndgame` reverts (WD/WR/none re-snap
+  with a note).
+- **The HR panel becomes the light-curve panel.** A CSS title-swap (`.hr-title-live` →
+  `.hr-title-sn` "Supernova light curve") + `hr.setSupernova(model, observed)` redraws it as
+  **L (erg/s, log) vs days (LINEAR)** — the LINEAR x-axis is load-bearing: ⁵⁶Co decay is
+  exponential, so log L is linear in linear time → the iconic **straight tail** on which the
+  Tier-1 slope is visually checkable against SN 1987A (a log-time axis would bend it). Draws:
+  the observed overlays, the `L_radio` component (dashed), `L_total` (solid), and the scrubber
+  marker (from `marker.age_yr·365.25` / `marker.L_lsun·LSUN_ERG_S`). y auto-fits to enclose
+  model+observed.
+- **The age slider becomes a linear-days time scrubber.** `snStateIndex` maps
+  `snFraction·maxDay` → the nearest homologous-photosphere state by time, so the marker tracks
+  the slider linearly and the tail gets bulk travel. `ageValue` is the derived day readout.
+- **The ⁵⁶Ni-mass slider** (`#sn-control`, Tier-3, 0.001–0.3 log-spaced, default 0.06,
+  debounced `/supernova` refetch via `refetchSNMni`) lifts the **radioactive TAIL, not the
+  plateau** (the IIP peak is the M_Ni-free plateau `L_p` — measured: tail +~0.6 dex at
+  M_Ni=0.25, plateau unmoved). Labeled "free parameter, not predicted."
+- **The cited observed-photometry overlays** (`frontend/src/sn.js`) — **SN 1987A ⁵⁶Co tail**
+  (`L₁₅₉·exp(−(t−159.1)/100)`, the one real tabulated point 159.1 d / 10^41.381) +
+  **SN 1999em IIP plateau** (1.2e42→1.0e42 to day 95, drop, then 0.30× the 87A tail). These
+  are **published bolometric *fits*, not raw photometry** — CDS/VizieR machine-readable
+  endpoints all failed (bot-block/DB-error/catalog-not-found; per-epoch bolometric LCs are
+  figure/electronic-only), so the honest resolution (advisor-endorsed) is to build the curves
+  from the papers' **published fit parameters** + the one tabulated point, **cited in code AND
+  in a visible `.hr-sn-caption`** (Suntzeff & Bouchet 1990; Elmhamdi 2003; Bersten & Hamuy
+  2009), labeled as fits not raw data. **Bolometric** (V-band's BC-varying slope would break
+  the Tier-1 anchor); SN 1987A is a **tail-only** anchor (compact blue-supergiant progenitor →
+  no normal IIP plateau).
+- **Anchor-slope calibration (advisor-caught post-commit, the load-bearing detail):** the
+  SN 1987A overlay e-fold **MUST equal `TAU_CO_D` (111.3 d)** — the same ⁵⁶Co decay constant
+  the model's `L_radio` uses — so the two tail slopes genuinely **coincide** (0.009755 ≈
+  0.00976 mag/day; measured in-browser). The first cut used a 100 d e-fold (slope 0.01086, 11%
+  steeper) that only *looked* parallel — but the Tier-1 anchor IS slope equality, so an eyeball
+  "looks parallel" silently undercut the one parameter-free honesty claim. 111.3 d is also the
+  honest description of 1987A (its bolometric tail **tracked the ⁵⁶Co decay** over day ~120–500;
+  leakage steepening bites only after ~day 530, past the window). SN 1999em's tail e-fold was
+  likewise corrected 119→111.3 d (a radioactive tail cannot decline *slower* than full Co
+  trapping). If you re-touch `sn.js`, keep `SN1987A_EFOLD_D == TAU_CO_D`.
+- **Consumers fed via an explicit `{endgame:"sn"}` signal, NOT naive reuse** (the WD/WR
+  discipline): `refreshSN` passes the photosphere `StellarState` to 3D/SED/comp/scale/readout/
+  classify with the mode flag, because the freely-expanding ejecta `logg≈−5` would trip the
+  consumers' `clamp((4−logg)/3)` boiling-fireball gate. `star.js` → smooth glowing sphere
+  (granulation/corona off, `(wr||sn)?0`; the real fireball is Chunk 3); `comp.js`/`spectrum.js`
+  → honest "ejecta composition / no model" placeholders; `classify.js` `snLabel` → Teff-based
+  "SN II — expanding fireball / cooling photosphere / nebular"; `sed.js` SN caption (expanding
+  photosphere, coronal band suppressed). Entry **narrates the un-modeled bounce**.
+- **Verified** with Playwright (bundled Chromium) at **1440 + 390 px**: zero console errors;
+  the straight ⁵⁶Co tail lying parallel to SN 1987A's overlay, the M_Ni slider lifting the tail
+  not the plateau, the time scrubber, re-snap, back-to-living restoration, the title swap, and
+  the citation caption all confirmed.
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean

@@ -106,6 +106,9 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   let scale = "lin";   // "lin" | "log" — the cno view's y-axis (log reveals Li/Na)
   let wd = false;      // white-dwarf endgame: replace the burning-abundance views with
                        // a layered structure cross-section (see drawWD)
+  let sn = false;      // supernova endgame: the photosphere composition is a labeled
+                       // H-rich placeholder, so show a note — NOT silent flat bands that
+                       // would imply a real ejecta model (the onion-shell is a later chunk)
   // Per-element visibility for the cno view (legend-click toggles). Session-only
   // (not persisted). Scoped to the cno view — the light view is only three lines.
   const hidden = new Set();
@@ -117,7 +120,10 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   // swaps the burning-abundance views for the layered cross-section, driven by the
   // marker state alone (the EEP-vs-track machinery doesn't apply to a structure view).
   function setEndgame(states) { wd = true; track = states && states.length ? states : track; draw(); }
-  function clearEndgame() { wd = false; draw(); }
+  // Enter the SN endgame: the served photosphere composition is a representative H-rich
+  // envelope placeholder, so the panel shows an honest labeled note instead of bands.
+  function setSupernova() { sn = true; draw(); }
+  function clearEndgame() { wd = false; sn = false; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
   // Toggle one per-element line in the cno view on/off, returning its new
   // visibility. Hiding doesn't just declutter: region() autoscales over only the
@@ -148,6 +154,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    if (sn) { drawSNPlaceholder(); return; }   // honest labeled note (no real ejecta model)
     if (wd) { drawWD(); return; }   // structure view drives off the marker, not the track
     if (!track) return;
     if (mode === "cno") drawCno();
@@ -383,6 +390,27 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   // caller can reserve the right height before laying out — the panel must stay
   // width-robust (a phone-narrow canvas wraps more lines than a wide one). Assumes the
   // font is already set on ctx (measureText/​fillText both read it).
+  // The SN endgame composition placeholder. The model's photosphere carries a
+  // representative hydrogen-rich envelope (X/Y/Z ≈ 0.70/0.28/0.02) — a labeled stand-in,
+  // not a computed ejecta composition. Drawing flat H/He/Z bands would imply an onion-shell
+  // model we don't have, so show an honest note (the real layered ejecta is a later chunk).
+  function drawSNPlaceholder() {
+    ctx.fillStyle = "#cbd3e1";
+    ctx.font = "600 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Ejecta composition", W / 2, PAD_T + 26);
+    ctx.fillStyle = "#8a93a6";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    const msg =
+      "The expanding photosphere is drawn with a representative hydrogen-rich envelope — " +
+      "a labeled placeholder, not a computed composition. The real layered ejecta (the " +
+      "Fe → Si → O → C → He → H onion shell left by the progenitor, plus the ⁵⁶Ni that " +
+      "powers the light curve) is a later feature.";
+    wrapText(msg, PAD_L + 8, PAD_T + 54, W - PAD_L - PAD_R - 16, 18);
+    ctx.textAlign = "left";
+  }
+
   function wrapText(text, x, y, maxW, lh, dry) {
     const words = text.split(" ");
     let line = "", n = 0;
@@ -545,5 +573,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update, setMode, setScale, toggleElem, setEndgame, clearEndgame, resize };
+  return { setTrack, update, setMode, setScale, toggleElem, setEndgame, setSupernova, clearEndgame, resize };
 }

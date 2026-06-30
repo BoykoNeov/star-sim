@@ -281,6 +281,9 @@ export function createSED(canvas) {
   // WR is a different physical object that must not borrow it. The blackbody continuum is
   // honest as-is — a stripped hot core peaks in the far-UV / soft X-ray.)
   let endgameWR = false;
+  // SN endgame: like WR, the expanding ejecta photosphere is no dynamo corona — suppress
+  // the coronal X-ray band entirely; only the (honest) blackbody continuum is drawn.
+  let endgameSN = false;
   // Rotation state (Chunk 3): protAuto = the age-derived default (null when out of the
   // gyro-valid domain); userProt = a manual slider override (null = follow the
   // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
@@ -310,6 +313,7 @@ export function createSED(canvas) {
         ph === phase && m === mass && fe === feh && rr === rRsun && md === mdot) return;
     endgameMode = eg;
     endgameWR = egKind === "wr";
+    endgameSN = egKind === "sn";
     // A NEW star (mass or [Fe/H] changed) clears any manual rotation override; scrubbing
     // age alone KEEPS it (so you can hold a rotation and watch the X-rays evolve).
     if (m !== mass || fe !== feh) userProt = null;
@@ -365,11 +369,12 @@ export function createSED(canvas) {
       // The hot-star wind free–free excess (Chunk 2): the data-grounded solid line, drawn
       // for a living hot massive star (gated inside; WR-endgame is out of scope for v1).
       drawWindFreeFree(lamPeak);
-    } else if (!endgameWR) {
+    } else if (!endgameWR && !endgameSN) {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
       if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // WD endgame: dying-giant band only
     }
-    // WR: no coronal overlay at all (wind, not dynamo) — just the blackbody continuum.
+    // WR / SN: no coronal overlay at all (wind / freely-expanding ejecta, not a dynamo) —
+    // just the honest blackbody continuum of the expanding photosphere.
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
   }
@@ -929,6 +934,14 @@ export function createSED(canvas) {
     // SED Chunk 2 (so honestly "not drawn"); and the un-modeled next step is core-collapse,
     // NOT a white dwarf. One fixed sentence for the whole WR scrub (Teff aside), like WD,
     // so scrubbing within the mode can't resize the panel.
+    if (endgameSN) {
+      caption.textContent =
+        `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +
+        `(${where}). This is the expanding supernova photosphere cooling as it grows — a ` +
+        `freely-expanding ejecta shell, not a dynamo, so no coronal band. The light curve ` +
+        `(not this blackbody) is the observable. γ-rays stay empty. Evocative, not predictive.`;
+      return;
+    }
     if (endgameWR) {
       caption.textContent =
         `Idealized blackbody at Teff ${Math.round(teff)} K — peaks at ${peakTxt} ` +

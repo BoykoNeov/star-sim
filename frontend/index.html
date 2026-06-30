@@ -43,12 +43,19 @@
     </section>
 
     <section class="panel hr-panel" data-panel-id="hr">
-      <h2>HR diagram <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age. For a star that ends as a white dwarf, a faint dashed path previews its endgame — the cooling track heading off toward the hot, faint white-dwarf corner beyond the visible life (clipped to the plot; the full sequence is scrubbable inside the endgame). Toggle 'Variable-star zones' to overlay the instability strip and other variable-star classes as a labeled map.">?</span></h2>
+      <h2><span class="hr-title-live">HR diagram</span><span class="hr-title-sn">Supernova light curve</span> <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age. For a star that ends as a white dwarf, a faint dashed path previews its endgame — the cooling track heading off toward the hot, faint white-dwarf corner beyond the visible life (clipped to the plot; the full sequence is scrubbable inside the endgame). Toggle 'Variable-star zones' to overlay the instability strip and other variable-star classes as a labeled map.">?</span></h2>
       <div class="hr-modes" role="group" aria-label="HR diagram overlays">
         <button type="button" class="mode-btn" data-overlay="vars" aria-pressed="false">Variable-star zones</button>
         <span class="help" tabindex="0" data-tip="Overlays the regions of the HR diagram where stars are known to pulsate or erupt — a labeled map of the major variable-star classes. The boundaries are SCHEMATIC (illustrative class positions, not a metallicity-calibrated instability strip): they show WHERE such stars sit, not a claim that this particular star is variable. The classical instability strip (gold) is one tilted band, driven by the same opacity (κ) mechanism in the helium-ionization zone, crossed by δ Scuti, RR Lyrae and Cepheids at rising luminosity. LBV and Mira are separate instabilities elsewhere on the diagram. Drag the star into a shaded zone to see when a star of this mass and age would be a pulsating (or eruptive) variable.">?</span>
       </div>
       <canvas id="hr-canvas"></canvas>
+      <!-- Citation for the SN-mode observed overlays (constraint #5: cite real photometry).
+           Shown only in the supernova endgame (CSS, body.sn-mode). These are published
+           bolometric-light-curve FITS, not raw photometry — said so honestly. -->
+      <p class="note hr-sn-caption">Observed overlays — published bolometric fits, not raw
+        photometry: <b>SN 1987A</b> ⁵⁶Co tail (Suntzeff &amp; Bouchet 1990); <b>SN 1999em</b>
+        IIP plateau (Elmhamdi 2003; Bersten &amp; Hamuy 2009). The model's dashed ⁵⁶Co tail
+        should run parallel to SN 1987A's — the bullet-proof Tier-1 anchor.</p>
       <div class="legend legend-vars">
         <span><i style="background:#ffce6b"></i><span class="tip" tabindex="0" data-tip="Short-period (hours) pulsators where the instability strip crosses the main sequence — A–F stars of ~1.5–2.5 M☉. The lowest-luminosity members of the classical strip.">δ Scuti</span></span>
         <span><i style="background:#ffce6b"></i><span class="tip" tabindex="0" data-tip="Old, metal-poor (Population II) horizontal-branch stars (~0.5–0.7 M☉, periods ~0.2–1 day). Their near-uniform luminosity makes them standard candles for the Milky Way's halo and globular clusters.">RR Lyrae</span></span>
@@ -113,6 +120,7 @@
         <div class="endgame-bar-top">
           <span class="endgame-title endgame-title-wd">White-dwarf endgame</span>
           <span class="endgame-title endgame-title-wr">Wolf–Rayet endgame</span>
+          <span class="endgame-title endgame-title-sn">Supernova endgame</span>
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
         <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
@@ -137,6 +145,17 @@
           bared core is hotter and more compact than any <i>observed</i> Wolf–Rayet, it
           honestly shows no model. Mass and [Fe/H] stay live (they re-snap to a different Wolf–Rayet).
           What follows — the <b>core-collapse supernova</b> — this simulator doesn't model.
+        </p>
+        <p class="endgame-narrate endgame-narrate-sn">
+          The iron core has collapsed — the <b>explosion mechanism itself</b> (the
+          neutrino-driven bounce) is the step this simulator doesn't model. What you're
+          scrubbing is the <b>aftermath</b>: a <b>⁵⁶Ni-powered light curve</b> (the HR panel
+          becomes luminosity vs. time) and a homologously expanding ejecta photosphere. The
+          tail SLOPE is set purely by ⁵⁶Co decay — the bullet-proof anchor, which lies along
+          SN 1987A's measured tail; the IIP plateau shape comes from your star's ejecta mass
+          and radius; but the brightness SCALE is set by the (unmodeled) explosion's
+          <b>nickel yield</b> — drag the ⁵⁶Ni slider and see where real supernovae land. Mass
+          and [Fe/H] stay live (they re-snap to a different progenitor).
         </p>
       </div>
 
@@ -204,6 +223,7 @@
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>
         <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
+        <span class="age-sn">· time since explosion (supernova)</span>
         <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">
@@ -212,6 +232,23 @@
       </div>
       <datalist id="age-ticks"></datalist>
       <p class="note endgame-age-caption" id="endgame-age-caption"></p>
+
+      <!-- The ⁵⁶Ni-mass slider (SN endgame, Tier-3): the ONE free knob of the light curve.
+           The radioactive tail / peak height scales linearly with the (unmodeled) explosion's
+           ⁵⁶Ni yield — NOT derivable from the track (observed 0.001–0.3 M☉), so it's a slider,
+           not a prediction. Shown only inside the supernova endgame (toggled by main.js). The
+           recombination plateau is ⁵⁶Ni-independent — only the tail moves. -->
+      <div class="sn-control" id="sn-control" hidden>
+        <label for="sn-mni"><sup>56</sup>Ni mass
+          <input id="sn-mni-num" class="val-input" type="number" /> M<sub>☉</sub>
+          <span class="help" tabindex="0" data-tip="The mass of radioactive ⁵⁶Ni forged in the explosion — the Tier-3 free parameter. Its decay chain (⁵⁶Ni → ⁵⁶Co → ⁵⁶Fe) powers the light curve's radioactive tail, and the tail/peak brightness scales LINEARLY with it. It is NOT derivable from the evolutionary track — the explosion mechanism that sets it isn't modeled — and observed core-collapse supernovae span 0.001–0.3 M☉ (canonical ~0.06). So drag it to set the brightness scale and watch where real supernovae land; the SHAPE (the recombination plateau, the ⁵⁶Co tail slope) is your star's and does not move with it — only the radioactive height does.">?</span>
+        </label>
+        <div class="slider-wrap">
+          <input id="sn-mni" type="range" />
+          <div class="ticks" id="sn-mni-marks"></div>
+        </div>
+        <p class="note sn-mni-note" id="sn-mni-note"></p>
+      </div>
 
       <!-- Feedback when a mass/[Fe/H] drag INSIDE an endgame re-snapped to a fate that
            doesn't support the current endgame (e.g. dragging a WD progenitor up into the
@@ -230,7 +267,8 @@
       <div id="gateway" class="gateway">
         <button id="gateway-wd" class="gateway-btn" type="button" hidden disabled>→ Continue: White&nbsp;Dwarf</button>
         <button id="gateway-wr" class="gateway-btn" type="button" hidden disabled>→ Continue: Wolf–Rayet</button>
-        <p id="gateway-sn" class="gateway-note" hidden></p>
+        <button id="gateway-sn" class="gateway-btn" type="button" hidden disabled>→ Continue: Supernova</button>
+        <p id="gateway-sn-note" class="gateway-note" hidden></p>
         <!-- Bridges the brief /endgame-fetch gap after a mass/[Fe/H] change: the fate
              classifier runs server-side, so for ~½ s the reserved slot would otherwise be
              blank (reads as "nothing happened"). This honest placeholder fills it until the

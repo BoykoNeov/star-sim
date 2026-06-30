@@ -544,9 +544,10 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 /* The bar's title + narration come in a WD and a WR variant; the body mode class
    reveals exactly one (the WR un-modeled gap is at the END — core-collapse — so its
    text differs from the WD's PN-ejection-at-entry framing). */
-.endgame-title-wd, .endgame-title-wr { display: none; }
+.endgame-title-wd, .endgame-title-wr, .endgame-title-sn { display: none; }
 body.wd-mode .endgame-title-wd { display: inline; }
 body.wr-mode .endgame-title-wr { display: inline; }
+body.sn-mode .endgame-title-sn { display: inline; }
 /* The "Back to the living star" button (item 9): a compact filled-accent (yellow)
    button, matching the gateway button's treatment, so the two endgame controls read
    as the same affordance. Kept compact (not full-width) so the bar's title-+-back
@@ -561,9 +562,10 @@ body.wr-mode .endgame-title-wr { display: inline; }
 .endgame-back:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
-.endgame-narrate-wd, .endgame-narrate-wr { display: none; }
+.endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn { display: none; }
 body.wd-mode .endgame-narrate-wd { display: block; }
 body.wr-mode .endgame-narrate-wr { display: block; }
+body.sn-mode .endgame-narrate-sn { display: block; }
 
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
@@ -572,29 +574,41 @@ body.wr-mode .endgame-narrate-wr { display: block; }
 
 /* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling
    time / WR stripping sequence). */
-.age-wd, .age-wr { display: none; color: var(--accent); }
+.age-wd, .age-wr, .age-sn { display: none; color: var(--accent); }
 
 /* In an endgame: the age input becomes a scrubber (no number entry), the endgame
    caption shows, and the SED's rotation control is hidden (neither a degenerate WD
    nor a wind-driven WR has the cool convective dynamo that control models). */
-body.wd-mode .age-live, body.wr-mode .age-live { display: none; }
+body.wd-mode .age-live, body.wr-mode .age-live, body.sn-mode .age-live { display: none; }
 body.wd-mode .age-wd { display: inline; }
 body.wr-mode .age-wr { display: inline; }
+body.sn-mode .age-sn { display: inline; }
 body.wd-mode .endgame-age-caption,
-body.wr-mode .endgame-age-caption { display: block; }
-body.wd-mode #sed-rot, body.wr-mode #sed-rot { display: none; }
+body.wr-mode .endgame-age-caption,
+body.sn-mode .endgame-age-caption { display: block; }
+body.wd-mode #sed-rot, body.wr-mode #sed-rot, body.sn-mode #sed-rot { display: none; }
 /* WR draws NO coronal X-ray band or rotation→activity line (a wind, not a dynamo), so
    hide those two SED legend entries — don't label a non-feature. (The WD endgame still
    draws a faded band, so it keeps the legend; only WR hides it.) */
-body.wr-mode .sed-nonthermal-legend { display: none; }
+body.wr-mode .sed-nonthermal-legend, body.sn-mode .sed-nonthermal-legend { display: none; }
 /* The variable-star overlay is a LIVING-star HR feature (the classical instability
    strip; white-dwarf pulsators like ZZ Ceti are a different mechanism), and the HR
    panel is the WD cooling track in this mode — so hide the toggle + its legend, the
    same way #sed-rot is hidden. Without this the toggle stayed clickable but drew
    nothing (hr.js draw() skips the overlay in endgame mode), leaving a dead button +
    an orphaned legend. The overlay's on/off state is preserved and re-shown on exit. */
-body.wd-mode .hr-modes, body.wr-mode .hr-modes,
-body.wd-mode .legend-vars, body.wr-mode .legend-vars { display: none; }
+body.wd-mode .hr-modes, body.wr-mode .hr-modes, body.sn-mode .hr-modes,
+body.wd-mode .legend-vars, body.wr-mode .legend-vars, body.sn-mode .legend-vars { display: none; }
+/* In the SN endgame the HR panel is repurposed as the light curve (L vs time) — a
+   genuinely different plot, NOT an HR diagram (unlike the WD/WR cooling/stripping tracks,
+   which keep real L-vs-Teff axes). So swap the panel title to match. */
+.hr-title-sn { display: none; }
+body.sn-mode .hr-title-live { display: none; }
+body.sn-mode .hr-title-sn { display: inline; }
+/* The SN observed-overlay citation caption — shown only in the supernova endgame. */
+.hr-sn-caption { display: none; margin: 8px 0 0; line-height: 1.5; }
+.hr-sn-caption b { color: #cbd2e0; }
+body.sn-mode .hr-sn-caption { display: block; }
 /* The composition panel becomes the white-dwarf STRUCTURE view in the WD endgame: its
    burning-abundance mode toggle and legends are meaningless for a degenerate remnant
    (the structure cross-section draws its own labels), so hide them. The WR endgame is
@@ -602,6 +616,11 @@ body.wd-mode .legend-vars, body.wr-mode .legend-vars { display: none; }
    burning-abundance views (the toggle + legends stay visible; no wr-mode rule here). */
 body.wd-mode .comp-modes,
 body.wd-mode .comp-panel .legend { display: none; }
+/* The SN endgame composition panel shows an honest labeled placeholder (the real layered
+   ejecta is a later chunk), so its burning-abundance toggle + legends are meaningless —
+   hide them, the same as the WD structure view. */
+body.sn-mode .comp-modes,
+body.sn-mode .comp-panel .legend { display: none; }
 /* In the white-dwarf endgame the Lane–Emden panel finally earns its keep: a white
    dwarf genuinely IS a degenerate polytrope (n≈1.5 non-relativistic → n=3 near the
    Chandrasekhar mass), so swap the general "not the real interior" intro for a hint
@@ -618,3 +637,10 @@ body.wd-mode .lane-wd-hint {
   margin: 8px 0 0; color: #ffb07a; font-size: 12.5px; line-height: 1.45;
   border: 1px dashed rgba(255, 176, 122, 0.5); border-radius: 6px; padding: 6px 10px;
 }
+
+/* The ⁵⁶Ni-mass slider (SN endgame, Tier-3). Shown only inside the supernova endgame
+   (main.js toggles its [hidden]); the slider styling reuses the page's range/ticks idiom. */
+.sn-control { margin: 14px 0 2px; }
+.sn-control > label { display: block; font-weight: 600; }
+.sn-control input[type="range"] { width: 100%; accent-color: var(--accent); }
+.sn-mni-note { margin: 6px 0 0; text-align: left; }
