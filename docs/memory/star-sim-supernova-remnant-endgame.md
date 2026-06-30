@@ -1,15 +1,46 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: Future endgame arc (NOTED, nothing built, no design yet) — supernovae + neutron-star/black-hole remnants, the planned successor to the currently-dead SN branch. Constraint set the user fixed: a ⁵⁶Ni-powered light curve, homologous ejecta expansion, *maybe* some nucleosynthesis, EXPLICITLY no computational explosion mechanism (infeasible), observed light curves as the verification anchor.
+description: Core-collapse SN + NS/BH endgame arc — DESIGNED + chunked, Chunk 0 measure-first gate DONE (verdict shape-GO/scale-via-slider); plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type="SN" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova).
 metadata:
   type: project
 ---
 
-The user wants a **future** endgame for **core-collapse supernovae + their compact
-remnants (neutron stars & black holes)** — the planned successor to the branch the
-current endgame classifier already reaches but deliberately leaves un-rendered.
-**Status: NOTED only. Nothing built, no design doc, no chunking yet.** This file
-exists so the requirement + its fixed constraints survive to whoever picks it up.
+The user wants an endgame for **core-collapse supernovae + their compact remnants
+(neutron stars & black holes)** — the successor to the branch the current endgame
+classifier reaches but leaves un-rendered (`type="SN", states=[]`).
+**Status: DESIGNED + chunked. Chunk 0 (measure-first gate) DONE; Chunks 1–5 are
+specified/sketched, not yet built.** Plan: `docs/plans/radioactive-afterglow-requiem.md`
+(sibling to `smoldering-cinder-gateway.md`). This file holds the locked constraints +
+the gate's measured verdict; the plan is the design source of truth.
+
+**Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
+`PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean
+routing metadata; do NOT relocate it). A new sibling **`supernova.py` + `/supernova`**
+(bypasses `PROVIDER`, like `lane_emden`/`spectra`) does the light-curve **computation**,
+emitting BOTH photosphere `StellarState`s (feed the existing 3D/SED/scale consumers —
+the expanding photosphere has L/Teff/R) AND a light-curve object (a new panel). So the
+SN state is a `StellarState` *and* a sibling object — the open §3 question, resolved.
+Progenitor inputs ride **scalar fields on `EndgameResult`** (`pre_sn_radius_rsun`,
+`he_core_msun`, `co_core_msun`, `h_retained`) — a `CACHE_VERSION` bump to parse the
+`he_core_mass`/`c_core_mass`/`o_core_mass` columns; `StellarState` untouched.
+
+**The 3-tier honesty framing IS the arc:** Tier-1 = the ⁵⁶Co tail slope (0.0098 mag/d,
+set only by τ_Co=111.3 d) — bulletproof, zero free params, THE verification anchor (not
+the peak). Tier-2 = plateau L & duration from MIST M_ej/R₀ + canonical E,κ (Popov/Kasen-
+Woosley) — robust shape, ±dex level. Tier-3 = peak/tail height ∝ M_Ni — NOT MIST-derivable
+(0.001–0.3 M☉), so a **free slider** (default 0.06), explicitly not predicted.
+
+**Chunk 0 gate — measured over the full MIST grid (the scope-setting findings):**
+- **The SN bucket is PURELY Type II** (all 279 SN-classified tracks retain H, surf-H
+  0.30–0.75; **zero Ib/c** — the stripped stars classify as **WR**, 329 of them). ⇒ v1
+  SN arc = **Type II / IIP**. Stripped-envelope **Ib/c is the WR endpoint** (a follow-on
+  chunk: "→ Continue: Supernova" off the WR scrub, pure Arnett no-plateau), NOT v1.
+- **Core masses present & sane** (0 unphysical) → clean ejecta/remnant split. Progenitors
+  are **red supergiants** (final-phase R₀ ≈ 400–1100 R☉) → IIP plateau valid; use the
+  **final-phase-median R₀** (terminal EEP row is a low-gravity artifact for some tracks).
+- **Canonical 15 M☉ solar curve lands in regime:** plateau 1.5e42 erg/s / 133 d, Co-tail
+  slope 0.00976 mag/d (= analytic = textbook 0.0098). **Verdict: shape-GO, scale-via-
+  slider** (the SED-Chunk-2 pattern). Cite Nadyozhin(1994) ε_Ni/ε_Co, Kasen-Woosley(2009).
 
 **Where it slots in (the existing dead-end this fills):** today `MISTProvider.endgame`
 classifies an ends-at-φ5-onset track as **`type="SN"` with `states=[]`** — an honest
