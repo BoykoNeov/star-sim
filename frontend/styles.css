@@ -201,6 +201,24 @@ main {
 }
 @media (max-width: 480px) { .sed-rot-note { min-height: 2.8em; } }
 
+/* Rotation toggle (rotation Chunk 3) — a two-state control in the Controls panel,
+   below [Fe/H]. Greyed (disabled) where rotation is a data-derived no-op; hidden
+   entirely (the `hidden` attribute) where no rotating grid exists for the [Fe/H]. */
+.rot-control { margin: 14px 0 2px; }
+.rot-control.disabled { opacity: 0.5; }
+.rot-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; color: var(--muted); cursor: pointer; margin: 0;
+}
+.rot-control.disabled .rot-label { cursor: default; }
+.rot-label > span { color: var(--ink); font-weight: 600; }
+.rot-label input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: inherit; }
+.rot-vvcrit { color: var(--muted) !important; font-weight: 400 !important; font-size: 12px; }
+/* Reserve the note height so toggling on/off (different note lengths) never resizes
+   the controls panel and shoves the age slider. */
+.rot-note { color: var(--accent); font-size: 12px; min-height: 1.4em; margin: 4px 0 0; }
+@media (max-width: 480px) { .rot-note { min-height: 2.8em; } }
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

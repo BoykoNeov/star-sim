@@ -37,6 +37,11 @@ const els = {
   ageMarks: document.getElementById("age-marks"),
   readout: document.getElementById("readout"),
   status: document.getElementById("status"),
+  // Rotation toggle (rotation Chunk 3): the two-state non-rotating/rotating control
+  // below [Fe/H], with its data-derived honesty note.
+  rotControl: document.getElementById("rot-control"),
+  rotToggle: document.getElementById("rot-toggle"),
+  rotNote: document.getElementById("rot-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -278,6 +283,22 @@ function posFromAge(age) {
 // SIMPLER than the live path: it picks states[i] from the pre-fetched /endgame result
 // and feeds the consumers directly — no /state fetch, no window build, no phase snap.
 let mode = "live";              // "live" | "wd" | "wr"
+// --- rotation axis (rotation Chunk 3) ----------------------------------------
+// `rotationOn` is the user's TOGGLE INTENT (persisted across mass/[Fe/H] changes, like
+// massValue): turning rotation on at a massive star and dragging the mass down keeps the
+// intent, the toggle just greys (the rotating track is then a bit-identical no-op). The
+// EFFECTIVE vvcrit sent to the backend gates that intent on `has_grid` — so a metallicity
+// with no rotating grid (or any non-MIST provider) silently falls back to non-rotating,
+// and /track?vvcrit=0.4 can never hit an [Fe/H] the rotating axis lacks (a 422). MIST
+// publishes only {0.0, 0.4}, so this is a snap, not a blend (see whirling-cohort-atlas.md).
+const ROT_VVCRIT = 0.4;
+let rotationOn = false;
+// The latest /rotation_status for the current (mass, [Fe/H]) — the data-derived honesty
+// gate (has_grid / threshold_msun / active). Refreshed (awaited) before any track/endgame
+// fetch on a mass/[Fe/H] change, so the effective vvcrit below is always current.
+let rotStatus = { has_grid: false, threshold_msun: null, active: false };
+const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
+
 let endgame = null;             // the latest /endgame result (type, states, masses…)
 let endgameKey = null;          // the requested (mass|feh) the `endgame` data is for
 let endgameToken = 0;           // latest-wins guard for /endgame fetches
@@ -436,7 +457,9 @@ function setWDResnapNote(msg) {
   els.endgameResnapNote.hidden = !msg;
 }
 
-const egKey = () => `${massValue.toFixed(4)}|${Number(els.feh.value).toFixed(2)}`;
+// The endgame-cache key includes the effective rotation: toggling rotation changes the
+// fate (rotation lowers the WR threshold), so a cached endgame for the other vvcrit is stale.
+const egKey = () => `${massValue.toFixed(4)}|${Number(els.feh.value).toFixed(2)}|${effVvcrit()}`;
 
 // Trailing debounce for the EXPENSIVE backend fetch behind a slider drag. Each
 // /track rebuilds the full (mass,[Fe/H]) EEP
@@ -902,7 +925,11 @@ function renderReadout(s) {
       "core mass fractions — watch hydrogen fall and helium rise as fusion proceeds",
       `${fmt(s.X_core)} / ${fmt(s.Y_core)} / ${fmt(s.Z_core, 2)}`],
     ["v_rot",
-      "surface rotation speed (not modeled by this provider)",
+      "surface equatorial rotation velocity — MIST's own value for the selected " +
+      "rotation. It is 0 on the non-rotating grid (and below the ~1.2 M☉ Kraft break, " +
+      "where MIST zeroes rotation), and the real, evolving speed on the rotating grid: " +
+      "fast on the zero-age main sequence, then falling as the star expands and its winds " +
+      "carry off angular momentum. Toggle Rotation (below [Fe/H]) to switch grids.",
       s.v_rot_kms === null ? "n/a" : `${fmt(s.v_rot_kms)} km/s`],
     ["activity",
       "a 0–1 proxy for magnetic activity — the dynamo-driven surface magnetism " +
@@ -1190,6 +1217,44 @@ function updateGateway() {
                                 // children toggle, so the panel never jitters in live mode
 }
 
+// --- rotation toggle: fetch the honesty gate + render the control ------------
+// Fetch /rotation_status for a (mass, [Fe/H]). Tiny (~60 B) and AWAITED before the
+// track/endgame fetch on a mass/[Fe/H] change, so the effective vvcrit is current
+// (avoids a /track?vvcrit=0.4 422 at an [Fe/H] the rotating axis lacks). Never throws —
+// a failure (or a provider with no rotation) degrades to "no grid" (toggle hidden).
+async function fetchRotStatus(mass, feh) {
+  try {
+    return await fetchJSON(`/rotation_status?mass=${mass}&feh=${feh}`);
+  } catch {
+    return { has_grid: false, threshold_msun: null, active: false };
+  }
+}
+
+// Render the rotation control from `rotStatus` (+ the live mode): HIDDEN where no
+// rotating grid covers this [Fe/H] (honestly absent, not a dead toggle) or inside an
+// endgame; GREYED where rotation is a data-derived no-op (below the Kraft break, where
+// the rotating track is bit-identical); ENABLED where toggling actually changes the track.
+function updateRotControl() {
+  const c = els.rotControl;
+  if (!c) return;
+  if (mode !== "live" || !rotStatus.has_grid) { c.hidden = true; return; }
+  c.hidden = false;
+  els.rotToggle.checked = rotationOn;
+  const active = !!rotStatus.active;
+  els.rotToggle.disabled = !active;
+  c.classList.toggle("disabled", !active);
+  if (!active) {
+    const thr = rotStatus.threshold_msun;
+    els.rotNote.textContent = thr
+      ? `Rotation is negligible below ~${fmt(thr)} M☉ (magnetic braking) — no effect on this star.`
+      : "Rotation is negligible for this star.";
+  } else {
+    els.rotNote.textContent = rotationOn
+      ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
+      : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
+  }
+}
+
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
 // /endgame?meta=1) so the gateway button appears (greyed, foreshadowing) the instant a new
 // track lands — instead of waiting ~150 ms+ for the full ~1 MB /endgame the preview/enter
@@ -1203,7 +1268,7 @@ async function fetchEndgameMeta() {
   const tok = ++endgameMetaToken;
   const mass = massValue, feh = Number(els.feh.value);
   try {
-    const m = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&meta=1`);
+    const m = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}&meta=1`);
     // Drop a stale/superseded response, or one for a star we've since moved off of.
     if (tok !== endgameMetaToken || mode !== "live" || egKey() !== key) return;
     endgameMeta = m; endgameMetaKey = key;
@@ -1234,7 +1299,7 @@ async function fetchEndgamePreview() {
   endgameLoading = true;   // a fetch is now in flight → the placeholder is live
   const mass = massValue, feh = Number(els.feh.value);
   try {
-    const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
+    const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // Drop a stale/superseded response, or one for a star we've since moved off of.
     if (tok !== endgameToken || mode !== "live" || egKey() !== key) return;
     endgame = eg; endgameKey = key;
@@ -1261,7 +1326,7 @@ async function maybeFetchEndgame() {
                            // fetchEndgamePreview, which sets this too)
   const mass = massValue, feh = Number(els.feh.value);
   try {
-    const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`);
+    const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     if (tok !== endgameToken || mode !== "live") return;
     endgame = eg; endgameKey = key;
     endgameLoading = false;
@@ -1288,6 +1353,7 @@ function updateLiveGateway() {
 function enterWD() {
   if (!endgame || endgame.type !== "WD" || !endgame.states.length) return;
   mode = "wd";
+  updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   // Invalidate any in-flight live /track so it can't land and clobber the WD render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackToken++;
@@ -1311,6 +1377,7 @@ function enterWD() {
 function enterWR() {
   if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
   mode = "wr";
+  updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   // Invalidate any in-flight live /track so it can't land and clobber the WR render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackToken++;
@@ -1361,8 +1428,12 @@ async function tryWDResnap() {
   if (mode !== "wd") return;
   const tok = ++endgameToken;
   const mass = massValue, feh = Number(els.feh.value);
+  // Keep the rotation gate current as [Fe/H] drags (it may leave the rotating grid),
+  // so effVvcrit() can fall back to non-rotating and /endgame never 422s off-grid.
+  rotStatus = await fetchRotStatus(mass, feh);
+  if (tok !== endgameToken || mode !== "wd") return;
   let eg;
-  try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`); }
+  try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`); }
   catch { return; }
   if (tok !== endgameToken || mode !== "wd") return;
   if (eg.type === "WD" && eg.states.length) {
@@ -1399,8 +1470,11 @@ async function tryWRResnap() {
   if (mode !== "wr") return;
   const tok = ++endgameToken;
   const mass = massValue, feh = Number(els.feh.value);
+  // Keep the rotation gate current as [Fe/H] drags (see tryWDResnap).
+  rotStatus = await fetchRotStatus(mass, feh);
+  if (tok !== endgameToken || mode !== "wr") return;
   let eg;
-  try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}`); }
+  try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`); }
   catch { return; }
   if (tok !== endgameToken || mode !== "wr") return;
   if (eg.type === "WR" && eg.states.length) {
@@ -1496,8 +1570,16 @@ async function refreshTrack() {
   massValue = Math.min(Math.max(massValue, validMassMin), validMassMax);
   const mass = massValue;
   const feh = Number(els.feh.value);
+  // Refresh the rotation gate FIRST (tiny, awaited) so the effective vvcrit is current for
+  // this (mass, [Fe/H]) before the track/endgame fetches read it: has_grid depends on
+  // [Fe/H], active on mass, and gating effVvcrit on has_grid keeps /track?vvcrit=0.4 from
+  // ever hitting an [Fe/H] the rotating axis lacks (a 422). Token-guarded like the track.
+  const rs = await fetchRotStatus(mass, feh);
+  if (token !== trackToken || mode !== "live") return;
+  rotStatus = rs;
+  updateRotControl();
   try {
-    const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}`);
+    const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // A newer track will drive its own refresh; and a track landing after we entered
     // the WD endgame must not overwrite the endgame view.
     if (token !== trackToken || mode !== "live") return;
@@ -1721,6 +1803,16 @@ async function init() {
     els.age.value = ageFraction;
     refresh();
     updateLiveGateway();
+  });
+
+  // Rotation toggle (rotation Chunk 3): flip the selected rotation and refetch the
+  // (rotating / non-rotating) track + endgame for the current star. Only meaningful in
+  // live mode and only enabled where rotation_status.active is true (updateRotControl
+  // greys it otherwise), so a `change` here always refers to a real track swap.
+  if (els.rotToggle) els.rotToggle.addEventListener("change", () => {
+    if (mode !== "live") return;
+    rotationOn = els.rotToggle.checked;
+    refreshTrack();
   });
 
   // The stellar-endgame gateway: enter the WD or WR endgame from the button at the slider

@@ -160,6 +160,24 @@
       </div>
       <datalist id="feh-ticks"></datalist>
 
+      <!-- Rotation (rotation Chunk 3): a two-state non-rotating/rotating TOGGLE, not a
+           slider — MIST v2.5 publishes only v/vcrit {0.0, 0.4}, so there is no third
+           grid to interpolate toward. It selects the rotating evolutionary track (real
+           data): main-sequence surface N/He enrichment, a longer life, a shifted HR
+           track, and at low metallicity the chemically-homogeneous (CHE) blue
+           divergence. Data-derived honesty gate (`/rotation_status`): it is GREYED where
+           rotation is a no-op (below the ~1.2 M☉ Kraft break, where MIST makes the
+           rotating track bit-identical to the non-rotating one) and HIDDEN where no
+           rotating grid is on disk for the current [Fe/H]. -->
+      <div class="rot-control" id="rot-control" hidden>
+        <label class="rot-label" for="rot-toggle">
+          <input id="rot-toggle" type="checkbox" />
+          <span>Rotation <span class="rot-vvcrit">v/v<sub>crit</sub> = 0.4</span></span>
+          <span class="help" tabindex="0" data-tip="Stellar rotation, as MIST's v/vcrit = 0.4 rotating grid (a two-state toggle — MIST publishes only non-rotating and v/vcrit = 0.4, so this is not a continuous slider). Rotation reshapes the WHOLE track, not just a cosmetic spin: rotational mixing dredges CNO-processed material to the surface DURING the main sequence (nitrogen and helium rise — the Hunter-diagram signature, which otherwise only appears after the first dredge-up), the extra mixing feeds the core so the star lives longer and sits at a shifted HR position, and at low metallicity fast rotation can trigger chemically-homogeneous evolution (the star stays compact and blue instead of becoming a red supergiant). It is greyed below the ~1.2 M☉ Kraft break, where low-mass stars magnetically brake and MIST makes the rotating track identical to the non-rotating one (so the toggle would do nothing — an honest no-op), and hidden at metallicities with no rotating grid on disk.">?</span>
+        </label>
+        <p class="note rot-note" id="rot-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>
