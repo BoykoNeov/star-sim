@@ -1038,13 +1038,16 @@ function refreshWD() {
   comp.update(s);                       // WD structure cross-section (comp is in endgame mode)
   sed.update(s, { endgame: true });
   // Phase-aware spectrum (Chunk 6): a TPAGB giant / contracting post-AGB star (low
-  // surface gravity) still has a real MAIN-cube spectrum, so route it through the
-  // normal live consumer; only the DEGENERATE remnant (log g ≥ 6 — past the main
-  // cube's gravity ceiling and into the Koester DA cube) goes to /wd_spectrum. The
-  // 6.0 boundary sits in the main(≤5)/Koester(≥6.5) gap, which coincides with the
-  // ~100 kK central-star spike where BOTH cubes show the honest "no model" frame —
-  // so the giant↔WD switch is invisible (verified against the real endgame track).
-  if (s.logg != null && s.logg >= 6.0) spectrum.updateWD(s);
+  // surface gravity, cool) still has a real MAIN-cube spectrum, so route it through
+  // the normal live consumer; the DEGENERATE remnant AND the hot central star go to
+  // the WD cube (/wd_spectrum). Route there when log g ≥ 6 (the main(≤5)/Koester(≥6.5)
+  // gravity gap) OR Teff > 55000 K — 55 kK is the MAIN cube's real ceiling (OSTAR, the
+  // hottest grid in MSG), so above it ONLY the WD cube can serve a spectrum: the whole
+  // post-AGB rise (~55–80 kK at log g ~5–6, Koester) through the ~100–190 kK central
+  // star (TMAP, Chunk 6b) routes here continuously, no "no model" flash in between. The
+  // cube's optical is log g-insensitive at those temperatures (measured Δ ~0.03), so
+  // clamping the low-gravity rows up to the 6.5 floor is invisible.
+  if (s.logg != null && (s.logg >= 6.0 || s.Teff_K > 55000)) spectrum.updateWD(s);
   else spectrum.update(s);
   renderWDReadout(s, z);
 

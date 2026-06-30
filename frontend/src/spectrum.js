@@ -164,8 +164,9 @@ export function createSpectrum({ api }) {
       if (mine !== token) return;
       if (!data && caption) {
         caption.textContent =
-          "White-dwarf spectrum unavailable — the Koester DA grid may not be baked " +
-          "yet (python -m star_sim.fetch_koester; python scripts/bake_wd_spectra.py).";
+          "White-dwarf spectrum unavailable — the WD grid may not be baked yet " +
+          "(python -m star_sim.fetch_koester; python -m star_sim.fetch_tmap; " +
+          "python scripts/bake_wd_spectra.py --tmap-dir data/spectra/grids/tmap).";
       }
     }
   }
@@ -363,8 +364,8 @@ export function createSpectrum({ api }) {
     ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
     ctx.fillText(
       data.isWD
-        ? `Our DA models reach ${Math.round(data.teff_max)} K — the hot central ` +
-          `star is ≈ ${Math.round(data.teff_requested)} K (a hot-WD model is Chunk 6b).`
+        ? `Our NLTE hot-WD/CSPN models (TMAP) reach ${Math.round(data.teff_max)} K — ` +
+          `this central star is ≈ ${Math.round(data.teff_requested)} K.`
         : `Our model atmospheres reach ${Math.round(data.teff_max)} K — ` +
           `this star is ≈ ${Math.round(data.teff_requested)} K.`,
       cx, cy + 13,
@@ -394,9 +395,10 @@ export function createSpectrum({ api }) {
     if (!caption || !data) return;
     if (teffAboveGrid()) {
       caption.textContent = data.isWD
-        ? `Teff ≈ ${Math.round(data.teff_requested)} K — the planetary-nebula central ` +
-          `star is hotter than our DA models (${Math.round(data.teff_max)} K); a hot-WD/` +
-          `CSPN model (TMAP) isn't wired in yet (endgame Chunk 6b).`
+        ? `Teff ≈ ${Math.round(data.teff_requested)} K — this planetary-nebula central ` +
+          `star is hotter than even our NLTE hot-WD/CSPN models (TMAP reaches ` +
+          `${Math.round(data.teff_max)} K); only the most massive progenitors' central ` +
+          `stars get this hot, a narrow residual gap.`
         : `Teff ≈ ${Math.round(data.teff_requested)} K is beyond our hottest ` +
           `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
       return;
@@ -406,11 +408,21 @@ export function createSpectrum({ api }) {
     // so [Fe/H] is meaningless (not merely "solar"), which the caption says plainly.
     if (data.isWD) {
       const t = Math.round(data.teff), g = Number(data.logg).toFixed(2);
-      caption.textContent = data.regime === "DC"
-        ? `Cold DC white dwarf · Teff ${t} K · log g ${g} — below ~5000 K the hydrogen ` +
-          `Balmer lines have faded; the spectrum is a featureless (blackbody) continuum.`
-        : `White dwarf (DA) · Teff ${t} K · log g ${g} — broad, pressure-broadened ` +
+      if (data.regime === "DC") {
+        caption.textContent =
+          `Cold DC white dwarf · Teff ${t} K · log g ${g} — below ~5000 K the hydrogen ` +
+          `Balmer lines have faded; the spectrum is a featureless (blackbody) continuum.`;
+      } else if (data.regime === "CSPN") {
+        caption.textContent =
+          `Hot central star (CSPN) · Teff ${t} K · log g ${g} — the ~100–190 kK post-AGB ` +
+          `star ionizing its planetary nebula; hydrogen is mostly ionized, so the Balmer ` +
+          `lines are weak on a steep blue continuum (NLTE TMAP models). Pure hydrogen, so ` +
+          `[Fe/H] doesn't apply.`;
+      } else {
+        caption.textContent =
+          `White dwarf (DA) · Teff ${t} K · log g ${g} — broad, pressure-broadened ` +
           `hydrogen Balmer lines (Koester DA models). Pure hydrogen, so [Fe/H] doesn't apply.`;
+      }
       return;
     }
     const t = Math.round(data.teff);

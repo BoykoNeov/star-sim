@@ -371,20 +371,29 @@ holders are told it is "restricted access, private communication," **non-redistr
 Drop it from planning (revisit only by direct request, local-only). Mitigation: cover
 hot *He* atmospheres (DO) via TMAP's He composition instead; accept no cool-DB branch.
 
-**TMAP hot WD / CSPN — CONDITIONAL GO (do second).** The CSPN / hottest-WD regime
-(~100–200 kK) lives **only** in TMAP. Crux: bulk-fetch the **SVO `tmap` collection**
-(pre-baked H+He NLTE grids, **Teff 50000–190000 K, log g 5–9, He 0–1**, SSAP `fid`
-enumeration is scriptable) — **NOT** the native **TheoSSA/GAVO** service, which is
-per-model / compute-on-demand (an off-grid request *queues a TMAP run*, minutes→days;
-do not hammer it). Format: ASCII/VOTable, **vacuum** λ, EUV-heavy (resample only the
-optical window). **Units gotcha: TMAP2019 astrophysical flux is 4×10⁸× physical —
-multiply by π×10⁸** for erg/cm²/s/Å. License: GAVO/SVO acknowledge-and-cite (Werner+
-2003; Rauch+ 2013). ~80–150 LOC SSAP-enumeration baker. Splices as the **hot, high-log g
-slab** of the *same separate WD cube* as Koester, overlapping ~50000–80000 K (an
-**LTE↔NLTE seam** there needs the OSTAR/CAP18-style measured-seam care). **Naming trap:**
-the brief's "Reindl 2020 pure-H grid" is actually **Bohlin, Hubeny & Rauch 2020** and
-its clean MAST tarball is the **TLUSTY** twin (caps at 95 kK), **not** TMAP — don't plan
-the TMAP ingest around it. [tmap](https://svo2.cab.inta-csic.es/theory/newov2/index.php?models=tmap)
+**TMAP hot WD / CSPN — ✅ BUILT (Chunk 6b, was "conditional GO").** The CSPN /
+hottest-WD regime (~100–200 kK) lives **only** in TMAP. We bulk-fetch the **SVO
+`tmap` collection** (pre-baked H+He NLTE grids, **Teff 50000–190000 K / 10 kK steps,
+log g 5–9 / 0.5, Hemass 0–1 / 0.1**, SSAP `fid` enumeration scriptable) — **NOT** the
+native **TheoSSA/GAVO** service, which is per-model / compute-on-demand (an off-grid
+request *queues a TMAP run*, minutes→days; do not hammer it). For a DA we take the
+**H-rich Hemass=0 slab** (rectangular at log g ≥ 6.0). Format: plain **2-col ASCII**
+(`&format=ascii`), **vacuum** λ over 3200–25000 Å, EUV-heavy (we resample only the
+optical window + convert vac→air to match the cube). License: GAVO/SVO
+acknowledge-and-cite (Werner+ 2003; Rauch+ 2013). Splices as the **hot slab** of the
+*same separate WD cube* as Koester, above Koester's 80000 K ceiling. Build details +
+two **measured corrections to this scoping** in **§8b**; the headlines:
+- **No ×π×10⁸ unit conversion** (the scoping guess was wrong for *this* path). The
+  ×4×10⁸ "astrophysical flux" gotcha is for the **native TheoSSA** files; the **SVO
+  ascii path already serves physical erg/cm²/s/Å** — measured: the TMAP/Koester
+  optical ratio at the 80000 K / log g 7 overlap is **0.98–1.08**. So the **LTE↔NLTE
+  seam is already graceful** (better than OSTAR/CAP18's 0.97–0.99) → splice with **no
+  rescale**, just report the agreement (the OSTAR precedent). Confirm from one real
+  header before trusting a unit factor.
+- **Naming trap:** the brief's "Reindl 2020 pure-H grid" is actually **Bohlin, Hubeny
+  & Rauch 2020** and its clean MAST tarball is the **TLUSTY** twin (caps at 95 kK),
+  **not** TMAP — don't plan the TMAP ingest around it.
+[tmap](https://svo2.cab.inta-csic.es/theory/newov2/index.php?models=tmap)
 
 **PoWR Wolf-Rayet (WN/WC) — CONDITIONAL GO at best (do last, highest design cost).**
 Spectra download cleanly: **public, no registration**, bulk per-grid tarballs at
@@ -415,19 +424,21 @@ cube is disjoint** from the existing cube (separate cube + endgame branch, not a
 splice — a design choice, not a blocker). (4) **unit/λ gotchas (LOW)** — TMAP ×π×10⁸,
 air-vs-vacuum per grid, PoWR opacity-edge mask — confirm from one real header each.
 
-## 8. Building the Koester DA WD cube (Chunk 6a — BUILT)
+## 8. Building the WD cube (Chunk 6a Koester DA + 6b TMAP CSPN — BOTH BUILT)
 
-Chunk 6's **Koester DA half (6a) is done**; the TMAP hot-WD/CSPN half (6b) is deferred
-(still the §7 "conditional GO"). Unlike the main cube, this needs **no Docker / pymsg /
-Fortran** — the Koester models are plain 2-col ASCII, so the whole vertical runs on the
-**host** with numpy/scipy only. Two commands:
+Chunk 6's **Koester DA half (6a)** and **TMAP hot-WD/CSPN half (6b)** are both done.
+Unlike the main cube, neither needs **Docker / pymsg / Fortran** — both grids are
+plain 2-col ASCII, so the whole vertical runs on the **host** with numpy/scipy only.
+Three commands (drop the TMAP two for the 6a-only cube):
 
 ```bash
 # (host, from backend/) one-time fetch of ~1066 Koester DA models into
 # data/spectra/grids/koester/ (skip-existing, retrying, 6-way parallel; ~tens of MB)
 python -m star_sim.fetch_koester
-# bake them into a separate (Teff, log g) cube -> data/spectra/wd_spectra_grid.npz
-python scripts/bake_wd_spectra.py
+# 6b: ~72 TMAP H-rich hot-slab models (Teff 80–190 kK x log g 6.5–9.0) -> grids/tmap/
+python -m star_sim.fetch_tmap
+# bake them into ONE separate (Teff, log g) cube -> data/spectra/wd_spectra_grid.npz
+python scripts/bake_wd_spectra.py --tmap-dir data/spectra/grids/tmap
 ```
 
 Then the runtime (`star_sim/spectra.py` `wd_spectrum_data`) serves `/wd_spectrum`, a
@@ -454,15 +465,64 @@ re-derive from assumptions):**
   runtime returns an **honest Planck blackbody continuum** at the *requested* Teff (tagged
   `regime="DC"`, `teff` NOT clamped), never the 5000 K line-bearing spectrum painted onto
   a cold cinder. Same "don't label a non-feature" discipline as VO-7400 / invisible-Na.
-- **80000 K ceiling = intentional no-model, not a bug.** The ~107 kK post-AGB central star
-  is above Koester; `wd_spectrum_data` reports `teff_requested > teff_max` and the panel's
-  existing `teffAboveGrid()` path draws the honest "no model" frame. **That gap is exactly
-  what TMAP fills in Chunk 6b** — left as tracked scope, not patched over.
-- **`BAKE_VERSION` is now coupled across THREE files**, all must match or the runtime
+- **80000 K = the Koester ceiling, now the Koester↔TMAP splice seam (no longer the
+  no-model edge).** Above it, the TMAP NLTE slab (6b, §8b) carries the ~100–190 kK
+  central star; the residual `teffAboveGrid()` no-model frame is re-pointed at TMAP's
+  **190000 K** ceiling (only the most massive progenitors' ~300–400 kK central stars).
+- **`BAKE_VERSION` is coupled across THREE files**, all must match or the runtime
   rejects the cube: `star_sim/spectra.py`, `scripts/bake_spectra.py`, **and**
   `scripts/bake_wd_spectra.py` (the WD cube uses the same axis-generic `.npz` schema and is
   read by the same `_Spectra` class, so it shares the version). Bump all three together.
+  **6b did NOT bump it** — the splice only lengthens the Teff axis + changes `grid_name`
+  (the OSTAR/Göttingen precedent); bumping would needlessly invalidate the MAIN cube and
+  force a Docker re-bake.
 
 The cube is gitignored (`data/spectra/wd_spectra_grid.npz`, like every other baked grid),
-so these two commands are the only reproducibility path — re-run after a `BAKE_VERSION`
-bump.
+so these commands are the only reproducibility path — re-run after a `BAKE_VERSION` bump.
+
+## 8b. Adding the TMAP hot-WD/CSPN splice (Chunk 6b — BUILT)
+
+The WD cooling scrub passes through a ~100–400 kK **post-AGB central star** (the hot star
+of a planetary nebula). 6a clipped that to the honest "no model" frame above 80000 K; 6b
+fills it by splicing **TMAP** (NLTE H+He) onto the hot end of the *same* WD cube — the
+mirror of the main cube's OSTAR hot-splice. `star_sim/fetch_tmap.py` fetches the H-rich
+slab; `scripts/bake_wd_spectra.py --tmap-dir …` splices it on. The result is a **93 Teff
+(5000–190000 K) × 13 log g (6.5–9.5) × 2400 λ** cube (~10 MB; Koester-only was 82×13).
+
+**Verified facts (measured this build — confirm from a real header / through the runtime,
+do not re-derive from the §7 scoping, which two of these correct):**
+
+- **Grid:** SVO `tmap` H-rich (Hemass=0) slab is **rectangular at log g ≥ 6.0** — 15 Teff
+  (50–190 kK) × 9 log g (5–9). We fetch the **hot, WD-gravity** subset (Teff ≥ 80000, log g
+  6.5–9.0 = 72 models, ~125 MB ascii) and splice the nodes **above** 80000 K.
+- **No ×π×10⁸.** The SVO ascii path serves physical erg/cm²/s/Å directly (the gotcha is for
+  native TheoSSA). **Measured seam @ 80000 K: TMAP/Koester optical-mean ratio 1.005–1.021
+  (mean 1.012)** across the 6 shared log g nodes → spliced **as-is, no rescale**; the bake
+  prints this (`_report_seam`) as the OSTAR-style validation.
+- **Vacuum→air** (Morton 2000) is applied to TMAP (it serves vacuum; the cube is air), so
+  the Balmer guides line up across the cube switch. The ~1.4 Å optical shift is sub-bin —
+  hot CSPN optical spectra are nearly featureless continuum — but converted for correctness.
+- **The 3000–3200 Å blue gap** (TMAP starts at 3200; the window at 3000) is filled by a
+  **log-linear (power-law) extrapolation** of the model's bluest 300 Å, NOT a flat fill —
+  the gap sits on the steep blue Rayleigh-Jeans rise (flux ∝ λ^p, p ≈ −4), so a flat fill
+  would shelf the blue edge. Measured: flux(3000)/flux(3200) ≈ 1.24 (RJ would give 1.29).
+- **The log g axis stays Koester's 6.5–9.5; low-gravity central stars clamp up to 6.5.**
+  Honest because the **optical is log g-insensitive at CSPN temperatures** — measured:
+  100 kK at log g 6.5 vs 9.5 differs by **max 0.03** (normalized), vs **0.41** for a 13 kK
+  cooling DA (Balmer-profile broadening). So the clamp on the lowest-gravity rows (log g
+  ~5.4 for massive progenitors) is invisible. (The alternative — extending the axis to 5.0
+  — would reintroduce the void-fill the 6a cube deliberately avoids.)
+- **regime = "CSPN"** (hot central star, not a cooling DA), **log g-aware**: above 80000 K, OR
+  on the contracting rise (`used_teff > 55000` — the MAIN cube's ceiling — AND the *raw* log g
+  < 6.5, i.e. not yet degenerate). A hot but high-gravity remnant (a young cooling DA at 70 kK,
+  log g 8) stays "DA". The panel draws Balmer guides (weak — H mostly ionized) on a steep blue
+  continuum. Below ~5000 K, "DC" (unchanged). `feh_varies` stays false (pure H throughout).
+- **Frontend routing (`refreshWD`): `log g ≥ 6.0 OR Teff > 55000`** — **55000 K is the MAIN
+  cube's real ceiling (OSTAR)**, NOT 80000. Above it ONLY the WD cube can serve a spectrum, so
+  the contracting rise (55–80 kK at log g ~5–6, Koester) through the central star (TMAP) routes
+  here *continuously*. (At the nominal 80000 a ~74 kK / log g 5.6 rise row flashed "no model" —
+  one row per mass, sandwiched between the giant and CSPN spectra. Route on a cube's MEASURED
+  give-up point, not its sibling boundary.) 55–80 kK is also log g-insensitive (Δ 0.024–0.030),
+  so the clamp is honest there too.
+- **`/wd_spectrum` Query `teff` bound widened to 500000** — massive progenitors' central
+  stars peak ~400 kK; without this they'd 422 instead of showing the residual no-model frame.

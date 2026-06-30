@@ -380,7 +380,7 @@ Playwright (WN vs WC/WO flavor if feasible). **Depends:** Chunk 4.
 > *real* spectra (which show the honest placeholder).
 
 ### Chunk 6 — WD spectra (data-gated; depends on Chunk 0)
-**Split into 6a (Koester DA — BUILT) + 6b (TMAP hot WD/CSPN — deferred).**
+**Split into 6a (Koester DA — BUILT) + 6b (TMAP hot WD/CSPN — BUILT).**
 **Goal:** real WD spectra (the tractable spectrum — hydrostatic, plane-parallel).
 **Do:** fetch Koester/TMAP; write the **bake reader/converter** (new code — not
 pymsg) → bake a **WD cube at logg 7–9** (a *separate* cube; you can't splice
@@ -404,11 +404,30 @@ for the ~107 kK central star (reuses the existing `teffAboveGrid()` path). Pure-
 [Fe/H] axis (`feh_varies:false`). 15 tests in `test_wd_spectra.py` (measured through the
 runtime). Build recipe: `backend/docs/msg_spectra_build_recipe.md §8`.
 
-**⏳ 6b — TMAP hot WD / CSPN: DEFERRED.** The ~50–190 kK CSPN/hottest-WD regime (the
-§7 "conditional GO") that fills the >80000 K no-model gap. NLTE H+He, an LTE↔NLTE seam at
-~50–80 kK with the OSTAR/CAP18-style measured-seam care, the ×π×10⁸ TMAP unit gotcha,
-vacuum λ. Splices as the hot, high-log g slab of the *same* separate WD cube. Tracked in
-`ROADMAP.md`.
+**✅ 6b — TMAP hot WD / CSPN: BUILT.** The ~100–190 kK CSPN/hottest-WD regime that fills
+the >80000 K no-model gap. Host-only (TMAP is plain ascii, like Koester — no Docker):
+`star_sim/fetch_tmap.py` (SVO `tmap` H-rich Hemass=0 slab, Teff 80–190 kK × log g 6.5–9.0
+= 72 models) → `scripts/bake_wd_spectra.py --tmap-dir` splices the >80000 K nodes onto the
+hot end of the SAME WD cube → **93 Teff (5000–190000 K) × 13 log g × 2400 λ**, grid
+`koester2-DA+TMAP-CSPN` (the §7-precedent OSTAR hot-splice, on the WD cube). Runtime adds a
+`regime="CSPN"` above 80000 K (logg-aware: the low-gravity contracting **rise** 55–80 kK
+also reads CSPN, a hot high-gravity remnant stays DA); frontend routes the central star to
+the WD cube (`refreshWD`: log g ≥ 6.0 **OR Teff > 55000** = the main cube's OSTAR ceiling, so
+the contracting rise routes here too — advisor-caught: at >80000 a 55–80 kK/low-logg rise row
+flashed "no model"). It narrates it ("Hot central star (CSPN) …
+hydrogen mostly ionized, weak Balmer on a steep blue continuum"). **Three measured findings
+(two correct the §7 scoping):** (1) **no ×π×10⁸** — the SVO ascii path already serves
+physical erg/cm²/s/Å (gotcha was for native TheoSSA); the **LTE↔NLTE seam @ 80000 K is
+already graceful, TMAP/Koester ratio 1.005–1.021**, so splice with no rescale (OSTAR
+precedent). (2) **3000–3200 Å blue gap** (TMAP starts at 3200) filled with a **log-linear
+extrapolation** of the RJ tail, not a flat shelf. (3) **log g clamp 5.4→6.5 on the lowest
+central stars is honest** — the optical is log g-insensitive at CSPN temps (measured Δ 0.03
+vs 0.41 for a cooling DA), so no axis extension / void-fill needed. **No `BAKE_VERSION`
+bump** (Teff-axis length + `grid_name` only, like OSTAR). Residual no-model frame re-pointed
+at TMAP's **190000 K** ceiling (only ~300–400 kK massive-progenitor central stars). 157
+pytest (+4), Playwright-verified (CSPN across the rise + the spike with no no-model flash,
+DA/DC unregressed, 0 JS errors, 390 px clean). Recipe
+`backend/docs/msg_spectra_build_recipe.md §8b`.
 
 **Known polish — RESOLVED in 6a.** The Chunk-2 placeholder (`refreshWD` called
 `showPlaceholder` unconditionally, so the TPAGB-giant rows at the start of the WD scrub

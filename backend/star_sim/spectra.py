@@ -31,6 +31,21 @@ from scipy.interpolate import RegularGridInterpolator
 # Must match scripts/bake_spectra.py's BAKE_VERSION; a stale cube is rejected.
 BAKE_VERSION = 1
 
+# The WD cube's Koester(LTE)↔TMAP(NLTE) splice seam (endgame Chunk 6b). Koester DA
+# supplies Teff ≤ this; the TMAP hot-WD/CSPN slab supplies the post-AGB central star
+# above it. Used only to LABEL the regime ("hot central star / CSPN" vs "cooling DA")
+# in the served spectrum — the cube itself is one continuous (Teff, log g) grid.
+_CSPN_TEFF = 80000.0
+# The MAIN spectrum cube's hottest model (OSTAR2002, the hottest grid in MSG). Above
+# it ONLY the WD cube can serve a spectrum, so the panel routes a wd-mode row here
+# past it — including the brief post-AGB rise (~55–80 kK at log g ≲ 6) on the way up
+# to the central-star spike. Such a row is a *contracting central star*, not a cooling
+# white dwarf, so it gets the CSPN label too (below the WD-gravity floor).
+_MAIN_TEFF_CEIL = 55000.0
+# The WD cube's log g floor — below it a hot star is a low-gravity central star, not a
+# degenerate remnant. Separates the rise (low g → CSPN) from a cooling hot DA (high g).
+_WD_LOGG_FLOOR = 6.5
+
 # data/spectra/ sits at the repo root: star_sim/spectra.py -> parents
 #   [0]=star_sim [1]=backend [2]=repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -232,15 +247,17 @@ def wd_spectrum_data(teff: float, logg: float, *, n_display: int | None = None) 
       return an honest Planck blackbody continuum at the requested Teff, tagged
       `regime="DC"`. This is the same "don't label a non-feature" discipline as the
       VO-7400 / invisible-Na decisions elsewhere.
-    - **Hot central star (Teff above the Koester ceiling, 80000 K) → no model.** The
-      ~107 kK post-AGB central star is past Koester; we return the clamped ceiling
-      spectrum plus the true `teff_max`, and the panel's existing `teffAboveGrid()`
-      path draws the honest "no model for this temperature" frame (that gap is what
-      TMAP fills in Chunk 6b). No special-casing needed here.
+    - **Hot central star (CSPN), Teff above the Koester ceiling (80000 K).** The
+      ~100–190 kK post-AGB central star is past Koester, so the TMAP NLTE H slab
+      (Chunk 6b) covers it — `regime="CSPN"`, a real spectrum. Only above TMAP's own
+      190000 K ceiling (the most massive progenitors' central stars peak hotter) does
+      `teff_requested > teff_max` trip the panel's `teffAboveGrid()` no-model frame —
+      a genuine, much narrower residual gap. No special-casing needed here: the cube
+      clamps in `evaluate()` and the panel keys off `teff_max` either way.
 
     Returns the same JSON shape as `spectrum_data` (so the panel can largely share a
-    draw path) plus `regime` ∈ {"DA", "DC"}. `feh_varies` is always false (a DA is
-    pure hydrogen — [Fe/H] is meaningless, not merely "solar").
+    draw path) plus `regime` ∈ {"DA", "DC", "CSPN"}. `feh_varies` is always false (a
+    DA / hot H-atmosphere is pure hydrogen — [Fe/H] is meaningless, not merely "solar").
     """
     s = _load_wd()
     ti = s.axis_keys.index("teff")
@@ -262,7 +279,15 @@ def wd_spectrum_data(teff: float, logg: float, *, n_display: int | None = None) 
         flux, used = s.evaluate({"teff": teff, "logg": logg})
         used_teff = used["teff"]
         used_logg = used["logg"]
-        regime = "DA"
+        # CSPN = a hot post-AGB central star: unambiguously so above the Koester
+        # ceiling (TMAP slab), OR on the contracting rise (hotter than the MAIN cube
+        # can model AND still below WD gravity — measured logg ~5–6 on the way up).
+        # A hot but already-degenerate remnant (high logg) stays a (hot) DA. We test
+        # the RAW requested logg, not the cube-clamped one, to read the true gravity.
+        regime = ("CSPN"
+                  if used_teff > _CSPN_TEFF
+                  or (used_teff > _MAIN_TEFF_CEIL and logg < _WD_LOGG_FLOOR)
+                  else "DA")
 
     if n_display is not None and n_display < lam.size:
         new_lam = np.linspace(lam[0], lam[-1], n_display)

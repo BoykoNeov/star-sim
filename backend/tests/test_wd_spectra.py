@@ -15,8 +15,12 @@ Koester DA cube). Two layers:
       wings → a shallower core (this is how DA gravities are measured).
     - below the ~5000 K Koester floor the DA → DC: an honest blackbody continuum,
       no Balmer lines (the cold-cinder honesty edge).
-    - above the 80000 K Koester ceiling the ~107 kK central star reports
-      teff_requested > teff_max (the existing no-model path; TMAP fills it in 6b).
+    - the ~100–190 kK post-AGB central star (CSPN) is the TMAP NLTE slab (Chunk 6b):
+      a real spectrum (regime "CSPN"), spliced continuously onto Koester at 80 kK,
+      and (measured) the optical is log g-insensitive there so the cube's log g clamp
+      on the lowest-gravity central stars is honest.
+    - only above TMAP's 190000 K ceiling (the most massive progenitors' central
+      stars) does teff_requested > teff_max trip the residual no-model path.
 """
 
 from __future__ import annotations
@@ -56,7 +60,7 @@ def _line_depth(d: dict, center: float, core_hw: float = 6.0,
 
 @pytest.mark.parametrize("params", [
     {"teff": 500, "logg": 8.0},        # Teff below any real star
-    {"teff": 500000, "logg": 8.0},     # Teff above the bounds
+    {"teff": 600000, "logg": 8.0},     # Teff above the wide WD bounds (500000)
     {"teff": 13000, "logg": 2.0},      # log g below the WD bounds (a giant, not a WD)
     {"teff": 13000, "logg": 12.0},     # log g absurd
     {"logg": 8.0},                     # missing required teff
@@ -67,11 +71,13 @@ def test_wd_spectrum_out_of_range_is_422(params):
 
 
 def test_wd_spectrum_hot_central_star_does_not_422():
-    """The post-AGB central star reaches ~107 kK — above the Koester DA ceiling
-    (80000 K), but the bounds must be wide enough that scrubbing there never 422s
-    (the panel shows the honest no-model frame instead). 200 if baked, 503 if not."""
-    r = client.get("/wd_spectrum", params={"teff": 107000, "logg": 7.0})
-    assert r.status_code in (200, 503)
+    """The post-AGB central star reaches ~107 kK (low-mass) up to ~400 kK (the most
+    massive WD progenitors) — the bounds must be wide enough that scrubbing there
+    never 422s (in-grid → a real CSPN spectrum; past TMAP's ceiling → the honest
+    no-model frame). 200 if baked, 503 if not — never 422."""
+    for teff in (107000, 190000, 405000):
+        r = client.get("/wd_spectrum", params={"teff": teff, "logg": 7.0})
+        assert r.status_code in (200, 503), f"teff={teff} -> {r.status_code}"
 
 
 def test_wd_spectrum_not_baked_is_503(tmp_path, monkeypatch):
@@ -178,13 +184,85 @@ def test_cold_cinder_is_dc_continuum_not_clamped_balmer():
 
 
 @requires_wd_spectra_data
-def test_hot_central_star_reports_no_model():
-    """The ~107 kK post-AGB central star is past the Koester ceiling (80000 K). The
-    response reports teff_requested > teff_max with teff pinned to teff_max — the same
-    contract the panel's existing no-model frame keys off (that gap is what the TMAP
-    hot-WD grid fills in Chunk 6b)."""
+def test_hot_central_star_has_real_cspn_spectrum():
+    """The ~107 kK post-AGB central star is past the Koester DA ceiling (80000 K) but
+    inside the TMAP NLTE slab (Chunk 6b), so it returns a REAL spectrum — regime
+    "CSPN", in-grid (not clamped), and a steep BLUE continuum (a ~100 kK star peaks
+    far in the UV, so within the optical window flux falls toward the red — the
+    opposite slope to the cold DC cinder)."""
     d = wd_spectrum_data(107000, 7.0)
-    assert d["teff_requested"] == pytest.approx(107000.0)
+    assert d["regime"] == "CSPN"
+    assert d["teff"] == pytest.approx(107000.0, abs=1.0)     # in-grid, NOT clamped
+    assert d["teff_requested"] <= d["teff_max"]              # below TMAP's ceiling
+    assert d["teff_max"] == pytest.approx(190000.0, abs=1.0)  # TMAP's ceiling now
+    flux = np.asarray(d["flux"]); lam = np.asarray(d["wavelength"])
+    assert np.all(np.isfinite(flux)) and np.all(flux >= 0) and flux.max() > 0
+    blue = flux[(lam > 3100) & (lam < 3500)].mean()
+    red = flux[(lam > 8000) & (lam < 8500)].mean()
+    assert blue > red                                        # steep blue continuum
+
+
+@requires_wd_spectra_data
+def test_contraction_rise_is_cspn_a_hot_wd_is_da():
+    """On the post-AGB rise to the central-star spike, a 55–80 kK star is still
+    contracting at LOW gravity (log g ~5–6 — measured ~74 kK/log g 5.6 for a 1 M☉
+    progenitor); it routes to the WD cube (the MAIN cube's ceiling is 55 kK) and is
+    labeled CSPN, NOT a cooling DA — so the scrub narrates the central-star phase
+    coherently instead of flashing "no model" or calling a 74 kK star a white dwarf.
+    The SAME Teff at WD gravity (a hot young cooling DA) stays DA — the regime reads
+    the TRUE gravity, not just Teff."""
+    rise = wd_spectrum_data(70000, 5.6)     # contracting central star (low g)
+    hotwd = wd_spectrum_data(70000, 8.5)    # hot young white dwarf (high g)
+    assert rise["regime"] == "CSPN"
+    assert hotwd["regime"] == "DA"
+    # both are real in-grid spectra (not no-model): the 55–80 kK band is fully covered
+    assert rise["teff_requested"] <= rise["teff_max"]
+    assert np.asarray(rise["flux"]).max() > 0
+
+
+@requires_wd_spectra_data
+def test_cspn_seam_is_continuous_across_the_koester_tmap_splice():
+    """Koester (LTE, ≤80 kK) and TMAP (NLTE, ≥90 kK) are spliced at 80 kK with NO
+    rescale because they already agree (~1% at the overlap). Measured through the
+    runtime: the normalized continuum slope must march smoothly across the seam — no
+    step from 80 kK (Koester) to 90 kK (TMAP), so the cooling scrub doesn't flicker."""
+    def slope(teff):
+        d = wd_spectrum_data(teff, 8.0)
+        f = np.asarray(d["flux"]); f = f / f.max()
+        lam = np.asarray(d["wavelength"])
+        return f[(lam > 6900) & (lam < 7100)].mean() / f[(lam > 3900) & (lam < 4100)].mean()
+    s70, s80, s90, s100 = (slope(t) for t in (70000, 80000, 90000, 100000))
+    # monotone, tiny step-to-step change (measured ~0.001 across the seam)
+    assert s70 > s80 > s90 > s100
+    assert abs(s80 - s90) < 0.01            # the Koester→TMAP seam, no jump
+
+
+@requires_wd_spectra_data
+def test_cspn_optical_is_logg_insensitive_so_the_clamp_is_honest():
+    """The cube's log g axis floors at 6.5 (Koester); the lowest-gravity central
+    stars (log g ~5.4 for massive progenitors) clamp up to it. That's honest ONLY if
+    the optical is log g-insensitive at CSPN temperatures — verify it here, and
+    contrast with a cooling DA where log g visibly changes the Balmer profile (so the
+    near-flatness below isn't a measurement artifact)."""
+    def norm(teff, logg):
+        d = wd_spectrum_data(teff, logg)
+        f = np.asarray(d["flux"]); return f / f.max()
+    lam = np.asarray(wd_spectrum_data(100000, 7.0)["wavelength"])
+    opt = (lam > 3500) & (lam < 8500)
+    hot_spread = np.abs(norm(100000, 6.5) - norm(100000, 9.5))[opt].max()
+    da_spread = np.abs(norm(13000, 6.5) - norm(13000, 9.5))[opt].max()
+    assert hot_spread < 0.10               # CSPN optical ~flat in log g (measured ~0.03)
+    assert da_spread > 0.25                # cooling-DA Balmer profile DOES move (~0.41)
+
+
+@requires_wd_spectra_data
+def test_above_tmap_ceiling_reports_no_model():
+    """The most massive WD progenitors' central stars peak above TMAP's 190000 K
+    ceiling (a 5–6 M☉ progenitor reaches ~300–400 kK). There the response reports
+    teff_requested > teff_max with teff pinned to teff_max — the residual no-model
+    frame, now keyed off TMAP's ceiling (a much narrower gap than the old 80 kK one)."""
+    d = wd_spectrum_data(330000, 7.0)
+    assert d["teff_requested"] == pytest.approx(330000.0)
     assert d["teff_requested"] > d["teff_max"]
     assert d["teff"] == pytest.approx(d["teff_max"], abs=1.0)
-    assert d["teff_max"] == pytest.approx(80000.0, abs=1.0)   # the Koester DA ceiling
+    assert d["teff_max"] == pytest.approx(190000.0, abs=1.0)   # TMAP's NLTE ceiling

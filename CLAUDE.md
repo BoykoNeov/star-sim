@@ -151,13 +151,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   **6a**) = a **second** spectrum sibling `/wd_spectrum`: a separate rectangular Koester DA
   cube (82 Teff × 13 log g, pure-H so no [Fe/H], host-baked — no Docker/pymsg via
   `fetch_koester.py` + `scripts/bake_wd_spectra.py`), `spectrum.js` `updateWD` switched in by
-  surface gravity (`refreshWD`: log g ≥ 6.0 → WD cube, else main cube, so TPAGB-giant rows
-  show their real spectrum). Two honest edges: **DC** Planck continuum below the ~5000 K
-  floor (no Balmer painted on a cold cinder), **no-model frame** above the 80 kK ceiling (the
-  gap TMAP fills in 6b). **Chunks 1–5 + 6a built; WR spectra (Chunk 7) and TMAP hot-WD/CSPN
-  (Chunk 6b) are later chunks.** [[star-sim-wr-wd-endgame-plan]]; plan
-  `docs/plans/smoldering-cinder-gateway.md`, WD-spectra recipe
-  `backend/docs/msg_spectra_build_recipe.md §8`.
+  surface gravity (`refreshWD`: log g ≥ 6.0 **or Teff > 55 kK** = the main cube's OSTAR
+  ceiling → WD cube, else main cube, so TPAGB-giant rows show their real spectrum and the
+  contracting ~55–80 kK rise routes to the WD cube too — no "no model" flash). **DC** Planck
+  continuum below the ~5000 K floor
+  (no Balmer painted on a cold cinder). WD spectra (Chunk **6b**) = the **TMAP** NLTE hot
+  splice: `fetch_tmap.py` (SVO `tmap` H-rich Hemass=0 slab, 72 models) → `bake_wd_spectra.py
+  --tmap-dir` splices the >80 kK nodes onto the hot end of the SAME WD cube (now 93 Teff ×
+  13 log g, `koester2-DA+TMAP-CSPN`), so the ~100–190 kK post-AGB **central star** shows a
+  real spectrum (`regime="CSPN"`, weak Balmer on a steep blue continuum) where the old
+  no-model frame was; residual no-model re-pointed at TMAP's 190 kK ceiling (only ~300–400 kK
+  massive-progenitor central stars). Measured: **no ×π×10⁸** (SVO ascii is physical; seam
+  ratio 1.005–1.021 → no rescale), log-linear blue-gap fill (TMAP starts 3200 Å), log g-clamp
+  honest (optical Δ 0.03 vs 0.41 for a cooling DA), **no `BAKE_VERSION` bump** (OSTAR-splice
+  precedent). **Chunks 1–5 + 6a + 6b built; WR spectra (Chunk 7, PoWR) is the last chunk.**
+  [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`, WD-spectra
+  recipe `backend/docs/msg_spectra_build_recipe.md §8/§8b`.
 
 ### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -180,7 +189,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **153 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **157 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr).
 
