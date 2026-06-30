@@ -95,6 +95,22 @@ class StellarStateProvider(Protocol):
         """(min_age_yr, max_age_yr) for the time scrubber at this (mass, feh)."""
         ...
 
+    def rotation_status(self, mass: float, feh: float) -> dict:
+        """Whether the rotation control is *meaningful* at (mass, [Fe/H]).
+
+        The data-derived honesty gate for the rotation toggle (see `track`'s
+        `vvcrit`). Shape:
+            {"has_grid": bool,            # a rotating grid covers this [Fe/H]
+             "threshold_msun": float|None,# rotation-onset mass (the Kraft break)
+             "active": bool}              # has_grid AND mass >= threshold
+
+        `active` is False where toggling rotation would change nothing — below the
+        magnetic-braking limit the rotating and non-rotating tracks are identical, so
+        the UI shows the toggle as an honest no-op rather than a dead control. A
+        provider with no rotating data returns has_grid=False / active=False.
+        """
+        ...
+
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         """The one method that matters: (mass, [Fe/H], age) -> StellarState."""
         ...

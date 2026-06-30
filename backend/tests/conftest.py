@@ -83,6 +83,22 @@ requires_mist_rotation = pytest.mark.skipif(
     reason="needs a rotating MIST grid — run `python -m star_sim.fetch_mist --vvcrit 0.4`",
 )
 
+
+def mist_rotation_lowz_available() -> bool:
+    """True if a *low-Z* rotating grid (m100, [Fe/H]=-1.0) is on disk — the grid
+    that carries the CHE / low-metallicity rotation payoff."""
+    return any(
+        _vvcrit_from_path(d) and _vvcrit_from_path(d) > 0.0 and _feh_from_path(d) == -1.0
+        for d in _find_eep_dirs(DATA_DIR)
+    )
+
+
+# The low-Z rotation tests need the rotating m100 grid (CHE lives at low Z).
+requires_mist_rotation_lowz = pytest.mark.skipif(
+    not mist_rotation_lowz_available(),
+    reason="needs the low-Z rotating grid — run `python -m star_sim.fetch_mist --vvcrit 0.4 --feh m100`",
+)
+
 _HELDOUT_FEHS = {-0.5, 0.0, 0.5}
 requires_mist_heldout_feh = pytest.mark.skipif(
     not _HELDOUT_FEHS.issubset(mist_fehs_available()),

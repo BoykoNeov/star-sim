@@ -110,6 +110,10 @@ class StubProvider:
         t_ms = 1.0e10 * mass**-2.5
         return (0.0, t_ms)
 
+    def rotation_status(self, mass: float, feh: float) -> dict:
+        """The stub models no rotation, so the toggle is never meaningful."""
+        return {"has_grid": False, "threshold_msun": None, "active": False}
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._check_mass_feh(mass, feh)

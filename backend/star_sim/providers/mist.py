@@ -729,6 +729,10 @@ class MISTProvider:
         self._axes: dict[float, _Axis] = {}
         self._vvcrits: np.ndarray | None = None
         self._default_vvcrit: float = 0.0
+        # Lazy per-[Fe/H] cache of the rotation-onset mass (the data-derived Kraft
+        # break): the lowest grid mass where the rotating track actually diverges
+        # from the non-rotating one. Keyed by the snapped rotating-grid [Fe/H].
+        self._rot_threshold_cache: dict[float, float | None] = {}
 
     # -- lazy data load --------------------------------------------------------
     def _ensure_loaded(self) -> None:
@@ -864,6 +868,82 @@ class MISTProvider:
         self._check_mass_feh(ax, mass, feh)
         age_win = self._interp_window(ax, mass, feh)["age"]
         return (float(age_win[0]), float(age_win[-1]))
+
+    # -- rotation honesty gate (Chunk 2): where is the toggle meaningful? -------
+    def _rotating_axis(self) -> _Axis | None:
+        """The most-rotating axis above the default, or None if only one rate is on
+        disk. 'Rotation ON' selects this bucket (MIST's vvcrit=0.4)."""
+        self._ensure_loaded()
+        assert self._vvcrits is not None
+        keys = [k for k in self._axes if k > self._default_vvcrit + _VVCRIT_TOL]
+        return self._axes[max(keys)] if keys else None
+
+    @staticmethod
+    def _track_diverges(rot: _Track, nonrot: _Track, tol: float = 1e-6) -> bool:
+        """Does the rotating track measurably differ from the non-rotating one?
+
+        Below the magnetic-braking (Kraft) limit MIST makes the rotating track
+        *bit-identical* to the non-rotating one (max|Δ| = 0 exactly), so any positive
+        tolerance cleanly separates 'rotation does nothing here' from 'rotation
+        reshapes the track'. Compares luminosity and surface helium over the shared
+        exposed window — the two quantities rotation moves first."""
+        n = min(rot.logL.size, nonrot.logL.size, rot.track_end + 1, nonrot.track_end + 1)
+        r0 = max(rot.zams_row, nonrot.zams_row)
+        if n <= r0:
+            return False
+        sl = slice(r0, n)
+        dL = float(np.max(np.abs(rot.logL[sl] - nonrot.logL[sl])))
+        dY = float(np.max(np.abs(rot.Ys[sl] - nonrot.Ys[sl])))
+        return dL > tol or dY > tol
+
+    def _rotation_threshold(self, feh: float) -> float | None:
+        """Lowest mass where rotation bites at the rotating-grid [Fe/H] nearest `feh`.
+
+        Data-derived (never a hardcoded 1.2 M_sun): scans the rotating grid against
+        its non-rotating twin and returns the first mass whose track diverges — the
+        magnetic-braking/Kraft break, which shifts with [Fe/H]. None if there is no
+        rotating grid or no non-rotating twin to compare against."""
+        rot = self._rotating_axis()
+        if rot is None:
+            return None
+        rot_grid = rot.grids[int(np.argmin(np.abs(rot.fehs - feh)))]
+        key = round(float(rot_grid.feh), 3)
+        if key in self._rot_threshold_cache:
+            return self._rot_threshold_cache[key]
+
+        nonrot = self._axis(self._default_vvcrit)
+        nonrot_grid = nonrot.grids[int(np.argmin(np.abs(nonrot.fehs - rot_grid.feh)))]
+        threshold: float | None = None
+        if math.isclose(float(nonrot_grid.feh), float(rot_grid.feh), abs_tol=_FEH_TOL):
+            by_mass = {round(t.minit, 3): t for t in nonrot_grid.tracks}
+            for t in rot_grid.tracks:                 # ascending by mass
+                nr = by_mass.get(round(t.minit, 3))
+                if nr is not None and self._track_diverges(t, nr):
+                    threshold = float(t.minit)
+                    break
+        self._rot_threshold_cache[key] = threshold
+        return threshold
+
+    def rotation_status(self, mass: float, feh: float) -> dict:
+        """Whether the rotation control is *meaningful* at (mass, [Fe/H]) — the
+        data-derived honesty gate the frontend reads to render the toggle:
+
+          * has_grid       — a rotating grid covers this [Fe/H] (so a rotating track
+                             can actually be served; False off the rotating axis's
+                             [Fe/H] span, e.g. before the matching grid is fetched).
+          * threshold_msun — the rotation-onset mass at this [Fe/H] (the Kraft break,
+                             derived from the data); None if has_grid is False.
+          * active         — has_grid AND mass >= threshold: toggling rotation changes
+                             the track. False below the threshold, where the rotating
+                             and non-rotating tracks are bit-identical (the toggle is
+                             an honest no-op — 'rotation negligible for this star').
+        """
+        rot = self._rotating_axis()
+        if rot is None or not (rot.fehs[0] - _FEH_TOL <= feh <= rot.fehs[-1] + _FEH_TOL):
+            return {"has_grid": False, "threshold_msun": None, "active": False}
+        thr = self._rotation_threshold(feh)
+        active = thr is not None and mass >= thr - 1e-9
+        return {"has_grid": True, "threshold_msun": thr, "active": bool(active)}
 
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:

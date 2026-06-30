@@ -262,26 +262,37 @@ is a **two-state toggle** that **data-derives its own active domain**, never a s
   *rotating* solar grid (20% different N here). The naive feh=0.0 grid-point check does
   NOT discriminate (the buggy bracket also lands non-rotating-first) — advisor-caught.
   178 pytest (+8 in `test_rotation_axis.py`; `requires_mist_rotation` marker).
-- **Chunk 2 — the data-derived active domain + the toggle's honesty gate.** A
-  `rotation_available(mass, feh)` (or similar) that returns true only where (a) a rotating
-  grid exists at that feh and (b) the rotating track measurably differs from the
-  non-rotating one at that mass (below the Kraft break they are bit-identical → "negligible").
-  This is the one rule that makes the toggle honest at the Sun (inert, with a "rotation
-  negligible below ~1.2 M☉" note) and off-solar (absent where no rotating grid is fetched).
+- **Chunk 2 — the data-derived active domain + the toggle's honesty gate. ✅ DONE.**
+  `rotation_status(mass, feh) → {has_grid, threshold_msun, active}` on the Protocol
+  (Stub/MESA return has_grid=False). `has_grid` = the rotating axis's [Fe/H] span covers
+  feh (False off it — honestly absent, not a dead toggle); `threshold_msun` = the
+  rotation-onset mass **derived by scanning** (`_rotation_threshold`: the first grid mass
+  whose rotating track diverges from its non-rotating twin via `_track_diverges` on logL +
+  surface He — never a hardcoded 1.2, it shifts with feh; measured 1.25 at solar and low-Z,
+  cached per feh); `active` = has_grid AND mass ≥ threshold. The centerpiece test ties the
+  gate to reality (the "don't label a non-feature" rule): wherever active=False the rotating
+  and non-rotating tracks are *bit-identical*, wherever active=True they differ — derivation
+  and served tracks can't drift apart. 188 pytest (+10). Low-Z m100 rotating grid fetched
+  (the gate works at [Fe/H]=−1, where CHE lives). API endpoint deferred to Chunk 3.
 - **Chunk 3 — the frontend toggle + the payoff render.** A non-rotating/rotating toggle
-  near the [Fe/H] control; greyed with the explanatory note where `rotation_available` is
-  false. Prove the payoff comes through the runtime path before shipping the control
-  (project "don't label a non-feature" rule): the **MS surface N/He enrichment** in the
-  comp panel (rotating vs non at ~20 M☉), the **HR track shift**, and the **low-Z CHE blue
-  divergence** (needs the m100/m200 rotating grids — the headline lives at low Z, not solar).
-- **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities** (m100/m075/
-  m050/p050 at vvcrit0.4) so the toggle is honest across the existing feh axis, and to
-  unlock the low-Z CHE payoff. ~180 MB each; can land before or interleaved with Chunk 3.
-- **Open decision before Chunk 3 (UI):** unify the vvcrit toggle with the existing SED
-  Chunk-3 rotation/activity slider, or keep them separate? They are the same physical
-  parameter at two fidelities (vvcrit selects the *track*, real for all masses in the grid;
-  the SED slider pins *activity/X-ray*, age-derivable only for cool MS stars) with different
-  validity domains. See cross-cutting Q2 below. Does not gate Chunks 1–2.
+  near the [Fe/H] control; greyed with the explanatory note where `rotation_status.active`
+  is false (inert below the threshold) and absent where `has_grid` is false. Wire the API
+  (a `vvcrit` query param on `/track` etc. + a `rotation_status` surface). Prove the payoff
+  comes through the runtime path before shipping the control (project "don't label a
+  non-feature" rule): the **MS surface N/He enrichment** in the comp panel (rotating vs non
+  at ~20 M☉), the **HR track shift**, and the **low-Z CHE blue divergence** (the m100
+  rotating grid is now on disk — the headline lives at low Z, not solar). **UI decision
+  (user, settled): UNIFY** with the existing SED Chunk-3 rotation/activity slider into one
+  rotation control that drives *both* the track selection (vvcrit, real for all masses in
+  the grid) and the activity/Rossby pinning (age-derivable only for cool MS stars) — the UI
+  must show each effect **only where it's honest** (e.g. the track effect gated by
+  `rotation_status`, the activity effect gated by the cool-MS validity domain), so a
+  spectrum/activity knob never implies the evolutionary track changed in a regime where it
+  didn't. `StellarState.v_rot_kms` (still None) is surfaced here as the real selected value.
+- **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities.** **m100
+  (low-Z) fetched in Chunk 2** for the CHE payoff; **m075/m050/p050 at vvcrit0.4 remain**
+  (user: fetch m100 now, rest later) so the toggle is honest across the full feh axis.
+  ~180 MB each; can interleave with Chunk 3.
 
 ## Cross-cutting design questions (decide before building any of these)
 

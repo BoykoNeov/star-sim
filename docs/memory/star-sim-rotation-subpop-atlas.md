@@ -60,15 +60,26 @@ break = honest "negligible"), NOT a slider.
   discriminate the bug (buggy bracket lands non-rotating-first by sort order) —
   **advisor-caught; don't regress to it.** 178 pytest (+8 `test_rotation_axis.py`,
   `requires_mist_rotation` marker). api.py untouched (Chunk 3 wires the query param).
-- **Chunk 2** = data-derived active domain + toggle honesty gate (`rotation_available
-  (mass,feh)`: true only where a rotating grid exists AND the rotating track differs at
-  that mass — bit-identical below ~1.2 M☉ = honest "negligible").
-- **Chunk 3** = frontend toggle + prove the payoff renders (comp N/He at ~20 M☉, HR
-  shift, low-Z CHE). **Open UI decision:** unify with the SED Chunk-3 rotation slider or
-  keep separate (same parameter, two fidelities). **`StellarState.v_rot_kms` still None**
-  even on a rotating axis — surfacing the real value is this chunk's payoff.
-- **Chunk 4** = fetch remaining rotating metallicities (m100/m075/m050/p050 vvcrit0.4;
-  ~180 MB each; m100 unlocks the low-Z CHE headline). One rotating grid (p000) on disk.
+- **Chunk 2 — BUILT.** `rotation_status(mass,feh) → {has_grid, threshold_msun, active}`
+  on the Protocol (Stub/MESA → has_grid=False). `has_grid` = rotating axis's feh span
+  covers feh (else honestly absent); `threshold_msun` = rotation-onset mass **derived by
+  scanning** (`_rotation_threshold`/`_track_diverges` on logL+surface-He, first grid mass
+  where rotating≠non-rotating — NOT hardcoded 1.2; measured **1.25** at solar AND low-Z,
+  cached per feh); `active` = has_grid AND mass≥threshold. Centerpiece test ties the gate
+  to reality ("don't label a non-feature"): active=False ⟺ tracks bit-identical, active=True
+  ⟺ they differ. 188 pytest (+10). **m100 (low-Z) rotating grid fetched** — gate works at
+  [Fe/H]=−1 (where CHE lives). `requires_mist_rotation` / `requires_mist_rotation_lowz`
+  markers. API endpoint deferred to Chunk 3.
+- **Chunk 3 (next)** = frontend toggle + API wiring (`vvcrit` query param + `rotation_status`
+  surface) + prove the payoff renders (comp N/He at ~20 M☉, HR shift, low-Z CHE). **UI
+  decision settled (user): UNIFY** with the SED Chunk-3 rotation/activity slider into ONE
+  rotation control driving both the track (vvcrit, gated by `rotation_status`) and
+  activity/Rossby (gated by the cool-MS validity domain) — each effect shown only where
+  honest. **`StellarState.v_rot_kms` still None** — surfacing the real selected value is
+  this chunk's payoff. See [[star-sim-nonthermal-sed-plan]] (the SED rotation slider).
+- **Chunk 4** = fetch remaining rotating metallicities. **m100 done (Chunk 2)**; m075/m050/
+  p050 vvcrit0.4 remain (~180 MB each; user: fetch m100 now, rest later). On disk now:
+  p000 + m100 rotating.
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime

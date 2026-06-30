@@ -373,6 +373,10 @@ class MESAProvider:
         t = self._snap(mass, feh)
         return float(t.age[0]), float(t.age[-1])
 
+    def rotation_status(self, mass: float, feh: float) -> dict:
+        """The offline MESA runs are non-rotating, so the toggle is never meaningful."""
+        return {"has_grid": False, "threshold_msun": None, "active": False}
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._ensure_loaded()

@@ -26,7 +26,11 @@ from star_sim.providers import MISTProvider
 from star_sim.providers._vendor import read_mist_models as rmm
 from star_sim.providers.mist import DATA_DIR
 
-from .conftest import requires_mist_heldout_feh, requires_mist_rotation
+from .conftest import (
+    requires_mist_heldout_feh,
+    requires_mist_rotation,
+    requires_mist_rotation_lowz,
+)
 
 pytestmark = requires_mist_rotation
 
@@ -181,3 +185,70 @@ def test_vvcrit_snaps_to_nearest_bucket(provider):
     # a wildly out-of-range value also snaps (no extrapolation, no error)
     far = provider.track(mass=3.0, feh=0.0, vvcrit=9.0)
     assert _provider_n_at_eep(far, 551.0) == _provider_n_at_eep(on, 551.0)
+
+
+# --- Chunk 2: the data-derived rotation honesty gate (rotation_status) ---------
+
+def test_rotation_threshold_is_data_derived_kraft_break(provider):
+    """The rotation-onset mass is *derived* from the data (the first grid mass whose
+    rotating track diverges from the non-rotating one), not hardcoded — and it lands
+    at the ~1.2 M_sun Kraft break (convective→radiative envelope; magnetic braking
+    shuts off so a fixed initial spin becomes physical)."""
+    thr = provider._rotation_threshold(0.0)
+    assert thr is not None
+    assert 1.15 <= thr <= 1.35, f"expected the Kraft break near 1.2 M_sun, got {thr}"
+
+
+def test_rotation_status_inert_below_threshold(provider):
+    """At the Sun (1.0 M_sun) the rotating grid exists but rotation does nothing —
+    the toggle must report has_grid=True, active=False (an honest no-op, not a dead
+    control). This is the gate the frontend uses to grey the toggle with a note."""
+    st = provider.rotation_status(1.0, 0.0)
+    assert st["has_grid"] is True
+    assert st["active"] is False
+    assert st["threshold_msun"] is not None and st["threshold_msun"] > 1.0
+
+
+def test_rotation_status_active_above_threshold(provider):
+    """At 3 M_sun (above the Kraft break) toggling rotation changes the track, so the
+    gate reports active=True."""
+    st = provider.rotation_status(3.0, 0.0)
+    assert st["has_grid"] is True
+    assert st["active"] is True
+
+
+def test_rotation_status_absent_where_no_grid(provider):
+    """Super-solar [Fe/H] has no rotating grid on disk (the rotating axis spans only
+    the fetched metallicities), so the toggle is honestly absent — has_grid=False —
+    rather than silently changing the star's metallicity to one that does."""
+    st = provider.rotation_status(3.0, 0.5)
+    assert st["has_grid"] is False
+    assert st["active"] is False
+
+
+@pytest.mark.parametrize("mass", [1.0, 1.1, 3.0, 8.0, 20.0])
+def test_rotation_status_never_lies_about_the_track(provider, mass):
+    """The honesty contract, tied to reality (the project's 'don't label a non-feature'
+    rule): wherever the gate says active=False, the rotating and non-rotating tracks
+    must be *bit-identical* (toggling truly does nothing); wherever it says active=True,
+    they must actually differ. The gate is derived from this same divergence, so this
+    pins that the derivation and the served tracks can never drift apart."""
+    st = provider.rotation_status(mass, 0.0)
+    s0 = provider.track(mass, 0.0, vvcrit=0.0)
+    s4 = provider.track(mass, 0.0, vvcrit=0.4)
+    max_dteff = max(abs(a.Teff_K - b.Teff_K) for a, b in zip(s0, s4))
+    max_dn = max(abs(a.metals_surf["N"] - b.metals_surf["N"]) for a, b in zip(s0, s4))
+    if st["active"]:
+        assert max_dteff > 0.0 or max_dn > 0.0, "active=True but the tracks are identical"
+    else:
+        assert max_dteff == 0.0 and max_dn == 0.0, "active=False but the tracks differ"
+
+
+@requires_mist_rotation_lowz
+def test_rotation_status_works_at_low_z(provider):
+    """Low-Z is where the headline CHE payoff lives, so the gate must work there too:
+    the rotating m100 grid gives has_grid=True and a derived threshold at [Fe/H]=-1."""
+    st = provider.rotation_status(3.0, -1.0)
+    assert st["has_grid"] is True
+    assert st["active"] is True
+    assert st["threshold_msun"] is not None
