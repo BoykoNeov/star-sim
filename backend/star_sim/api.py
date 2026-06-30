@@ -24,7 +24,12 @@ from .provider import (
     ProviderDataMissing,
     StellarStateProvider,
 )
-from .spectra import SpectraDataMissing, spectrum_data, wd_spectrum_data
+from .spectra import (
+    SpectraDataMissing,
+    spectrum_data,
+    wd_spectrum_data,
+    wr_spectrum_data,
+)
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -263,6 +268,33 @@ def wd_spectrum(
     narrow residual gap for the very hottest central stars). 503 if not yet baked."""
     try:
         return wd_spectrum_data(teff, logg)
+    except SpectraDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/wr_spectrum")
+def wr_spectrum(
+    teff: float = Query(..., ge=1000.0, le=500000.0, description="effective temperature / K"),
+    lum: float = Query(..., gt=0.0, description="luminosity / L_sun"),
+    xsurf: float = Query(..., ge=0.0, le=1.0, description="surface hydrogen mass fraction"),
+    ysurf: float = Query(..., ge=0.0, le=1.0, description="surface helium mass fraction"),
+    zsurf: float = Query(..., ge=0.0, le=1.0, description="surface metal mass fraction"),
+    feh: float = Query(0.0, ge=-4.0, le=1.0, description="initial [Fe/H]"),
+) -> dict:
+    """Wolf-Rayet wind-emission spectrum (endgame Chunk 7) — a THIRD spectrum sibling.
+
+    Reads the PoWR cube, whose axis is the WR spectroscopic pair (T*, transformed
+    radius Rt), NOT (Teff, log g) — so the route takes the star's `(Teff, L, surface
+    composition, [Fe/H])` and `wr_spectrum_data` does the placement: subtype (WNE/WNL/
+    WC) from the composition, metallicity grid from [Fe/H], T* ≈ Teff, and Rt from L +
+    a Nugis-Lamers Ṁ. It then snaps to the nearest real grid node, OR reports
+    `regime="none"` when the star is hotter / denser-wind than any PoWR model — the
+    stripped-core bulk the Chunk-7a gate measured off-grid, where the panel shows an
+    honest 'no model' frame (recipe §7a). The wide Teff `Query` bound (up to 500000)
+    keeps a 250+ kK stripped core from tripping a 422; the off-grid path handles it.
+    503 if the WR cube isn't baked."""
+    try:
+        return wr_spectrum_data(teff, lum, xsurf, ysurf, zsurf, feh)
     except SpectraDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

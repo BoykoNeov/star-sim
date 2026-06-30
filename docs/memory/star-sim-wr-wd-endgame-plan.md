@@ -1,6 +1,6 @@
 ---
 name: star-sim-wr-wd-endgame-plan
-description: "Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) & 5 (WR 3D optically-thick-wind shader: WIND_FRAG additive halo over the opaque sphere — limb-brightened electron-scattering haze + outward-advected value-noise filaments, Z_surf density cue WN→WC/WO, honest Teff color NOT a chemistry hue, intensity ramps by X_surf strippedness (≈off at WNh entry → blazes up as H strips: no entry pop, the continuation-not-cut discipline) × a clamped-L tie NOT a measured Ṁ; FIT-TO-FRAME extent recomputed each frame because the WR scrub opens on a huge R≈33 star that would clip; uTime wiring trap) BUILT, plus CHUNK 6a (Koester DA WD spectra: a SECOND spectrum sibling /wd_spectrum, a separate rectangular host-baked Teff×logg cube — 82×13, pure-H so no [Fe/H], NO Docker/pymsg via fetch_koester.py+bake_wd_spectra.py; DC Planck-continuum below the ~5000 K floor + 80 kK no-model honesty edges; phase-aware logg≥6.0 cube switch fixing the Chunk-3 TPAGB-giant-placeholder polish; BAKE_VERSION now coupled across THREE files; 137→153 tests) & CHUNK 6b (TMAP NLTE hot-WD/CSPN spectra: SVO `tmap` H-rich Hemass=0 slab spliced as the >80 kK hot slab of the SAME WD cube → 93×13, grid koester2-DA+TMAP-CSPN, host-baked fetch_tmap.py — no Docker; the ~100–400 kK post-AGB central star now shows a real spectrum where the no-model frame was, regime "CSPN" logg-aware; MEASURED corrections to the §7 scoping: NO ×π×10⁸ — SVO ascii is physical, seam ratio 1.005–1.021 → no rescale; vacuum→air; log-linear blue-gap fill for TMAP's 3200 Å start; logg-clamp 5.4→6.5 honest because the optical is logg-insensitive at CSPN temps (Δ0.03 vs 0.41 for a cooling DA); NO BAKE_VERSION bump (OSTAR precedent — re-bake before tests); advisor-caught the contracting-RISE no-model flash → route on the MAIN cube's REAL 55 kK ceiling not 80 kK; Query teff bound→500000; residual no-model re-pointed at TMAP's 190 kK ceiling; 153→157 tests) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption."
+description: "Full Wolf–Rayet & white-dwarf endgame renderers — design, measured grounding, locked decisions, chunked plan; CHUNKS 1 (backend accessor+classifier), 2 (reversible WD gateway + WD mode shell), 3 (WD 3D shader + structure panel) & 4 (WR mode shell + HR-to-316kK + stripped-surface WN→WC→WO composition via the NORMAL comp views + WN/WC/WO subtype + mass-stays-live re-snap; SED coronal band suppressed; un-modeled gap narrated at the END = core-collapse; living→WR seam verified continuous before coding) & 5 (WR 3D optically-thick-wind shader: WIND_FRAG additive halo over the opaque sphere — limb-brightened electron-scattering haze + outward-advected value-noise filaments, Z_surf density cue WN→WC/WO, honest Teff color NOT a chemistry hue, intensity ramps by X_surf strippedness (≈off at WNh entry → blazes up as H strips: no entry pop, the continuation-not-cut discipline) × a clamped-L tie NOT a measured Ṁ; FIT-TO-FRAME extent recomputed each frame because the WR scrub opens on a huge R≈33 star that would clip; uTime wiring trap) BUILT, plus CHUNK 6a (Koester DA WD spectra: a SECOND spectrum sibling /wd_spectrum, a separate rectangular host-baked Teff×logg cube — 82×13, pure-H so no [Fe/H], NO Docker/pymsg via fetch_koester.py+bake_wd_spectra.py; DC Planck-continuum below the ~5000 K floor + 80 kK no-model honesty edges; phase-aware logg≥6.0 cube switch fixing the Chunk-3 TPAGB-giant-placeholder polish; BAKE_VERSION now coupled across THREE files; 137→153 tests) & CHUNK 6b (TMAP NLTE hot-WD/CSPN spectra: SVO `tmap` H-rich Hemass=0 slab spliced as the >80 kK hot slab of the SAME WD cube → 93×13, grid koester2-DA+TMAP-CSPN, host-baked fetch_tmap.py — no Docker; the ~100–400 kK post-AGB central star now shows a real spectrum where the no-model frame was, regime "CSPN" logg-aware; MEASURED corrections to the §7 scoping: NO ×π×10⁸ — SVO ascii is physical, seam ratio 1.005–1.021 → no rescale; vacuum→air; log-linear blue-gap fill for TMAP's 3200 Å start; logg-clamp 5.4→6.5 honest because the optical is logg-insensitive at CSPN temps (Δ0.03 vs 0.41 for a cooling DA); NO BAKE_VERSION bump (OSTAR precedent — re-bake before tests); advisor-caught the contracting-RISE no-model flash → route on the MAIN cube's REAL 55 kK ceiling not 80 kK; Query teff bound→500000; residual no-model re-pointed at TMAP's 190 kK ceiling; 153→157 tests) BUILT, plus the Chunk-2/3 continuous-living→WD-transition fix (degeneracy-gate corona+SED X-ray, raise GATE_SHOW→0.999); plus the Lane–Emden-in-WD hint (a WD IS a degenerate polytrope n≈1.5→3; hint+caption coherence; editing a static n-only caption ≠ breaking decoupling); plus the hot-end-can't-extend spectrum finding; plus the living-HR endgame preview (eager /endgame fetch + a fetchEndgamePreview/maybeFetchEndgame token race), wd-mode hides the variable-star overlay, and total age in the cooling caption; plus CHUNK 7 (WR spectra, PoWR — narrow-GO) BUILT: a THIRD spectrum sibling /wr_spectrum keyed on the WR axes (T*, Rt) NOT (Teff, logg), host-baked fetch_powr.py + bake_wr_spectra.py (FLAT-NODE cube — ragged (T*,Rt) parallelogram, no rectangular void-fill), gal/lmc/smc grids; the 7a MEASURED gate found it narrow-GO — PoWR covers only the cool H-rich WNh entry (~9%), the stripped core is the hot/compact EVOLUTIONARY surface (Teff 150–262 kK ≈ T*, the evolutionary-vs-spectroscopic Teff gap) off any observed-WR grid → honest no-model frame; map MIST Teff→T* DIRECTLY (advisor REVERSED on my locus evidence — Teff→T_2/3 would clamp everything), Rt from a Nugis–Lamers Ṁ (star_mdot stays OFF StellarState); spectrum.js updateWR = EMISSION draw (continuum-normalized, lines UP, display_max cap, WR species guides); 157→170 tests; endgame arc COMPLETE. Recipe §7a/§9."
 metadata: 
   node_type: memory
   type: project
@@ -424,8 +424,57 @@ central star (CSPN) … hydrogen mostly ionized, weak Balmer on a steep blue con
   cold DC cinder; reversible exit, 390 px caption wraps clean. Recipe `backend/docs/msg_spectra_build_recipe.md
   §7 (status→BUILT) + §8b`.
 
-**Remaining: Chunk 7 (WR spectra, PoWR).** Chunks 6a (Koester DA) + 6b (TMAP CSPN) are the WD spectra,
-both shipped; WR spectra (the hardest, wind-axis) is the only endgame chunk left.
+**CHUNK 7 DONE (WR spectra, PoWR — narrow-GO; backend + frontend, pytest 157→170, +13
+`test_wr_spectra.py`; Playwright bundled-Chromium pass at 1440 + 390 px, 0 JS errors).** The
+last endgame chunk — the THIRD spectrum sibling `/wr_spectrum`, the hardest because PoWR's axis
+is the WR spectroscopic pair **(T\*, transformed-radius Rt)**, NOT (Teff, log g). What landed:
+- **The 7a GATE decided scope BEFORE building (advisor-gated, "measure first" — the discipline
+  that caught the TMAP units + WD radius pop).** Fetched ONE grid (Galactic WNE), overlaid the
+  REAL MIST WR locus on its footprint: **only ~9% maps in-grid** (the cool, H-rich **WNh entry**,
+  Teff 30–60 kK, log Rt 1.0–1.3); **39% below the dense-wind Rt floor**, **52% above the T\*
+  ceiling**. ROOT CAUSE = the **evolutionary-vs-spectroscopic Teff gap**: MIST's stripped-WR Teff
+  (150–262 kK) is the hot, compact **evolutionary/hydrostatic** surface ≈ PoWR's deep T\* (MIST
+  has no thick wind), far hotter/denser-wind than any *observed* WR PoWR was tuned to. **User
+  chose narrow-GO** (real PoWR spectrum for the entry, honest no-model frame for the stripped
+  bulk) over edge-clamp (over-claiming) or placeholder-only.
+- **THE ADVISOR REVERSED on my evidence (don't silently switch — I surfaced the conflict): map
+  MIST Teff → grid T\* DIRECTLY, NOT Teff→T_2/3.** The advisor first said map to T_2/3 (assuming
+  MIST Teff is the cooler wind-veiled value); my locus evidence (stripped Teff 200–262 kK is
+  impossible as an *observed* WR temp, sensible only as the hydrostatic surface) inverted the
+  premise. Teff→T_2/3 would push every stripped star to need T\* ≫ 250 kK → universal clamp (the
+  advisor's own failure mode). The correction makes it CLEANER: both grid coordinates come free,
+  **no T_2/3 round-trip** — T\*≈Teff, **Rt from a Nugis & Lamers (2000) Ṁ(L,Y,Z)** with the grid's
+  fixed v∞/D. **REUSABLE: primary evidence (the actual numbers) beats a plausible scoping premise;
+  surface the conflict in one more advisor call, don't switch silently.**
+- **Files:** `star_sim/fetch_powr.py` (per-grid tarball download+extract — gal/lmc/smc WNE/WNL +
+  gal/lmc WC, 8 grids; strips the tarball's OWN top dir dynamically — PoWR top dirs don't always
+  match the filename, e.g. the `_2016` suffix; resilient: a 404 on one grid skips it),
+  `scripts/bake_wr_spectra.py` (**flat-node** cube — the (T\*, Rt) footprint is a ragged
+  parallelogram with an empty hot+dense-wind corner, so NO rectangular RGI+void-fill, which would
+  invent spectra PoWR never computed; stores per-grid flat node arrays + spectra → snap at
+  runtime), `tests/test_wr_spectra.py`. Edits: `spectra.py` (`wr_spectrum_data`, `_WRSpectra`,
+  `_nugis_lamers_mdot`, `_wr_subtype`, `_wr_continuum`, `WR_GRID_FILENAME`), `api.py`
+  (`/wr_spectrum` route), `conftest.py` (`requires_wr_spectra_data`), `spectrum.js`
+  (`updateWR`/`fetchWR`, emission draw + WR guides + WR no-model frame), `main.js` (`refreshWR`
+  swaps the Chunk-4 placeholder for `spectrum.updateWR`), `index.html` (WR narrate sentence).
+- **Convention (no parameter file ships — site is JS-gated/unscrapeable, derived from the data +
+  the Hamann+ 2006 paper, astro-ph/0608078):** model dir `<T*idx>-<Rtidx>` → `log T*=4.30+0.05·idx`
+  (anchored to the known 28–158 kK WNE range), `log Rt=Rtidx/10` (idx 04=0.4=the paper's degeneracy
+  floor). Fixed per grid: WNE v∞=1600/WNL v∞=1000/WC v∞=2000 km/s, D=4, log L=5.3. Empirical
+  T*-from-IR-RJ calibration FAILS (the IR is wind-free-free-dominated, not a stellar BB tail — the
+  WR inverse problem PoWR exists to solve; don't try to invert the SED).
+- **Frontend = EMISSION draw** (`spectrum.js` `updateWR`): `wr_spectrum_data` continuum-normalizes
+  (per-chunk low percentile → continuum≈1) so lines stand UP, with a `display_max` y-cap so one
+  He II 4686 line can't squash the panel (advisor's per-max gate). WR species guides gated by
+  subtype (N for WN, C for WC). Off-grid (`regime="none"`) → an honest two-line no-model frame
+  ("hotter/more compact than any observed WR … covers the WNh entry"). Caption is honest about the
+  assumption-mapping (T\*←Teff, Ṁ←Nugis-Lamers, "not a fit"). Verified: WNh entry renders a real
+  He II/N emission spectrum (line peak ~7× continuum); stripped core (188 kK) shows the no-model
+  frame; metallicity snap gal/lmc/smc by [Fe/H]; 0 JS errors at 1440 + 390 px.
+- **`BAKE_VERSION` now coupled across FOUR files** (added `bake_wr_spectra.py`), though the WR
+  cube has its OWN flat-node schema (`_WRSpectra`, not the axis-generic `_Spectra`). **Galactic was
+  the MVP slice; LMC/SMC widened the [Fe/H] axis as a pure data re-bake** (CAP18 precedent — no code
+  change). **Chunks 1–7 ALL BUILT — the endgame arc is COMPLETE.** Recipe §7a (gate) + §9 (build).
 
 **The hot-end question that preceded it (answered, closed):** "is there a dataset
 to extend the *higher* (hot) end?" → **No.** OSTAR2002 (Teff [27500, 55000] K) is

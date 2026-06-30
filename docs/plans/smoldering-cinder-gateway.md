@@ -437,11 +437,38 @@ fixed: `refreshWD` is now **phase-aware by surface gravity** — log g ≥ 6.0 �
 spectrum and the WD cube engages only once degenerate. The 6.0 threshold sits in the
 empty main(≤5)/Koester(≥6.5) gravity gap, so the cube switch is invisible.
 
-### Chunk 7 — WR spectra (data-gated, hardest; depends on Chunk 0)
+### Chunk 7 — WR spectra (PoWR) — ✅ BUILT (narrow-GO)
+**Status:** shipped (backend + frontend; pytest 157→170, +13 `test_wr_spectra.py`;
+Playwright bundled-Chromium pass at 1440 + 390 px, 0 JS errors). The hardest, highest-
+risk chunk, gated first by a **measured locus check (7a, recipe §7a)** that found PoWR a
+**narrow-GO**: it honestly covers only the cool, hydrogen-rich **WNh entry** (~10% of the
+scrub); MIST's stripped core is the hot, compact **evolutionary** surface (Teff 150–262 kK
+≈ PoWR's deep T*), far hotter / denser-wind than any *observed* WR PoWR was tuned to, so
+the stripped bulk shows an honest "no model" frame (the evolutionary-vs-spectroscopic Teff
+gap). What landed:
+- **Data:** `star_sim/fetch_powr.py` downloads + extracts the PoWR per-grid tarballs
+  (Galactic WNE/WNL/WC for the MVP; LMC/SMC via `--grids all`); each model a 2-col ASCII
+  `flux_calib.dat` (λ Å, F_λ at 10 pc). Gitignored + cited (Hamann+ 2006, Sander+ 2012,
+  Todt+ 2015).
+- **Bake:** `scripts/bake_wr_spectra.py` reads each ragged (T*, Rt) parallelogram grid,
+  derives node coords from the PoWR dir-name convention, resamples emission spectra onto
+  the shared 3000–9000 Å @ 2.5 Å grid, and stores **flat per-grid nodes** (no rectangular
+  void-fill — that would invent hot dense-wind models PoWR never computed). →
+  `data/spectra/wr_spectra_grid.npz`.
+- **Runtime:** `spectra.py` `wr_spectrum_data` + the `/wr_spectrum` route (THIRD spectrum
+  sibling). Maps the star onto (T*, Rt): **T\* ≈ Teff**, **Rt** from L + a **Nugis-Lamers**
+  Ṁ (kept `star_mdot` OFF StellarState — Option B); subtype (WNE/WNL/WC) from surface
+  composition; metallicity grid from [Fe/H]. **Snaps to the nearest node**, or reports
+  `regime="none"` when the nearest node is far / the star is hotter than any node.
+- **Frontend:** `spectrum.js` `updateWR` — an EMISSION draw (continuum-normalized so lines
+  stand UP, y-cap so one He II 4686 line can't squash the rest), WR species guides (N for
+  WN, C for WC), an honest no-model frame for the stripped core. `main.js` `refreshWR`
+  swaps the Chunk-4 placeholder for it.
+
 **Goal:** real WR emission spectra.
 **Do:** fetch PoWR; reconcile its **wind axis** (Teff + transformed-radius /
-mass-loss) with MIST's `star_mdot`; write the reader/converter; bake a WR cube;
-new sibling route (e.g. `/wr_spectrum`); the emission-line panel (broad He II,
+mass-loss) with a Nugis-Lamers Ṁ; write the reader/converter; bake a WR cube;
+new sibling route (`/wr_spectrum`); the emission-line panel (broad He II,
 C IV, N III/V…) — a different draw from the absorption panel. Measured tests.
 **Fallback:** labeled placeholder. **Depends:** Chunks 0, 5. **Highest risk.**
 

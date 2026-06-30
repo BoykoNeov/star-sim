@@ -13,7 +13,12 @@ import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
 from star_sim.providers.mist import DATA_DIR, _feh_from_path, _find_eep_dir, _find_eep_dirs
-from star_sim.spectra import GRID_FILENAME, SPECTRA_DATA_DIR, WD_GRID_FILENAME
+from star_sim.spectra import (
+    GRID_FILENAME,
+    SPECTRA_DATA_DIR,
+    WD_GRID_FILENAME,
+    WR_GRID_FILENAME,
+)
 
 
 def mist_data_available() -> bool:
@@ -114,4 +119,17 @@ def wd_spectra_data_available() -> bool:
 requires_wd_spectra_data = pytest.mark.skipif(
     not wd_spectra_data_available(),
     reason="WD spectrum grid not baked — run fetch_koester + scripts/bake_wd_spectra.py",
+)
+
+
+def wr_spectra_data_available() -> bool:
+    return (SPECTRA_DATA_DIR / WR_GRID_FILENAME).is_file()
+
+
+# The /wr_spectrum (PoWR Wolf-Rayet) tests need the baked WR cube — fetched + baked on
+# the host (never committed): `python -m star_sim.fetch_powr` then
+# `python scripts/bake_wr_spectra.py` (endgame Chunk 7).
+requires_wr_spectra_data = pytest.mark.skipif(
+    not wr_spectra_data_available(),
+    reason="WR spectrum grid not baked — run fetch_powr + scripts/bake_wr_spectra.py",
 )

@@ -1094,8 +1094,12 @@ function refreshWR() {
   hr.update(s);
   comp.update(s);                       // normal views over the WR sub-track (stripped surface)
   sed.update(s, { endgame: "wr" });     // blackbody only — no coronal band (wind, not dynamo)
-  spectrum.showPlaceholder(
-    "Wolf–Rayet wind-emission spectra aren't in the spectral grid yet.");
+  // WR wind-emission spectrum (Chunk 7): the PoWR cube via /wr_spectrum. The runtime
+  // places the star on PoWR's (T*, Rt) axes and either shows a real emission spectrum
+  // (the cool, hydrogen-rich WNh entry) or an honest "no model" frame (the hot stripped
+  // core, hotter/denser-wind than any PoWR model — recipe §7a). Either way it's driven
+  // by the state, no placeholder.
+  spectrum.updateWR(s);
   renderWRReadout(s);
 
   els.status.style.color = teffToCSS(s.Teff_K);

@@ -164,9 +164,21 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   massive-progenitor central stars). Measured: **no ×π×10⁸** (SVO ascii is physical; seam
   ratio 1.005–1.021 → no rescale), log-linear blue-gap fill (TMAP starts 3200 Å), log g-clamp
   honest (optical Δ 0.03 vs 0.41 for a cooling DA), **no `BAKE_VERSION` bump** (OSTAR-splice
-  precedent). **Chunks 1–5 + 6a + 6b built; WR spectra (Chunk 7, PoWR) is the last chunk.**
-  [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`, WD-spectra
-  recipe `backend/docs/msg_spectra_build_recipe.md §8/§8b`.
+  precedent). WR spectra (Chunk **7**, the last chunk) = a **third** spectrum sibling
+  `/wr_spectrum` over the **PoWR** wind-emission grids, keyed on the WR axes **(T\*, Rt)** not
+  (Teff, log g) — `fetch_powr.py` (per-grid tarballs, host-only) → `bake_wr_spectra.py`
+  (**flat-node** cube, NOT rectangular void-fill — the (T\*, Rt) footprint is a ragged
+  parallelogram with an empty hot+dense-wind corner) → `spectra.py` `wr_spectrum_data` →
+  `spectrum.js` `updateWR` (an **emission** draw: continuum-normalized so lines stand UP,
+  WR species guides). **Narrow-GO, measured first (the 7a gate):** mapping real MIST WR states
+  (**T\*≈Teff**, **Rt** from a Nugis–Lamers Ṁ — `star_mdot` stays OFF StellarState) shows PoWR
+  covers only the cool, H-rich **WNh entry** (~10%); the stripped core is the hot, compact
+  *evolutionary* surface (Teff 150–262 kK ≈ T\*, far hotter/denser-wind than any *observed* WR
+  — the evolutionary-vs-spectroscopic Teff gap), so the bulk shows an honest **no-model** frame.
+  Snaps to nearest node (subtype WNE/WNL/WC from surface composition, metallicity gal/lmc/smc
+  from [Fe/H]). **Chunks 1–7 ALL BUILT — the endgame arc is complete.**
+  [[star-sim-wr-wd-endgame-plan]]; plan `docs/plans/smoldering-cinder-gateway.md`, spectra
+  recipe `backend/docs/msg_spectra_build_recipe.md §7a/§8/§8b/§9`.
 
 ### SED (broadband panel — **sibling**, Teff-driven, frontend-only)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -189,7 +201,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **157 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **170 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr).
 

@@ -80,6 +80,24 @@ const LINES = [
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
 const COL_GRID = "#283149";
 
+// Wolf-Rayet wind-EMISSION lines (endgame Chunk 7) — drawn rising ABOVE the continuum,
+// the opposite of the absorption guides above. The defining optical features: He II
+// 4686 (THE WR line, all subtypes) + the He II Pickering series; nitrogen lines for WN
+// (`wn`), carbon lines for WC (`wc`). Gated by the served subtype so we label only the
+// species that grid actually shows (the "don't label a non-feature" rule).
+const COL_WR = "rgba(120,230,180,0.6)";   // a wind-green tint marks WR emission guides
+const WR_LINES = [
+  { lam: 4058, label: "N IV", wn: true },
+  { lam: 4604, label: "N V", wn: true },
+  { lam: 4686, label: "He II" },          // the defining Wolf–Rayet emission line
+  { lam: 4861, label: "He II" },          // Pickering (blends with Hβ)
+  { lam: 5411, label: "He II" },
+  { lam: 5696, label: "C III", wc: true },
+  { lam: 5808, label: "C IV", wc: true }, // the defining WC line
+  { lam: 5876, label: "He I" },
+  { lam: 6560, label: "He II" },          // Pickering (blends with Hα)
+];
+
 export function createSpectrum({ api }) {
   const canvas = document.getElementById("spectrum-canvas");
   const caption = document.getElementById("spectrum-caption");
@@ -185,6 +203,52 @@ export function createSpectrum({ api }) {
     debounce = setTimeout(() => fetchWD(teff, logg), 90);
   }
 
+  // The WR endgame's wind-EMISSION spectrum: a THIRD backend cube (PoWR) served at
+  // /wr_spectrum, keyed on the WR axes (T*, Rt) rather than (Teff, log g). The backend
+  // places the star (subtype from composition, Rt from L + a Nugis-Lamers Ṁ) and either
+  // snaps to a real grid node (regime "WR") or reports off-grid (regime "none" — the hot
+  // stripped core, hotter/denser-wind than any PoWR model). The response's `isWR`/
+  // `off_grid` flags steer draw()/guides/caption onto the emission branch or the honest
+  // no-model frame.
+  async function fetchWR(teff, lum, xs, ys, zs, feh) {
+    const mine = ++token;
+    try {
+      const res = await fetch(
+        `${api}/wr_spectrum?teff=${teff}&lum=${lum}&xsurf=${xs}&ysurf=${ys}` +
+        `&zsurf=${zs}&feh=${feh}`,
+      );
+      if (!res.ok) throw new Error(`/wr_spectrum -> ${res.status}`);
+      const d = await res.json();
+      if (mine !== token) return;
+      d.isWR = true;          // steer draw()/guides/caption onto the WR emission branch
+      data = d;
+      draw();
+      renderCaption();
+    } catch {
+      if (mine !== token) return;
+      if (!data && caption) {
+        caption.textContent =
+          "Wolf–Rayet spectrum unavailable — the WR grid may not be baked yet " +
+          "(python -m star_sim.fetch_powr; python scripts/bake_wr_spectra.py).";
+      }
+    }
+  }
+
+  function updateWR(state) {
+    if (!state) return;
+    placeholderMsg = null;
+    const teff = state.Teff_K, lum = state.L_lsun;
+    if (teff == null || lum == null) return;
+    const xs = state.X_surf ?? 0, ys = state.Y_surf ?? 0, zs = state.Z_surf ?? 0;
+    const feh = state.feh_init ?? 0;
+    // Distinct key prefix, like updateWD — switching cubes always refetches.
+    const key = `wr|${Math.round(teff)}|${zs.toFixed(3)}|${xs.toFixed(3)}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => fetchWR(teff, lum, xs, ys, zs, feh), 90);
+  }
+
   // Show an honest "no spectral model for this regime yet" frame instead of a
   // spectrum (the WD endgame, until the Chunk 6 white-dwarf grid lands). Bumps the
   // token + clears the dedup key so a pending live fetch can't overwrite it, and a
@@ -218,6 +282,10 @@ export function createSpectrum({ api }) {
     if (placeholderMsg) { drawPlaceholder(placeholderMsg); return; }
     if (!data) return;
     if (teffAboveGrid()) { drawNoModel(); return; }
+    // WR: the stripped core hotter/denser-wind than any PoWR model → honest no-model
+    // frame; otherwise the wind-emission render (lines UP, not absorption notches).
+    if (data.isWR && data.off_grid) { drawNoModel(); return; }
+    if (data.isWR) { drawWR(); return; }
 
     const lam = data.wavelength, flux = data.flux;
     const n = lam.length;
@@ -349,6 +417,114 @@ export function createSpectrum({ api }) {
     ctx.textAlign = "left";
   }
 
+  // The Wolf-Rayet wind-EMISSION render: the same rainbow-shaded spectrograph, but the
+  // flux is continuum-normalized (continuum ≈ 1) so the broad emission lines stand UP
+  // above it instead of cutting absorption notches into it. The y-scale is the backend's
+  // `display_max` (a touch above this spectrum's tallest line, capped) so one strong
+  // He II 4686 line can't squash the continuum and weaker lines (the advisor's gate).
+  function drawWR() {
+    const lam = data.wavelength, flux = data.flux;
+    const n = lam.length;
+    const lamLo = lam[0], lamHi = lam[n - 1];
+    const ftop = data.display_max || 3;
+
+    const xOf = (l) => PAD_L + (l - lamLo) / (lamHi - lamLo) * (W - PAD_L - PAD_R);
+    const yOf = (f) => H - PAD_B - Math.min(f, ftop) / ftop * (H - PAD_T - PAD_B);
+    const yAxis = H - PAD_B;
+
+    // shade under the curve — spectral colour inside the visible band, muted grey
+    // outside; emission lines therefore read as tall colour spikes over a low continuum.
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]);
+      const w = i + 1 < n ? xOf(lam[i + 1]) - x + 1 : 1.5;
+      const yTop = yOf(flux[i]);
+      if (lam[i] >= VIS_LO && lam[i] <= VIS_HI) {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = wavelengthToCSS(lam[i] / 10);
+      } else {
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = "#9aa6bd";
+      }
+      ctx.fillRect(x, yTop, w, yAxis - yTop);
+    }
+    ctx.globalAlpha = 1;
+
+    // the continuum reference line at flux = 1 (so "emission" is unambiguous).
+    const yc = yOf(1.0);
+    ctx.strokeStyle = "rgba(180,190,205,0.30)"; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(PAD_L, yc); ctx.lineTo(W - PAD_R, yc); ctx.stroke();
+    ctx.setLineDash([]);
+
+    drawWRGuides(xOf, lamLo, lamHi);
+
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]), y = yOf(flux[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.3; ctx.stroke();
+
+    drawWRFrameAndAxes(xOf, lamLo, lamHi, ftop);
+  }
+
+  // WR emission-line guides — only the species the served subtype actually shows
+  // (nitrogen for WN, carbon for WC, helium always), the "don't label a non-feature" rule.
+  function drawWRGuides(xOf, lamLo, lamHi) {
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 1;
+    const sub = data.subtype || "";
+    let lastLabelX = -1e9;
+    for (const ln of WR_LINES) {
+      if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
+      if (ln.wn && !sub.startsWith("WN")) continue;   // nitrogen only on the WN grids
+      if (ln.wc && sub !== "WC") continue;            // carbon only on the WC grid
+      const x = xOf(ln.lam);
+      ctx.strokeStyle = COL_WR;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+      ctx.setLineDash([]);
+      if (x - lastLabelX >= 26) {
+        ctx.fillStyle = "#aef0cd";
+        ctx.fillText(ln.label, x, PAD_T - 4);
+        lastLabelX = x;
+      }
+    }
+    ctx.textAlign = "left";
+  }
+
+  function drawWRFrameAndAxes(xOf, lamLo, lamHi, ftop) {
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD_T, W - PAD_L - PAD_R, H - PAD_T - PAD_B);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
+
+    ctx.textAlign = "center";
+    for (let nm = 400; nm * 10 <= lamHi; nm += 100) {
+      const lA = nm * 10;
+      if (lA <= lamLo) continue;
+      const x = xOf(lA);
+      ctx.globalAlpha = 0.22;
+      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(String(nm), x, H - PAD_B + 14);
+    }
+    ctx.fillText("wavelength (nm)", W / 2, H - 6);
+
+    ctx.save();
+    ctx.translate(12, (H - PAD_B + PAD_T) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("flux / continuum (emission)", 0, 0);
+    ctx.restore();
+
+    // y ticks: 0, the continuum (1), and the display cap.
+    ctx.textAlign = "right";
+    const yFor = (f) => H - PAD_B - Math.min(f, ftop) / ftop * (H - PAD_T - PAD_B);
+    for (const v of [0, 1, ftop]) {
+      ctx.fillText(v.toFixed(v < 10 ? 1 : 0), PAD_L - 5, yFor(v) + 4);
+    }
+    ctx.textAlign = "left";
+  }
+
   // The "no model for this range" state: the star is hotter than every grid we
   // have, so there's nothing honest to plot. A faint frame keeps the panel reading
   // as intentionally empty (not broken); the message names the real ceiling and
@@ -360,6 +536,21 @@ export function createSpectrum({ api }) {
     const cx = (PAD_L + W - PAD_R) / 2, cy = (PAD_T + H - PAD_B) / 2;
     ctx.textAlign = "center";
     ctx.fillStyle = "#aeb7c8"; ctx.font = "14px system-ui, sans-serif";
+    // The WR off-grid frame is its own story: the stripped core is hotter / denser-wind
+    // than any *observed* WR the PoWR grid covers (the evolutionary-vs-spectroscopic Teff
+    // gap), NOT simply "too hot for our cube" — so it gets a two-line explanation.
+    if (data.isWR) {
+      ctx.fillText("No Wolf–Rayet wind model for this stripped core", cx, cy - 14);
+      ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
+      ctx.fillText(
+        `Teff ≈ ${Math.round(data.teff_requested / 1000)} kK — hotter and more compact ` +
+        `than any observed Wolf–Rayet star`, cx, cy + 6);
+      ctx.fillText(
+        "the PoWR grids model (it covers the cooler, hydrogen-rich WNh entry).",
+        cx, cy + 22);
+      ctx.textAlign = "left";
+      return;
+    }
     ctx.fillText("No spectral model for this temperature", cx, cy - 8);
     ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif";
     ctx.fillText(
@@ -401,6 +592,31 @@ export function createSpectrum({ api }) {
           `stars get this hot, a narrow residual gap.`
         : `Teff ≈ ${Math.round(data.teff_requested)} K is beyond our hottest ` +
           `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
+      return;
+    }
+    // The WR endgame: PoWR wind-emission spectra. The caption is HONEST about the
+    // assumption-mapping (advisor): the deep temperature is mapped (Teff→T*) and the
+    // wind density is a Nugis-Lamers estimate (→Rt), NOT a fit — and off the cool WNh
+    // entry, the stripped core is hotter/denser-wind than any modelled WR (no spectrum).
+    if (data.isWR) {
+      const metalName = { gal: "Galactic (Z☉)", lmc: "LMC (½ Z☉)", smc: "SMC (⅕ Z☉)" }[data.metal]
+        || data.metal;
+      if (data.off_grid) {
+        caption.textContent =
+          `Wolf–Rayet · Teff ≈ ${Math.round(data.teff_requested / 1000)} kK — this stripped ` +
+          `core is hotter / denser-wind than any observed WR the PoWR grids cover (the ` +
+          `evolutionary-vs-spectroscopic temperature gap). A real wind spectrum shows for the ` +
+          `cooler, hydrogen-rich WNh entry of the scrub.`;
+      } else {
+        const sub = data.subtype;
+        const subName = sub === "WC" ? "WC (carbon surface)"
+          : sub === "WNL" ? "WNL (hydrogen-rich)" : "WNE (hydrogen-free)";
+        const species = sub === "WC" ? "C IV 5808" : "N V / N IV";
+        caption.textContent =
+          `Wolf–Rayet ${subName} · ${metalName} · broad wind EMISSION lines (He II 4686, ` +
+          `${species}) from PoWR models. T* and wind density are assumption-mapped from the ` +
+          `track (Teff→T*, a Nugis–Lamers Ṁ→Rt), not a spectral fit.`;
+      }
       return;
     }
     // The WD endgame: a DA's pressure-broadened Balmer lines, or — once the cinder
@@ -445,5 +661,5 @@ export function createSpectrum({ api }) {
     renderCaption();
   }
 
-  return { update, updateWD, showPlaceholder, resize };
+  return { update, updateWD, updateWR, showPlaceholder, resize };
 }

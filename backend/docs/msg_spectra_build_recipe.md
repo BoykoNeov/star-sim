@@ -395,7 +395,7 @@ two **measured corrections to this scoping** in **§8b**; the headlines:
   **not** TMAP — don't plan the TMAP ingest around it.
 [tmap](https://svo2.cab.inta-csic.es/theory/newov2/index.php?models=tmap)
 
-**PoWR Wolf-Rayet (WN/WC) — CONDITIONAL GO at best (do last, highest design cost).**
+**PoWR Wolf-Rayet (WN/WC) — ✅ BUILT (Chunk 7, narrow-GO; §9). Was "CONDITIONAL GO at best".**
 Spectra download cleanly: **public, no registration**, bulk per-grid tarballs at
 [~htodt/powr-sed/](https://www.astro.physik.uni-potsdam.de/~htodt/powr-sed/) (12 grids
 WNE/WNL/WNL-H50/WC × Galactic/LMC/SMC/sub-SMC, 61–129 MB each; each model a
@@ -415,6 +415,43 @@ already sketches. ~50–100 LOC + a ragged-grid void-fill + an opacity-edge band
 [PoWR tarballs](https://www.astro.physik.uni-potsdam.de/~htodt/powr-sed/) — SVO has **no**
 WR collection. *Aside:* PoWR's **OB** grids ARE Teff×log g and would slot onto the main
 cube — but they're MS hot stars, not the WR endgame.)
+
+### Chunk 7a — PoWR locus check (MEASURED, the go/no-go gate) — narrow-GO at best
+
+Before baking, we did the discriminating measurement (advisor-gated, the same "measure
+first" discipline as the TMAP units / WD radius pop): fetch **one** grid (Galactic WNE,
+`wnegrid.200-80000_2016.tgz`, 129 MB) and overlay the **real MIST WR locus** on its
+footprint. Findings, all measured:
+
+- **Grid format confirmed.** Tarball = one dir per model `wnegrid.200-80000/<T*idx>-<Rtidx>/`
+  with `flux_calib.dat` (2-col ASCII: λ Å [air], F_λ erg/cm²/s/Å **at 10 pc**, 200–80000 Å,
+  ~59.8k pts, all normalized to **log L=5.3**) + `flux.pdf`. **No per-model parameter table**
+  (not in the tarball, not in the flux.pdf text, and the PoWR website is JS-gated — unscrapeable).
+  Footprint = the classic PoWR parallelogram: T* idx 03–18 (+sparse 19/20, +one 00-80), Rt idx
+  04–21. **Fixed grid params (from Hamann+ 2006, astro-ph/0608078):** WNE v∞ **1600 km/s**
+  (WNL 1000), **D=4**, v_D=100 km/s. **Convention (anchored, not scraped):** `log(Rt/R☉)=Rtidx/10`
+  (idx 04 = 0.4 = the paper's **degeneracy floor** `log Rt<0.4` where the spectrum depends only
+  on Rt·T*²), `log(T*/K)≈4.30+0.05·T*idx` (idx 03–18 ⇒ 28–158 kK, the known WNE grid range).
+  An empirical T*-from-IR-RJ calibration **fails** — the IR is wind-free-free-dominated, not a
+  stellar BB tail (the WR inverse problem PoWR exists to solve; don't try to invert the SED).
+- **Mapping decided (advisor reversed to agree): MIST Teff → grid T\* DIRECTLY**, NOT Teff→T_2/3.
+  MIST's stripped-WR Teff (150–262 kK) is the hot, compact **evolutionary/hydrostatic** surface
+  ≈ PoWR's deep **T\*** (MIST has no optically-thick wind) — the well-known evolutionary-vs-
+  spectroscopic Teff split (Groh/Meynet). So both grid coordinates come free, no T_2/3 round-trip:
+  **T\*≈MIST Teff**, **Rt from Nugis & Lamers (2000)** Ṁ(L,Y,Z) `log Ṁ=−11.00+1.29logL+1.73logY+0.47logZ`
+  with the grid's own v∞/D — PoWR returns the cooler emergent spectrum for free. (Option (b);
+  star_mdot stays OFF StellarState — N&L drove the locus cleanly.)
+- **THE GATE RESULT (6 stars × 21 samples = 126 points, 60/100/300 M☉ × [Fe/H] 0/−1):**
+  **only 9% land IN-grid** (the cool **WNh hydrogen-rich entry**, Teff 30–60 kK, log Rt 1.0–1.3);
+  **39% fall below the dense-wind Rt floor** (the grid has NO hot+dense-wind models — they sit in
+  the degeneracy region and were never computed); **52% exceed the T\* ceiling** (~158–200 kK;
+  MIST's bare cores reach 250+ kK). The iconic **stripped WN→WC→WO bulk is off the map of every
+  PoWR atmosphere** — because MIST's evolutionary T* is far hotter/more compact than the *observed*
+  WR (T* 50–140 kK) PoWR was tuned to. This is **real physics surfaced, not a bug to engineer
+  around.** Verdict: **narrow-GO** — a real PoWR emission spectrum is honest ONLY for the WNh/early
+  entry; the stripped tail must show the honest "no model" frame (hotter/more compact than any WR
+  atmosphere grid). Scripts: scratchpad `wr_locus.py` / `wr_overlay.py` (re-run vs the provider if
+  grids change).
 
 **Top risks:** (1) **PoWR wind-axis mapping (HIGH)** — no track-only placement; v∞/D
 assumed, Teff↔T\* approximate; the star is *snapped with assumptions*, accept honestly
@@ -526,3 +563,52 @@ do not re-derive from the §7 scoping, which two of these correct):**
   so the clamp is honest there too.
 - **`/wd_spectrum` Query `teff` bound widened to 500000** — massive progenitors' central
   stars peak ~400 kK; without this they'd 422 instead of showing the residual no-model frame.
+
+## 9. Building the WR cube (Chunk 7 — PoWR, narrow-GO — BUILT)
+
+The WR-endgame wind-emission spectrum. Like the WD cube it needs **no pymsg/Docker** (PoWR
+is plain 2-col ASCII), but it is structurally different from every other cube — see §7a for
+WHY (the measured narrow-GO gate) and the headlines below. Two commands:
+
+```bash
+# (host, from backend/) download + extract the PoWR grid tarballs into
+# data/spectra/grids/powr/<tag>/  (Galactic WNE/WNL/WC by default; add LMC/SMC:)
+python -m star_sim.fetch_powr                 # MVP: Galactic only
+python -m star_sim.fetch_powr --grids all      # + LMC/SMC metallicity grids
+# bake them into ONE flat-node WR cube -> data/spectra/wr_spectra_grid.npz
+python scripts/bake_wr_spectra.py
+```
+
+Then the runtime (`star_sim/spectra.py` `wr_spectrum_data`) serves `/wr_spectrum`, the THIRD
+spectrum sibling; `pytest backend/tests/test_wr_spectra.py` gates it (`requires_wr_spectra_data`
+skips the data-gated half if the cube is absent). The frontend (`spectrum.js` `updateWR`,
+wired in `main.js` `refreshWR`) draws the emission spectrum or the off-grid no-model frame.
+
+**Verified facts (confirm from a real file / measured through the runtime — do not re-derive):**
+
+- **Tarball = one dir per model `<T*idx>-<Rtidx>/flux_calib.dat`** (2-col ASCII: λ Å,
+  F_λ erg/cm²/s/Å at 10 pc, 200–80000 Å, all log L=5.3). **No parameter file ships** — the bake
+  derives node coords from the convention `log T* = 4.30 + 0.05·T*idx`, `log Rt = Rt_idx/10`
+  (recipe §7a). Fixed per grid: WNE v∞=1600, WNL v∞=1000, WC v∞=2000 (km/s), D=4.
+- **Flat-node cube, NOT a rectangular RGI cube + void-fill.** PoWR's footprint is a ragged
+  (T*, Rt) parallelogram with an empty hot+dense-wind corner; void-filling it would invent
+  spectra PoWR never computed. So `wr_spectra_grid.npz` stores, per grid, the flat node
+  `(log T*, log Rt)` arrays + spectra, and the runtime **snaps to the nearest node** (the
+  endgame snap-to-track discipline) — `regime="none"` when the nearest node is too far / the
+  star is hotter than any node (the stripped bulk, §7a).
+- **Mapping (no T_2/3 round-trip):** T\* ≈ MIST Teff (the evolutionary surface ≈ PoWR's deep
+  T*, §7a), Rt from the star's L + a **Nugis & Lamers (2000)** Ṁ(L,Y,Z) with the grid's fixed
+  v∞/D. Subtype (WNE/WNL/WC) from surface composition; metallicity grid snapped from [Fe/H].
+- **Emission, continuum-normalized.** `wr_spectrum_data` divides by a per-chunk low-percentile
+  continuum (≈1) so lines stand UP, and returns a `display_max` y-cap so one He II 4686 line
+  can't squash the panel under per-max normalization (the advisor's gate). Vacuum→air applied
+  (PoWR is vacuum; WR lines are 1000s km/s broad so the ~1.4 Å shift is sub-resolution, but
+  converted for guide alignment).
+- **`BAKE_VERSION` coupled across FOUR files now** (`spectra.py`, `bake_spectra.py`,
+  `bake_wd_spectra.py`, **`bake_wr_spectra.py`**) — though the WR cube has its OWN flat-node
+  schema (read by `_WRSpectra`, not the axis-generic `_Spectra`), it shares the version
+  discipline; bump in lockstep.
+- **Galactic is the MVP slice; LMC/SMC widen the [Fe/H] axis as a pure data re-bake** (the
+  CAP18 precedent — `fetch_powr --grids all` then re-bake, no code change). One filename trap:
+  the LMC WC tarball is `lmc-wcgrid.200-80000.tgz` (no `_2016`); the fetcher is resilient (a
+  404 on one grid skips it, the batch continues).

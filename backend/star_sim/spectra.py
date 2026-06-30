@@ -59,6 +59,12 @@ GRID_FILENAME = "spectra_grid.npz"
 # runtime reuses `_Spectra` verbatim (a 2-axis Teff×log g cube, like the original
 # solar `sg-demo`). Baked on the host by scripts/bake_wd_spectra.py (no pymsg).
 WD_GRID_FILENAME = "wd_spectra_grid.npz"
+# The Wolf-Rayet cube (endgame Chunk 7): PoWR wind-emission grids, keyed on the WR
+# spectroscopic axes (T*, transformed-radius Rt) — NOT (Teff, log g) — so it has its
+# OWN flat-node .npz schema (a ragged (T*, Rt) parallelogram per subtype × metallicity)
+# and the runtime snaps to the nearest real node (`_WRSpectra`, not `_Spectra`). Baked
+# on the host by scripts/bake_wr_spectra.py (no pymsg). See recipe §7/§7a.
+WR_GRID_FILENAME = "wr_spectra_grid.npz"
 
 _BAKE_HINT = (
     "Spectrum grid not baked. Build it once in the MSG container and copy it to "
@@ -305,6 +311,219 @@ def wd_spectrum_data(teff: float, logg: float, *, n_display: int | None = None) 
         "teff_max": teff_max,
         "feh_varies": False,
         "regime": regime,
+        "flux_unit": s.flux_unit,
+        "grid_name": s.grid_name,
+    }
+
+
+# --- Wolf-Rayet (endgame Chunk 7) -------------------------------------------
+#
+# The WR spectrum is a wind-EMISSION spectrum from the PoWR grids, keyed on the WR
+# spectroscopic axes (stellar temperature T*, transformed radius Rt), not (Teff,
+# log g). The mapping from a track star onto the grid is unavoidably assumption-laden
+# (PoWR's own framing) and was MEASURED before building (recipe §7a — the narrow-GO
+# gate): PoWR honestly covers only the cool, hydrogen-rich WNh ENTRY; MIST's stripped
+# core is the hot, compact EVOLUTIONARY surface (Teff ≈ T*, 150–260 kK), far hotter and
+# more dense-wind than any observed WR, so the stripped bulk maps OFF-grid and the panel
+# shows an honest "no model" frame there.
+
+_TSUN_K = 5772.0          # solar Teff, for R* = sqrt(L/Lsun)·(Tsun/Teff)²
+_WR_CLUMP_D = 4.0         # clumping density contrast — fixed in every PoWR grid
+# Off-grid tolerances (in dex). A star hotter than the grid's hottest node by more than
+# _WR_T_TOL, or whose nearest (log T*, log Rt) node is farther than _WR_SNAP_TOL, is
+# "no model" — the stripped-bulk regime the gate found off every PoWR atmosphere.
+_WR_T_TOL = 0.06
+_WR_SNAP_TOL = 0.30
+
+
+def _nugis_lamers_mdot(l_lsun: float, y_surf: float, z: float) -> float:
+    """Wolf-Rayet mass-loss rate (M☉/yr), Nugis & Lamers (2000) — the standard WR
+    Ṁ(L, Y, Z): log Ṁ = −11.00 + 1.29 logL + 1.73 logY + 0.47 logZ. Used to place the
+    star on PoWR's wind (Rt) axis without needing the track's own Ṁ (kept off
+    StellarState, §3/Option B) — MIST's WR mass loss is itself ~this family, so the
+    composite Rt is the same to within the assumptions PoWR's Rt already carries."""
+    logL = np.log10(max(l_lsun, 1.0))
+    y = min(max(y_surf, 1e-3), 1.0)
+    return 10.0 ** (-11.00 + 1.29 * logL + 1.73 * np.log10(y) + 0.47 * np.log10(max(z, 1e-3)))
+
+
+def _wr_subtype(x_surf: float, y_surf: float, z_surf: float) -> str:
+    """Pick the PoWR grid subtype from the surface composition (mirrors classify.js'
+    WN/WC logic): carbon/oxygen surfaced → WC; else hydrogen still present → WNL
+    (hydrogen-rich WN); else → WNE (hydrogen-free WN). WO has no PoWR grid → folds into
+    WC (the hottest carbon grid)."""
+    if (z_surf or 0.0) >= 0.4:
+        return "WC"
+    if (x_surf or 0.0) > 0.05:
+        return "WNL"
+    return "WNE"
+
+
+class _WRSpectra:
+    """Lazily-loaded PoWR WR grids: a flat set of (log T*, log Rt) nodes + emission
+    spectra per (subtype, metallicity) grid. The runtime snaps to the nearest node
+    (the endgame snap-to-track discipline) rather than interpolating a ragged,
+    parallelogram-shaped grid."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        npz = np.load(path, allow_pickle=False)
+        ver = int(npz["bake_version"])
+        if ver != BAKE_VERSION:
+            raise SpectraDataMissing(
+                f"baked WR grid {path} is BAKE_VERSION {ver}, runtime wants "
+                f"{BAKE_VERSION}; re-bake with scripts/bake_wr_spectra.py"
+            )
+        self.grid_name = str(npz["grid_name"])
+        self.flux_unit = str(npz["flux_unit"])
+        self.lam = np.asarray(npz["lam"], dtype=float)
+        self.tags = [str(t) for t in npz["grid_tags"]]
+        subt = [str(s) for s in npz["grid_subtype"]]
+        metal = [str(m) for m in npz["grid_metal"]]
+        z = np.asarray(npz["grid_z"], dtype=float)
+        vinf = np.asarray(npz["grid_vinf"], dtype=float)
+        self.grids: dict[str, dict] = {}
+        for i, tag in enumerate(self.tags):
+            logT = np.asarray(npz[f"nodes_logT_{tag}"], dtype=float)
+            logRt = np.asarray(npz[f"nodes_logRt_{tag}"], dtype=float)
+            self.grids[tag] = {
+                "subtype": subt[i], "metal": metal[i],
+                "z": float(z[i]), "vinf": float(vinf[i]),
+                "logT": logT, "logRt": logRt,
+                "flux": np.asarray(npz[f"flux_{tag}"], dtype=float),
+                "logT_max": float(logT.max()),
+            }
+
+    def select_grid(self, subtype: str, feh: float) -> dict:
+        """Choose the grid: the requested subtype, metallicity-snapped to the nearest
+        available Z/Z☉ (a star's [Fe/H] → Z/Z☉ = 10**[Fe/H]). Falls back across subtype
+        only if the requested one isn't on disk (so a Galactic-only cube still serves)."""
+        z_target = 10.0 ** feh
+        cands = [g for g in self.grids.values() if g["subtype"] == subtype]
+        if not cands:                      # subtype not baked → any subtype, same Z snap
+            cands = list(self.grids.values())
+        return min(cands, key=lambda g: abs(g["z"] - z_target))
+
+
+_WR_CACHE: _WRSpectra | None = None
+
+
+def _load_wr() -> _WRSpectra:
+    global _WR_CACHE
+    if _WR_CACHE is None:
+        path = SPECTRA_DATA_DIR / WR_GRID_FILENAME
+        if not path.is_file():
+            raise SpectraDataMissing(
+                f"Wolf-Rayet spectrum grid not baked. Fetch + bake it once:\n"
+                f"    python -m star_sim.fetch_powr\n"
+                f"    python scripts/bake_wr_spectra.py   # -> {path}\n"
+                f"(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 7)."
+            )
+        _WR_CACHE = _WRSpectra(path)
+    return _WR_CACHE
+
+
+def _wr_continuum(flux: np.ndarray, n_chunks: int = 24, pct: float = 25.0) -> np.ndarray:
+    """A robust continuum for an EMISSION spectrum: a low percentile per wavelength
+    chunk, interpolated back to full resolution. Normalizing by this puts the continuum
+    near 1 and lets the emission lines stand UP above it — the advisor's gate against a
+    single He II 4686 spike squashing the whole panel under per-max normalization."""
+    n = flux.size
+    edges = np.linspace(0, n, n_chunks + 1).astype(int)
+    xs, ys = [], []
+    for i in range(n_chunks):
+        a, b = int(edges[i]), int(edges[i + 1])
+        if b <= a:
+            continue
+        xs.append(0.5 * (a + b))
+        ys.append(float(np.percentile(flux[a:b], pct)))
+    cont = np.interp(np.arange(n), xs, ys)
+    return np.maximum(cont, 1e-300)
+
+
+def wr_spectrum_data(
+    teff: float, lum: float, x_surf: float, y_surf: float, z_surf: float,
+    feh: float = 0.0, *, n_display: int | None = None,
+) -> dict:
+    """The Wolf-Rayet wind-emission spectrum the `/wr_spectrum` endpoint serves — a
+    third spectrum sibling beside `/spectrum` and `/wd_spectrum`, reading the PoWR cube.
+
+    Maps the track star onto PoWR's (T*, Rt) axes (recipe §7a): **T\\* ≈ MIST Teff**
+    (the hot evolutionary surface, the well-known evolutionary-vs-spectroscopic Teff
+    split), **Rt** from the star's L + a Nugis-Lamers Ṁ with the grid's fixed v∞/D. The
+    subtype (WNE/WNL/WC) comes from the surface composition; the metallicity grid from
+    [Fe/H]. Then it **snaps to the nearest real grid node** and returns that emission
+    spectrum — UNLESS the star is hotter / denser-wind than any PoWR model (the stripped
+    bulk), in which case `regime="none"` and the panel shows an honest "no model" frame.
+
+    Returns a dict (continuum-normalized `flux`, so emission lines stand above 1):
+      wavelength, flux, continuum (≡ 1.0 reference), display_max (y-cap so one strong
+      line doesn't squash the rest), regime ∈ {"WR","none"}, subtype, metal, z_grid,
+      teff (the snapped node T*), teff_requested, teff_max (the grid's hottest node, for
+      the no-model frame), rt (snapped node Rt), off_grid, off_reason, grid_name.
+    """
+    s = _load_wr()
+    lam = s.lam
+    subtype = _wr_subtype(x_surf, y_surf, z_surf)
+    g = s.select_grid(subtype, feh)
+
+    # Place on the wind axis: R* from (L, Teff), Ṁ from Nugis-Lamers, Rt with this
+    # grid's fixed v∞ and D=4 (so it's consistent with how the grid was computed).
+    z_metal = max(z_surf or 0.014, 1e-3)
+    mdot = _nugis_lamers_mdot(lum, y_surf or 0.9, z_metal)
+    rstar = float(np.sqrt(max(lum, 1.0)) * (_TSUN_K / max(teff, 1.0)) ** 2)
+    rt = rstar * ((g["vinf"] / 2500.0) / ((mdot * np.sqrt(_WR_CLUMP_D)) / 1e-4)) ** (2.0 / 3.0)
+    log_t = float(np.log10(max(teff, 1.0)))
+    log_rt = float(np.log10(max(rt, 1e-6)))
+
+    # Snap to the nearest node in (log T*, log Rt).
+    d = np.hypot(g["logT"] - log_t, g["logRt"] - log_rt)
+    j = int(np.argmin(d))
+    dist = float(d[j])
+    node_logT, node_logRt = float(g["logT"][j]), float(g["logRt"][j])
+    teff_max = 10.0 ** g["logT_max"]
+
+    # Off-grid (the stripped bulk): hotter than any node, or the nearest node too far.
+    off_grid = False
+    off_reason = ""
+    if log_t > g["logT_max"] + _WR_T_TOL:
+        off_grid, off_reason = True, "hotter than any WR atmosphere model"
+    elif dist > _WR_SNAP_TOL:
+        off_grid, off_reason = True, "denser/hotter wind than any WR model"
+    regime = "none" if off_grid else "WR"
+
+    flux = g["flux"][j].astype(float)
+    cont = _wr_continuum(flux)
+    flux = flux / cont                       # continuum ≈ 1, emission lines stand up
+    # y-cap that frames THIS spectrum's lines: a touch above its tallest emission peak
+    # (broad WR lines, so the max is representative — not a single-bin spike), floored at
+    # 2.5 so a weak-lined entry still reads as emission and capped at 12 so a monster He II
+    # line can't squash the continuum + weaker lines (the advisor's per-max gate).
+    display_max = float(min(max(flux.max() * 1.05, 2.5), 12.0))
+
+    if n_display is not None and n_display < lam.size:
+        new_lam = np.linspace(lam[0], lam[-1], n_display)
+        flux = np.interp(new_lam, lam, flux)
+        lam = new_lam
+
+    return {
+        "wavelength": lam.tolist(),
+        "flux": flux.tolist(),
+        "continuum": 1.0,
+        "display_max": display_max,
+        "regime": regime,
+        "subtype": subtype,
+        "metal": g["metal"],
+        "z_grid": g["z"],
+        "teff": 10.0 ** node_logT,
+        "teff_requested": float(teff),
+        "teff_max": float(teff_max),
+        "rt": 10.0 ** node_logRt,
+        "rt_requested": float(rt),
+        "mdot": float(mdot),
+        "off_grid": off_grid,
+        "off_reason": off_reason,
+        "feh_varies": False,
         "flux_unit": s.flux_unit,
         "grid_name": s.grid_name,
     }
