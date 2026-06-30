@@ -1719,7 +1719,7 @@ function refreshSN() {
   classification.update(s, "sn");      // expanding-photosphere label, read from Teff
   scale.update(s);                     // true size — the photosphere swells to ~AU scale
   hr.update(s);                        // the marker on the light curve (hr is in SN mode)
-  comp.update(s);                      // the SN composition placeholder note (ignores the state)
+  comp.update(s);                      // no-op in SN mode (the onion is static, set by applySNModel)
   sed.update(s, { endgame: "sn" });    // blackbody continuum only (no coronal band)
   renderSNReadout(s);
 
@@ -1756,7 +1756,7 @@ function refreshSN() {
 function applySNModel(model) {
   snModel = model;
   hr.setSupernova(model, OBSERVED_SNE);
-  comp.setSupernova();
+  comp.setSupernova(model);   // pre-collapse onion shell from the snapped core masses
   // SN spectra (P-Cygni absorption → nebular emission) aren't modeled — an honest
   // placeholder, NOT the living model-atmosphere spectrum (wrong for freely-expanding ejecta,
   // and the photosphere's negative log g would trip /spectrum anyway). Set once per model.

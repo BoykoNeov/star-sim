@@ -55,6 +55,18 @@ const WD_CAPTION =
   "Schematic cross-section. Composition is from the model (the C/O core and DA " +
   "atmosphere are real); the He buffer and all layer thicknesses are canonical, " +
   "exaggerated to be visible — no radial structure is modeled.";
+// Honesty caption for the supernova pre-collapse onion view (see drawSNOnion). The H/He/CO
+// boundaries are real (snapped core masses), sized by ENCLOSED MASS not radius; the inner
+// heavy shells are BEYOND what MIST computed — the tracks end before the iron core forms —
+// so they're the canonical pre-collapse structure theory predicts, never measured here.
+const SN_ONION_CAPTION =
+  "Schematic pre-collapse cross-section. The H envelope, He shell and C/O-core boundaries " +
+  "are sized by ENCLOSED MASS from the model (the disk is the mass budget, not physical " +
+  "radius — the real Fe core is a few thousand km across inside an envelope hundreds of R☉ " +
+  "wide; the radial structure is inverted). The inner Si/O–Ne shells and Fe core are the " +
+  "canonical structure theory predicts forms in the final burning stages — MIST's tracks " +
+  "end before the iron core forms, so those are not computed here. The ⁵⁶Ni (the " +
+  "light-curve fuel) is exaggerated — your slider's value, far too thin to draw to scale.";
 
 // Bulk band colors: H a cool blue, He a warm gold, metals a violet. Z is ~1.5%
 // so its band is a thin sliver at the top — honest, not a rendering bug.
@@ -106,23 +118,28 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   let scale = "lin";   // "lin" | "log" — the cno view's y-axis (log reveals Li/Na)
   let wd = false;      // white-dwarf endgame: replace the burning-abundance views with
                        // a layered structure cross-section (see drawWD)
-  let sn = false;      // supernova endgame: the photosphere composition is a labeled
-                       // H-rich placeholder, so show a note — NOT silent flat bands that
-                       // would imply a real ejecta model (the onion-shell is a later chunk)
+  let sn = false;      // supernova endgame: show the progenitor's PRE-COLLAPSE onion shell
+                       // (drawSNOnion) — a cross-section sized by enclosed mass from the
+                       // model's snapped core masses, the inner heavy shells labeled
+                       // schematic (MIST ends before the iron core forms). See drawSNOnion.
+  let snData = null;   // the latest SupernovaModel scalars (final/he/CO/remnant masses, ⁵⁶Ni)
   // Per-element visibility for the cno view (legend-click toggles). Session-only
   // (not persisted). Scoped to the cno view — the light view is only three lines.
   const hidden = new Set();
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
-  function update(state) { marker = state; draw(); }
+  // The marker drives the bulk/cno/light/WD views; the SN onion is the static pre-collapse
+  // structure (it ignores the scrub), so skip the per-frame redraw in SN mode.
+  function update(state) { marker = state; if (sn) return; draw(); }
   function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
   // Enter/leave the white-dwarf endgame structure view (mirrors hr.setEndgame). It
   // swaps the burning-abundance views for the layered cross-section, driven by the
   // marker state alone (the EEP-vs-track machinery doesn't apply to a structure view).
-  function setEndgame(states) { wd = true; track = states && states.length ? states : track; draw(); }
-  // Enter the SN endgame: the served photosphere composition is a representative H-rich
-  // envelope placeholder, so the panel shows an honest labeled note instead of bands.
-  function setSupernova() { sn = true; draw(); }
+  function setEndgame(states) { wd = true; sn = false; track = states && states.length ? states : track; draw(); }
+  // Enter the SN endgame: show the progenitor's pre-collapse onion shell, sized from the
+  // model's snapped core masses (`final/he/CO/remnant` + the ⁵⁶Ni slider value). Driven by
+  // the model scalars alone (the EEP-vs-track machinery doesn't apply to a structure view).
+  function setSupernova(model) { sn = true; wd = false; if (model) snData = model; draw(); }
   function clearEndgame() { wd = false; sn = false; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
   // Toggle one per-element line in the cno view on/off, returning its new
@@ -154,7 +171,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    if (sn) { drawSNPlaceholder(); return; }   // honest labeled note (no real ejecta model)
+    if (sn) { drawSNOnion(); return; }   // pre-collapse onion shell (drives off snData, not the track)
     if (wd) { drawWD(); return; }   // structure view drives off the marker, not the track
     if (!track) return;
     if (mode === "cno") drawCno();
@@ -385,32 +402,163 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   // Format a mass fraction as a whole-ish percent for compact core labels.
   function pct(v) { return `${Math.round((v || 0) * 100)}%`; }
 
+  // -- supernova pre-collapse onion-shell view -----------------------------------
+  // The SN endgame composition view: the progenitor's PRE-COLLAPSE onion shell, sized from
+  // the snapped core masses the /supernova route already serves. What is honest here (the
+  // white-dwarf-structure discipline — real bits data-driven, schematic bits labeled):
+  //   * The H-envelope / He-shell / C-O-core boundaries and the collapsing core are sized by
+  //     ENCLOSED MASS (final_mass / he_core / co_core / remnant): radius ∝ √(enclosed mass),
+  //     so each ring's AREA ∝ its mass. The disk is the star's MASS BUDGET, not physical
+  //     radius — the real Fe core is a few thousand km across inside an envelope hundreds of
+  //     R☉ wide (the radial structure is inverted; the caption says so).
+  //   * The remnant (NS if the CO core < 7 M☉, else BH) is a labeled mass cut. For a BH the
+  //     whole C/O core falls in, so only the He + H shells eject — the onion then VISIBLY
+  //     LACKS the copper C/O+heavy band (a real teaching beat, not a missing feature).
+  //   * The inner Si / O–Ne shells are faint SCHEMATIC dividers inside the remnant→CO band:
+  //     MIST's tracks END before the iron core forms (the gate saw o_core=0 for some
+  //     φ3-enders), so those heavy layers are the canonical structure theory predicts, NOT
+  //     computed — drawn faint, never as confident model boundaries.
+  //   * ⁵⁶Ni (the light-curve fuel, the Tier-3 slider value) is far too thin to draw to scale
+  //     (0.001–0.3 M☉ vs several-M☉ ejecta), so it is an EXAGGERATED bright ring at the inner
+  //     ejecta boundary, tied to the slider — labeled not-to-scale.
+  function drawSNOnion() {
+    const m = snData;
+    if (!m || !m.final_mass_msun) { drawSNNote(); return; }
+    const PAD = 12;
+
+    // the four real mass coordinates (M_sun), clamped nested-monotone (he ≥ co ≥ rem)
+    const Mtot = m.final_mass_msun;
+    const heC = Math.min(Math.max(m.he_core_msun ?? 0, 0), Mtot);
+    const coC = Math.min(Math.max(m.co_core_msun ?? 0, 0), heC);
+    const rem = Math.min(Math.max(m.remnant_mass_msun ?? 0, 0), coC);
+    const isNS = m.remnant_type === "NS";
+    const mni = Math.max(0, m.m_ni_msun ?? 0);
+    const hasCOEjecta = (coC - rem) > 0.12;   // BH (rem≈coC) ejects only He+H → no heavy band
+
+    // layout (mirrors drawWD): disk on the left, label column on the right, a DYNAMIC
+    // caption reserve at the bottom — its wrapped line count grows as the canvas narrows,
+    // so a fixed reserve would clip the last line on a phone-width panel.
+    const titleH = 24, capLh = 11;
+    ctx.font = "10px system-ui, sans-serif";
+    const capH = wrapText(SN_ONION_CAPTION, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
+    const top = PAD + titleH, bot = H - PAD - capH;
+    const LW = Math.max(150, W * 0.42);
+    const diskAreaW = W - PAD - PAD - LW;
+    const cx = PAD + diskAreaW / 2;
+    const cy = (top + bot) / 2;
+    const Rd = Math.max(24, Math.min(diskAreaW / 2 - 4, (bot - top) / 2 - 4));
+
+    // radius at an enclosed mass — area ∝ mass (the one consistent sizing rule)
+    const rOf = (mass) => Rd * Math.sqrt(clamp01(mass / Mtot));
+    const circle = (r) => { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); };
+
+    // colors: a hot-inner → cool-outer onion. H blue / He gold reuse the bulk palette; the
+    // heavy ejecta band is copper; the remnant is degenerate steel (NS) or a void (BH).
+    const COL_H = COL.X, COL_HE = COL.Y, COL_CO = "#cf8a52";
+    const COL_REM = isNS ? "#aab6cc" : "#070810";
+    const COL_NI = "#8effc0";
+
+    // shells outer→inner, nested fills (inner fills paint over the outer)
+    ctx.fillStyle = COL_H;  circle(Rd);              // H envelope (he_core→total)
+    ctx.fillStyle = COL_HE; circle(rOf(heC));        // He shell (co_core→he_core)
+    if (hasCOEjecta) {
+      ctx.fillStyle = COL_CO; circle(rOf(coC));      // C/O + heavier ejecta (remnant→co_core)
+      // faint SCHEMATIC interior dividers (Si / O–Ne — no model boundary)
+      ctx.strokeStyle = "rgba(255,240,225,0.22)"; ctx.lineWidth = 1;
+      const rIn = rOf(rem), rOut = rOf(coC);
+      for (const f of [1 / 3, 2 / 3]) {
+        const r = rIn + (rOut - rIn) * f;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // the remnant core (collapsed): a steel degenerate sphere (NS) or a dark void with a
+    // faint horizon ring (BH). The ⁵⁶Ni ring sits just OUTSIDE it (synthesized & ejected).
+    const rRem = Math.max(rOf(rem), 3);
+    ctx.fillStyle = COL_REM; circle(rRem);
+    if (isNS) {
+      const grd = ctx.createRadialGradient(cx - rRem * 0.3, cy - rRem * 0.3, rRem * 0.1, cx, cy, rRem);
+      grd.addColorStop(0, "rgba(255,255,255,0.50)");
+      grd.addColorStop(1, "rgba(20,30,55,0.20)");
+      ctx.fillStyle = grd; circle(rRem);
+    } else {
+      ctx.strokeStyle = "rgba(150,130,255,0.55)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, rRem, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (mni > 0) {   // ⁵⁶Ni: exaggerated bright ring at the inner ejecta boundary (not to scale)
+      ctx.strokeStyle = COL_NI; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(cx, cy, rRem + 2, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // thin separators between the real shells
+    ctx.strokeStyle = "rgba(8,10,18,0.45)"; ctx.lineWidth = 1;
+    for (const r of [Rd, rOf(heC), hasCOEjecta ? rOf(coC) : rRem]) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // --- title + type/remnant tag ---
+    labelPill("pre-collapse onion shell", PAD, PAD);
+    const tag = `Type ${m.type || "II"} · → ${isNS ? "neutron star" : "black hole"}`;
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.fillStyle = isNS ? "#bcd0ff" : "#b9aaff"; ctx.textAlign = "right";
+    ctx.fillText(tag, W - PAD, PAD + 12);
+    ctx.textAlign = "left";
+
+    // --- label column: outer → inner, one entry per shell (mass from the boundaries) ---
+    // Fit the column to the band with EVEN spacing. At phone widths the band is short, so
+    // each entry shows fewer sublines — the caveats fold into the always-shown caption rather
+    // than overflowing INTO it (the labels overrunning the caption was the phone-width bug).
+    // lines[0] is the mass (kept first); lines[1] is the caveat (shown only on a tall band).
+    const f1 = (v) => (v >= 10 ? v.toFixed(0) : v.toFixed(1));
+    const mH = Mtot - heC, mHe = heC - coC, mCO = coC - rem;
+    const entries = [];
+    if (mH > 0.05) entries.push([COL_H, "H envelope", [`${f1(mH)} M☉ · ejected`]]);
+    if (mHe > 0.05) entries.push([COL_HE, "He shell", [`${f1(mHe)} M☉ · ejected`]]);
+    if (hasCOEjecta)
+      entries.push([COL_CO, "C/O → Si shells",
+        [`${f1(mCO)} M☉ · ejected`, "inner Si/O–Ne schematic"]]);
+    if (mni > 0)
+      entries.push([COL_NI, "⁵⁶Ni (light-curve fuel)",
+        [`${mni.toFixed(3)} M☉ · ejected`, "exaggerated — your slider"]]);
+    entries.push([COL_REM, isNS ? "Fe core → neutron star" : "C/O core → black hole",
+      [`${f1(rem)} M☉ · collapsed`, isNS ? "degenerate remnant" : "swallows the C/O core"]]);
+
+    const lx = W - PAD - LW + 2;
+    const availH = bot - (top + 4);
+    const rawStep = availH / entries.length;
+    const L = rawStep >= 50 ? 2 : rawStep >= 28 ? 1 : 0;   // sublines that fit per entry
+    const step = Math.min(rawStep, 22 + L * 12 + 8);        // cap so a tall band doesn't over-spread
+    let ly = top + 4;
+    for (const [col, title, lines] of entries) {
+      ctx.fillStyle = col; ctx.fillRect(lx, ly + 2, 9, 9);
+      // a thin outline so the near-black BH-void swatch stays visible on the dark panel
+      ctx.strokeStyle = "rgba(160,170,190,0.5)"; ctx.lineWidth = 1;
+      ctx.strokeRect(lx + 0.5, ly + 2.5, 8, 8);
+      ctx.fillStyle = "#e7ecf5"; ctx.font = "600 11px system-ui, sans-serif";
+      ctx.fillText(title, lx + 14, ly + 10);
+      ctx.fillStyle = "#9aa3b5"; ctx.font = "10px system-ui, sans-serif";
+      let yy = ly + 22;
+      for (const l of lines.slice(0, L)) { ctx.fillText(l, lx + 14, yy); yy += 12; }
+      ly += step;
+    }
+
+    // --- honesty caption (wrapped; capH reserved its exact line count above) ---
+    ctx.fillStyle = "#7e879a"; ctx.font = "10px system-ui, sans-serif";
+    wrapText(SN_ONION_CAPTION, PAD, bot + 12, W - 2 * PAD, capLh);
+  }
+
+  // Defensive fallback if the onion is asked to draw before the model lands.
+  function drawSNNote() {
+    ctx.fillStyle = "#8a93a6"; ctx.font = "12px system-ui, sans-serif"; ctx.textAlign = "left";
+    wrapText("Computing the progenitor's pre-collapse structure…", PAD_L + 8, PAD_T + 40,
+      W - PAD_L - PAD_R - 16, 18);
+  }
+
   // Minimal word-wrap for canvas text: draw `text` from (x,y) wrapping to maxW, and
   // return the number of lines used. With dry=true it measures only (no draw), so a
   // caller can reserve the right height before laying out — the panel must stay
   // width-robust (a phone-narrow canvas wraps more lines than a wide one). Assumes the
   // font is already set on ctx (measureText/​fillText both read it).
-  // The SN endgame composition placeholder. The model's photosphere carries a
-  // representative hydrogen-rich envelope (X/Y/Z ≈ 0.70/0.28/0.02) — a labeled stand-in,
-  // not a computed ejecta composition. Drawing flat H/He/Z bands would imply an onion-shell
-  // model we don't have, so show an honest note (the real layered ejecta is a later chunk).
-  function drawSNPlaceholder() {
-    ctx.fillStyle = "#cbd3e1";
-    ctx.font = "600 13px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Ejecta composition", W / 2, PAD_T + 26);
-    ctx.fillStyle = "#8a93a6";
-    ctx.font = "12px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    const msg =
-      "The expanding photosphere is drawn with a representative hydrogen-rich envelope — " +
-      "a labeled placeholder, not a computed composition. The real layered ejecta (the " +
-      "Fe → Si → O → C → He → H onion shell left by the progenitor, plus the ⁵⁶Ni that " +
-      "powers the light curve) is a later feature.";
-    wrapText(msg, PAD_L + 8, PAD_T + 54, W - PAD_L - PAD_R - 16, 18);
-    ctx.textAlign = "left";
-  }
-
   function wrapText(text, x, y, maxW, lh, dry) {
     const words = text.split(" ");
     let line = "", n = 0;

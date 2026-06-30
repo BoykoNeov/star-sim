@@ -260,11 +260,43 @@ solar** → CO core 7.68 > the 7.0 cut → BH, vs the canonical **15 M☉ solar*
 is NOT dead code — both verified on-screen. Evocative/labeled throughout (the corona/WR-wind
 precedent, spec §7). **Depends:** Chunk 2.
 
-### Chunk 4 — Ejecta composition / onion-shell (sketch)
-Repurpose the composition panel (WD-style `setEndgame`) for the **pre-SN onion
-structure** (Fe core → Si → O → C → He → H shells) from the progenitor core masses,
-and/or the ejecta yield (⁵⁶Ni + a few species). The "maybe nucleosynthesis" — keep
-it the honest, bounded version. **Depends:** Chunk 2.
+### Chunk 4 — Ejecta composition / onion-shell ✅ DONE
+**Built (frontend-only; 215 pytest still green, backend untouched; Playwright-verified at
+1440 + 390 px, zero console errors):** the composition panel's SN placeholder is now the
+progenitor's **pre-collapse onion-shell cross-section** (`comp.js` `drawSNOnion`, mirroring
+`drawWD`), driven entirely by the scalars `/supernova` already serves (`final_mass_msun` /
+`he_core_msun` / `co_core_msun` / `remnant_mass_msun` / `remnant_type` / `m_ni_msun`) — **no
+backend change**. `setSupernova(model)` takes the model; `applySNModel` passes it; the onion
+is **static across the time scrub** (`comp.update` is a no-op in SN mode — the pre-collapse
+structure doesn't change), redrawn only when the model re-fetches (⁵⁶Ni slider / mass re-snap,
+both verified live: the green-ring label tracked 0.06→0.25, and a 15→30 M☉ re-snap inside SN
+mode redrew NS→BH).
+
+**The honesty discipline (advisor-shaped, the load-bearing part):**
+- **One consistent sizing rule:** the four REAL boundaries (remnant, CO core, He core, total)
+  are sized by **area ∝ enclosed mass** (radius ∝ √(M/M_tot)) — the ring between r(m₁) and
+  r(m₂) has area πRd²(m₂−m₁)/M_tot, genuinely honest. The disk is the **mass budget, not
+  physical radius** (the caption owns the inverted-radial-structure caveat).
+- **The inner Si/O–Ne shells are faint SCHEMATIC dividers** inside the remnant→CO band, NOT
+  confident fills. The deeper honesty point (bigger than "thicknesses are canonical"): the
+  scalars are read at the **end of the MIST window**, and **MIST v2.5 never builds the Si/Fe
+  core** (it runs massive stars only to ~carbon burning, so `c_core_mass` is the *last
+  computed* boundary — the gate even saw `o_core=0` for some φ3-enders). The caption says
+  exactly that: "MIST's tracks end before the iron core forms, so those are not computed here"
+  (the boron-b8 / VO-7400 discipline — under-captioning would read as faking computed data).
+- **NS/BH contrast shows honestly:** for a BH the remnant = the CO core, so the whole C/O core
+  collapses and only He + H eject — the onion **visibly lacks the copper C/O+heavy band** (the
+  void fills ~68% of the disk radius at 30 M☉ solar), a real teaching beat. NS (15 M☉ solar) =
+  a degenerate steel core with the full ejected C/O→Si band.
+- **⁵⁶Ni is exaggerated, not to scale** (0.001–0.3 M☉ vs several-M☉ ejecta): a bright ring at
+  the inner ejecta boundary tied to the slider, labeled. Kept on the BH onion too (consistent
+  with the light curve, which still uses the slider M_Ni for BH progenitors — zeroing it would
+  contradict the curve; the failed-SN/dim-curve asymmetry is Chunk 5's job).
+- **Phone-width fix:** the label column fits its band with **even spacing**, folding the
+  caveat sublines into the always-shown caption when the band is short (the labels overrunning
+  INTO the caption was the one real bug the screenshot pass caught at 390 px).
+
+**Depends:** Chunk 2.
 
 ### Chunk 5 — Remnant branch: NS / BH / failed-SN (sketch)
 The remnant as a **labeled, deliberately-simplified mass cut** (CO-core / progenitor
@@ -272,6 +304,13 @@ mass), explicitly *not* a crisp prediction (reality = "islands of explodability"
 non-monotonic compactness). Add the **direct-collapse-to-BH / failed-SN** branch —
 some massive progenitors give little/no optical display ("the star just winks out"),
 honest and visually striking. **Depends:** Chunks 1–3.
+
+**Note (from Chunk 4):** the CO=7.0 NS/BH cut is now a **visual cliff in two places** — the
+light curve's M_ej discontinuity *and* the Chunk-4 onion (the copper C/O+heavy band collapses
+into the void in one step as mass crosses the cut). Both faithfully mirror the model's hard
+mass cut, but it's exactly the "islands of explodability" artifact this chunk softens — so
+smooth the onion's discontinuity together with the light curve's (and the ⁵⁶Ni ring: a true
+failed-SN should dim/zero the ejected Ni, the asymmetry Chunk 4 deliberately deferred here).
 
 ### Follow-on (not v1) — Ib/c via the WR endpoint; SN spectra
 - **Ib/c stripped-envelope SNe** chain off the **WR** scrub endpoint (the stripped

@@ -252,8 +252,18 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   As `snFade`→1 the remnant emerges: **NS** → a tiny hot blue-white dot (color labeled **evocative, NOT a Teff** —
   a real NS's optical thermal emission is negligible); **BH/failed** → no dot, the frame goes dark ("**winks out**").
   Measured: a BH-on-SN progenitor IS in-grid (**30 M☉ solar** → BH vs **15 M☉ solar** NS), so winks-out isn't dead
-  code — both verified on-screen. **Chunks 4–5 (ejecta onion-shell, NS/BH/failed-SN branch refinement) NOT yet
-  built.** [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
+  code — both verified on-screen. **Chunk 4 BUILT (pre-collapse onion shell, frontend-only):** `comp.js` `drawSNOnion`
+  replaces the SN placeholder with the progenitor's onion cross-section, driven by the scalars `/supernova` already
+  serves (`final/he/CO/remnant` masses + ⁵⁶Ni — **no backend change**). Real boundaries (remnant/CO/He/total) sized by
+  **area ∝ enclosed mass** (radius ∝ √(M/M_tot)); the inner Si/O–Ne shells are **faint schematic** dividers (MIST v2.5
+  runs massive stars only to ~carbon burning, so `c_core_mass` is the *last computed* boundary — the iron core is never
+  built; the caption owns it, the boron-b8 discipline); **NS/BH contrast honest** (a BH's remnant = the whole CO core →
+  the onion visibly LACKS the copper C/O+heavy band, only He+H eject); ⁵⁶Ni an **exaggerated** slider-tied ring (not to
+  scale, kept on BH too — consistent with the light curve). Static across the time scrub (`comp.update` no-op in SN mode),
+  redraws on the ⁵⁶Ni-slider / mass-re-snap (both verified live: 0.06→0.25, NS↔BH). Phone-width label-overflow bug caught
+  + fixed (even-spacing fit, caveats fold into the always-shown caption). 215 pytest (backend untouched), zero console
+  errors at 1440 + 390 px. **Chunk 5 (NS/BH/failed-SN branch refinement, incl. softening the onion's shared CO-cut
+  discontinuity) NOT yet built.** [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical

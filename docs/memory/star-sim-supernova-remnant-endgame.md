@@ -1,6 +1,6 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor) + Chunk 3 BUILT (3D expanding-fireball→remnant shader: star.js FIREBALL_FRAG + REMNANT_FRAG, cooling-Teff color the only honest cue, snGrow/snFade beats, NS hot-dot reveal vs BH winks-out — measured BH-on-SN at 30 M☉ solar), 215 pytest. Chunks 4–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
+description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor) + Chunk 3 BUILT (3D expanding-fireball→remnant shader: star.js FIREBALL_FRAG + REMNANT_FRAG, cooling-Teff color the only honest cue, snGrow/snFade beats, NS hot-dot reveal vs BH winks-out — measured BH-on-SN at 30 M☉ solar) + Chunk 4 BUILT (frontend: comp.js drawSNOnion pre-collapse onion shell — real boundaries remnant/CO/He/total sized area∝mass, inner Si/Fe faint schematic since MIST ends before the iron core forms, honest NS-vs-BH contrast (BH swallows the CO core → no copper band), exaggerated slider-tied ⁵⁶Ni ring; no backend change), 215 pytest. Chunk 5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
 metadata: 
   node_type: memory
   type: project
@@ -11,7 +11,8 @@ The user wants an endgame for **core-collapse supernovae + their compact remnant
 (neutron stars & black holes)** — the successor to the branch the current endgame
 classifier reaches but leaves un-rendered (`type="SN", states=[]`).
 **Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunk 2 (frontend
-gateway + light-curve panel) BUILT; Chunk 3 (3D fireball→remnant) BUILT; Chunks 4–5 next.**
+gateway + light-curve panel) BUILT; Chunk 3 (3D fireball→remnant) BUILT; Chunk 4
+(pre-collapse onion shell) BUILT; Chunk 5 next.**
 Plan: `docs/plans/radioactive-afterglow-requiem.md` (sibling to
 `smoldering-cinder-gateway.md`). This file holds the locked constraints + the gate's
 measured verdict + Chunk 1/2's built state; the plan is the design source of truth.
@@ -141,6 +142,49 @@ backend untouched; Playwright-verified 1440 + 390 px, zero JS/page errors):**
   multiple scrub fracs and looked at each — the small-blue-white→huge-orange→red expansion, the
   thinning wisps, the NS dot appearing, the BH dark frame. The lone console line is an
   environmental favicon.ico 404 (not in the diff, not a JS error).
+
+**Chunk 4 BUILT (pre-collapse onion shell, frontend-only; 215 pytest still green, backend
+untouched; Playwright-verified 1440 + 390 px, zero console errors):**
+- `comp.js` `drawSNOnion` replaces the SN placeholder (`drawSNPlaceholder` removed) with the
+  progenitor's **pre-collapse onion-shell cross-section** (mirrors `drawWD`), driven ENTIRELY
+  by the scalars `/supernova` already serves — `final_mass_msun` / `he_core_msun` /
+  `co_core_msun` / `remnant_mass_msun` / `remnant_type` / `m_ni_msun`. **No backend change** at
+  all (the data was already on the `SupernovaModel`). `setSupernova(model)` now takes the model;
+  `main.js` `applySNModel` passes it; `comp.update` is a **no-op in SN mode** (the pre-collapse
+  structure is static across the time scrub — it redraws only when the model re-fetches).
+- **One consistent honest sizing rule:** the four REAL boundaries (remnant, CO core, He core,
+  total) are sized by **area ∝ enclosed mass** (radius ∝ √(M/M_tot) — the ring between r(m₁) and
+  r(m₂) genuinely has area πRd²(m₂−m₁)/M_tot). The disk is the **mass budget, not physical
+  radius**; the caption owns the inverted-radial-structure caveat (the real Fe core is ~thousands
+  of km inside a hundreds-of-R☉ envelope).
+- **The inner Si/O–Ne shells are faint SCHEMATIC dividers** in the remnant→CO band, NOT confident
+  fills. The load-bearing honesty point (advisor): the scalars are read at the **end of the MIST
+  window**, and **MIST v2.5 never builds the Si/Fe core** (it runs massive stars only to ~carbon
+  burning, so `c_core_mass` — the CO boundary — is the *last computed* boundary; the gate saw
+  `o_core=0` for some φ3-enders). The caption says exactly that ("MIST's tracks end before the
+  iron core forms, so those are not computed here") — the boron-b8 / VO-7400 discipline.
+- **NS/BH contrast shows honestly:** for a BH the remnant = the whole CO core, so the C/O core
+  all collapses and **only He + H eject** → the onion VISIBLY LACKS the copper C/O+heavy band
+  (the void fills ~68% of the disk radius at **30 M☉ solar**: final 16.4 / He 10.9 / CO 7.68,
+  remnant = CO). NS (**15 M☉ solar**: final 12.0 / He 4.7 / CO 2.8 / remnant 1.4) = a degenerate
+  steel core with the full ejected C/O→Si band. Both measured + screenshotted.
+- **⁵⁶Ni is exaggerated, not to scale** (0.001–0.3 M☉ vs several-M☉ ejecta): a bright ring at
+  the inner ejecta boundary tied to the slider, labeled. **Kept on the BH onion too** (advisor-
+  confirmed: consistent with the light curve, which still uses the slider M_Ni for BH — zeroing
+  it would contradict the curve; the failed-SN/dim-Ni asymmetry is Chunk 5's job).
+- **Phone-width bug caught + fixed by the screenshot pass:** the label column overran INTO the
+  caption at 390 px (5 entries × 2-line sublines didn't fit the short band). Fix = the label
+  column fits its band with **even spacing**, folding the caveat sublines into the always-shown
+  caption when the band is short (the caveats live in the caption regardless, so nothing honest
+  is lost). The disk + the (dynamic-reserve) caption were never the problem — the LABELS were.
+- **Two live-update paths verified on-screen** (the advisor's flagged gap): dragging the ⁵⁶Ni
+  slider redrew the green-ring label 0.06→0.25 M☉; a **15→30 M☉ mass re-snap INSIDE SN mode**
+  redrew the onion NS→BH (the debug confirmed the re-snap sends `mass=30` — an earlier "still
+  NS" reading was a waitForResponse race in the test harness, NOT a bug). One-line hardening
+  added while in the file: `setSupernova`/`setEndgame` now mutually clear `sn`/`wd`.
+- **The CO=7.0 NS/BH cut is now a visual cliff in TWO places** (the light curve's M_ej jump AND
+  the onion's copper-band→void collapse) — both faithful to the model's hard mass cut, both the
+  "islands of explodability" artifact Chunk 5 should soften together (noted in the plan).
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean
