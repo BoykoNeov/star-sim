@@ -1,6 +1,6 @@
 ---
 name: star-sim-rotation-subpop-atlas
-description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-3 BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms), only Chunk 4 (fetch remaining rotating feh) remains. User said \"nothing is out of scope.\""
+description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-4 ALL BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms, and Chunk 4 fetched the remaining rotating feh grids → rotating axis now spans the full -1.0..+0.5 [Fe/H] axis). Rotation arc complete. User said \"nothing is out of scope.\""
 metadata: 
   node_type: memory
   type: project
@@ -30,9 +30,9 @@ break = honest "negligible"), NOT a slider.
 
 **Other measured facts (re-check if grids change):**
 - **All 12 feh codes publish a `vvcrit0.4` tarball** (`discover_tarball_url`, no
-  download). On disk now: `feh_p000_..._vvcrit0.4` (171 tracks, fetched for the gate)
-  + the original 5 non-rotating grids. To match the feh axis, fetch m100/m075/m050/
-  p050 at 0.4 (~180 MB each). **Low-Z (m100/m200) is the highest-value grid** — CHE
+  download). On disk now (post-Chunk 4): **all 5 rotating grids m100/m075/m050/p000/p050
+  at vvcrit0.4** (matching the 5 non-rotating grids) — the rotating [Fe/H] axis is
+  complete over −1.0→+0.5. **Low-Z (m100/m200) is the highest-value grid** — CHE
   blue divergence is a low-Z + high-rotation effect; the headline lives at low Z.
 - **Mass footprint identical** across vvcrit (both 171 tracks, 0.1–300 M☉) + **EEP
   counts align per mass** (1721/1721, 808/808) ⇒ stays a **2D (mass×feh) domain per
@@ -92,9 +92,23 @@ break = honest "negligible"), NOT a slider.
   panel keeps the X-ray line + a pointer. **GOTCHA:** `.rot-toggle-row{display:flex}` beat the UA
   `[hidden]{display:none}` → off-grid facet wouldn't hide; needed `.rot-toggle-row[hidden]{display:none}`.
   +4 tests (192 pytest). Verified via Playwright. See [[star-sim-nonthermal-sed-plan]].
-- **Chunk 4 (only one left)** = fetch remaining rotating metallicities. **m100 done (Chunk 2)**;
-  m075/m050/p050 vvcrit0.4 remain (~180 MB each; user: fetch m100 now, rest later). On disk now:
-  p000 + m100 rotating. (Until then the toggle is honestly absent off [-1, 0] — by design.)
+- **Chunk 4 — BUILT (arc complete).** Fetched m075/m050/p050 vvcrit0.4 (171/169/170 tracks) via
+  `fetch_mist --feh m075,m050,p050 --vvcrit 0.4`, so the **rotating axis now spans the full
+  [Fe/H] axis −1.0→+0.5** (m100/m075/m050/p000/p050) — coextensive with non-rotating. Cold parse
+  cache rebuilt (`CACHE_VERSION` 11, unchanged — pure data add). `rotation_status.has_grid` now
+  honest across the whole axis (was capped at the partial −1.0…0.0 span); absence is honest only
+  *beyond* it (feh>+0.5). MS surface-N enrichment confirmed real at the new grids: 20 M☉ rot/non-rot
+  N ratio 5.5×/4.6×/1.8× at feh −0.75/−0.5/+0.5. **Two `test_rotation_axis.py` assertions that
+  encoded the *incomplete* axis** (`test_rotation_status_absent_where_no_grid` + the API route test,
+  both asserting `has_grid` False at +0.5) **flipped to the completed truth** (+0.5 present; absence
+  re-tested at +0.75, beyond the axis). 192 pytest. Data is gitignored (`data/feh_*_vvcrit0.4/`).
+  **Deferred gap (advisor-flagged, beyond Chunk 4's pure-data scope):** there is no
+  "lies-between-metallicities" interpolation test for the *rotating* axis the way there is for
+  the non-rotating one — payoff was verified *at* grid points (20 M☉, three feh), but an
+  intermediate rotating feh (e.g. −0.6, now interpolating real m050↔m075 instead of the old
+  coarse m100↔p000 dex) isn't pinned. The natural next test if the rotating axis ever needs
+  full parity with non-rotating. Note-and-defer (the "lies-between" scenario it guarded —
+  valid-feh-with-no-rotating-grid — is now data-impossible since the two axes are coextensive).
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime

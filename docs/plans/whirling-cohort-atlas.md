@@ -302,10 +302,17 @@ is a **two-state toggle** that **data-derives its own active domain**, never a s
     barely overlap, so usually one facet shows; at the Sun **both** do (track greyed/no-op,
     activity live), so a spectrum/activity knob never implies the track changed where it
     didn't. The SED panel keeps the X-ray line + a pointer to the relocated control.
-- **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities.** **m100
-  (low-Z) fetched in Chunk 2** for the CHE payoff; **m075/m050/p050 at vvcrit0.4 remain**
-  (user: fetch m100 now, rest later) so the toggle is honest across the full feh axis.
-  ~180 MB each; can interleave with Chunk 3.
+- **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities. ✅ DONE.**
+  **m100 (low-Z) fetched in Chunk 2** for the CHE payoff; **m075/m050/p050 at vvcrit0.4
+  fetched here** (171/169/170 tracks via `fetch_mist --feh m075,m050,p050 --vvcrit 0.4`),
+  so the **rotating axis now spans the full [Fe/H] axis −1.0→+0.5**, coextensive with the
+  non-rotating set — the toggle is honest across every fetched metallicity. `rotation_status`
+  `has_grid` extends across the whole axis (was capped at the partial −1.0…0.0 span); absence
+  is now honest only *beyond* the axis (feh>+0.5). MS surface-N enrichment confirmed real at
+  the new grids (5.5×/4.6×/1.8× at 20 M☉ for feh −0.75/−0.5/+0.5). Two `test_rotation_axis.py`
+  assertions that encoded the *incomplete* axis (`has_grid` False at +0.5) flipped to the
+  completed truth (+0.5 present; absence tested at +0.75). 192 pytest. **The rotation arc is
+  complete.** (Data is gitignored; the grids live under `data/feh_*_vvcrit0.4/`.)
 
 ## Cross-cutting design questions (decide before building any of these)
 

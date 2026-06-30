@@ -221,10 +221,13 @@ def test_rotation_status_active_above_threshold(provider):
 
 
 def test_rotation_status_absent_where_no_grid(provider):
-    """Super-solar [Fe/H] has no rotating grid on disk (the rotating axis spans only
-    the fetched metallicities), so the toggle is honestly absent — has_grid=False —
-    rather than silently changing the star's metallicity to one that does."""
-    st = provider.rotation_status(3.0, 0.5)
+    """The rotating axis now spans the full fetched [Fe/H] axis (Chunk 4 added the
+    remaining rotating metallicities), so the headline super-solar grid [Fe/H]=+0.5 is
+    *present* — has_grid=True. Absence is honest only *beyond* the fetched axis: a
+    metallicity past the rotating-grid span (here +0.75) has no rotating grid, so the
+    toggle reports has_grid=False rather than silently snapping to one that exists."""
+    assert provider.rotation_status(3.0, 0.5)["has_grid"] is True   # filled by Chunk 4
+    st = provider.rotation_status(3.0, 0.75)
     assert st["has_grid"] is False
     assert st["active"] is False
 
@@ -305,4 +308,6 @@ def test_api_rotation_status_route():
     assert set(body) == {"has_grid", "threshold_msun", "active"}
     assert body["has_grid"] is True and body["active"] is False        # inert at the Sun
     assert client.get("/rotation_status", params={"mass": 20.0, "feh": 0.0}).json()["active"] is True
-    assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.5}).json()["has_grid"] is False
+    # +0.5 is now covered (Chunk 4 filled the rotating axis); absence is beyond it (+0.75).
+    assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.5}).json()["has_grid"] is True
+    assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.75}).json()["has_grid"] is False
