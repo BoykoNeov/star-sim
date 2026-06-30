@@ -26,9 +26,24 @@ plan written & committed; Chunk 1 (backend) BUILT.** Plan:
   absent on the other" hazard the plan's own risk register flags). Reports the **true
   snapped** mass/feh (honest, §6 — verified: req(60,+0.2)→feh +0.0; req(2.7,−0.6)→feh −0.5).
 - **Classification is data-derived** from the snapped track's FSPS phases: φ9→**WR**;
-  φ6-present OR final-logg>7 (`_WD_LOGG`)→**WD**; ends-at-φ5-onset→**SN** (dead end,
-  `states=[]` — the lone pre-collapse supergiant row is a logg≈0 artifact, dropped);
-  else→**none** (low-mass still-living). **WR threshold scanned per grid, never hardcoded**
+  φ6-present OR final-logg>7 (`_WD_LOGG`)→**WD**; **evolved-massive→SN** (dead end,
+  `states=[]` — the last pre-collapse supergiant row is a logg≈0 artifact, dropped);
+  else→**none** (low-mass still-living). **SN/none split FIXED (2026-06-30, user-reported):**
+  the SN test used to be `r0 ≤ r_last` — a *row-count artifact* ("does a row exist past the
+  EAGB window?"). That silently dropped massive **rotating** tracks (vvcrit=0.4: 35–42 M☉ at
+  solar) and the very-massive **metal-poor** end (110–260 M☉) into **none** — so the gateway
+  said *nothing* for stars that core-collapse, while their non-rotating twins (which keep a
+  φ5 row past the window) correctly said SN → inconsistent across the rotation axis (the user
+  saw "at 35–40, before WR, it says nothing"). Fixed to classify by the **evolved/massive end
+  state**: `final phase ≥ _CHEB_PHASE (3 = CHeB) AND final mass > _SN_FINAL_MASS_FLOOR (1.4 M☉,
+  Chandrasekhar)`. Both guards needed — phase alone would mislabel a **low-mass blue-HB star**
+  (≈0.55 M☉ @ [Fe/H]=−1: ignites core He at CHeB but ends at 0.49 M☉, a future WD) as SN; the
+  Chandrasekhar floor excludes it (the data leaves a wide gap: lightest real SN progenitor ends
+  ~5.8 M☉, heaviest excluded HB star ~0.5). Full-grid flip audit: **30 cells none→SN, zero
+  WD-progenitor flips**. The old "m=0 says SN" half of the report was **not reproducible** (low
+  mass correctly shows nothing); only the rotation-on 35–40 gap reproduced. +2 tests
+  (`test_massive_rotating_supergiant_classifies_sn_not_none` in test_rotation_axis.py,
+  `test_low_mass_he_burner_is_not_misclassified_sn` in test_endgame.py); 198→200. **WR threshold scanned per grid, never hardcoded**
   (`_wr_threshold`): the real fine grid gives onset **+0.5→35, 0.0→48, −0.5→56** (finer than
   the coarse 40/50/60 first measured; slightly non-monotonic at low Z — m100=56<m075=58 —
   so the test asserts the metal-rich *trend* + brackets, not global monotonicity).

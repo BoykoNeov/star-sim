@@ -32,7 +32,7 @@ from star_sim.provider import ParameterOutOfRange
 from star_sim.providers import MISTProvider
 from star_sim.state import StellarState
 
-from .conftest import requires_mist_data, requires_mist_heldout_feh
+from .conftest import requires_mist_data, requires_mist_heldout_feh, requires_mist_lowz
 from .test_stub_provider import EXPECTED_KEYS
 
 pytestmark = requires_mist_data
@@ -68,6 +68,22 @@ def test_low_mass_has_no_endgame(provider):
     """A low-mass star is still alive at the grid's end (the universe isn't old
     enough): no exposed endgame, type='none', no states."""
     res = provider.endgame(0.1, 0.0)
+    assert res.type == "none"
+    assert res.states == []
+
+
+@requires_mist_lowz
+def test_low_mass_he_burner_is_not_misclassified_sn(provider):
+    """The SN classifier must not call a low-mass blue-HB star a supernova.
+
+    SN is "evolved past core-helium ignition (CHeB) AND retains more than a white
+    dwarf's worth of mass". The phase guard alone isn't enough: a ~0.55 M_sun star
+    at [Fe/H]=-1 ignites core helium (reaches CHeB) but its track truncates there
+    holding only ~0.5 M_sun — a future white dwarf, not a core-collapse. The final
+    mass falls well below the Chandrasekhar floor, so it stays 'none' (no remnant we
+    expose), not 'SN'. (Mass 0.55 snaps to that exact HB track; 0.6 already carries a
+    post-AGB row and is a normal WD.)"""
+    res = provider.endgame(0.55, -1.0)
     assert res.type == "none"
     assert res.states == []
 

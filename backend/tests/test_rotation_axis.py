@@ -439,3 +439,24 @@ def test_api_rotation_status_route():
     # +0.5 is now covered (Chunk 4 filled the rotating axis); absence is beyond it (+0.75).
     assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.5}).json()["has_grid"] is True
     assert client.get("/rotation_status", params={"mass": 3.0, "feh": 0.75}).json()["has_grid"] is False
+
+
+def test_massive_rotating_supergiant_classifies_sn_not_none(provider):
+    """The core-collapse foreshadow must not vanish when rotation is enabled.
+
+    A rotating massive solar track (35-42 M_sun, vvcrit=0.4) ends at core-helium
+    burning (CHeB) as a bloated supergiant — it forms no WD and no WR, and its track
+    simply terminates with NO row past the normal window. The endgame classifier used
+    to split SN vs none on whether such a post-window row existed (`r0 <= r_last`),
+    so these stars fell through to `type="none"` and the UI showed nothing — even
+    though they core-collapse. Their non-rotating twins (which keep a phase-5 row
+    past the window) were correctly SN, so the gateway was inconsistent across the
+    rotation axis. The fix classifies by the evolved, massive end state instead, so
+    the SN note is shown whether rotation is on or off."""
+    for m in (35.0, 40.0):
+        rot = provider.endgame(m, 0.0, 0.4)
+        non = provider.endgame(m, 0.0, 0.0)
+        assert rot.type == "SN", f"rotating {m} M_sun must warn of core collapse, got {rot.type}"
+        assert non.type == "SN"                 # the non-rotating twin was always SN
+        assert rot.states == []                 # SN is a dead-end note, nothing to render
+        assert rot.mass_init_msun == m          # snapped to the real grid track

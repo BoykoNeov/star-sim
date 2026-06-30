@@ -149,7 +149,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
 - Both endgames are already on disk in the MIST tracks (clipped by the `phase>=5`
   window). `endgame()` is on the Protocol (MESA/Stub → `type="none"`),
   `EndgameResult` dataclass, snaps both mass+feh, data-derived classify (φ9→WR /
-  φ6-or-logg>7→WD / φ5-onset→SN / else none). WD path = a reversible gateway button
+  φ6-or-logg>7→WD / **evolved-massive→SN** [reached CHeB φ≥3 AND final mass > 1.4 M☉
+  Chandrasekhar] / else none). The SN test was once a row-count artifact (`r0≤r_last`,
+  "has a post-window row") that silently dropped massive ROTATING & very-massive-metal-
+  poor stars into "none" → the gateway said *nothing* for stars that core-collapse;
+  fixed to classify by the evolved/massive end state (the Chandrasekhar floor keeps a
+  low-mass blue-HB star ending at CHeB from being mislabelled SN). WD path = a reversible gateway button
   at the slider limit → log-cooling-age scrubber + WD 3D shader + structure panel +
   mass–radius re-snap. WR path (Chunk 4) = the matching `→ Continue: Wolf–Rayet` button
   → reversible `wr-mode`: index-linear scrub over the φ9 sub-track (WN→WC→WO landmark),
@@ -225,7 +230,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **198 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **200 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the

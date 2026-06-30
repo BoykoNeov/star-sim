@@ -257,6 +257,17 @@ _VVCRIT_TOL = 0.05
 # whose cooling ran but whose FSPS phase code we don't want to over-trust.
 _WD_LOGG = 7.0
 
+# The endgame's SN-vs-none split (see `endgame`). A track that forms neither a WD
+# nor a WR, yet ran past core-helium ignition (FSPS phase >= 3 = CHeB) AND ended
+# holding more than a white dwarf's worth of *non-degenerate* mass, can't quietly
+# become a WD -> it core-collapses (SN). Both guards are needed: the phase alone
+# would catch low-mass blue-HB stars whose track truncates at CHeB (they're future
+# WDs), so we also require the final mass to clear the Chandrasekhar ceiling. The
+# data leaves a wide gap here (the lightest real SN progenitor ends at ~5.8 M_sun,
+# the heaviest excluded HB star at ~0.5), so 1.4 is an unambiguous floor.
+_CHEB_PHASE = 3          # FSPS phase code: core-helium burning (first post-RGB phase)
+_SN_FINAL_MASS_FLOOR = 1.4   # M_sun ~ the Chandrasekhar mass (max white-dwarf mass)
+
 
 @dataclass
 class _Track:
@@ -1002,14 +1013,25 @@ class MISTProvider:
                   -> the ~100 kK central star -> cold-cinder cooling (post-AGB,
                   FSPS 6), the full scrubbable sequence (the pulses are coherent
                   because we snapped to one real star, never blended — §6).
-          * SN  — the track just ends at TPAGB onset (one FSPS-5 row, no cooling and
-                  no WR): the core-collapse / uncertain-fate dead end we do NOT
-                  render (states = []; the lone pre-collapse supergiant row is a
-                  low-gravity artifact, not a renderable endgame). At solar this is
-                  ~7 M_sun and up — just above where MIST stops modeling cooling, in
-                  the genuinely-uncertain super-AGB / electron-capture regime.
-          * none — no exposed endgame at all (e.g. a low-mass star still alive at the
-                  grid's end, whose `track_end` is already its last row). states = [].
+          * SN  — the track forms neither a WD nor a WR, yet ran past core-helium
+                  ignition (FSPS phase >= _CHEB_PHASE) and ended holding more than a
+                  white dwarf's worth of non-degenerate mass (> _SN_FINAL_MASS_FLOOR):
+                  the core-collapse / uncertain-fate dead end we do NOT render
+                  (states = []; the last pre-collapse supergiant row is a low-gravity
+                  artifact, not a renderable endgame). At solar this is ~7 M_sun and
+                  up — just above where MIST stops modeling cooling, in the
+                  genuinely-uncertain super-AGB / electron-capture regime. Some of
+                  these stars stop at TPAGB onset (an FSPS-5 row past `track_end`);
+                  others — notably massive ROTATING tracks and the very massive
+                  metal-poor end — simply terminate at CHeB/EAGB with no row past the
+                  window. Both are core-collapse-bound, so we classify by the star's
+                  evolved, massive end state, not by whether a post-window row happens
+                  to exist (that row count was a data artifact, not physics).
+          * none — no exposed endgame at all: a star that never reached the SN
+                  criterion above — typically a low-mass star still alive at the
+                  grid's end (its `track_end` is already its last row), or a low-mass
+                  blue-HB star whose track truncates at CHeB but ends well below the
+                  Chandrasekhar mass (a future WD, not a core-collapse). states = [].
         """
         ax = self._axis(vvcrit)
         j = self._snap_feh_index(ax, feh)           # raises if [Fe/H] is off-grid (§6)
@@ -1033,9 +1055,9 @@ class MISTProvider:
             etype = "WR"
         elif bool(np.any(phase == 6)) or float(track.logg[r_last]) > _WD_LOGG:
             etype = "WD"
-        elif r0 <= r_last:                          # ends at TPAGB onset, no cooling
-            etype = "SN"
-        else:                                       # track_end is already the last row
+        elif float(phase[r_last]) >= _CHEB_PHASE and final_mass > _SN_FINAL_MASS_FLOOR:
+            etype = "SN"                            # evolved & massive, no remnant modeled
+        else:                                       # low-mass / still-alive: nothing to expose
             etype = "none"
 
         states: list[StellarState] = []
