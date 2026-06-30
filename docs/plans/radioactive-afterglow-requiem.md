@@ -236,11 +236,29 @@ render a *boiling fireball* with full granulation/corona). Pass an explicit
 bounce at *entry* (the explosion mechanism is the gap, mirroring WD's PN-ejection note).
 **Verify:** Playwright at 1440 + 390 px. **Depends:** Chunk 1.
 
-### Chunk 3 — 3D expanding fireball → remnant (sketch)
-An expanding, cooling homologous-ejecta shader (value-noise fireball, color from the
-photosphere Teff, fit-to-frame extent like the WR wind — the ejecta reach AU-scale)
-that fades to reveal the compact remnant (a tiny hot NS dot, or "winks out" for BH /
-failed-SN). Evocative/labeled. **Depends:** Chunk 2.
+### Chunk 3 — 3D expanding fireball → remnant ✅ DONE
+**Built (frontend-only; 215 pytest still green, backend untouched; Playwright-verified at
+1440 + 390 px, zero JS/page errors):** `star.js` gained a `FIREBALL_FRAG` shader on a
+dedicated `fireball` sphere mesh (reuses `star.geometry`, additive, depth-write off) and a
+`REMNANT_FRAG` camera-facing additive dot mesh. In SN mode the surface sphere hides
+(`star.visible=!sn`, set **unconditionally** so a mode switch can't strand a stale mesh) and
+the fireball shows: 3D value-noise fbm mottling on a **bounded** time orbit (boils, no
+unbounded drift/seam), center-bright with a soft round silhouette, color = the **honest
+blackbody at the photosphere Teff** (the one load-bearing cue — blue-white→orange→red is the
+real cooling). A single back-face-culled additive layer with clamped per-fragment alpha
+(≤0.8) **keeps the hue + cell structure** instead of washing to white (the advisor's white-out
+trap — verified clean). `main.js` `refreshSN` drives two scrub-derived beats: **`snGrow`**
+swells the ball over the first ~14% of the scrub (an evocative "expanding" beat — the true
+AU-scale R rides the scale bar, the WR decoupled-extent precedent), **`snFade`** dissipates it
+over the late tail (the ball breaks into sparse wisps and dims toward nothing). As `snFade`→1
+the **remnant** emerges: an **NS** → a tiny hot blue-white dot (color **labeled evocative, NOT
+a Teff** — a real NS's optical thermal emission is negligible, Crab pulsar V≈16 synchrotron);
+a **BH / failed SN** → no dot at all (the frame goes dark — the star "winks out"). Threaded via
+`{endgame:"sn", remnant, snGrow, snFade}`. A late-time caption swap narrates the nebular phase +
+which remnant emerges. **Measured grounding:** a BH-on-SN progenitor exists in-grid (**30 M☉
+solar** → CO core 7.68 > the 7.0 cut → BH, vs the canonical **15 M☉ solar** NS), so winks-out
+is NOT dead code — both verified on-screen. Evocative/labeled throughout (the corona/WR-wind
+precedent, spec §7). **Depends:** Chunk 2.
 
 ### Chunk 4 — Ejecta composition / onion-shell (sketch)
 Repurpose the composition panel (WD-style `setEndgame`) for the **pre-SN onion

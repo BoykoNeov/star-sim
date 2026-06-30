@@ -1,6 +1,6 @@
 ---
 name: star-sim-supernova-remnant-endgame
-description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor), 215 pytest. Chunks 3–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
+description: "Core-collapse SN + NS/BH endgame arc — Chunk 0 gate DONE + Chunk 1 BUILT (backend vertical: supernova.py sibling + EndgameResult progenitor scalars + CACHE_VERSION 11→12 + /supernova route) + Chunk 2 BUILT (frontend: reversible sn-mode gateway + L-vs-LINEAR-days light-curve panel + ⁵⁶Ni slider + cited sn.js observed overlays = the deferred Tier-1 anchor) + Chunk 3 BUILT (3D expanding-fireball→remnant shader: star.js FIREBALL_FRAG + REMNANT_FRAG, cooling-Teff color the only honest cue, snGrow/snFade beats, NS hot-dot reveal vs BH winks-out — measured BH-on-SN at 30 M☉ solar), 215 pytest. Chunks 4–5 next. Plan docs/plans/radioactive-afterglow-requiem.md. Fills the dead type=\"SN\" branch. Constraints the user fixed: ⁵⁶Ni light curve, homologous ejecta expansion, *maybe* light nucleosynthesis, EXPLICITLY no explosion mechanism, observed light curves as verification. Hybrid sibling (classify on the spine, compute in supernova.py + /supernova)."
 metadata: 
   node_type: memory
   type: project
@@ -11,7 +11,7 @@ The user wants an endgame for **core-collapse supernovae + their compact remnant
 (neutron stars & black holes)** — the successor to the branch the current endgame
 classifier reaches but leaves un-rendered (`type="SN", states=[]`).
 **Status: Chunk 0 (gate) DONE; Chunk 1 (backend vertical) BUILT; Chunk 2 (frontend
-gateway + light-curve panel) BUILT; Chunks 3–5 next.**
+gateway + light-curve panel) BUILT; Chunk 3 (3D fireball→remnant) BUILT; Chunks 4–5 next.**
 Plan: `docs/plans/radioactive-afterglow-requiem.md` (sibling to
 `smoldering-cinder-gateway.md`). This file holds the locked constraints + the gate's
 measured verdict + Chunk 1/2's built state; the plan is the design source of truth.
@@ -104,6 +104,43 @@ measured verdict + Chunk 1/2's built state; the plan is the design source of tru
   the straight ⁵⁶Co tail lying parallel to SN 1987A's overlay, the M_Ni slider lifting the tail
   not the plateau, the time scrubber, re-snap, back-to-living restoration, the title swap, and
   the citation caption all confirmed.
+
+**Chunk 3 BUILT (3D expanding fireball → remnant, frontend-only; 215 pytest still green,
+backend untouched; Playwright-verified 1440 + 390 px, zero JS/page errors):**
+- `star.js` gained two shaders: **`FIREBALL_FRAG`** on a dedicated `fireball` sphere mesh
+  (reuses `star.geometry`, additive, depthWrite off) + **`REMNANT_FRAG`** on a small
+  camera-facing additive dot mesh (the corona-quad pattern). In SN mode `star.visible=!sn` /
+  `fireball.visible=sn` are set **unconditionally** (advisor: a mode switch must not strand a
+  stale mesh). The fireball = 3D value-noise fbm mottling on a **bounded** sin/cos time orbit
+  (boils, no unbounded drift or angular seam), center-bright with a soft round silhouette.
+- **The ONE honest cue is the color** = the real blackbody at the photosphere Teff (uColor);
+  the blue-white→orange→red shift over the scrub IS the genuine cooling. Everything else
+  (size, turbulence, the dot) is **evocative, labeled** (the corona/WR-wind precedent, spec §7).
+- **White-out trap avoided** (advisor point 3): a single back-face-culled additive sphere is
+  ONE layer, so a clamped per-fragment alpha (≤0.8) keeps the Teff hue + cell structure rather
+  than saturating to white — verified on the explosion frame (a colored blue-white ball, not a
+  white disk). (If it had whited out, the fallback was an opaque-emissive body.)
+- `main.js` `refreshSN` drives two scrub-derived beats threaded as `{endgame:"sn", remnant,
+  snGrow, snFade}`: **`snGrow`** = `0.4+0.6·smoothstep01(0,0.14,dayFrac)` swells the ball over
+  the early scrub (the "expanding" beat — on-screen size is decoupled from the true AU-scale R,
+  which the scale bar carries, the WR fit-to-frame precedent); **`snFade`** =
+  `smoothstep01(0.55,1,dayFrac)` dissipates it over the late tail (breaks into sparse wisps,
+  dims via `1-0.97·uFade`).
+- **The remnant reveal** (the heart of the chunk): as `snFade`→1 an **NS** emerges as a tiny
+  hot blue-white dot (`remnantMat` ramp `(fade-0.7)/0.3`); a **BH / failed SN** shows **no dot
+  at all** — the frame just goes dark = the star **"winks out."** The NS-dot color is a fixed
+  pale blue-white **labeled EVOCATIVE, NOT a blackbody Teff** (advisor point 4 — a real NS's
+  optical thermal emission is negligible; the Crab pulsar is V≈16 synchrotron). A late-time
+  caption swap (`snFade>0.6`) narrates the nebular phase + which remnant.
+- **Measured grounding (advisor point 2 — confirm BH-on-SN exists BEFORE treating winks-out as
+  tested):** probed the real provider → a BH-on-SN progenitor IS in-grid: **30 M☉ solar** (CO
+  core 7.68 > the 7.0 cut → BH) vs the canonical **15 M☉ solar** (NS). So winks-out is NOT dead
+  code; both verified on-screen across explosion / plateau / late-reveal scrub positions.
+- **The verification IS the screenshots, not the console** (advisor point 1): a default
+  zero-console-errors pass would have gone green on dead reveal logic, so I captured NS + BH ×
+  multiple scrub fracs and looked at each — the small-blue-white→huge-orange→red expansion, the
+  thinning wisps, the NS dot appearing, the BH dark frame. The lone console line is an
+  environmental favicon.ico 404 (not in the diff, not a JS error).
 
 **Architecture (advisor-affirmed): a HYBRID sibling.** Classification stays in
 `PROVIDER.endgame()` (it already returns `type="SN"` + progenitor scalars — §3-clean

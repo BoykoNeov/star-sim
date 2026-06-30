@@ -238,12 +238,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   photometry**, cited in a visible `.hr-sn-caption`) are the deferred **Tier-1 anchor**. Consumers
   (3D/SED/comp/scale/readout/classify) get the photosphere StellarState via an explicit `{endgame:"sn"}`
   signal (NOT naive reuse — `logg≈−5` ejecta would trip the boiling-fireball gate); `star.js` shows a
-  smooth glowing sphere (granulation/corona off — the fireball is Chunk 3), `comp.js`/`spectrum.js` honest
+  smooth glowing sphere (granulation/corona off), `comp.js`/`spectrum.js` honest
   placeholders, entry narrates the un-modeled bounce. Mass/[Fe/H] stay live → re-snap (`trySNResnap`;
   WD/WR/none revert with a note). Playwright-verified at 1440 + 390 px (zero console errors), 215 pytest
-  (backend untouched). **Chunks 3–5 (3D fireball→remnant, ejecta onion-shell, NS/BH/failed-SN branch)
-  NOT yet built.** [[star-sim-supernova-remnant-endgame]];
-  plan `docs/plans/radioactive-afterglow-requiem.md`.
+  (backend untouched). **Chunk 3 BUILT (3D expanding fireball → remnant, frontend-only):** `star.js`
+  gained `FIREBALL_FRAG` (a dedicated additive `fireball` sphere mesh, reuses `star.geometry`) + `REMNANT_FRAG`
+  (a small camera-facing additive dot). In SN mode the surface sphere hides (`star.visible=!sn`, set
+  **unconditionally**) and the fireball shows: 3D value-noise fbm on a bounded time orbit (boils, no drift/seam),
+  center-bright, color = the **honest blackbody Teff** (the one load-bearing cue — blue-white→orange→red IS the
+  cooling); a single additive layer with clamped alpha keeps the hue + cell structure (no white-out). `refreshSN`
+  drives `snGrow` (swells the ball over the early scrub — the evocative "expanding" beat, true AU-scale R on the
+  scale bar) + `snFade` (dissipates it over the late tail), threaded `{endgame:"sn", remnant, snGrow, snFade}`.
+  As `snFade`→1 the remnant emerges: **NS** → a tiny hot blue-white dot (color labeled **evocative, NOT a Teff** —
+  a real NS's optical thermal emission is negligible); **BH/failed** → no dot, the frame goes dark ("**winks out**").
+  Measured: a BH-on-SN progenitor IS in-grid (**30 M☉ solar** → BH vs **15 M☉ solar** NS), so winks-out isn't dead
+  code — both verified on-screen. **Chunks 4–5 (ejecta onion-shell, NS/BH/failed-SN branch refinement) NOT yet
+  built.** [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical

@@ -311,6 +311,115 @@ void main() {
   gl_FragColor = vec4(lin2srgb(uColor), a);
 }`;
 
+// --- supernova fireball shader (Chunk 3) --------------------------------------
+// The core-collapse SN endgame's 3D: an expanding, cooling ball of homologously-
+// expanding ejecta that, as it thins, dissipates to reveal the compact remnant. Like
+// the WR wind it is EVOCATIVE, NOT PREDICTIVE (the corona precedent, spec §7) — but
+// the one honest, load-bearing cue is the *color*: uColor is the real blackbody at the
+// photosphere Teff, so the fireball blue-white→orange→red shift over the scrub is the
+// genuine cooling of the expanding photosphere (the same Teff the readout and SED show).
+// Everything else is illustrative: the turbulent cells are not resolved ejecta clumps,
+// and the on-screen size is decoupled from the true R (the photosphere reaches hundreds
+// of AU within months — the scale bar carries the honest radius). Rendered on a back-
+// face-culled sphere (one additive layer, so a bounded per-fragment alpha keeps the hue
+// and the cell structure instead of saturating to white), it boils via a bounded noise
+// orbit (no unbounded drift / seam) and, as uFade rises, breaks into sparse filaments
+// and dims toward nothing — clearing the frame for the remnant dot (or, for a black
+// hole, leaving it dark: the star "winks out").
+const FIREBALL_FRAG = `
+precision highp float;
+uniform vec3  uColor;      // LINEAR sRGB blackbody color at the photosphere Teff — the honest pixel
+uniform float uTime;       // seconds (real clock) — boils the ejecta
+uniform float uIntensity;  // overall fireball brightness (a gentle, clamped L tie; evocative)
+uniform float uFade;       // 0 = young opaque fireball .. 1 = dissipated thin ejecta (remnant emerges)
+varying vec3 vObjPos;
+varying vec3 vViewNormal;
+varying vec3 vViewPos;
+
+${GLSL_LIN2SRGB}
+
+// Scalar 3D value noise (hash + trilinear smoothstep) — the fireball's turbulence.
+float hash31(vec3 p) {
+  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise3(vec3 x) {
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
+  float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
+  float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
+  float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
+  float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
+  float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
+  float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
+  float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
+  return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+             mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+}
+// fbm whose octaves each ride a slow, BOUNDED orbit (sin/cos of time) rather than a
+// monotonic drift — so the surface roils like a fireball without any feature sliding off
+// to infinity (uTime is the real, ever-increasing clock) or a directional seam.
+float fireFbm(vec3 p, float t) {
+  float a = 0.0, w = 0.55, freq = 1.0;
+  for (int k = 0; k < 4; k++) {
+    float fk = float(k);
+    vec3 orbit = vec3(sin(t * 0.27 + fk), cos(t * 0.31 + fk * 1.7), sin(t * 0.23 + fk * 2.3)) * 0.45;
+    a += w * vnoise3(p * freq + orbit);
+    freq *= 2.03; w *= 0.5;
+  }
+  return a;   // ~0 .. ~1.1
+}
+
+void main() {
+  vec3 viewDir = normalize(-vViewPos);
+  float mu = clamp(dot(vViewNormal, viewDir), 0.0, 1.0);   // 1 face-on (centre) .. 0 limb
+
+  float n = fireFbm(normalize(vObjPos) * 3.2, uTime);
+
+  // A ball of fire: a bright hot core fading toward a softer limb (the optically-thick
+  // photosphere is brightest seen face-on), broken up by the turbulent cells.
+  float core = 0.35 + 0.65 * smoothstep(0.0, 0.9, mu);
+  float edge = smoothstep(0.0, 0.16, mu);                  // soft round silhouette (no hard disk rim)
+  float cells = mix(0.45, 1.15, smoothstep(0.25, 0.85, n));
+
+  // As the ejecta thin (uFade→1) the smooth photosphere breaks into sparse bright
+  // filaments and the whole ball dims toward nothing — the dissipation that reveals the remnant.
+  float wisp = smoothstep(0.58, 0.86, n);
+  float body = mix(cells, wisp, uFade);
+  float dim  = 1.0 - 0.97 * uFade;
+
+  float a = uIntensity * core * edge * body * dim;
+  // Bounded so a single additive sphere layer keeps the Teff hue + cell structure (never white-out).
+  gl_FragColor = vec4(lin2srgb(uColor), clamp(a, 0.0, 0.8));
+}`;
+
+// --- compact-remnant dot shader (Chunk 3) -------------------------------------
+// The tiny neutron star left at the centre once the ejecta have dissipated: a small,
+// sharp glowing point with a soft halo, camera-facing (the corona-quad pattern). The
+// COLOR HERE IS EVOCATIVE, NOT A BLACKBODY Teff (unlike the fireball and the living
+// star): a neutron star's *optical thermal* emission is negligible — the Crab pulsar is
+// visible only via synchrotron at V≈16 — so a "hot blue-white dot" is an illustrative
+// marker for "a compact object is here", not a temperature claim (spec §7 honesty). A
+// black hole / failed SN never shows this dot at all (the frame just goes dark — the
+// star "winks out"); the intensity ramps in only as the fireball clears.
+const REMNANT_FRAG = `
+precision highp float;
+uniform vec3  uColor;      // evocative hot tint (NOT a blackbody Teff — see the comment above)
+uniform float uIntensity;  // 0 until the ejecta thin; ramps in as the remnant emerges (NS only)
+varying vec2 vUv;
+
+${GLSL_LIN2SRGB}
+
+void main() {
+  float d = length(vUv - 0.5) * 2.0;            // 0 centre .. 1 quad edge
+  float pt   = exp(-d * d * 90.0);              // tiny sharp core
+  float glow = 0.4 * exp(-d * d * 10.0);        // soft surrounding halo
+  float a = clamp((pt + glow) * uIntensity, 0.0, 1.0);
+  gl_FragColor = vec4(lin2srgb(uColor), a);
+}`;
+
 export function createStar(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -388,6 +497,52 @@ export function createStar(canvas) {
   wind.visible = false;
   scene.add(wind);
 
+  // Supernova fireball (Chunk 3): a second sphere sharing the star's geometry, shown ONLY
+  // in the SN endgame (it never co-displays — the SN path hides the surface sphere). Additive
+  // (a single back-face-culled layer, so the bounded shader alpha keeps the Teff hue rather
+  // than washing to white); its uTime boils in animate(); its on-screen size is the same
+  // displayRadius clamp as the star (already ~frame-filling for AU-scale ejecta — the sphere's
+  // limb clips at the frame by construction, so no quad-style refit is needed).
+  const fireballMat = new THREE.ShaderMaterial({
+    vertexShader: SURFACE_VERT,
+    fragmentShader: FIREBALL_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uTime: { value: 0 },
+      uIntensity: { value: 0.9 },
+      uFade: { value: 0 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const fireball = new THREE.Mesh(star.geometry, fireballMat);
+  fireball.renderOrder = 1;
+  fireball.visible = false;
+  scene.add(fireball);
+
+  // Compact remnant dot (Chunk 3): a tiny camera-facing additive point, drawn on top of the
+  // fading fireball. Shown only for a neutron-star remnant (a black hole "winks out" — no dot);
+  // its intensity ramps in from zero as the ejecta dissipate, so it emerges rather than pops.
+  const remnantMat = new THREE.ShaderMaterial({
+    vertexShader: CORONA_VERT,
+    fragmentShader: REMNANT_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(0.75, 0.85, 1.0) },  // evocative hot blue-white (NOT a Teff)
+      uIntensity: { value: 0 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const remnant = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), remnantMat);
+  remnant.renderOrder = 3;
+  remnant.scale.setScalar(0.5);
+  remnant.visible = false;
+  scene.add(remnant);
+
   function resize() {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
@@ -459,6 +614,12 @@ export function createStar(canvas) {
     const rad = displayRadius(state.R_rsun);
     star.scale.setScalar(rad);
 
+    // SN mode hides the living-star surface sphere and shows the fireball instead; every
+    // other mode restores it. Set unconditionally (not just inside an `if (sn)`) so a mode
+    // switch can never strand a stale mesh on screen.
+    star.visible = !sn;
+    fireball.visible = sn;
+
     // Corona: activity drives both how bright and how far the glow reaches; a small
     // floor keeps a faint neutral bloom so even a hot, inactive star isn't a hard-edged
     // disk (the activity-driven part is what actually grows). The quad half-size is
@@ -503,6 +664,34 @@ export function createStar(canvas) {
     } else {
       windState = null;
     }
+
+    // Supernova fireball + remnant (Chunk 3): the expanding ejecta photosphere as a cooling,
+    // boiling ball that dissipates (uFade) to reveal the compact remnant. The one honest cue is
+    // the blackbody color (the cooling Teff); the on-screen size, the turbulence and the remnant
+    // dot are evocative (spec §7). uFade / uGrow come from the scrubbed day (main.js refreshSN):
+    // grow swells the ball over the early scrub (an "expanding" beat — the on-screen size is
+    // decoupled from the true AU-scale R, which the scale bar carries), fade dissipates it late.
+    if (sn) {
+      fireballMat.uniforms.uColor.value.setRGB(r, g, b);
+      const fade = Math.max(0, Math.min(1, (opts && opts.snFade) ?? 0));
+      const grow = Math.max(0.2, Math.min(1.5, (opts && opts.snGrow) ?? 1));
+      fireballMat.uniforms.uFade.value = fade;
+      // A gentle, clamped luminosity tie so the brightest moments read brighter — evocative,
+      // NOT a measured photometric scale (the light-curve panel carries the real L).
+      const logL = Math.log10(Math.max(1, state.L_lsun));
+      fireballMat.uniforms.uIntensity.value = 0.6 + 0.4 * Math.max(0, Math.min(1, (logL - 5) / 4));
+      fireball.scale.setScalar(rad * grow);
+
+      // The remnant: a neutron star emerges as a tiny hot dot once the ejecta thin; a black
+      // hole / failed SN shows nothing at all (the frame goes dark as the fireball fades —
+      // the star "winks out"). The dot ramps in over the last of the fade so it emerges, not pops.
+      const isNS = !!(opts && opts.remnant === "NS");
+      remnant.visible = isNS;
+      remnantMat.uniforms.uIntensity.value =
+        isNS ? Math.max(0, Math.min(1, (fade - 0.7) / 0.3)) : 0;
+    } else {
+      remnant.visible = false;
+    }
   }
 
   const clock = new THREE.Clock();
@@ -519,6 +708,8 @@ export function createStar(canvas) {
       windMat.uniforms.uTime.value = t;
       applyWindScale();
     }
+    // The SN fireball boils from the same clock (the remnant dot is static — no uTime).
+    if (fireball.visible) fireballMat.uniforms.uTime.value = t;
     renderer.render(scene, camera);
     raf = requestAnimationFrame(animate);
   }

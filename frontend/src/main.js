@@ -243,6 +243,8 @@ let currentTrack = null;           // last /track result; the source for age tic
 // Snap-tick positions in each slider's own coordinate (mass/age: 0..1; feh: dex).
 let massTickPos = [], massTickVals = [], fehTickPos = [], ageTickPos = [];
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
+// GLSL-style smoothstep on a scalar (used to drive the SN fireball grow/fade beats).
+const smoothstep01 = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
 // --- the age slider is LINEAR IN EEP, not in years (Chunk E) ------------------
 // A star spends ~85–90% of its LIFE on the main sequence barely changing, so a slider
@@ -1705,7 +1707,15 @@ function refreshSN() {
   const i = snStateIndex(snFraction);
   const s = snModel.states[i];
 
-  star.update(s, { endgame: "sn" });   // smooth glowing sphere (the fireball shader is Chunk 3)
+  // Drive the 3D fireball→remnant (Chunk 3) from the scrubbed day: `snGrow` swells the ball
+  // over the early scrub (an evocative "expanding" beat — the true AU-scale R is on the scale
+  // bar), `snFade` dissipates it over the late tail to reveal the remnant. `remnant` selects
+  // the NS dot vs the BH "winks out" (no dot). All evocative except the photosphere Teff color.
+  const day = (s.age_yr ?? 0) * 365.25;
+  const dayFrac = clamp01(day / snMaxDay());
+  const snGrow = 0.4 + 0.6 * smoothstep01(0, 0.14, dayFrac);
+  const snFade = smoothstep01(0.55, 1.0, dayFrac);
+  star.update(s, { endgame: "sn", remnant: snModel.remnant_type, snGrow, snFade });
   classification.update(s, "sn");      // expanding-photosphere label, read from Teff
   scale.update(s);                     // true size — the photosphere swells to ~AU scale
   hr.update(s);                        // the marker on the light curve (hr is in SN mode)
@@ -1722,9 +1732,16 @@ function refreshSN() {
     " · " + tipSpan(`SN ${snModel.type}`, phaseTip("SN")) +
     (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
 
-  const day = (s.age_yr ?? 0) * 365.25;
   let cap;
-  if (snModel.has_plateau && day <= snModel.plateau_duration_days)
+  if (snFade > 0.6) {
+    // The ejecta have thinned: the 3D dissipates to the compact remnant (an NS dot, or a
+    // black hole that leaves the frame dark — "winks out"). Evocative, labeled as such.
+    const rem = snModel.remnant_type === "NS"
+      ? `a neutron star emerges as a faint hot point`
+      : `the black hole leaves nothing to see — the star winks out`;
+    cap = `Nebular phase — the ejecta thin and disperse; ${rem} (the 3D remnant is ` +
+      `evocative) · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
+  } else if (snModel.has_plateau && day <= snModel.plateau_duration_days)
     cap = `Recombination plateau — the shock-heated hydrogen envelope recombines at roughly ` +
       `constant luminosity · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
   else
