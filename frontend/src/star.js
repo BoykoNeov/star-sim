@@ -687,8 +687,10 @@ export function createStar(canvas) {
       // the star "winks out"). The dot ramps in over the last of the fade so it emerges, not pops.
       const isNS = !!(opts && opts.remnant === "NS");
       remnant.visible = isNS;
+      // Ramp from fade 0.6 (where refreshSN's "a neutron star emerges" caption appears) to 1,
+      // so the dot begins emerging exactly when the text says it does — no caption/visual gap.
       remnantMat.uniforms.uIntensity.value =
-        isNS ? Math.max(0, Math.min(1, (fade - 0.7) / 0.3)) : 0;
+        isNS ? Math.max(0, Math.min(1, (fade - 0.6) / 0.4)) : 0;
     } else {
       remnant.visible = false;
     }
