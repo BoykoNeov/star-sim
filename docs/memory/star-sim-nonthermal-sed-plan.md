@@ -45,6 +45,14 @@ Chrome) on the real served UI across all 5 gating branches + phone 390; only the
 favicon 404, no JS errors. **Chunk 2 (wind free–free radio from real Ṁ, the spine touch) remains;
 Chunk 3 is now BUILT (see next).**
 
+**UPDATE (rotation Chunk 3c, the UNIFY):** the Chunk-3 rotation-PERIOD slider's DOM (`#sed-rot`)
+**moved out of the SED panel into the Controls panel**, merged with the vvcrit track toggle into
+ONE regime-adaptive "Rotation" control. `sed.js` STILL owns `#sed-rot` by id (draws the X-ray line
+from it, unchanged) and now exposes `rotationAllowed()` so the unified control shows the period
+facet only in the cool-MS dynamo regime; the SED panel keeps the line + a pointer. So if you look
+for the rotation-period slider, it's in **Controls** now, not the SED panel. See
+[[star-sim-rotation-subpop-atlas]].
+
 **CHUNK 3 BUILT (frontend-only, `sed.js`+SED control markup/CSS/legend, NO spine touch, pytest
 unchanged 137).** Collapses the Chunk-1 BAND to a LINE via rotation — the upgrade ladder's top rung.
 Chain (advisor-greenlit, Sun-cross-checked): Teff→(B−V) Ballesteros 2012 (inverted closed form) →

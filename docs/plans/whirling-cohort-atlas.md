@@ -274,21 +274,34 @@ is a **two-state toggle** that **data-derives its own active domain**, never a s
   and non-rotating tracks are *bit-identical*, wherever active=True they differ — derivation
   and served tracks can't drift apart. 188 pytest (+10). Low-Z m100 rotating grid fetched
   (the gate works at [Fe/H]=−1, where CHE lives). API endpoint deferred to Chunk 3.
-- **Chunk 3 — the frontend toggle + the payoff render.** A non-rotating/rotating toggle
-  near the [Fe/H] control; greyed with the explanatory note where `rotation_status.active`
-  is false (inert below the threshold) and absent where `has_grid` is false. Wire the API
-  (a `vvcrit` query param on `/track` etc. + a `rotation_status` surface). Prove the payoff
-  comes through the runtime path before shipping the control (project "don't label a
-  non-feature" rule): the **MS surface N/He enrichment** in the comp panel (rotating vs non
-  at ~20 M☉), the **HR track shift**, and the **low-Z CHE blue divergence** (the m100
-  rotating grid is now on disk — the headline lives at low Z, not solar). **UI decision
-  (user, settled): UNIFY** with the existing SED Chunk-3 rotation/activity slider into one
-  rotation control that drives *both* the track selection (vvcrit, real for all masses in
-  the grid) and the activity/Rossby pinning (age-derivable only for cool MS stars) — the UI
-  must show each effect **only where it's honest** (e.g. the track effect gated by
-  `rotation_status`, the activity effect gated by the cool-MS validity domain), so a
-  spectrum/activity knob never implies the evolutionary track changed in a regime where it
-  didn't. `StellarState.v_rot_kms` (still None) is surfaced here as the real selected value.
+- **Chunk 3 — the frontend toggle + the payoff render. ✅ DONE** (three commits 3a/3b/3c).
+  - **3a (backend/API):** `vvcrit` query param threaded onto `/state`, `/track`,
+    `/endgame`(+`meta`), `/mass_range`, `/age_range` (default 0.0 → the live non-rotating
+    spine is byte-unchanged); a new `/rotation_status` route surfaces the Chunk-2 gate
+    through PROVIDER (§3-clean). **`StellarState.v_rot_kms` is now real**: `surf_avg_v_rot`
+    (km/s) added as `_Track.Vrot`, interpolated across mass/[Fe/H] like the other living
+    quantities (`CACHE_VERSION` 10→11). It is 0 on the non-rotating grid **and below the
+    Kraft break** (MIST zeroes rotation there, so it stays consistent with the active=False
+    gate — no "spinning but identical" nuance), and the real evolving equatorial velocity
+    above it (~224 km/s at 20 M☉ MS). Payoff proven through `track()` BEFORE any UI (the
+    "don't label a non-feature" gate): 20 M☉ solar rotating raises MS surface N ~2.3× + He
+    + longer MS; m100 low-Z 40 M☉ shows the **CHE blue divergence** (rotating ends logTeff
+    3.94 vs non-rotating 3.70). +4 tests.
+  - **3b (frontend toggle):** a two-state non-rotating/rotating toggle below [Fe/H], with
+    `effVvcrit()` = `rotationOn && has_grid ? 0.4 : 0.0` (silently falls back to
+    non-rotating off the rotating grid → no `/track?vvcrit=0.4` 422). `/rotation_status`
+    fetched (awaited, token-guarded) at the top of `refreshTrack` so the gate is current;
+    greyed where `!active`, hidden where `!has_grid`; vvcrit in `egKey()` + all endgame
+    fetches. Verified in-app: 0→249 km/s at 20 M☉, HR/comp shift, age preserved.
+  - **3c (UNIFY, user-settled):** the toggle + the SED Chunk-3 rotation/activity slider are
+    now **one "Rotation" control** in the Controls panel with **two regime-gated facets**
+    (advisor's regime-adaptive design — *not* a single shared continuous unit, which would
+    be lossy/dishonest): the vvcrit **track** toggle (massive stars, gated by
+    `rotation_status`) and the rotation-**period** slider (cool-MS activity, the relocated
+    `#sed-rot`, gated by `sed.rotationAllowed()` — the dynamo domain). The two regimes
+    barely overlap, so usually one facet shows; at the Sun **both** do (track greyed/no-op,
+    activity live), so a spectrum/activity knob never implies the track changed where it
+    didn't. The SED panel keeps the X-ray line + a pointer to the relocated control.
 - **Chunk 4 (data, incremental) — fetch the remaining rotating metallicities.** **m100
   (low-Z) fetched in Chunk 2** for the CHE payoff; **m075/m050/p050 at vvcrit0.4 remain**
   (user: fetch m100 now, rest later) so the toggle is honest across the full feh axis.

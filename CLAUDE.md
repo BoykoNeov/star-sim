@@ -98,16 +98,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   mass grid **0.1–300 M☉** per metallicity, window **ZAMS → end of early-AGB**
   (TPAGB thermal pulses hard-stopped — §6 "messy, defer"). Non-rectangular valid
   domain (`mass_range(feh)` tightens the floor for [Fe/H]>0). Per-grid
-  `_parsed_tracks.npz` parse cache (**`CACHE_VERSION` 10**; ~50–110 s cold reparse on
-  a bump, ~0.35 s warm). A **third selection axis — rotation `vvcrit`** — is now on
-  the boundary (Chunk 1 of the rotation feature): grids partition into one `_Axis`
-  per rotation rate keyed by `(feh, vvcrit)`, the provider **snaps** between buckets
-  (MIST ships only {0.0, 0.4}, no third grid to blend) and interpolates mass×[Fe/H]
-  *within* a bucket. `track()/state_at()/endgame()/mass_range()/age_range()` take
-  `vvcrit=0.0` (default = non-rotating, so the live spine is byte-unchanged); rotation
-  is **mass-ramped at the ~1.2 M☉ Kraft break** (bit-identical below it). Not yet
-  wired to the frontend (Chunks 2–4). [[star-sim-rotation-subpop-atlas]],
-  [[star-sim-mist-provider]], [[star-sim-composition-panel]].
+  `_parsed_tracks.npz` parse cache (**`CACHE_VERSION` 11**; ~50–110 s cold reparse on
+  a bump, ~0.35 s warm). A **third selection axis — rotation `vvcrit`** — is on the
+  boundary and **wired end-to-end (rotation Chunks 1–3 DONE)**: grids partition into one
+  `_Axis` per rotation rate keyed by `(feh, vvcrit)`, the provider **snaps** between
+  buckets (MIST ships only {0.0, 0.4}, no third grid to blend) and interpolates
+  mass×[Fe/H] *within* a bucket. `track()/state_at()/endgame()/mass_range()/age_range()`
+  take `vvcrit=0.0` (default = non-rotating, so the live spine is byte-unchanged) and the
+  API exposes it as a query param + a `/rotation_status` route (the data-derived honesty
+  gate). Rotation is **mass-ramped at the ~1.2 M☉ Kraft break** (bit-identical below it).
+  `surf_avg_v_rot` is now surfaced as the real **`v_rot_kms`** (0 non-rotating/below the
+  break, real above). Frontend: a **unified "Rotation" control** below [Fe/H] with two
+  regime-gated facets — the vvcrit **track** toggle (massive, gated by `rotation_status`)
+  + the rotation-**period** slider (cool-MS activity, the SED slider relocated here, gated
+  by the dynamo domain); only Chunk 4 (fetch the remaining rotating [Fe/H] grids; on disk:
+  p000 + m100) remains. [[star-sim-rotation-subpop-atlas]], [[star-sim-mist-provider]],
+  [[star-sim-composition-panel]], [[star-sim-nonthermal-sed-plan]].
 - `MESAProvider` — the **second real provider** (offline MESA `history.data`, a
   different on-disk format behind the same boundary), used to **validate MIST**.
   Discrete-grid, snap-to-nearest, **multi-metallicity by snapping** (no
@@ -209,7 +215,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **170 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **192 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr).
 

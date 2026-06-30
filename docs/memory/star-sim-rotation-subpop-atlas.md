@@ -1,8 +1,10 @@
 ---
 name: star-sim-rotation-subpop-atlas
-description: Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunk 1 (provider (feh,vvcrit) keying) BUILT, Chunks 2-4 remain. User said "nothing is out of scope."
-metadata:
+description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-3 BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms), only Chunk 4 (fetch remaining rotating feh) remains. User said \"nothing is out of scope.\""
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: d6e84098-c905-486b-85f4-edc0b6e21d37
 ---
 
 **DISCUSSION CAPTURED, nothing built.** Plan doc:
@@ -70,16 +72,29 @@ break = honest "negligible"), NOT a slider.
   ⟺ they differ. 188 pytest (+10). **m100 (low-Z) rotating grid fetched** — gate works at
   [Fe/H]=−1 (where CHE lives). `requires_mist_rotation` / `requires_mist_rotation_lowz`
   markers. API endpoint deferred to Chunk 3.
-- **Chunk 3 (next)** = frontend toggle + API wiring (`vvcrit` query param + `rotation_status`
-  surface) + prove the payoff renders (comp N/He at ~20 M☉, HR shift, low-Z CHE). **UI
-  decision settled (user): UNIFY** with the SED Chunk-3 rotation/activity slider into ONE
-  rotation control driving both the track (vvcrit, gated by `rotation_status`) and
-  activity/Rossby (gated by the cool-MS validity domain) — each effect shown only where
-  honest. **`StellarState.v_rot_kms` still None** — surfacing the real selected value is
-  this chunk's payoff. See [[star-sim-nonthermal-sed-plan]] (the SED rotation slider).
-- **Chunk 4** = fetch remaining rotating metallicities. **m100 done (Chunk 2)**; m075/m050/
-  p050 vvcrit0.4 remain (~180 MB each; user: fetch m100 now, rest later). On disk now:
-  p000 + m100 rotating.
+- **Chunk 3 — BUILT** (3 commits 3a/3b/3c). **3a (backend/API):** `vvcrit` query param on
+  `/state`/`/track`/`/endgame`(+`meta`)/`/mass_range`/`/age_range` (default 0.0 → live spine
+  byte-unchanged) + new `/rotation_status` route (gate through PROVIDER). **`v_rot_kms` is now
+  REAL**: `surf_avg_v_rot` (km/s) → `_Track.Vrot`, interp'd across mass/[Fe/H] like the other
+  living quantities, `CACHE_VERSION` 10→11. It's 0 non-rotating AND below the Kraft break (MIST
+  zeroes rotation there → consistent with active=False, NO "spinning-but-identical" nuance),
+  real above it (~224 km/s @ 20 M☉ MS). Payoff PROVEN via `track()` before UI: 20 M☉ solar MS
+  N ~2.3×+He+longer life; m100 40 M☉ CHE blue divergence (rot logTeff 3.94 vs non-rot 3.70).
+  **3b (toggle):** two-state toggle below [Fe/H]; `effVvcrit()=rotationOn&&has_grid?0.4:0.0`
+  (falls back off-grid → no `/track?vvcrit=0.4` 422); `/rotation_status` fetched awaited+token-
+  guarded atop `refreshTrack`; greyed `!active`, hidden `!has_grid`; vvcrit in `egKey()`+all
+  endgame fetches. **3c (UNIFY, user-settled):** toggle + the SED rotation/activity slider are
+  now ONE "Rotation" control in Controls with TWO regime-gated facets (advisor's regime-adaptive
+  design — NOT a shared continuous unit, which is lossy/dishonest): vvcrit **track** toggle
+  (massive, gated by `rotation_status`) + rotation-**period** slider (cool-MS activity, the
+  relocated `#sed-rot`, gated by NEW `sed.rotationAllowed()` = the dynamo domain). Regimes barely
+  overlap → usually one facet shows; at the Sun BOTH (track greyed/no-op, activity live). SED
+  panel keeps the X-ray line + a pointer. **GOTCHA:** `.rot-toggle-row{display:flex}` beat the UA
+  `[hidden]{display:none}` → off-grid facet wouldn't hide; needed `.rot-toggle-row[hidden]{display:none}`.
+  +4 tests (192 pytest). Verified via Playwright. See [[star-sim-nonthermal-sed-plan]].
+- **Chunk 4 (only one left)** = fetch remaining rotating metallicities. **m100 done (Chunk 2)**;
+  m075/m050/p050 vvcrit0.4 remain (~180 MB each; user: fetch m100 now, rest later). On disk now:
+  p000 + m100 rotating. (Until then the toggle is honestly absent off [-1, 0] — by design.)
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime
