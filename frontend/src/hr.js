@@ -399,10 +399,22 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // the observed SNe overlays, which would read as a broken plot without a banner saying so.
     if (snModel && snModel.failed_sn) {
       ctx.textAlign = "center";
-      ctx.fillStyle = "#b9aaff"; ctx.font = "600 12px system-ui, sans-serif";
-      ctx.fillText("Direct collapse — failed supernova: almost no light emitted", W / 2, PAD + 18);
-      ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
-      ctx.fillText("the star implodes to a black hole and winks out", W / 2, PAD + 34);
+      // Auto-shrink each line to fit the canvas so the long banner doesn't clip at the panel
+      // edge on narrow (phone-width) viewports; centered at W/2 with a small side margin.
+      const avail = W - 12;
+      const fitFont = (px, weight, text) => {
+        let size = px;
+        ctx.font = `${weight}${size}px system-ui, sans-serif`;
+        const w = ctx.measureText(text).width;
+        if (w > avail) size = Math.max(9, Math.floor(size * avail / w));
+        ctx.font = `${weight}${size}px system-ui, sans-serif`;
+      };
+      const line1 = "Direct collapse — failed supernova: almost no light emitted";
+      const line2 = "the star implodes to a black hole and winks out";
+      ctx.fillStyle = "#b9aaff"; fitFont(12, "600 ", line1);
+      ctx.fillText(line1, W / 2, PAD + 18);
+      ctx.fillStyle = "#8a93a6"; fitFont(11, "", line2);
+      ctx.fillText(line2, W / 2, PAD + 34);
       ctx.textAlign = "left";
     }
 
