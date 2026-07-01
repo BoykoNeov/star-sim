@@ -265,6 +265,30 @@ note reads the *snapped* result so it stays correct as the axis grows). **238 py
 Playwright-verified 1440 px (conv. band visibly, monotonically shallows +0.5→−1: conv. base
 0.659→0.694→0.807; radiative core → n=3 at every Z; zero console errors).
 
-**Next:** extend [Fe/H] to still more masses the same way (clean on the lower MS, *fails* in the
-convective-core regime per the 6 M☉ measurement — verify visible first), or ship the 1.3 M☉
-double-convective structure on its own merits. See ROADMAP + [[star-sim-roadmap]].
+## [Fe/H]-axis clean window MEASURED to its edges — 0.6 & 1.1 M☉ NON-SHIPS (recipe §12)
+
+The "extend [Fe/H] to still more masses" thread is **closed by measurement** — both neighbours
+of the shipped 0.8/1.0 window fail the ship gate in the two complementary ways the mass axis
+predicts (no data/test/code ships — nothing cleared the gate; a documented negative result like
+[Fe/H]=−2 §10 and 1.3 M☉ §11). Envelope-base spread across [Fe/H] +0.5→−1 (matched mid-MS Xc):
+- **0.6 M☉ — compression:** 0.633/0.642/0.721, spread **~0.09 < the 0.1 gate**, and **+0.5≈0.0**
+  (0.633 vs 0.642, <0.01 — not a *visibly monotone* trend). The 1.0→0.8→0.6 spread SHRINKS
+  (0.25→0.15→0.09): a deeper envelope gives a *smaller* Z-response, not a bigger one (advisor
+  predicted). Core radiative at every Z incl. +0.5 (fully-conv-at-+0.5 degeneracy worry cleared).
+  Long MS → `max_age=6d10` to reach mid-MS.
+- **1.1 M☉ — fragmentation + core-flip:** spread big (0.26) & monotone BUT the −1.0 envelope
+  **fragments into 2 zones** (0.99 sliver — the 1.3 M☉ failure, pushed −0.5→−1.0), AND the core
+  type is **inconsistent across Z** (conv at +0.5 / rad at solar / conv at −1.0) → `expected_n`
+  flips *within* the axis, breaking the clean "pure envelope-depth, core stays n=3" story. The
+  flip is striking but non-monotonic/phase-sensitive — an aside, not a feature.
+- **0.9 M☉** is the only remaining clean option (spread ~0.20, unfragmented) but **redundant** — a
+  point *between* two shipped masses, no new regime → not shipped either.
+
+**The usable clean-envelope [Fe/H]-axis window is 0.8–1.0 M☉ and is fully covered.** Measured via
+raw `mixing_type` (correct for a non-ship — the OR-clause only adds r/R≥0.97 cells, can't rescue a
+<0.01 gap). Container/temp cleaned up. Advisor-confirmed: thread exhausted; extending Z further is
+not productive.
+
+**Next (a USER choice, not auto-pursued):** ship the **1.3 M☉ double-convective structure** on its
+own merits — a mass with a convective core AND convective envelope at once, a genuinely new
+*structure* regime (not a Z axis) the panel doesn't yet show. See ROADMAP + [[star-sim-roadmap]].

@@ -452,7 +452,55 @@ axis grows). **238 pytest** (was 237, +1). Playwright-verified 1440 px (the conv
 visibly, monotonically shallows +0.5→−1: conv. base 0.659 → 0.694 → 0.807; radiative core →
 n=3 at every Z; zero console errors).
 
-**Next:** the [Fe/H] axis could extend to still more masses the same way (verify visible
-first — the effect is clean on the lower main sequence and *fails* in the convective-core
-regime, per the 6 M☉ measurement above), or the 1.3 M☉ double-convective structure could
-ship on its own merits (as a *structure* slice, not a metallicity axis).
+**Next:** the 1.3 M☉ double-convective structure could ship on its own merits (as a
+*structure* slice, not a metallicity axis) — but the [Fe/H] axis itself is now **measured
+to its clean-window edges** and cannot be extended further without hitting a gate failure
+(§12).
+
+## 12. The [Fe/H]-axis clean window is 0.8–1.0 M☉ — 0.6 and 1.1 measured, NOT shipped
+
+The "extend the [Fe/H] axis to still more masses" thread was pursued and **closed by
+measurement**: both neighbours of the shipped 0.8/1.0 window fail the ship gate, in the two
+*complementary* ways the mass axis predicts. This is a documented negative result (like the
+[Fe/H]=−2 non-ship in §10 and the 1.3 M☉ non-ship in §11) — **no data, test, or code ships**
+(nothing cleared the gate). The measured spread of the convective-envelope base across
+[Fe/H] +0.5→−1 *shrinks* going down and the envelope *fragments* going up:
+
+| mass | env base +0.5 / 0.0 / −1.0 (matched mid-MS Xc) | spread | verdict |
+|---|---|---|---|
+| 0.6 M☉ | 0.633 / 0.642 / 0.721 | **~0.09** | **non-ship: compression** |
+| 0.8 M☉ | 0.659 / 0.694 / 0.807 | 0.15 | shipped (§11) |
+| 1.0 M☉ | 0.701 / 0.750 / 0.955 | 0.25 | shipped (§10) |
+| 1.1 M☉ | 0.731 / ~0.81 / 0.992 (2 zones) | 0.26 | **non-ship: fragments + core-flip** |
+
+- **0.6 M☉ — spread compression.** The whole +0.5→−1 spread is **~0.09, below the ≥0.1
+  gate**, and worse, **+0.5 and 0.0 are indistinguishable** (0.633 vs 0.642 — a <0.01 gap,
+  not a *visibly monotone* trend; only the metal-poor bucket separates). This is exactly the
+  1.0→0.8 trend continued (0.25 → 0.15 → **0.09**): a deeper envelope does **not** give a
+  more dramatic Z-response — it gives a *smaller* one. The core stays radiative
+  (`mixing_type==0`) at every Z, incl. metal-rich (the advisor's fully-convective-at-+0.5
+  degeneracy worry — cleared), so the corner is well-defined; it's simply too compressed to
+  ship. A 0.6 M☉ MS lifetime is long, so the run used `max_age = 6d10` (initial_mass=0.6,
+  the three Zbase/initial_z pairs) to reach mid-MS Xc≈0.29; matched at Xc≈0.5 (profile9) the
+  bases are 0.654/0.655/0.724 — same verdict, +0.5≈0.0.
+- **1.1 M☉ — fragmentation + core-type inconsistency.** The spread is large (0.26) and
+  monotone, but the **[Fe/H]=−1.0 envelope fragments into two zones** at mid-MS (base 0.99
+  sliver — the same failure that killed 1.3 M☉ in §11, just pushed from −0.5 to −1.0). *And*
+  the central core type is **inconsistent across the Z buckets** — convective at +0.5
+  (`mixing_type==1`), radiative at solar (`mixing_type==0`), convective at −1.0 — so
+  `expected_n` would *flip within the axis*, breaking the clean "pure envelope-depth effect,
+  core stays radiative n=3 at every Z" story the 0.8/1.0 slices ship. (The flip is striking
+  but non-monotonic and phase-matching-sensitive — an aside, not a feature.) 1.1 M☉ used the
+  standard TAMS stop (`max_age = 2d10` safety), reaching TAMS normally.
+
+**The remaining clean option is 0.9 M☉** (spread ~0.20, unfragmented, core radiative) — but
+it is *redundant*: a point *between* the two shipped masses, adding no new regime or lesson,
+so it is deliberately not shipped either. **The usable clean-envelope [Fe/H]-axis window is
+0.8–1.0 M☉, and it is fully covered.** Extending the metallicity axis further is not a
+productive thread; the 1.3 M☉ double-convective *structure* slice (§11's other Next) remains
+the live option — as a structure regime, not a Z axis.
+
+Measured via raw `mixing_type` (the correct tool for a non-ship — you are documenting
+"spread too small" / "it fragments", which raw mixing shows directly; the `interior_structure()`
+OR-clause only adds r/R≥0.97 near-surface cells and cannot rescue a <0.01 metal-rich/solar
+gap). The `mesa_struct06` container and temp inlists were removed after measurement.
