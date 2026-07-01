@@ -315,7 +315,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
 
 ### Interior structure (real MESA radial profiles — a **sibling**; the honest Lane–Emden successor)
 - **BUILT — the three interior regimes: 0.25 M☉ fully-convective M dwarf + 1 M☉ solar radiative-core↔
-  convective-envelope + the 2/6/15/25 M☉ convective-core↔radiative-envelope FLIP.** `/structure` bypasses
+  convective-envelope + the 2/6/15/25 M☉ convective-core↔radiative-envelope FLIP; PLUS the metallicity
+  axis (1 M☉ at [Fe/H]=−1/+0.5, the convective envelope shallows as Z drops).** `/structure` bypasses
   `PROVIDER` (like `/polytrope`, `/spectrum`): interior structure is a sibling, not a
   `StellarState`. `structure.py` reads offline MESA `profile.data` snapshots under
   `data/mesa_profiles/` (gitignored) with its **own** MESA-profile parser (never imports
@@ -370,10 +371,21 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   is the lesson." NOT a pure drop-in: +`requires_structure_lowmass` marker (≤0.5 M☉ gate) + 2 tests +
   the off-grid snap probe re-pointed 0.3→0.15 (0.25 is now the grid floor) + a small `structure.js`
   caption refinement ("fully convective …the rare case the real profile follows it"; blank conv.base).
-  **16 tests** (`test_structure.py`); 236 pytest total. Playwright-verified 1440 px (6/15 M☉ "convective
+  **17 tests** (`test_structure.py`); 237 pytest total. Playwright-verified 1440 px (6/15 M☉ "convective
   core → canonical n = 3/2"; 0.25 M☉ "fully convective", ρ overlapping the n=1.5 dash, whole-panel
-  convective shading; zero console errors). **Next:** other-Z buckets drop in the same way (verify the
-  effect is *visible in the panel* first). [[star-sim-interior-structure-mesa]].
+  convective shading; zero console errors). The **metallicity axis** added — the first non-mass slice
+  (1 M☉ at [Fe/H]=−1.0 and +0.5): the solar-abundance-problem effect, lower Z → more transparent
+  envelope → **shallower convective envelope** (base at higher r/R). **Gating measurement first, at
+  matched Xc not age** (a metal-poor 1 M☉ is hotter/shorter-lived): mid-MS envelope base **0.70/0.75/
+  0.95** at [Fe/H] **+0.5/0/−1** — visibly, monotonically distinct → clears the honesty gate. **NOT a
+  core-type flip** (advisor-predicted): core stays radiative, `expected_n=3` at every Z; the whole
+  payoff is the envelope-depth band. −2.0 run too but **not shipped** (base 0.99, fragments). **MESA
+  gotcha: change `Zbase` too, not just `initial_z`** (round Z → clean [Fe/H] label auto). **Runtime NO
+  code change** (the index already snapped mass→feh→age; frontend already passed the marker's [Fe/H]);
+  data (`1Msun_fehm1p0`/`1Msun_fehp0p5`) + `requires_structure_multifeh` marker + 1 trend test + a
+  **[Fe/H]-snapped-far note** (`structure.js`, the Z grid is 1 M☉-only) + the conv.base tooltip Z-link.
+  Recipe §10. **Next:** metallicity at other masses (grid non-rectangular — only 1 M☉ has the Z axis
+  today); verify visible in the panel first. [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
@@ -388,7 +400,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **233 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **237 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
@@ -405,7 +417,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   branch (M_ej<M_EJ_FAIL, ejected Ni→0, no plateau, faint-positive curve, non-expanding R₀
   photosphere), and Tier-3 linearity surviving the fallback dimming. Light-curve physics is
   unit-tested deterministically; the endgame→sibling→route path through the real provider.
-  The real interior-structure sibling adds **13** tests (`test_structure.py`, gated by
+  The real interior-structure sibling adds **17** tests (`test_structure.py`, gated by
   `requires_structure_data`): convective-envelope-over-radiative-core, order-of-SSM central
   values, monotone centrally-concentrated ρ, r/R spanning [0,1], canonical-polytrope overlay
   (n=3 more concentrated than n=1.5), honest age/mass snapping, and the `/structure` route +
@@ -413,7 +425,10 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   ≥4 M☉ slice so they *skip* not fail on a 1 M☉-only checkout): the 6 M☉ convective-core +
   n=3/2 + radiative-envelope-at-r/R=0.9, the direct Sun↔6 M☉ *mirror* on the same two probe
   radii, the 2 M☉ core-convective check, and the 15 M☉ SN-progenitor deepest-convective-core
-  (core r/R 0→0.178, hotter/less-dense than 6 M☉).
+  (core r/R 0→0.178, hotter/less-dense than 6 M☉); plus the **25 M☉ upper-SN-range** test and
+  the **2 low-mass M-dwarf** tests (`requires_structure_lowmass`); plus the **metallicity-axis
+  trend test** (`requires_structure_multifeh`, gated on |[Fe/H]|>0.3): the matched-Xc monotone
+  envelope-shallowing base(+0.5)<base(0)<base(−1), all `expected_n`=3 (not a core flip).
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

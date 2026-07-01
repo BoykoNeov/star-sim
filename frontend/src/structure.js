@@ -30,6 +30,9 @@ const COL_CONV = "rgba(120,170,255,0.16)";  // convective-zone shading
 
 // A requested vs snapped mass this close is "on grid" (no snapped-far note).
 const MASS_MATCH_TOL = 0.05;
+// The metallicity grid is coarse (a few [Fe/H] buckets, and only at 1 M☉), so a
+// request this far from the nearest saved [Fe/H] is a real snap worth flagging.
+const FEH_MATCH_TOL = 0.3;
 
 function fmt(x, sig = 3) {
   if (x === null || x === undefined || !isFinite(x)) return "—";
@@ -64,6 +67,7 @@ export function createStructure({ api }) {
 
   let data = null;         // last /structure result
   let reqMass = null;      // the mass we asked for (to detect a far snap)
+  let reqFeh = null;       // the [Fe/H] we asked for (to detect a far metallicity snap)
   let unavailable = false; // 503 — no profiles generated yet
 
   // --- latest-wins + debounce (the lane.js / spectrum.js idiom, own token) ---
@@ -103,6 +107,7 @@ export function createStructure({ api }) {
     const mass = state.mass_init_msun, feh = state.feh_init ?? 0, age = state.age_yr;
     if (mass == null || age == null || !(age > 0)) return;
     reqMass = mass;
+    reqFeh = feh;
     // The backend snaps to a handful of ages, so round the request key coarsely —
     // sub-percent age moves cannot change which snapshot is nearest.
     const key = `${mass.toFixed(3)}|${feh.toFixed(2)}|${age.toExponential(2)}`;
@@ -236,7 +241,7 @@ export function createStructure({ api }) {
       ["Tc", "central temperature — sets the nuclear burning rate. Hydrogen fusion needs ~10⁷ K; the Sun's core is ~1.5×10⁷ K.", `${fmt(c.T_c_K)} K`],
       ["Pc", "central pressure (dyne/cm²) — the weight of the whole star bearing down on its centre, balanced by gas + radiation pressure.", `${fmt(c.P_c_dyne)}`],
       ["R", "the model's surface radius, in solar radii.", `${fmt(c.R_surface_rsun)} R☉`],
-      ["conv. base", "radius (as a fraction of R) where the outer convective envelope begins — below it the star is radiative. The single-index polytrope has no such boundary.", convBase != null ? convBase.toFixed(3) : "—"],
+      ["conv. base", "radius (as a fraction of R) where the outer convective envelope begins — below it the star is radiative. The single-index polytrope has no such boundary. It depends strongly on metallicity: fewer metals means a more transparent envelope, so the convection zone is shallower — a metal-poor ([Fe/H] = −1) Sun's envelope is a thin surface sliver, a metal-rich one's reaches deeper.", convBase != null ? convBase.toFixed(3) : "—"],
     ];
     readout.innerHTML = rows
       .map(([k, d, v]) =>
@@ -244,12 +249,27 @@ export function createStructure({ api }) {
         `<div class="v">${v}</div></div>`)
       .join("");
 
-    // Snapped-far note: the request's mass is well off the only grid we have.
-    if (reqMass != null && Math.abs(reqMass - snap.mass_msun) > MASS_MATCH_TOL) {
+    // Snapped-far note: the request's mass and/or [Fe/H] is well off the grid we have
+    // (the mass grid is 0.25–25 M☉ at solar Z; the metallicity grid is only at 1 M☉).
+    const massFar = reqMass != null && Math.abs(reqMass - snap.mass_msun) > MASS_MATCH_TOL;
+    const fehFar = reqFeh != null && Math.abs(reqFeh - snap.feh) > FEH_MATCH_TOL;
+    if (massFar && fehFar) {
+      note.textContent =
+        `No MESA interior grid for a ${fmt(reqMass)} M☉, [Fe/H] ${reqFeh >= 0 ? "+" : ""}` +
+        `${reqFeh.toFixed(1)} star — showing the nearest available model ` +
+        `(${fmt(snap.mass_msun)} M☉, [Fe/H] ${snap.feh >= 0 ? "+" : ""}${snap.feh.toFixed(1)}). ` +
+        `Structure varies with both, so this is only a guide.`;
+    } else if (massFar) {
       note.textContent =
         `No MESA interior grid for a ${fmt(reqMass)} M☉ star — showing the nearest ` +
         `available model (${fmt(snap.mass_msun)} M☉). The structure of a very ` +
         `different-mass star can differ substantially.`;
+    } else if (fehFar) {
+      note.textContent =
+        `No MESA interior grid at [Fe/H] ${reqFeh >= 0 ? "+" : ""}${reqFeh.toFixed(1)} for ` +
+        `this mass — showing the nearest metallicity (${fmt(snap.mass_msun)} M☉, ` +
+        `[Fe/H] ${snap.feh >= 0 ? "+" : ""}${snap.feh.toFixed(1)}). Metallicity sets the ` +
+        `convective-envelope depth, so this is only a guide.`;
     } else {
       note.textContent = "";
     }

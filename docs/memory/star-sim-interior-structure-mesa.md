@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (0.25/1/2/6/15/25 M☉ slices — the three regimes: 0.25 fully convective, 1 radiative-core+conv-envelope, 6/15/25 convective-core+radiative-envelope; 15 = the SN progenitor, 25 brackets the upper SN range)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (0.25/1/2/6/15/25 M☉ mass slices — the three regimes: 0.25 fully convective, 1 radiative-core+conv-envelope, 6/15/25 convective-core+radiative-envelope; 15 = the SN progenitor, 25 brackets the upper SN range — PLUS the metallicity axis: 1 M☉ at [Fe/H]=−1/+0.5, the convective envelope shallows as Z drops)"
 metadata: 
   node_type: memory
   type: project
@@ -193,5 +193,40 @@ row flipped idea→done. 232 pytest.
   (was 234, +2). Playwright-verified 1440 px, zero console errors (screenshot: ρ overlapping
   the n=1.5 dash, whole-panel convective shading).
 
-**Next:** other-Z buckets drop in the same way (but verify the structural effect is *visible in
-the panel* before shipping a control, per the honesty rule). See ROADMAP + [[star-sim-roadmap]].
+## The metallicity axis (BUILT — 1 M☉ at [Fe/H] = −1.0 and +0.5, the first non-mass axis)
+- The "other-Z buckets" Next, now built — the **first slice that varies [Fe/H] instead of
+  mass**. Hold the star at 1 M☉, change only Z → "same star, different metallicity → different
+  convection zone", overlaid on the solar 1 M☉ slice. Payoff = the **solar-abundance-problem
+  effect**: lower Z → more transparent envelope → **shallower convective envelope** (base at a
+  *higher* r/R). Advisor-settled: hold mass at 1 M☉ (don't drift), it reads as a direct overlay.
+- **The gating measurement came first (honesty rule) and MUST be at matched central-H, not
+  matched age** — a metal-poor 1 M☉ is hotter/shorter-lived, so equal age ≠ equal phase (the
+  confound is *worse* than for the mass slices). Measured mid-MS (Xc≈0.35) convective-envelope
+  base r/R: **[Fe/H]+0.5 → 0.70** (deepest, outer ~31%) · **0.0 → 0.75** (Sun) · **−1.0 → 0.95**
+  (thin surface sliver). All three visibly, monotonically distinct → clears the gate. Ran
+  **[Fe/H]=−2.0** too (base 0.99) but it **fragments** into tiny adjacent zones and is visually
+  indistinguishable from −1.0 → **measured but NOT shipped** (don't ship a bucket you can't
+  distinguish just to have "more" — advisor).
+- **This is NOT a core-type flip** (advisor predicted): the core stays radiative
+  (`expected_n = 3`) at every Z; the entire visible effect is the envelope-depth band. (Contrast
+  the mass axis, where the flip to a convective core drives `expected_n`→3/2.)
+- **Two MESA-run gotchas** (every prior slice varied only `initial_mass`): (1) **change `Zbase`
+  too, not just `initial_z`** — the recipe hardcodes both at 0.0152; a mismatched `Zbase` gives
+  inconsistent Type-2 opacities. Round Z → clean label (`structure.py`: [Fe/H]=log₁₀(Z/0.0152),
+  so Z=0.00152→−1.00, Z=0.048→+0.50 auto). (2) **Keep the TAMS stop** (unlike the 0.25 M☉ dwarf)
+  — a metal-poor 1 M☉ still reaches central-H exhaustion in a few Gyr. Rates cache already built,
+  so 2nd/3rd concurrent 1 M☉ runs finish in ~1–2 min.
+- **Runtime NO code change** (the index already snapped mass→feh→age; the frontend already passed
+  the marker's [Fe/H] and reported the snapped value). Accompanying: data (dirs `1Msun_fehm1p0` /
+  `1Msun_fehp0p5`, 5 profiles each, mid-MS anchor by Xc) + a new `requires_structure_multifeh`
+  marker (gated on |[Fe/H]|>0.3 → skips not fails on a solar-only checkout) + one test
+  (`test_convective_envelope_shallows_as_metallicity_drops` — the **matched-Xc monotone trend**,
+  base(+0.5)<base(0)<base(−1), all `expected_n`=3) + two small `structure.js` polishes: a
+  **[Fe/H]-snapped-far note** (mirrors the mass one — the Z grid is 1 M☉-only, so a 6 M☉/[Fe/H]−1
+  request snaps to solar-Z and now says so; verified live) and the "conv. base" tooltip extended
+  to the Z→envelope-depth link. **237 pytest** (was 236, +1). Playwright-verified 1440 px (band
+  spans r/R 0.69→1.0 at +0.5, a sliver at 0.97 at −1.0; zero console errors). Recipe §10.
+
+**Next:** metallicity at *other masses* (the grid is non-rectangular — only 1 M☉ has the Z axis
+today) or other mass-Z combinations if a specific pedagogy calls for it — always verify the
+structural effect is *visible in the panel* first. See ROADMAP + [[star-sim-roadmap]].

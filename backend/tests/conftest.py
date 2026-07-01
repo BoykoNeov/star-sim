@@ -229,6 +229,22 @@ def structure_massive_available() -> bool:
         return False
 
 
+def structure_multifeh_available() -> bool:
+    """True if a *non-solar-metallicity* interior-structure slice is present.
+
+    The solar-Z slices (all at [Fe/H]=0) satisfy `structure_data_available()`, but the
+    metallicity-axis test — the convective envelope shallows as [Fe/H] drops — needs at
+    least one non-solar-Z 1 M☉ run (the [Fe/H]=−1 / +0.5 slices, see the recipe §10).
+    Detect it by a snapshot whose [Fe/H] is well off solar, so that test *skips* (not
+    fails) on a checkout with only the solar-Z data."""
+    from star_sim.structure import _ProfileIndex, StructureDataMissing
+
+    try:
+        return any(abs(m.feh) > 0.3 for m in _ProfileIndex().available())
+    except StructureDataMissing:
+        return False
+
+
 def structure_lowmass_available() -> bool:
     """True if a *low-mass, fully-convective* interior-structure slice is present.
 
@@ -264,4 +280,11 @@ requires_structure_massive = pytest.mark.skipif(
 requires_structure_lowmass = pytest.mark.skipif(
     not structure_lowmass_available(),
     reason="no low-mass MESA profile slice (0.25 M☉) — see backend/docs/mesa_structure_recipe.md §9",
+)
+
+# The metallicity-axis test needs a non-solar-Z 1 M☉ slice ([Fe/H]=−1 / +0.5) — the
+# solar-Z data alone would make it FAIL, not skip. See mesa_structure_recipe.md §10.
+requires_structure_multifeh = pytest.mark.skipif(
+    not structure_multifeh_available(),
+    reason="no non-solar-Z MESA profile slice ([Fe/H]=−1/+0.5) — see backend/docs/mesa_structure_recipe.md §10",
 )

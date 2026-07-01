@@ -331,6 +331,70 @@ flat ~0.71 line (fully mixed, unburned). Playwright-verified 1440 px (caption "f
 convective → canonical n = 3/2 — the rare case the real profile follows it", the ρ line
 overlapping the n=1.5 dash, whole-panel convective shading, zero console errors).
 
-**Next:** other-Z buckets (a metallicity axis — but verify the structural effect is
-*visible in the panel* before shipping a control, per the project honesty rule) drop in
-the same way.
+## 10. The metallicity axis (1 M☉ at [Fe/H] = −1.0 and +0.5) — BUILT
+
+The first slice that varies **[Fe/H] instead of mass**: hold the star at 1 M☉ and change
+only its metallicity, so the panel reads as "same star, different metallicity → different
+convection zone" — a direct overlay against the solar 1 M☉ slice. The payoff is the
+**solar-abundance-problem effect**: a lower Z gives a more transparent envelope, so the
+**convective envelope is shallower** (its base sits at a *higher* r/R). This is **not** a
+core-type flip — the core stays radiative (`expected_n = 3`) at every Z; the entire visible
+effect is the envelope-depth band.
+
+**The gating measurement came first** (the honesty rule — verify it's visible in the panel
+before shipping a control), and it must be done **at matched central-H, not matched age**: a
+metal-poor 1 M☉ is hotter and shorter-lived, so equal age ≠ equal phase. Compared at a
+mid-MS Xc ≈ 0.35, the convective-envelope base r/R:
+
+| [Fe/H] | Z | envelope base r/R (mid-MS) | band |
+|---|---|---|---|
+| **+0.5** | 0.048    | **≈ 0.70** | deepest — outer ~31% |
+| **0.0** (solar) | 0.0152   | **≈ 0.75** | the Sun — outer ~25% |
+| **−1.0** | 0.00152  | **≈ 0.95** | a thin surface sliver |
+
+All three are visibly, monotonically distinct → the effect clears the gate. ([Fe/H]=−2.0,
+Z=0.000152, was also run: base ≈ 0.99, a razor-thin envelope that **fragments** into tiny
+adjacent zones — visually indistinguishable from −1.0, so it was measured but **not shipped**;
+don't ship a bucket you can't distinguish from a neighbour just to have "more.")
+
+**Two recipe changes vs §1–§9 (both easy to miss — every prior slice varied only
+`initial_mass`):**
+
+1. **Change `Zbase` too, not just `initial_z`.** A metal-poor run needs
+   `initial_z = 0.00152` **and** `&kap Zbase = 0.00152` — a mismatched `Zbase` gives
+   inconsistent Type-2 opacities. Pick round Z values for clean labels: `structure.py`
+   derives [Fe/H] = log₁₀(Z / 0.0152), so Z=0.00152 → −1.00, Z=0.048 → +0.50 automatically.
+2. **Keep the TAMS stop** (unlike the 0.25 M☉ M dwarf) — a 1 M☉ star, even metal-poor, is
+   hotter/shorter-lived than solar and reaches central-H exhaustion in a few Gyr, so
+   `xa_central_lower_limit(h1)` fires normally.
+
+Everything else is identical: same image, same profile-column edit, same
+`profile_interval=25`, run detached (rates cache is already built from the earlier slices,
+so a second/third concurrent 1 M☉ run finishes in ~1–2 min). Ran −1.0 and −2.0 concurrently
+in separate work/LOGS dirs (`mp10`/`mp20`), then +0.5 (`mr05`).
+
+### Selection & shipped slices
+
+Five snapshots each, near-ZAMS → TAMS, matched to the solar slice's phase spread — mid-MS
+anchor selected by central Xc (the matched-phase discipline), not by age:
+
+| slice | dir | profiles | mid-MS anchor | ρ_c | T_c | R | envelope base |
+|---|---|---|---|---|---|---|---|
+| [Fe/H] = −1.0 | `1Msun_fehm1p0` | 8/9/10/11/13 | profile10 (Xc 0.36) | 394 (late-MS) | 2.0×10⁷ | 1.19 | 0.955 |
+| [Fe/H] = +0.5 | `1Msun_fehp0p5` | 8/9/10/11/13 | profile9  (Xc 0.39) | 181 | 1.74×10⁷ | 1.02 | 0.701 |
+
+**Runtime needed NO code change** — the index globs the tree and snaps on the header
+(mass, Z→[Fe/H], age), which already supported the [Fe/H] axis (snap mass → feh → age); the
+frontend already passes the marker's [Fe/H] and reports the snapped value. The accompanying
+changes are pure data + tests + a small frontend polish: a new `requires_structure_multifeh`
+marker (gated on a snapshot with |[Fe/H]| > 0.3 — so the test *skips*, not fails, on a
+solar-only checkout), one new test (`test_convective_envelope_shallows_as_metallicity_drops`
+— the matched-Xc monotone trend), a **[Fe/H]-snapped-far note** in `structure.js` (mirrors the
+mass one — the metallicity grid is only at 1 M☉, so a 6 M☉/[Fe/H]−1 request snaps to solar-Z
+and now says so), and the "conv. base" tooltip extended to explain the Z→envelope-depth link.
+**237 pytest** (was 236, +1). Playwright-verified 1440 px (the shaded band spans r/R 0.69→1.0
+at +0.5, a thin sliver at 0.97 at −1.0; zero console errors).
+
+**Next:** metallicity at *other masses* would need those masses' [Fe/H] runs (the grid is
+non-rectangular — only 1 M☉ has the Z axis today); or other-mass-Z combinations if a specific
+pedagogy calls for it. As always, verify the structural effect is *visible in the panel* first.

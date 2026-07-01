@@ -34,6 +34,7 @@ from .conftest import (
     requires_structure_data,
     requires_structure_lowmass,
     requires_structure_massive,
+    requires_structure_multifeh,
 )
 
 client = TestClient(app)
@@ -359,6 +360,68 @@ def test_fully_convective_mdwarf_hugs_the_n_onehalf_polytrope():
         assert abs(real - n15) < 0.05, f"r/R={frac}: real {real:.3f} not near n=1.5 {n15:.3f}"
         # ...and is much closer to n=1.5 than to n=3 (the honesty-inversion payoff).
         assert abs(real - n15) < abs(real - n3), f"r/R={frac}: real closer to n=3 than n=1.5"
+
+
+# --- the metallicity axis (the [Fe/H]=−1 / +0.5 slices at 1 M☉) --------------
+
+
+def _midms_envelope_base(feh, target_xc=0.35):
+    """The outer convective-envelope base r/R of the 1 M☉ snapshot at this [Fe/H]
+    whose central H is nearest `target_xc` — i.e. matched *evolutionary phase*, not
+    matched age. A metal-poor star is hotter and shorter-lived, so equal age ≠ equal
+    phase; comparing at equal Xc is the load-bearing discipline (recipe §10).
+
+    Returns (snapped_feh, center_h, envelope_base r/R, expected_n)."""
+    ages = sorted(
+        m.age_yr for m in _INDEX.available()
+        if m.mass_init == 1.0 and abs(m.feh - feh) < 0.01
+    )
+    assert ages, f"no 1 M☉ snapshots at [Fe/H]={feh}"
+    best = None
+    for a in ages:
+        s = interior_structure(1.0, feh, a)
+        xc = s["snapped"]["center_h"]
+        if best is None or abs(xc - target_xc) < abs(best[1] - target_xc):
+            best = (s, xc)
+    s, xc = best
+    surf = [z for z in s["convective_zones"] if z[1] > 0.99]
+    base = min(z[0] for z in surf) if surf else None
+    return s["snapped"]["feh"], xc, base, s["expected_n"]
+
+
+@requires_structure_multifeh
+def test_convective_envelope_shallows_as_metallicity_drops():
+    """The metallicity axis's whole payoff (the solar-abundance-problem effect): at a
+    matched main-sequence phase, a *lower* [Fe/H] gives a more transparent envelope, so
+    the convective envelope is **shallower** — its base sits at a *higher* r/R. The three
+    1 M☉ buckets form a clean monotone trend:
+
+        [Fe/H] = +0.5 : deepest envelope (base ≈ 0.70)
+        [Fe/H] =  0.0 : the Sun         (base ≈ 0.75)
+        [Fe/H] = −1.0 : a thin sliver   (base ≈ 0.95)
+
+    Unlike the mass axis, this is NOT a core-type flip — the core stays radiative
+    (expected_n = 3) in every bucket; the entire visible effect is the envelope depth."""
+    fp, _, base_rich, n_rich = _midms_envelope_base(0.5)
+    fz, _, base_sun, n_sun = _midms_envelope_base(0.0)
+    fm, _, base_poor, n_poor = _midms_envelope_base(-1.0)
+
+    # the three buckets are actually on grid (snapped near the requested [Fe/H]).
+    assert abs(fp - 0.5) < 0.05 and fz == 0.0 and fm == -1.0
+
+    # every bucket must have an outer convective envelope reaching the surface.
+    assert base_rich is not None and base_sun is not None and base_poor is not None
+
+    # the monotone trend: envelope deepens with metallicity (base rises as Z falls).
+    assert base_rich < base_sun < base_poor, (base_rich, base_sun, base_poor)
+
+    # and the metal-poor envelope is a genuine sliver, dramatically shallower than solar
+    # (a small numerical wobble in the solar base can't fake this ~0.2 gap).
+    assert base_poor > 0.90, base_poor
+    assert base_poor - base_sun > 0.1, (base_sun, base_poor)
+
+    # NOT a core-type flip — the core stays radiative at every metallicity (n=3).
+    assert n_rich == n_sun == n_poor == 3.0
 
 
 # --- the route ---------------------------------------------------------------
