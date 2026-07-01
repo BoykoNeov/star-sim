@@ -314,7 +314,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-nonthermal-sed-plan]]; plan `docs/plans/magnetic-ember-broadcast.md`.
 
 ### Interior structure (real MESA radial profiles — a **sibling**; the honest Lane–Emden successor)
-- **BUILT (1 M☉ solar slice — the first vertical, end-to-end).** `/structure` bypasses
+- **BUILT (1 M☉ solar + the 2/6 M☉ convective-core↔radiative-envelope FLIP).** `/structure` bypasses
   `PROVIDER` (like `/polytrope`, `/spectrum`): interior structure is a sibling, not a
   `StellarState`. `structure.py` reads offline MESA `profile.data` snapshots under
   `data/mesa_profiles/` (gitignored) with its **own** MESA-profile parser (never imports
@@ -329,8 +329,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   from the *core* type (radiative→3 / convective→3/2), not a fit. Frontend `structure.js`
   is a **live consumer** wired into `paintState` (own debounced latest-wins fetch); draws
   ρ bold + T/X thinner + dashed polytrope references + shaded convective bands, a snapshot
-  caption, a scalar readout, and a **snapped-far note** when the star is off-grid (today
-  everything snaps to 1 M☉ solar — honestly stated). **Why MESA-only/offline:** MIST ships
+  caption, a scalar readout, and a **snapped-far note** when the star is off-grid (snaps to
+  the nearest of the 1/2/6 M☉ slices — honestly stated). **Why MESA-only/offline:** MIST ships
   no radial profiles and a live solve is out of scope (§2/§9), so profiles are self-run once
   (Docker MESA, the solar recipe + profile snapshots — `backend/docs/mesa_structure_recipe.md`).
   **Measured (mid-MS, ≈ solar age):** ρ_c≈190 g/cm³, T_c≈1.66×10⁷ K, R≈1.06 R☉, radiative
@@ -338,10 +338,19 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   calibrated, hence loose test tolerances). Near-ZAMS shows a **real transient convective
   core** (MESA `mixing_type==1`, the early-MS ¹²C→¹⁴N-burning core before CN equilibrium) →
   an honest `expected_n=3/2` label flip, verified against the raw column, not an OR-clause
-  artifact. **9 tests** (`test_structure.py`, gated by `requires_structure_data`); 229 pytest
-  total. Playwright-verified 1440 + 390 px (zero console errors). **Next:** a 2/6 M☉ slice
-  (the convective-core↔radiative-envelope flip) drops in as another `data/mesa_profiles/`
-  dir with no code change. [[star-sim-interior-structure-mesa]].
+  artifact. The **2 & 6 M☉ slice** is the mirror — a **convective core** (CNO, centrally
+  peaked) under a **radiative envelope**, so `expected_n` flips to **3/2** and the envelope is
+  radiative at r/R≈0.9 (measured 6 M☉ mid-MS ρ_c≈16, T_c≈2.95×10⁷ K, R≈3.89 R☉, core r/R 0→0.131;
+  2 M☉ core 0→0.088). **NO runtime code change** (the index globs the tree, snaps on the header
+  mass/Z/age — "drops in as a bucket"); the accompanying change is data + tests: a new
+  `requires_structure_massive` marker (gated on a ≥4 M☉ slice so the flip test *skips* not fails
+  on a 1 M☉-only checkout), 3 flip tests, and one stale off-grid-snap test fixed (7.3 M☉ now snaps
+  to 6.0). The advisor semiconvection-OR caveat was re-checked at this slice → it doesn't bite (the
+  `mixing_type∪Schwarzschild` OR adds nothing beyond `mixing_type==1` here). Snapshot-selection is
+  the real risk (a massive convective core *shrinks toward TAMS* → deliberately kept a healthy
+  mid-MS Xc≈0.4 anchor). **12 tests** (`test_structure.py`); 232 pytest total. Playwright-verified
+  1440 px (6 M☉ B5 V, "convective core → canonical n = 3/2", zero console errors). **Next:** other-Z
+  or a 15 M☉ slice drops in the same way. [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
@@ -356,7 +365,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **229 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **232 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
@@ -373,11 +382,14 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   branch (M_ej<M_EJ_FAIL, ejected Ni→0, no plateau, faint-positive curve, non-expanding R₀
   photosphere), and Tier-3 linearity surviving the fallback dimming. Light-curve physics is
   unit-tested deterministically; the endgame→sibling→route path through the real provider.
-  The real interior-structure sibling adds **9** tests (`test_structure.py`, gated by
+  The real interior-structure sibling adds **12** tests (`test_structure.py`, gated by
   `requires_structure_data`): convective-envelope-over-radiative-core, order-of-SSM central
   values, monotone centrally-concentrated ρ, r/R spanning [0,1], canonical-polytrope overlay
   (n=3 more concentrated than n=1.5), honest age/mass snapping, and the `/structure` route +
-  422s.
+  422s; plus **3 flip tests** for the 2/6 M☉ slice (gated by `requires_structure_massive`, a
+  ≥4 M☉ slice so they *skip* not fail on a 1 M☉-only checkout): the 6 M☉ convective-core +
+  n=3/2 + radiative-envelope-at-r/R=0.9, the direct Sun↔6 M☉ *mirror* on the same two probe
+  radii, and the 2 M☉ core-convective check.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

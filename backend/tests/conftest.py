@@ -213,9 +213,32 @@ def structure_data_available() -> bool:
     return len(glob.glob(str(PROFILES_DATA_DIR / "**" / "profile*.data"), recursive=True)) > 0
 
 
+def structure_massive_available() -> bool:
+    """True if a *massive* (convective-core) interior-structure slice is present.
+
+    The 1 M☉ solar slice alone satisfies `structure_data_available()`, but the
+    convective-core ↔ radiative-envelope flip test needs an intermediate-mass run
+    (the 2/6 M☉ slice — see the recipe §6). Detect it by a snapshot whose initial
+    mass is well above the solar slice, so the flip test *skips* (not fails) on a
+    checkout that only has the 1 M☉ data."""
+    from star_sim.structure import _ProfileIndex, StructureDataMissing
+
+    try:
+        return any(m.mass_init >= 4.0 for m in _ProfileIndex().available())
+    except StructureDataMissing:
+        return False
+
+
 # The /structure (real MESA interior-structure) tests need offline MESA profile
 # snapshots — generated on the host, never committed (endgame's Lane-Emden successor).
 requires_structure_data = pytest.mark.skipif(
     not structure_data_available(),
     reason="no MESA profiles — see backend/docs/mesa_structure_recipe.md",
+)
+
+# The convective-core flip test additionally needs the massive (2/6 M☉) slice — the
+# 1 M☉ solar data alone would make it FAIL, not skip. See mesa_structure_recipe.md §6.
+requires_structure_massive = pytest.mark.skipif(
+    not structure_massive_available(),
+    reason="no massive MESA profile slice (2/6 M☉) — see backend/docs/mesa_structure_recipe.md §6",
 )

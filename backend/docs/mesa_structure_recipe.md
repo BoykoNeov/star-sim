@@ -137,11 +137,53 @@ a small **real convective core** (MESA `mixing_type = 1`; the transient early-MS
 ¹²C→¹⁴N-burning core, before CN equilibrium), so `expected_n = 3/2` there — an honest
 label flip across the snapshots, not a bug.
 
-## 6. Extending the grid (a 2/6 M☉ slice, other Z)
+## 6. The 2 & 6 M☉ slice (the convective-core ↔ radiative-envelope flip) — BUILT
 
-Same recipe, only `initial_mass` changes (and `initial_z`/`Zbase` for another [Fe/H]
-bucket). A 6 M☉ run would show the **convective core ↔ radiative envelope** flip (the
-opposite of the Sun), the natural next pedagogy. Drop the new `profile*.data` under
-another `data/mesa_profiles/<run>/` dir — the `structure.py` index globs the whole
-tree and snaps on the true header (mass, Z, age), so **no code change** is needed
-(the same "drops in as another bucket" property as the MESA history provider).
+The natural next pedagogy is the **mirror of the Sun**: an intermediate-mass star has a
+**convective core** (CNO burning, ε ∝ T¹⁶⁻¹⁸, is fiercely centrally peaked) under a
+**radiative envelope** — the opposite of the 1 M☉ radiative-core/convective-envelope
+case. Both 2 and 6 M☉ show it (6 M☉ most dramatically).
+
+Same recipe, only `initial_mass` changes (`= 2.0` / `6.0`; same `Z=0.0152`, same TAMS
+stop). Two operational notes learned building it:
+
+- **Compile each work dir** (`./mk` builds `star` *into that dir*; the stock `rn` runs
+  `./star`). Run them in **separate work/LOGS dirs** so the second run doesn't clobber
+  the first's snapshots.
+- **Snapshot selection matters more than for the Sun.** A massive-star convective core
+  is largest mid-MS and *shrinks toward TAMS* (near-TAMS it can vanish — the 2 M☉ core
+  is already gone by the central-H-exhausted profile). So keep at least one clearly
+  **mid-MS** profile (Xc ≈ 0.4–0.5, central `mixing_type == 1`) where the core is
+  healthy — don't just span ZAMS→TAMS by age or the very feature the slice exists to
+  show can be missing. Inspect the central mixing type before copying:
+
+  ```bash
+  # per profile: model, age, central Xc (col 7), central mixing_type (col 15, last row)
+  for f in LOGS/profile*.data; do read xc mt <<< "$(tail -1 $f | awk '{print $7,$15}')";
+    echo "$f Xc=$xc centralMix=$mt"; done   # centralMix=1 -> convective core
+  ```
+
+Drop the new `profile*.data` under another `data/mesa_profiles/<run>/` dir — the
+`structure.py` index globs the whole tree and snaps on the true header (mass, Z, age),
+so the **runtime** needs **no code change** (the "drops in as another bucket" property).
+The accompanying change is a test (`test_structure.py`, the flip locked under
+`requires_structure_massive` — gated on a ≥4 M☉ slice so it *skips*, not fails, on a
+1 M☉-only checkout) and this measured record — plus the one stale test whose off-grid
+mass now snaps to 6 M☉ instead of 1 M☉.
+
+### Measured result (the shipped 2 & 6 M☉ slices)
+
+Five snapshots each, near-ZAMS → TAMS (profiles 13/15/16/18/21 for 2 M☉,
+15/16/17/19/22 for 6 M☉). Central `mixing_type == 1` (a real convective core) holds
+across the MS for both.
+
+| slice | mid-MS snapshot | Xc | ρ_c | T_c | R | convective core (r/R) | envelope |
+|---|---|---|---|---|---|---|---|
+| 2 M☉ | profile16 | 0.39 | 71 g/cm³ | 2.3×10⁷ K | 2.07 R☉ | 0 → 0.088 | radiative (n=3/2 core) |
+| 6 M☉ | profile17 | 0.41 | 16 g/cm³ | 3.0×10⁷ K | 3.89 R☉ | 0 → 0.131 | radiative (n=3/2 core) |
+
+So `expected_n` **flips to 3/2** (the innermost zone is convective) and the envelope is
+radiative at r/R = 0.9 — the exact mirror of the 1 M☉ Sun (radiative core, `expected_n
+= 3`, convective envelope reaching the surface). Massive stars still carry a **razor-thin
+sub-surface convection sliver** (e.g. 6 M☉ r/R ≈ 0.994–0.997, an opacity-bump zone); that
+is *not* a deep envelope, so the flip test probes the bulk envelope at r/R = 0.9.

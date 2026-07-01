@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1 M☉ solar slice built end-to-end)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6 M☉ slices; the convective-core↔radiative-envelope flip built)"
 metadata: 
   node_type: memory
   type: project
@@ -11,9 +11,9 @@ The **real interior-structure** feature — the honest successor to the Lane–E
 ([[star-sim-phase3-lane-emden]]). Where Lane–Emden gives an *idealized* static polytrope
 from an index `n`, this serves a **real** radial structure of the selected star from an
 offline MESA `profile.data` snapshot, and overlays the canonical polytropes so you can see
-how good the idealization is. **Built as one vertical slice: 1 M☉ solar, end-to-end**
-(picked over a broad grid per advisor — prove the chain first). ROADMAP row flipped
-idea→done. 229 pytest.
+how good the idealization is. **Built end-to-end: 1 M☉ solar first (prove the chain per
+advisor), then the 2 & 6 M☉ slice — the convective-core↔radiative-envelope FLIP.** ROADMAP
+row flipped idea→done. 232 pytest.
 
 ## Architecture (a §3 sibling, like lane_emden/spectra)
 - `backend/star_sim/structure.py` + `/structure?mass=&feh=&age=` route (in `api.py`, right
@@ -58,7 +58,9 @@ idea→done. 229 pytest.
   header (line 3) carries `star_age`/`model_number`, so age-snapping needs NO `profiles.index`.
   profile.data shares history.data's 6-line-header format.
 - Recipe: `backend/docs/mesa_structure_recipe.md`. Profiles gitignored under
-  `data/mesa_profiles/solar_1Msun/` (5 snapshots ZAMS→TAMS: profile 8/9/10/11/13).
+  `data/mesa_profiles/solar_{1,2,6}Msun/` (5 snapshots each, ZAMS→TAMS). **2/6 M☉ gotcha:
+  `./mk` builds `star` INTO each work dir (stock `rn` runs `./star`) — compile every dir, use
+  SEPARATE work/LOGS dirs so runs don't clobber. Ran both concurrently detached (~4–5 min each).**
 
 ## Measured / gotchas
 - Mid-MS (≈ solar age, profile 10): **ρ_c≈190 g/cc, T_c≈1.66e7 K, R≈1.06 R☉**, radiative core
@@ -75,11 +77,34 @@ idea→done. 229 pytest.
 - **Port gotcha:** a stale uvicorn from a prior session held :8000 (no `/structure` route → 404
   looked like a bug); used :8010. Don't assume :8000 is your fresh server.
 
-**Next:** a 2/6 M☉ slice (the convective-core↔radiative-envelope flip — 6 M☉ is the opposite of
-the Sun) drops in as another `data/mesa_profiles/<run>/` dir with **no code change** (the index
-globs the tree and snaps on the true header mass/Z/age). See ROADMAP + [[star-sim-roadmap]].
-**Advisor caveat to re-check then:** `_convective_mask` ORs `mixing_type==1` with Schwarzschild
-`gradr>grada` — clean for the 1 M☉ slice, but in a μ-gradient region a zone can be Schwarzschild-
-unstable yet **Ledoux-stable** (MESA calls it radiative/semiconvective, mixing_type 0/3), where
-the OR would over-shade. The convective-core slice is exactly where semiconvection appears, so
-re-verify the shading against `mixing_type` there (or drop the OR to mixing_type-only).
+## The 2 & 6 M☉ flip (BUILT — the mirror of the Sun)
+- Intermediate-mass MS star = **convective core** (CNO ε∝T¹⁶⁻¹⁸, centrally peaked) under a
+  **radiative envelope** — the exact opposite of the 1 M☉ case. Runtime needed **NO code
+  change** (index globs the tree, snaps on the true header mass/Z/age — the "drops in as a
+  bucket" property). The accompanying changes: a **new data marker** `requires_structure_massive`
+  (conftest, gated on a ≥4 M☉ slice so the flip test SKIPS not FAILS on a 1 M☉-only checkout —
+  `requires_structure_data` alone is satisfied by the Sun), **3 flip tests** (6 M☉ convective-
+  core+n=3/2+radiative-envelope-at-r/R=0.9; the direct Sun-vs-6M☉ mirror on the same two probe
+  radii; 2 M☉ also core-convective), and **one stale test fixed** (`test_out_of_grid_mass_snaps`
+  — off-grid 7.3 M☉ used to snap to 1.0, now snaps to 6.0; rewrote to assert snap-to-min-saved).
+- **Snapshot-selection is the real risk** (advisor): a massive-star convective core is largest
+  mid-MS and **shrinks toward TAMS** (the 2 M☉ core is already gone at central-H-exhausted). So
+  deliberately kept a healthy **mid-MS** anchor (Xc≈0.4, central `mixing_type==1`): 6 M☉ profile17
+  (Xc 0.41), 2 M☉ profile16 (Xc 0.39) — checked central mixing_type before copying, don't just
+  span by age. Measured mid-MS: 6 M☉ ρ_c≈16/T_c≈2.95e7/R≈3.89, core r/R 0→0.131; 2 M☉ ρ_c≈71/
+  T_c≈2.26e7/R≈2.07, core 0→0.088. `expected_n` flips to **3/2**; envelope radiative at r/R=0.9.
+- **The semiconvection caveat did NOT bite** — checked across the FULL slice incl. the near-TAMS
+  snapshots where it's worst (advisor caught that mid-MS is the *weakest* test: the Ledoux-stable
+  μ-gradient is left behind by a *receding* core, so it grows toward TAMS). Compared
+  `mixing_type==1` vs `gradr>grada` vs the served OR on 6 M☉ profile17/19/22 and 2 M☉ profile16/18/21:
+  the OR adds **at most 1–2 cells**, and **every one is at r/R > 0.98** — a boundary cell of the thin
+  near-surface convection sliver, **never a mid-radius shell** in the μ-gradient between the receding
+  core (r/R≈0.05–0.13) and the envelope. So no over-shading of a Ledoux-stable region anywhere on the
+  slice → **no change to the OR**. (Confirms the likely cause: the inlist used **default MESA
+  (Schwarzschild, Ledoux off)**, so `mixing_type` *is* the Schwarzschild test and the OR is a near
+  no-op by construction.) If a future run enables Ledoux and DOES show a spurious mid-radius shell,
+  drop the OR to mixing_type-only.
+- Playwright-verified 1440 px: 6 M☉ B5 V, caption "6 M☉ … convective core → canonical n = 3/2",
+  core shading at r/R 0→0.13, X(r) flat-then-rising (mixed-core signature), zero console errors.
+
+**Next:** other-Z buckets or a 15 M☉ slice drop in the same way. See ROADMAP + [[star-sim-roadmap]].

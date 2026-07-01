@@ -28,9 +28,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from star_sim.api import app
-from star_sim.structure import interior_structure
+from star_sim.structure import _INDEX, interior_structure
 
-from .conftest import requires_structure_data
+from .conftest import requires_structure_data, requires_structure_massive
 
 client = TestClient(app)
 
@@ -143,10 +143,81 @@ def test_snaps_to_nearest_saved_age_and_reports_true_values():
 @requires_structure_data
 def test_out_of_grid_mass_snaps_not_extrapolates():
     """A far-off-grid mass snaps to the nearest available run and reports that run's
-    TRUE mass — never a silently extrapolated value (§3/§6 honesty). With only the
-    1 M☉ slice on disk, any mass returns the 1 M☉ structure, honestly labeled."""
-    s = interior_structure(7.3, 0.0, 1.0e8)
-    assert s["snapped"]["mass_msun"] == 1.0
+    TRUE mass — never a silently extrapolated value (§3/§6 honesty). The snapped mass
+    is whatever slice is closest and on disk (1 M☉ alone, or the nearest of the
+    1/2/6 M☉ grid), and it is always one of the *saved* masses, never an interpolant."""
+    s = interior_structure(0.3, 0.0, 1.0e8)          # far below the grid floor
+    masses = {m.mass_init for m in _INDEX.available()}
+    assert s["snapped"]["mass_msun"] in masses
+    assert s["snapped"]["mass_msun"] == min(masses)   # snaps to the lightest saved run
+
+
+# --- the convective-core <-> radiative-envelope flip (the 2/6 M☉ slice) -------
+
+def _conv_at(zones, frac):
+    """True if radius fraction `frac` falls inside a convective zone."""
+    return any(a <= frac <= b for a, b in zones)
+
+
+@requires_structure_massive
+def test_massive_star_flips_to_convective_core_radiative_envelope():
+    """The whole point of the 2/6 M☉ slice: an intermediate-mass MS star is the
+    *mirror* of the Sun — a **convective core** (CNO burning is fiercely
+    temperature-sensitive) under a **radiative envelope**. So at mid-MS the flip
+    must show on the served data:
+
+      * the innermost zone is convective  -> the canonical overlay is n=3/2,
+      * a convective zone is anchored at the centre and is a sizeable fraction of R,
+      * the envelope is radiative: no *deep* convective envelope like the Sun's
+        (a razor-thin sub-surface convection sliver is allowed, but the bulk of the
+        outer star at r/R≈0.9 must be radiative — the opposite of the 1 M☉ case).
+
+    Uses the mid-MS 6 M☉ snapshot (Xc≈0.4), where a massive-star convective core is
+    at its healthiest — it shrinks toward TAMS (see mesa_structure_recipe.md §6)."""
+    s = interior_structure(6.0, 0.0, 3.4e7)
+    assert s["snapped"]["mass_msun"] == 6.0
+
+    # core convective -> n=3/2 (fully-mixed adiabatic core), the flipped overlay hint.
+    assert s["convective"][0] is True, "a 6 M☉ MS star has a convective core"
+    assert s["expected_n"] == 1.5
+
+    zones = s["convective_zones"]
+    core = [z for z in zones if z[0] < 0.02]
+    assert core, f"expected a convective core anchored at r/R~0, got {zones}"
+    assert core[0][1] > 0.05, f"convective core should be a sizeable fraction of R: {core}"
+
+    # radiative envelope: r/R=0.9 must be radiative (the Sun is convective there).
+    assert not _conv_at(zones, 0.9), f"6 M☉ envelope should be radiative at r/R=0.9: {zones}"
+
+
+@requires_structure_massive
+def test_flip_is_the_mirror_of_the_solar_case():
+    """Directly contrast the 6 M☉ flip against the 1 M☉ Sun on the SAME two probe
+    radii — the pedagogy the slice exists to teach, locked as a regression:
+
+        core (r/R≈0)      envelope (r/R≈0.9)
+      Sun (1 M☉):  radiative           convective
+      6 M☉      :  convective          radiative      <- mirrored
+    """
+    sun = interior_structure(1.0, 0.0, 4.6e9)
+    massive = interior_structure(6.0, 0.0, 3.4e7)
+
+    assert sun["convective"][0] is False and massive["convective"][0] is True
+    assert sun["expected_n"] == 3.0 and massive["expected_n"] == 1.5
+    assert _conv_at(sun["convective_zones"], 0.9) is True       # Sun: deep convective envelope
+    assert _conv_at(massive["convective_zones"], 0.9) is False  # 6 M☉: radiative envelope
+
+
+@requires_structure_massive
+def test_intermediate_mass_also_has_a_convective_core():
+    """The 2 M☉ slice sits at the low-mass end of the convective-core regime (just
+    above the ~1.1 M☉ onset) — it too has a convective core under a radiative
+    envelope, a milder version of the 6 M☉ flip. Guards the whole 1/2/6 progression."""
+    s = interior_structure(2.0, 0.0, 5.0e8)
+    assert s["snapped"]["mass_msun"] == 2.0
+    assert s["convective"][0] is True
+    assert s["expected_n"] == 1.5
+    assert not _conv_at(s["convective_zones"], 0.9), "2 M☉ envelope should be radiative at r/R=0.9"
 
 
 # --- the route ---------------------------------------------------------------
