@@ -738,6 +738,13 @@ export function createStar(canvas) {
 
   const clock = new THREE.Clock();
   let raf = 0;
+  // The fireball boils on its OWN accumulated clock, not the raw elapsed time, so its
+  // turbulence can slow to a HALT as the ejecta thin: the late-time remnant nebula is a
+  // frozen, static filamentary shell — the expanding gas has cooled and stopped churning —
+  // while the young fireball still boils at full rate. We advance this by dt·(1−uFade²), so
+  // it runs at full speed young (uFade 0) and freezes at the end (uFade 1).
+  let fireballTime = 0;
+  let lastElapsed = 0;
   function animate() {
     resize();
     // Drive time from a real clock so boil/rotation speed is frame-rate
@@ -750,8 +757,15 @@ export function createStar(canvas) {
       windMat.uniforms.uTime.value = t;
       applyWindScale();
     }
-    // The SN fireball boils from the same clock (the remnant dot is static — no uTime).
-    if (fireball.visible) fireballMat.uniforms.uTime.value = t;
+    // The SN fireball boils on its own clock that slows to a stop as uFade→1, so the final
+    // remnant shell is STATIC (the remnant dot is always static — no uTime).
+    const dt = t - lastElapsed;
+    lastElapsed = t;
+    if (fireball.visible) {
+      const fade = fireballMat.uniforms.uFade.value;
+      fireballTime += dt * (1 - fade * fade);
+      fireballMat.uniforms.uTime.value = fireballTime;
+    }
     renderer.render(scene, camera);
     raf = requestAnimationFrame(animate);
   }

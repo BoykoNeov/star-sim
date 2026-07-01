@@ -388,3 +388,12 @@ pass is what catches it. Playwright-verified (`#star-canvas` element shots, 1440
 0 console errors): NS late = filamentary red shell + dot through the hollow centre;
 **BH-fallback = same shell, NO dot** (real SN, invisible BH remnant); **failed = dim
 ball, no shell, winks out**. Repro scripts `M:/claud_projects/temp/sn-nebula/`.
+
+**Static-remnant follow-up:** user asked the late remnant SURFACE to be static (the
+frozen SNR shell shouldn't keep boiling). Fix (frontend-only, `star.js` animate loop):
+the fireball now boils on its OWN accumulated `fireballTime` (not the raw
+`clock.getElapsedTime()`), advanced each frame by `dt·(1 − uFade²)` — full boil young
+(uFade 0), frozen at the end (uFade 1). So the young fireball still churns and the
+late-time filamentary shell holds perfectly still. Verified with a pixel-hash pair
+(two `#star-canvas` shots 1.2 s apart): explosion frame MOVING, late frame STATIC
+(identical hash), 0 console errors. The remnant dot was already static (no uTime).
