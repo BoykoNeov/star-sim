@@ -306,3 +306,26 @@ you doesn't start Ia off the wrong branch or imply a lone star can do it.
 When this is picked up: write a real plan doc (sibling to
 `docs/plans/smoldering-cinder-gateway.md`), and update `docs/plans/ROADMAP.md`
 from "idea" as it gets designed.
+
+**Post-arc UX polish (2026-07-01):** three user-reported SN-view fixes, frontend-only
+(220 pytest unchanged, Playwright-verified 1440 + 390 px, zero console errors).
+(1) **Scale bar in SN mode** (`scale.js`, which lives in the star panel): `update(state,
+opts)` now takes `{endgame:"sn", failed, axisMaxRsun}`; `sn` is re-derived every call so
+absence auto-reverts to the normal axis (no stranded SN bounds — the advisor's state-leak
+trap; `logLo`/`logHi` are mutable, `LOG_LO`/`LOG_HI` stay const). SN mode **widens the log
+axis** to fit the fireball's PEAK radius (~180k R☉ ≈ 800+ AU for a normal SN — passed from
+`refreshSN` as `max(snModel.states.R_rsun)`), swaps to OUTER-planet orbit landmarks (curated
+Mercury/Earth/Jupiter/Saturn/Neptune; **body-radius dots dropped** — invisibly tiny at AU
+scale), and replaces the WRONG "This giant … swallows orbits" caption (the core complaint —
+an SN photosphere isn't a giant star and swells FAR past Jupiter) with an honest AU one
+("The expanding fireball is now N R☉ ≈ M AU across — already past Neptune's orbit…"). A
+**failed** SN → "This failing supergiant … does not explode outward — it implodes … fades"
+(stays at R₀, no fireball). Marker pill = "fireball · M AU" (or "supergiant · N R☉" failed);
+it **rides the axis** as it grows (264 AU early → 816 AU late) instead of pinning to the
+edge. `valueTicks()` now generates powers of 10 inside the live span (auto 1e4/1e5 in SN,
+0.01…1000 normal). (2) **Light-curve overlay labels** (`hr.js`): moved from ON the curves
+(obscured by the path — the complaint) to a compact **top-right legend** (`drawSNLegend`)
+that ALSO names the model's own two lines (L_total solid white, L_radio dashed amber —
+previously unlabeled); shifts down (`y0 = PAD + (failed?42:8)`) to clear the failed-SN
+top-centre banner. (3) **Rotation track toggle** — see [[star-sim-rotation-subpop-atlas]]:
+now HIDDEN below the Kraft break instead of greyed (confusing next to the period slider).

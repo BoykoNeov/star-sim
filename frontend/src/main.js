@@ -1288,28 +1288,33 @@ async function fetchRotStatus(mass, feh) {
 }
 
 // Render the UNIFIED rotation control (rotation Chunk 3 unify) — one control, two
-// regime-gated facets, each shown only where it's honest (the user-settled design):
+// regime-gated facets, each shown only where it's honest:
 //
 //   * Track facet (the vvcrit toggle): shown where a rotating grid covers this [Fe/H]
-//     (`has_grid`), GREYED where rotation is a data-derived no-op (below the Kraft break,
-//     where the rotating track is bit-identical — `!active`), ENABLED where toggling
-//     changes the track. Its effect is the evolutionary track (HR / composition).
+//     (`has_grid`) AND toggling actually changes the track (`active`, i.e. above the ~1.2 M☉
+//     Kraft break). Below the break it is a data-derived no-op (the rotating track is
+//     bit-identical), so it is HIDDEN, not greyed — a greyed dead knob next to the live period
+//     slider was confusing (user feedback; supersedes the earlier greyed-not-hidden design).
 //   * Activity facet (the period slider, sed.js's #sed-rot): shown only in the cool
 //     main-sequence dynamo regime (`sed.rotationAllowed()`), where the rotation period
 //     sets the coronal X-ray line on the SED. sed.js owns the slider + draws the line.
 //
-// The two regimes barely overlap, so usually one facet shows; at the Sun BOTH do (the
-// track facet greyed/no-op, the activity facet live). The whole control hides inside an
+// The two regimes barely overlap, so usually one facet shows; at the Sun ONLY the activity
+// facet shows (the track facet is a no-op there → hidden). The whole control hides inside an
 // endgame or where NEITHER facet is honest (e.g. a cool giant) — absent, not a dead knob.
 function updateRotControl() {
   const c = els.rotControl;
   if (!c) return;
   if (mode !== "live") { c.hidden = true; return; }
-  const showToggle = !!rotStatus.has_grid;
-  const active = !!rotStatus.active;
-  // VISIBILITY of the period facet = the cool-MS family (stable across an age scrub, so no
-  // mid-drag reflow above the Age slider); sed.js greys it per-age via rot.sync(). Both
-  // facets are now track-stable, so updateRotControl() on an age scrub never changes height.
+  // Show the track toggle ONLY where it actually changes the track (above the ~1.2 M☉ Kraft
+  // break, `active`) — NOT greyed below it. A greyed, no-op toggle sitting under the same
+  // "Rotation" header as the live period slider (e.g. at the Sun) read as a confusing dead
+  // knob; hiding it matches this control's own "absent, not a dead knob" philosophy and
+  // leaves just the self-labeled "Rotation period" slider. (`active` is mass/[Fe/H]-derived,
+  // stable across an age scrub, so this never causes a mid-drag reflow above the Age slider.)
+  const showToggle = !!(rotStatus.has_grid && rotStatus.active);
+  // VISIBILITY of the period facet = the cool-MS family (also track-stable); sed.js greys it
+  // per-age via rot.sync(). Both facets are track-stable, so an age scrub never changes height.
   const showPeriod = coolDynamoFamily();
   c.hidden = !(showToggle || showPeriod);
   // -- track facet --
@@ -1317,18 +1322,11 @@ function updateRotControl() {
   els.rotNote.hidden = !showToggle;
   if (showToggle) {
     els.rotToggle.checked = rotationOn;
-    els.rotToggle.disabled = !active;
-    els.rotToggleRow.classList.toggle("disabled", !active);
-    if (!active) {
-      const thr = rotStatus.threshold_msun;
-      els.rotNote.textContent = thr
-        ? `Track unchanged: rotation is negligible below ~${fmt(thr)} M☉ (magnetic braking).`
-        : "Track unchanged: rotation is negligible for this star.";
-    } else {
-      els.rotNote.textContent = rotationOn
-        ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
-        : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
-    }
+    els.rotToggle.disabled = false;                       // shown ⇒ always live now
+    els.rotToggleRow.classList.remove("disabled");        // clear any stale greyed styling
+    els.rotNote.textContent = rotationOn
+      ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
+      : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
   }
   // -- activity facet -- (sed.js syncs the slider/note internally via rot.sync())
   els.sedRot.hidden = !showPeriod;
@@ -1697,7 +1695,7 @@ function renderSNReadout(s) {
       "effective temperature of the photosphere — hot at first, cooling as the ejecta expand",
       `${fmt(s.Teff_K, 4)} K`],
     ["Photosphere R",
-      "radius of the expanding photosphere (R = v·t, homologous) — it swells to hundreds of AU within months (the true-size scale bar pins to the right)",
+      "radius of the expanding photosphere (R = v·t, homologous) — it swells to hundreds of AU within months (the true-size scale bar widens to show it dwarfing the planetary orbits)",
       `${fmt(s.R_rsun)} R☉`],
     ["Ejecta velocity",
       "the characteristic homologous expansion speed √(2E/M_ej) — a few thousand km/s, set by the energy and the ejecta mass",
@@ -1736,7 +1734,10 @@ function refreshSN() {
   const snFade = failed ? smoothstep01(0.0, 0.6, dayFrac) : smoothstep01(0.55, 1.0, dayFrac);
   star.update(s, { endgame: "sn", remnant: snModel.remnant_type, failed, snGrow, snFade });
   classification.update(s, "sn", { failed });   // expanding-photosphere label (failed → direct-collapse)
-  scale.update(s);                     // true size — the photosphere swells to ~AU scale
+  // true size — the fireball swells to ~AU scale; pass the model's PEAK radius so the scale
+  // bar widens its axis to fit it (past Neptune) instead of pinning the marker to the edge.
+  const snAxisMaxR = snModel.states.reduce((m, st) => Math.max(m, st.R_rsun || 0), 0);
+  scale.update(s, { endgame: "sn", failed, axisMaxRsun: snAxisMaxR });
   hr.update(s);                        // the marker on the light curve (hr is in SN mode)
   comp.update(s);                      // no-op in SN mode (the onion is static, set by applySNModel)
   sed.update(s, { endgame: "sn", failed });   // blackbody only (failed → non-expanding caption)

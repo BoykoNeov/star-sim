@@ -49,8 +49,20 @@ const ORBITS = [
   { au: 5.2026, name: "Jupiter" },
 ].map((o) => ({ r: o.au * RSUN_PER_AU, name: o.name }));
 
-// Decade value labels along the bottom (R_sun).
-const VALUE_TICKS = [0.01, 0.1, 1, 10, 100, 1000];
+// SN-mode orbit landmarks — a supernova's expanding fireball reaches AU scale (hundreds of
+// AU within months), FAR past Jupiter's orbit, so the normal strip pins its marker to the
+// right edge and reads as broken. SN mode widens the axis and swaps in the OUTER solar
+// system (Saturn, Neptune) so "past Neptune's orbit" is SHOWN, not just claimed. A curated
+// 5 (Venus/Mars/Uranus dropped) so the inner cluster doesn't crush on the widened log axis.
+const ORBITS_SN = [
+  { au: 0.3871, name: "Mercury" },
+  { au: 1.0,    name: "Earth" },
+  { au: 5.2026, name: "Jupiter" },
+  { au: 9.5388, name: "Saturn" },
+  { au: 30.07,  name: "Neptune" },
+].map((o) => ({ r: o.au * RSUN_PER_AU, name: o.name }));
+const MERCURY_R = ORBITS_SN[0].r;                      // ~83 R☉ — the inner-orbit anchor
+const NEPTUNE_R = ORBITS_SN[ORBITS_SN.length - 1].r;   // ~6466 R☉ — the outer-planet edge
 
 const COL_GRID = "#283149";
 const COL_LABEL = "#8a93a6";
@@ -87,17 +99,37 @@ export function createScale(canvas) {
   plotW = W - PAD_L - PAD_R;
 
   let R = null, css = "#ffffff";
+  // SN mode is re-derived from opts on EVERY update() (see update): absence auto-reverts to
+  // the normal axis, so returning to a living star needs no manual reset (no stranded SN
+  // bounds — the state-leak trap). `logLo`/`logHi` are the ACTIVE axis bounds; SN widens
+  // them to fit the AU-scale fireball, the normal star uses the fixed LOG_LO/LOG_HI.
+  let sn = false, snFailed = false;
+  let logLo = LOG_LO, logHi = LOG_HI;
 
   // log position, clamped to the plot so an off-axis star still pins to an edge.
   const xOf = (r) => {
-    const f = (Math.log10(r) - LOG_LO) / (LOG_HI - LOG_LO);
+    const f = (Math.log10(r) - logLo) / (logHi - logLo);
     return PAD_L + Math.max(0, Math.min(1, f)) * plotW;
   };
 
-  function update(state) {
+  function update(state, opts) {
     if (!state || state.R_rsun == null) return;
     R = state.R_rsun;
     css = teffToCSS(state.Teff_K);
+    sn = !!(opts && opts.endgame === "sn");
+    snFailed = !!(opts && opts.failed);
+    if (sn) {
+      // Fit the axis to the model's PEAK fireball radius (passed once per model via
+      // axisMaxRsun) so the marker rides the strip as it expands instead of pinning; keep
+      // the outer orbits on-scale (hiR clears Neptune) so the "past Neptune" reach is shown.
+      // loR anchors the inner solar system at the left edge.
+      const maxR = (opts && opts.axisMaxRsun) || R;
+      logLo = Math.log10(MERCURY_R / 2);
+      logHi = Math.log10(Math.max(maxR, NEPTUNE_R) * 1.25);
+    } else {
+      logLo = LOG_LO;
+      logHi = LOG_HI;
+    }
     draw();
     renderCaption();
   }
@@ -125,7 +157,7 @@ export function createScale(canvas) {
 
     // Decade gridlines + value labels.
     ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center";
-    for (const v of VALUE_TICKS) {
+    for (const v of valueTicks()) {
       const x = xOf(v);
       ctx.strokeStyle = COL_GRID; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, ORBIT_TOP); ctx.lineTo(x, BODY_BOT); ctx.stroke();
@@ -139,20 +171,31 @@ export function createScale(canvas) {
     ctx.beginPath(); ctx.moveTo(PAD_L, AXIS_Y); ctx.lineTo(W - PAD_R, AXIS_Y); ctx.stroke();
 
     drawOrbits();
-    drawBodies();
+    if (!sn) drawBodies();   // at AU scale a body's RADIUS (even the Sun's) is an invisible dot
     drawMarker(xs);
 
     // Axis title.
     ctx.fillStyle = COL_LABEL; ctx.font = "10px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("true size — radius in solar radii (R☉), log scale", W / 2, H - 4);
+    ctx.fillText(sn
+      ? "the expanding fireball — radius in R☉ (log); planet orbits mark the scale"
+      : "true size — radius in solar radii (R☉), log scale", W / 2, H - 4);
     ctx.textAlign = "left";
+  }
+
+  // Decade value labels: every power of 10 inside the current axis span, so the SN-widened
+  // axis auto-adds 1e4/1e5 and the normal axis stays 0.01…1000 (the old static VALUE_TICKS).
+  function valueTicks() {
+    const out = [];
+    for (let k = Math.ceil(logLo); k <= Math.floor(logHi); k++) out.push(10 ** k);
+    return out;
   }
 
   // Orbits ABOVE the axis: a faint "planet orbits" bracket over the cluster, open
   // rings on the axis, and staggered (2-row) collision-skipped labels.
   function drawOrbits() {
-    const xl = xOf(ORBITS[0].r), xr = xOf(ORBITS[ORBITS.length - 1].r);
+    const orbits = sn ? ORBITS_SN : ORBITS;
+    const xl = xOf(orbits[0].r), xr = xOf(orbits[orbits.length - 1].r);
     // Bracket (the SED "detailed spectrum" idiom): groups the cluster AND tells the
     // reader these are orbits — disambiguating "Earth" (orbit, 215 R☉) above from
     // "Earth" (body, 0.009 R☉) below.
@@ -166,7 +209,7 @@ export function createScale(canvas) {
 
     ctx.font = "10px system-ui, sans-serif";
     const rowRight = [-1e9, -1e9];      // last label's right edge, per stagger row
-    ORBITS.forEach((o, i) => {
+    orbits.forEach((o, i) => {
       const x = xOf(o.r);
       ctx.strokeStyle = COL_ORBIT; ctx.globalAlpha = 0.85; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, AXIS_Y); ctx.lineTo(x, ORBIT_TOP + 3); ctx.stroke();
@@ -210,7 +253,11 @@ export function createScale(canvas) {
     ctx.beginPath(); ctx.moveTo(x, ORBIT_TOP - 2); ctx.lineTo(x, BODY_BOT + 2); ctx.stroke();
     ctx.globalAlpha = 1;
 
-    const txt = `this star · ${fmtRsun(R)} R☉`;
+    const txt = sn
+      ? (snFailed
+          ? `supergiant · ${fmtRsun(R)} R☉`
+          : `fireball · ${fmtAU(R / RSUN_PER_AU)} AU`)
+      : `this star · ${fmtRsun(R)} R☉`;
     ctx.font = "11px system-ui, sans-serif";
     const tw = ctx.measureText(txt).width;
     const pad = 6, ph = 18, pw = tw + 2 * pad;
@@ -229,7 +276,42 @@ export function createScale(canvas) {
   // labels can't all fit).
   function renderCaption() {
     if (!caption || R == null) return;
-    caption.textContent = describe(R);
+    caption.textContent = sn ? describeSN(R, snFailed) : describe(R);
+  }
+
+  // Format an AU value compactly: "0.84", "5.2", "30", "837".
+  function fmtAU(au) {
+    if (au >= 10) return Math.round(au).toString();
+    if (au >= 1) return (Math.round(au * 10) / 10).toString();
+    return parseFloat(au.toPrecision(2)).toString();
+  }
+
+  // The SN caption: the honest "expanding fireball" framing (NOT the "this giant" star line —
+  // an SN photosphere is not a star, and it swells FAR past Jupiter's orbit, out to hundreds
+  // of AU). Given in AU + the outer-planet orbit it has reached. A FAILED SN does not expand
+  // (it implodes at R₀), so its caption says so instead of inventing a fireball.
+  function describeSN(r, failed) {
+    const au = r / RSUN_PER_AU;
+    const sz = `${fmtRsun(r)} R☉ ≈ ${fmtAU(au)} AU`;
+    if (failed) {
+      return `This failing supergiant (${sz}) does not explode outward — it implodes. It ` +
+        `stays roughly the size of a red supergiant and simply fades from view as the core ` +
+        `collapses to a black hole.`;
+    }
+    const engulfed = ORBITS_SN.filter((o) => r >= o.r);
+    const beyond = ORBITS_SN.find((o) => r < o.r);
+    let reach;
+    if (!engulfed.length) {
+      reach = "already larger than the inner planets' orbits";
+    } else {
+      const outer = engulfed[engulfed.length - 1].name;
+      reach = beyond
+        ? `already engulfing ${outer}'s orbit and reaching toward ${beyond.name}'s ` +
+          `(${fmtAU(beyond.r / RSUN_PER_AU)} AU)`
+        : `already past ${outer}'s orbit — out beyond the entire planetary system`;
+    }
+    return `The expanding fireball is now ${sz} across — ${reach}. The ejecta race outward ` +
+      `at thousands of km/s, swelling past the planets within months.`;
   }
 
   function describe(r) {

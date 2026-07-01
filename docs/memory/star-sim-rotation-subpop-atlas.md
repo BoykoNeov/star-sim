@@ -148,3 +148,15 @@ vs pins activity/X-ray (age-derivable only for cool MS stars). See
 
 Suggested order if picked: instability-strip overlay → rotation toggle (after the
 mass-ramp diff) → v sin i broadening → [α/Fe] re-bake → binarity/live-solver.
+
+**UX correction (2026-07-01):** the vvcrit **track toggle now HIDES** where it is a
+data-derived no-op (below the ~1.2 M☉ Kraft break, `!rotStatus.active`) instead of showing
+**greyed** — `showToggle = has_grid && active` in `updateRotControl` (`main.js`). A greyed,
+dead toggle sitting under the same "Rotation" header as the live **period slider** (e.g. at
+the Sun, where both facets would show) read as a confusing dead knob (user feedback). This
+**supersedes the earlier "greyed-not-hidden, user-settled" design** — the comment in
+`main.js` + the `index.html` rotation comments were updated. At the Sun only the self-labeled
+"Rotation period" slider now shows; matches the control's own "absent, not a dead knob" rule.
+`active` is mass/[Fe/H]-derived (age-stable), so hiding it never reflows mid-age-scrub. No
+data-path change (`effVvcrit` still gates on `has_grid`; below-break tracks are bit-identical
+so a stray vvcrit=0.4 is a no-op). Verified Playwright 1440 + 390 px, zero console errors.

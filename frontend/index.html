@@ -184,17 +184,17 @@
            grid to interpolate toward. It selects the rotating evolutionary track (real
            data): main-sequence surface N/He enrichment, a longer life, a shifted HR
            track, and at low metallicity the chemically-homogeneous (CHE) blue
-           divergence. Data-derived honesty gate (`/rotation_status`): it is GREYED where
+           divergence. Data-derived honesty gate (`/rotation_status`): it is HIDDEN where
            rotation is a no-op (below the ~1.2 M☉ Kraft break, where MIST makes the
-           rotating track bit-identical to the non-rotating one) and HIDDEN where no
-           rotating grid is on disk for the current [Fe/H]. -->
+           rotating track bit-identical to the non-rotating one) and where no rotating grid
+           is on disk for the current [Fe/H] — absent, never a greyed dead knob. -->
       <div class="rot-control" id="rot-control" hidden>
         <div class="rot-head">Rotation
-          <span class="help" tabindex="0" data-tip="Stellar rotation — ONE control with two honest faces, because rotation matters in two different ways for two different kinds of star. (1) For MASSIVE stars it selects MIST's rotating evolutionary TRACK (v/vcrit = 0.4 — a two-state toggle, as MIST publishes only non-rotating and v/vcrit = 0.4): rotational mixing dredges CNO-processed material to the surface during the main sequence (nitrogen and helium rise — the Hunter-diagram signature), the star lives longer and sits at a shifted HR position, and at low metallicity fast rotation can trigger chemically-homogeneous evolution (it stays compact and blue instead of becoming a red supergiant). (2) For COOL main-sequence stars it sets the magnetic ACTIVITY level — the rotation period fixes the dynamo's strength (Rossby number) and so the coronal X-ray output, collapsing the SED's X-ray band to a line. The two regimes barely overlap (a star is either hot/massive or cool), so the control shows whichever face is honest for the current star and greys/hides the other — a rotation knob never implies the evolutionary track changed where it didn't.">?</span>
+          <span class="help" tabindex="0" data-tip="Stellar rotation — ONE control with two honest faces, because rotation matters in two different ways for two different kinds of star. (1) For MASSIVE stars it selects MIST's rotating evolutionary TRACK (v/vcrit = 0.4 — a two-state toggle, as MIST publishes only non-rotating and v/vcrit = 0.4): rotational mixing dredges CNO-processed material to the surface during the main sequence (nitrogen and helium rise — the Hunter-diagram signature), the star lives longer and sits at a shifted HR position, and at low metallicity fast rotation can trigger chemically-homogeneous evolution (it stays compact and blue instead of becoming a red supergiant). (2) For COOL main-sequence stars it sets the magnetic ACTIVITY level — the rotation period fixes the dynamo's strength (Rossby number) and so the coronal X-ray output, collapsing the SED's X-ray band to a line. The two regimes barely overlap (a star is either hot/massive or cool), so the control shows whichever face is honest for the current star and hides the other — a rotation knob never implies the evolutionary track changed where it didn't.">?</span>
         </div>
 
-        <!-- Track facet (massive stars): the vvcrit grid TOGGLE. Greyed below the Kraft
-             break (a data-derived no-op), hidden where no rotating grid covers [Fe/H]. -->
+        <!-- Track facet (massive stars): the vvcrit grid TOGGLE. Hidden below the Kraft
+             break (a data-derived no-op) and where no rotating grid covers [Fe/H]. -->
         <label class="rot-toggle-row" id="rot-toggle-row" for="rot-toggle" hidden>
           <input id="rot-toggle" type="checkbox" />
           <span>Rotating track <span class="rot-vvcrit">v/v<sub>crit</sub> = 0.4</span></span>

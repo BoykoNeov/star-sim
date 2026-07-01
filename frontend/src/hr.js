@@ -382,17 +382,10 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.restore();
     ctx.textAlign = "left";
 
+    // The observed overlays draw faint behind; their labels go in the legend (drawn last),
+    // NOT on the curves — an on-curve label lands on the light-curve path and gets obscured.
     if (snObserved) {
-      for (const o of snObserved) {
-        drawSNCurve(o.points, o.color, 1.6, [5, 4]);
-        const p0 = o.points.find((p) => p.t <= snTmax);
-        if (p0) {
-          const ll = Math.max(snLlo, Math.min(snLhi, Math.log10(p0.L)));
-          ctx.fillStyle = o.color;
-          ctx.font = "11px system-ui, sans-serif";
-          ctx.fillText(o.label, Math.min(W - PAD - 92, xSN(p0.t) + 6), ySN(ll) - 5);
-        }
-      }
+      for (const o of snObserved) drawSNCurve(o.points, o.color, 1.6, [5, 4]);
     }
 
     const lc = snModel && snModel.light_curve;
@@ -413,6 +406,8 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       ctx.textAlign = "left";
     }
 
+    drawSNLegend(!!lc, !!(snModel && snModel.failed_sn));
+
     if (marker) {
       const day = (marker.age_yr ?? 0) * 365.25;
       const L = (marker.L_lsun ?? 0) * LSUN_ERG_S;
@@ -426,6 +421,46 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       ctx.strokeStyle = "#e7ecf5";
       ctx.stroke();
     }
+  }
+
+  // The SN light-curve legend — a compact keyed box in the TOP-RIGHT (clear of the plateau,
+  // which sits upper-left, and the marker, which rides the curve). It names BOTH the model's
+  // two lines (L_total solid, L_radio dashed — previously unlabeled) and the cited observed
+  // overlays, so nothing is a mystery line and no label sits on the light-curve path. Shifts
+  // below the failed-SN banner (top-centre) when it's shown.
+  function drawSNLegend(hasModel, failed) {
+    const rows = [];
+    if (hasModel) {
+      rows.push({ label: "This star (model)", color: "#e7ecf5", dash: null, w: 2.2 });
+      rows.push({ label: "⁵⁶Co tail (model)", color: "rgba(255,210,140,0.95)", dash: [3, 3], w: 1.5 });
+    }
+    if (snObserved) for (const o of snObserved) rows.push({ label: o.label, color: o.color, dash: [5, 4], w: 1.6 });
+    if (!rows.length) return;
+
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    const sw = 20, gap = 6, rowH = 15;      // swatch length, swatch→text gap, row pitch
+    let tw = 0;
+    for (const r of rows) tw = Math.max(tw, ctx.measureText(r.label).width);
+    const boxW = 6 + sw + gap + tw + 8;
+    const boxH = rows.length * rowH + 8;
+    const x0 = W - PAD - boxW;
+    const y0 = PAD + (failed ? 42 : 8);     // clear the two-line failed banner at PAD+18/+34
+
+    ctx.fillStyle = "rgba(20,24,38,0.78)";  // opaque-ish backing so lines behind don't muddle it
+    ctx.fillRect(x0, y0, boxW, boxH);
+    ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, boxW, boxH);
+
+    rows.forEach((r, i) => {
+      const y = y0 + 8 + i * rowH + 3;
+      ctx.strokeStyle = r.color; ctx.lineWidth = r.w;
+      if (r.dash) ctx.setLineDash(r.dash);
+      ctx.beginPath(); ctx.moveTo(x0 + 6, y); ctx.lineTo(x0 + 6 + sw, y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#cfd6e4";
+      ctx.fillText(r.label, x0 + 6 + sw + gap, y + 4);
+    });
   }
 
   // Enter / refresh the SN light-curve view. Auto-fits the y-axis (log L) to enclose the
