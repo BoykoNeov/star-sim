@@ -9,6 +9,7 @@ import { createScale } from "./scale.js";
 import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
+import { createStructure } from "./structure.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
 import { createClassification } from "./classify.js";
@@ -151,6 +152,14 @@ const lane = createLane({ api: API });
 // fetch (it doesn't need the track, just the current state).
 const spectrum = createSpectrum({ api: API });
 
+// The real interior-structure panel (the honest successor to lane.js) — unlike lane,
+// it IS a live consumer of the marker: update(state) reads (mass, [Fe/H], age) and
+// fetches the matching MESA radial profile (/structure bypasses PROVIDER, like
+// /polytrope). Snaps to the nearest saved snapshot; only main-sequence structure is on
+// disk, so it's wired into paintState (the live path) and simply keeps its last profile
+// through the WD/WR/SN endgame modes (no interior grid there).
+const structure = createStructure({ api: API });
+
 // The broadband SED panel (spec §5) is a SIBLING like lane.js — but, unlike lane,
 // it DOES move with the star: it's the Planck blackbody across the whole EM
 // spectrum, driven by Teff alone (a blackbody ignores log g and [Fe/H]), so it
@@ -192,6 +201,7 @@ const RESPONSIVE = [
   { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
   { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
+  { id: "structure-canvas", mod: structure, maxW: 720, h: 340 },
 ];
 for (const r of RESPONSIVE) {
   const canvas = document.getElementById(r.id);
@@ -1902,6 +1912,7 @@ function paintState(s) {
   hr.update(s);
   comp.update(s);
   spectrum.update(s);
+  structure.update(s);
   sed.update(s);
   renderReadout(s);
   els.status.style.color = teffToCSS(s.Teff_K);

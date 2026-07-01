@@ -357,6 +357,37 @@
         </div>
       </div>
     </section>
+
+    <section class="panel structure-panel" data-panel-id="structure">
+      <h2>Interior structure · real (MESA) <span class="help" tabindex="0" data-tip="The honest counterpart to the Lane–Emden panel: a REAL radial structure of the selected star — density, temperature, pressure and hydrogen fraction at every radius — computed offline by the MESA stellar-evolution code and read from a saved profile snapshot. Unlike the polytrope beside it, this shows the true convective and radiative regions the single-index model can only fake. The two canonical polytropes (n = 3/2 and n = 3) are overlaid so you can see how well — and where — the idealization holds. It snaps to the nearest saved snapshot in mass, metallicity and age (a handful exist, not a continuum), and always labels the true snapshot it is showing.">?</span></h2>
+      <p class="hint structure-intro">
+        The <b>real</b> interior of the star, from a full MESA model — the same
+        quantities the polytrope beside it approximates, but computed with
+        temperature, composition and energy transport all in play. Watch the
+        real density (bold) sit against the two canonical polytropes, and the
+        shaded band where the star is <b>convective</b> — structure the single-n
+        model cannot represent.
+        <span class="help" tabindex="0" data-tip="Why MESA and not the same provider as the rest of the app? The evolutionary tracks driving the HR diagram carry only surface quantities (L, Teff, radius) — no radial profile of the interior at all. A real interior comes from a full structure calculation, which MESA does offline; a live solve is out of scope. So these are a few pre-computed snapshots (near-ZAMS, mid-main-sequence, end of the main sequence), and the panel jumps between the nearest ones as you scrub age — it never invents an in-between profile.">?</span>
+      </p>
+      <div class="lane-body">
+        <div>
+          <canvas id="structure-canvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#ff9966"></i><span class="tip" tabindex="0" data-tip="The real density profile ρ(r)/ρc from the MESA model — density at each radius as a fraction of the central value. This is the direct analogue of the polytrope's density curve; compare its steepness (central concentration) against the two dashed references.">ρ/ρc — real density</span></span>
+            <span><i style="background:#e5555f"></i><span class="tip" tabindex="0" data-tip="Temperature T(r)/Tc as a fraction of the central temperature. It falls from 1 at the core to a thin sliver at the surface — the steep drop that drives the star's energy outward.">T/Tc — temperature</span></span>
+            <span><i style="background:#9a7fd0"></i><span class="tip" tabindex="0" data-tip="Pressure P(r)/Pc as a fraction of the central pressure. Since pressure rises with both density and temperature (P ∝ ρ·T), it plunges fastest of all — the lowest curve — the enormous weight the core must hold up.">P/Pc — pressure</span></span>
+            <span><i style="background:#5fbf7f"></i><span class="tip" tabindex="0" data-tip="Hydrogen mass fraction X(r). On the main sequence it is depleted in the core (where H is fusing to He) and near-pristine in the envelope — a direct picture of nuclear burning eating into the centre. Flat across a young star, visibly hollowed as it ages.">X — hydrogen</span></span>
+            <span><i style="border-top:2px dashed #7f8aa3;background:none;height:0"></i><span class="tip" tabindex="0" data-tip="The two canonical Lane–Emden polytropes — n = 3/2 (fully convective / adiabatic) and n = 3 (radiative, the Eddington standard model). These are NOT fitted to the star; they are the fixed textbook idealizations, drawn so the real density can be seen departing from them. The label notes which one the core matches.">n = 3/2 · 3 — polytropes</span></span>
+            <span><i style="background:rgba(120,170,255,0.30)"></i><span class="tip" tabindex="0" data-tip="Shaded where the star is CONVECTIVE (energy carried by rising and sinking gas, MESA's mixing flag / the Schwarzschild criterion), unshaded where it is radiative (energy carried by photons). A 1 M☉ star has a radiative core and a convective outer envelope; this boundary is exactly what the polytrope's single index cannot express.">convective zone</span></span>
+          </div>
+        </div>
+        <div class="lane-controls">
+          <p class="lane-caption" id="structure-caption"></p>
+          <div id="structure-readout" class="readout"></div>
+          <p class="hint structure-note" id="structure-note"></p>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script type="module" src="./src/main.js"></script>

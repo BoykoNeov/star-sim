@@ -41,20 +41,27 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `fetch_mist.py` / `fetch_mesa.py` (build-time grid fetches), `lane_emden.py`
   (the Phase 3 §8 polytrope solver — a **sibling** to the §3 spine, not a
   provider), `spectra.py` (the Phase 5 synthetic-spectrum runtime — also a
-  sibling), `api.py` (FastAPI, the swap point; also hosts `/polytrope` and
-  `/spectrum`, the routes that do NOT go through `PROVIDER`).
+  sibling), `structure.py` (the **real interior-structure** sibling — offline MESA
+  radial `profile.data` snapshots behind `/structure`; the honest successor to
+  Lane–Emden, its own MESA-profile parser, snaps (mass,[Fe/H],age) to the nearest
+  saved snapshot, never imports a provider), `api.py` (FastAPI, the swap point; also
+  hosts `/polytrope`, `/structure` and `/spectrum`, the routes that do NOT go through
+  `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
   `test_mesa_provider.py`, `test_mesa_vs_mist.py` (the **measured** MESA-vs-MIST
   cross-validation, matched on Z + central-Xc via the public `track()` API),
   `test_stub_provider.py`, `test_lane_emden.py` (§8 polytrope validation),
-  `test_spectra.py`, `test_endgame.py`. Skip markers in `conftest.py` gate by
-  data present (`requires_mist_data`, `requires_mist_multifeh`,
-  `requires_mist_heldout_feh`, `requires_mesa_data`, `requires_mist_lowz`,
-  `requires_spectra_data`, …).
+  `test_spectra.py`, `test_endgame.py`, `test_structure.py` (the real MESA
+  interior-structure sibling — convective-envelope-over-radiative-core, order-of-SSM
+  central values, monotone centrally-concentrated ρ, canonical-polytrope overlay,
+  honest snapping). Skip markers in `conftest.py` gate by data present
+  (`requires_mist_data`, `requires_mist_multifeh`, `requires_mist_heldout_feh`,
+  `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
+  `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
+  `src/{main,star,hr,comp,lane,structure,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
   `sn.js` is the SN endgame's cited observed-photometry dataset (SN 1987A ⁵⁶Co tail +
   SN 1999em IIP plateau, published bolometric fits — the Tier-1 overlay anchor); `hr.js`
   gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail).
@@ -64,7 +71,13 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   H/He/Z; per-element detail, 14 metals + linear/log `setScale`, `mode="cno"` id
   kept; light-element `mode="light"` Li/Be/F log-forced). `lane.js` is the Phase 3
   §8 Lane–Emden interior panel (a self-contained sibling driven by the polytropic
-  index `n` alone, never wired into `refresh()`). `star.js` is the Phase 2 §7
+  index `n` alone, never wired into `refresh()`). `structure.js` is its **honest
+  successor** — the real MESA interior-structure panel: a live consumer wired into
+  `paintState` that fetches `/structure` for the marker's (mass,[Fe/H],age), draws
+  ρ(r)/T(r)/X(r) center-normalized vs r/R + shaded convective zones + the two
+  canonical polytrope overlays (n=1.5/3, references, not fitted), and labels the
+  nearest saved snapshot (jumps between snapshots; snapped-far note when off-grid).
+  `star.js` is the Phase 2 §7
   shader (Teff→color × H_p granulation × limb darkening × streak-proof rotation +
   activity corona quad). `color.js` is the reference Planck→CIE→sRGB color pipeline
   (`teffToLinearRGB` for the shader, `teffToRGB`/`teffToCSS`/`wavelengthToCSS` for
@@ -300,6 +313,36 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   not on the in-house number). Slope robust; level ±dex (v∞ bistability + clumping).
   [[star-sim-nonthermal-sed-plan]]; plan `docs/plans/magnetic-ember-broadcast.md`.
 
+### Interior structure (real MESA radial profiles — a **sibling**; the honest Lane–Emden successor)
+- **BUILT (1 M☉ solar slice — the first vertical, end-to-end).** `/structure` bypasses
+  `PROVIDER` (like `/polytrope`, `/spectrum`): interior structure is a sibling, not a
+  `StellarState`. `structure.py` reads offline MESA `profile.data` snapshots under
+  `data/mesa_profiles/` (gitignored) with its **own** MESA-profile parser (never imports
+  a provider — a §3 boundary rule) and snaps a request to the nearest saved snapshot in
+  **(mass, [Fe/H], age)**, reporting the *true* snapped values (no interpolation across
+  snapshots — the panel **jumps**, honestly labeled "nearest saved snapshot"). Returns
+  center-normalized ρ(r)/T(r)/P(r) + X/Y/Z vs r/R, the **real convective/radiative split**
+  (MESA `mixing_type==1` ∪ Schwarzschild `gradr>grada`), central scalars (ρ_c/T_c/P_c/R/M),
+  and the **two canonical polytrope overlays (n=1.5, n=3)** — NOT a best fit; the canonical
+  curves bracket the real ρ and the departure IS the lesson (advisor-settled: a fitted n
+  would hide the very mismatch the panel exists to show). `expected_n` is a labeled hint
+  from the *core* type (radiative→3 / convective→3/2), not a fit. Frontend `structure.js`
+  is a **live consumer** wired into `paintState` (own debounced latest-wins fetch); draws
+  ρ bold + T/X thinner + dashed polytrope references + shaded convective bands, a snapshot
+  caption, a scalar readout, and a **snapped-far note** when the star is off-grid (today
+  everything snaps to 1 M☉ solar — honestly stated). **Why MESA-only/offline:** MIST ships
+  no radial profiles and a live solve is out of scope (§2/§9), so profiles are self-run once
+  (Docker MESA, the solar recipe + profile snapshots — `backend/docs/mesa_structure_recipe.md`).
+  **Measured (mid-MS, ≈ solar age):** ρ_c≈190 g/cm³, T_c≈1.66×10⁷ K, R≈1.06 R☉, radiative
+  core (n=3) + convective envelope base at r/R≈0.75 (SSM ≈0.71; the run is NOT solar-
+  calibrated, hence loose test tolerances). Near-ZAMS shows a **real transient convective
+  core** (MESA `mixing_type==1`, the early-MS ¹²C→¹⁴N-burning core before CN equilibrium) →
+  an honest `expected_n=3/2` label flip, verified against the raw column, not an OR-clause
+  artifact. **9 tests** (`test_structure.py`, gated by `requires_structure_data`); 229 pytest
+  total. Playwright-verified 1440 + 390 px (zero console errors). **Next:** a 2/6 M☉ slice
+  (the convective-core↔radiative-envelope flip) drops in as another `data/mesa_profiles/`
+  dir with no code change. [[star-sim-interior-structure-mesa]].
+
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
   classification, instability-strip HR overlay, tooltip singleton, age-slider
@@ -313,7 +356,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **220 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **229 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
@@ -330,6 +373,11 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   branch (M_ej<M_EJ_FAIL, ejected Ni→0, no plateau, faint-positive curve, non-expanding R₀
   photosphere), and Tier-3 linearity surviving the fallback dimming. Light-curve physics is
   unit-tested deterministically; the endgame→sibling→route path through the real provider.
+  The real interior-structure sibling adds **9** tests (`test_structure.py`, gated by
+  `requires_structure_data`): convective-envelope-over-radiative-core, order-of-SSM central
+  values, monotone centrally-concentrated ρ, r/R spanning [0,1], canonical-polytrope overlay
+  (n=3 more concentrated than n=1.5), honest age/mass snapping, and the `/structure` route +
+  422s.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

@@ -25,6 +25,7 @@ from star_sim.spectra import (
     WD_GRID_FILENAME,
     WR_GRID_FILENAME,
 )
+from star_sim.structure import PROFILES_DATA_DIR
 
 
 def mist_data_available() -> bool:
@@ -198,4 +199,23 @@ def wr_spectra_data_available() -> bool:
 requires_wr_spectra_data = pytest.mark.skipif(
     not wr_spectra_data_available(),
     reason="WR spectrum grid not baked — run fetch_powr + scripts/bake_wr_spectra.py",
+)
+
+
+def structure_data_available() -> bool:
+    """True if any MESA interior-structure profile*.data snapshots are present.
+
+    Generated offline by running MESA with profile snapshots enabled (never
+    committed — see backend/docs/mesa_structure_recipe.md), so the /structure tests
+    skip until they're dropped under data/mesa_profiles/."""
+    import glob
+
+    return len(glob.glob(str(PROFILES_DATA_DIR / "**" / "profile*.data"), recursive=True)) > 0
+
+
+# The /structure (real MESA interior-structure) tests need offline MESA profile
+# snapshots — generated on the host, never committed (endgame's Lane-Emden successor).
+requires_structure_data = pytest.mark.skipif(
+    not structure_data_available(),
+    reason="no MESA profiles — see backend/docs/mesa_structure_recipe.md",
 )

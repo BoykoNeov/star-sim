@@ -30,6 +30,7 @@ from .spectra import (
     wd_spectrum_data,
     wr_spectrum_data,
 )
+from .structure import StructureDataMissing, interior_structure
 from .supernova import Progenitor, supernova_model
 from .providers import MISTProvider
 
@@ -310,6 +311,32 @@ def polytrope(
     (n ≥ 5 has no finite surface; n > 5 is unbound), enforced by the Query bounds.
     """
     return polytrope_profile(n)
+
+
+@app.get("/structure")
+def structure(
+    mass: float = Query(..., gt=0.0, description="initial mass / M_sun"),
+    feh: float = Query(0.0, description="initial [Fe/H]"),
+    age: float = Query(..., gt=0.0, description="stellar age / yr"),
+) -> dict:
+    """(mass, [Fe/H], age) -> a REAL MESA radial interior-structure snapshot.
+
+    The honest successor to `/polytrope`: where Lane-Emden gives an *idealized* static
+    polytrope from an index `n`, this serves a **real** radial structure — ρ(r), T(r),
+    P(r), composition(r), and the true convective/radiative boundaries — read from an
+    offline MESA `profile.data` snapshot, plus the two canonical polytrope overlays
+    (n=1.5, n=3) so the panel can show how good the idealization is.
+
+    Like `/polytrope` and `/spectrum` this does **not** go through `PROVIDER`: interior
+    structure is a sibling to the `StellarState` spine, not a `StellarState`. It snaps
+    to the nearest saved snapshot in (mass, [Fe/H], age) and reports the *true* snapped
+    values — never an interpolation across snapshots (the panel jumps between the
+    handful of saved snapshots, labeled honestly). If no profiles have been generated
+    yet, return 503 with an actionable hint (analogue of a missing provider grid)."""
+    try:
+        return interior_structure(mass, feh, age)
+    except StructureDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/spectrum")
