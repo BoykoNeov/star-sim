@@ -364,3 +364,27 @@ shell (capped intensity) — still winks out. Early spherical fireball kept (the
 photosphere IS round — advisor). Honesty guardrail held: the realism is the NEBULA,
 the NS dot stays evocative/labeled (a real NS's optical thermal emission is
 negligible).
+
+**Nebula-shell tuning (follow-up):** user reported the late 3D still read as "dim
+parts of the fireball," no visible filaments. Root cause (advisor-confirmed): the
+shell was a **hairline** rim (`smoothstep(0.55,0.97,1-mu)` peaks only at mu<0.03,
+which the soft-edge cutoff then fought) and the "filaments" were `vnoise` at freq
+3.2 = ~3 soft blobs, all dimmed to 0.38. Fix in `FIREBALL_FRAG` (frontend-only):
+(1) **fat annulus** `shellBand=smoothstep(0.30,0.82,1-mu)`; (2) a **second, higher-
+freq/faster noise** `nFil=fireFbm(...*8.0, uTime*1.35)` sharp-thresholded
+`fil=smoothstep(0.46,0.72,nFil)` for high-CONTRAST threads on a faint floor
+`shellA=uIntensity*shellBand*(0.10+1.15*fil)` — **contrast, not brightness**, is
+what reads as filamentary (advisor); (3) built as two SEPARATE looks
+`a=mix(ballA,shellA,uFade*uNebula)*edge` (not one dimming profile). **New `uNebula`
+uniform (0 for failed, 1 else)** is the load-bearing gate: it keeps the bright shell
+off the **failed** branch so it stays a dim filled ball that winks out — the advisor's
+"don't let the brightening contradict the disappearing-supergiant" constraint. Also
+broadened `snFade` window to `smoothstep01(0.5,0.95,dayFrac)` (was 0.55,1.0) so the
+shell is fully formed before the last pixel of the scrub. **GOTCHA:** a literal
+backtick inside a GLSL *comment* silently TERMINATES the JS template literal holding
+the shader → browser `SyntaxError: Unexpected number` at load, yet `node --check`
+PASSES (balanced count parses as valid-but-wrong JS) — the Playwright console-error
+pass is what catches it. Playwright-verified (`#star-canvas` element shots, 1440 px,
+0 console errors): NS late = filamentary red shell + dot through the hollow centre;
+**BH-fallback = same shell, NO dot** (real SN, invisible BH remnant); **failed = dim
+ball, no shell, winks out**. Repro scripts `M:/claud_projects/temp/sn-nebula/`.

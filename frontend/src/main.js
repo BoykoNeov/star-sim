@@ -1731,7 +1731,7 @@ function refreshSN() {
   // expand — it implodes — so we skip the "expanding" beat (a small steady ball) and let it
   // fade from the start: a dim supergiant that simply winks out (star.js dims it too).
   const snGrow = failed ? 0.5 : 0.55 + 0.45 * smoothstep01(0, 0.14, dayFrac);
-  const snFade = failed ? smoothstep01(0.0, 0.6, dayFrac) : smoothstep01(0.55, 1.0, dayFrac);
+  const snFade = failed ? smoothstep01(0.0, 0.6, dayFrac) : smoothstep01(0.5, 0.95, dayFrac);
   // A brief shock-breakout FLASH at the explosion moment (first ~5% of the scrub) so the entry
   // reads as a violent burst rather than a dim little ball — 3D-only + evocative, gated off for
   // a failed direct collapse (there is no explosion to flash). star.js adds it to the intensity.
