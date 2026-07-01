@@ -220,6 +220,41 @@ def test_intermediate_mass_also_has_a_convective_core():
     assert not _conv_at(s["convective_zones"], 0.9), "2 M☉ envelope should be radiative at r/R=0.9"
 
 
+@requires_structure_massive
+def test_massive_15msun_has_the_deepest_convective_core():
+    """The 15 M☉ slice — the SN arc's *canonical* progenitor mass — is the most
+    extreme convective-core case, and it makes the structure panel honest exactly
+    where the core-collapse feature lives (a 15 M☉ progenitor no longer snaps to the
+    6 M☉ run). Same flip as 6 M☉ but bigger: a hot, low-density CNO-burning core
+    (ε ∝ T^~17) drives a convective core reaching a *larger* fraction of R than the
+    6 M☉ core (~0.13), still under a radiative envelope.
+
+    Uses the mid-MS 15 M☉ snapshot (Xc≈0.41) — a massive-star convective core recedes
+    fastest here, so the shipped slice deliberately anchors mid-MS (recipe §6)."""
+    s = interior_structure(15.0, 0.0, 6.8e6)
+    assert s["snapped"]["mass_msun"] == 15.0
+
+    # core convective -> n=3/2, the flipped overlay hint (mirror of the Sun).
+    assert s["convective"][0] is True, "a 15 M☉ MS star has a convective core"
+    assert s["expected_n"] == 1.5
+
+    zones = s["convective_zones"]
+    core = [z for z in zones if z[0] < 0.02]
+    assert core, f"expected a convective core anchored at r/R~0, got {zones}"
+    # the 15 M☉ core is a larger fraction of R than the 6 M☉ core (~0.13, measured ~0.18).
+    assert core[0][1] > 0.15, f"15 M☉ convective core should be the deepest: {core}"
+
+    # radiative envelope: r/R=0.9 must be radiative (the Sun is convective there).
+    assert not _conv_at(zones, 0.9), f"15 M☉ envelope should be radiative at r/R=0.9: {zones}"
+
+    # central values of the right order for a hot massive-star core — hotter and less
+    # dense than the 6 M☉ core (CNO burning at higher T, lower ρ). A parser/units bug
+    # would blow these out by orders of magnitude.
+    c = s["central"]
+    assert 2.0e7 < c["T_c_K"] < 5.0e7, c["T_c_K"]
+    assert abs(c["M_total_msun"] - 15.0) < 0.1, c["M_total_msun"]
+
+
 # --- the route ---------------------------------------------------------------
 
 @requires_structure_data

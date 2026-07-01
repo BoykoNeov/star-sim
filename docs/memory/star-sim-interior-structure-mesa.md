@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6 M☉ slices; the convective-core↔radiative-envelope flip built)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6/15 M☉ slices; the convective-core↔radiative-envelope flip built, 15 M☉ = the SN progenitor)"
 metadata: 
   node_type: memory
   type: project
@@ -107,4 +107,28 @@ row flipped idea→done. 232 pytest.
 - Playwright-verified 1440 px: 6 M☉ B5 V, caption "6 M☉ … convective core → canonical n = 3/2",
   core shading at r/R 0→0.13, X(r) flat-then-rising (mixed-core signature), zero console errors.
 
-**Next:** other-Z buckets or a 15 M☉ slice drop in the same way. See ROADMAP + [[star-sim-roadmap]].
+## The 15 M☉ slice (BUILT — the SN arc's canonical progenitor)
+- Extends the massive end to the **canonical core-collapse SN progenitor** (the supernova
+  light curve is measured at 15 M☉ — [[star-sim-supernova-remnant-endgame]]). The payoff is
+  **honesty where a built feature lives**: before this, a 15 M☉ structure request snapped to
+  the 6 M☉ run + showed the "snapped-far" note. Same recipe (`initial_mass=15.0`, Z=0.0152,
+  TAMS stop), **NO runtime code change** (drops in as a bucket) — the accompanying change is
+  one new gated test (`test_massive_15msun_has_the_deepest_convective_core`, same
+  `requires_structure_massive` marker, **no conftest change** — the ≥4 M☉ gate already covers
+  it) + the recipe §7 record. Snapping topology unaffected (off-grid 0.3 M☉ still snaps to the
+  lightest; no test asserts high-mass→6). **233 pytest** (was 232, +1).
+- Shipped **5 snapshots** (profiles 9/10/11/12/13, near-ZAMS→TAMS), mid-MS anchor **profile11**
+  (model 250, age 6.81 Myr, Xc 0.409, central `mixing_type==1`) — selection caution is
+  **sharpest here** (a 15 M☉ core recedes fastest toward TAMS), so anchored by central mixing
+  type + Xc, not age. Measured mid-MS: **ρ_c≈5.9 g/cc, T_c≈3.5×10⁷ K, R≈6.67 R☉, convective core
+  0→0.178** — hotter/less-dense than the 6 M☉ core and the **deepest** of the 2/6/15 set;
+  `expected_n`→3/2, envelope radiative at r/R=0.9.
+- **Advisor OR-clause re-check at this slice** (the μ-gradient region grows with mass): across
+  all five 15 M☉ snapshots every cell the served OR adds beyond `mixing_type==1` is at r/R≥0.97
+  (near-surface opacity bump), **never a mid-radius shell** — so no over-shading, same as 6 M☉
+  (inlist still default-Schwarzschild). The little shells at r/R≈0.19–0.21 just above the core
+  are MESA's own `mixing_type==1` (real receding-core convection), not OR-invented. Playwright
+  1440 px: caption "15 M☉ … convective core → canonical n = 3/2", zero console errors.
+
+**Next:** other-Z buckets drop in the same way (but verify the structural effect is *visible in
+the panel* before shipping a control, per the honesty rule). See ROADMAP + [[star-sim-roadmap]].

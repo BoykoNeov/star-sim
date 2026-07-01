@@ -348,9 +348,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   to 6.0). The advisor semiconvection-OR caveat was re-checked at this slice → it doesn't bite (the
   `mixing_type∪Schwarzschild` OR adds nothing beyond `mixing_type==1` here). Snapshot-selection is
   the real risk (a massive convective core *shrinks toward TAMS* → deliberately kept a healthy
-  mid-MS Xc≈0.4 anchor). **12 tests** (`test_structure.py`); 232 pytest total. Playwright-verified
-  1440 px (6 M☉ B5 V, "convective core → canonical n = 3/2", zero console errors). **Next:** other-Z
-  or a 15 M☉ slice drops in the same way. [[star-sim-interior-structure-mesa]].
+  mid-MS Xc≈0.4 anchor). The **15 M☉ slice** (the SN arc's canonical progenitor — honest structure
+  where the SN feature lives, was snapping to 6 M☉) is the **deepest** convective core of the set
+  (ρ_c≈5.9, T_c≈3.5×10⁷ K, R≈6.67 R☉, core r/R 0→0.178; mid-MS anchor profile11, Xc 0.41) — **NO
+  runtime change** again (drops in as a bucket), +1 gated test (`requires_structure_massive` already
+  covers it, no conftest change), advisor OR-clause re-checked at 15 M☉ (every OR-added cell r/R≥0.97
+  → no mid-radius over-shading). **13 tests** (`test_structure.py`); 233 pytest total. Playwright-
+  verified 1440 px (6 M☉ + 15 M☉, "convective core → canonical n = 3/2", zero console errors).
+  **Next:** other-Z buckets drop in the same way (verify the effect is *visible in the panel*
+  first). [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
@@ -365,7 +371,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **232 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **233 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
@@ -382,14 +388,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   branch (M_ej<M_EJ_FAIL, ejected Ni→0, no plateau, faint-positive curve, non-expanding R₀
   photosphere), and Tier-3 linearity surviving the fallback dimming. Light-curve physics is
   unit-tested deterministically; the endgame→sibling→route path through the real provider.
-  The real interior-structure sibling adds **12** tests (`test_structure.py`, gated by
+  The real interior-structure sibling adds **13** tests (`test_structure.py`, gated by
   `requires_structure_data`): convective-envelope-over-radiative-core, order-of-SSM central
   values, monotone centrally-concentrated ρ, r/R spanning [0,1], canonical-polytrope overlay
   (n=3 more concentrated than n=1.5), honest age/mass snapping, and the `/structure` route +
-  422s; plus **3 flip tests** for the 2/6 M☉ slice (gated by `requires_structure_massive`, a
+  422s; plus **4 flip tests** for the 2/6/15 M☉ slices (gated by `requires_structure_massive`, a
   ≥4 M☉ slice so they *skip* not fail on a 1 M☉-only checkout): the 6 M☉ convective-core +
   n=3/2 + radiative-envelope-at-r/R=0.9, the direct Sun↔6 M☉ *mirror* on the same two probe
-  radii, and the 2 M☉ core-convective check.
+  radii, the 2 M☉ core-convective check, and the 15 M☉ SN-progenitor deepest-convective-core
+  (core r/R 0→0.178, hotter/less-dense than 6 M☉).
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything
