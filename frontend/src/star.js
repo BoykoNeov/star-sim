@@ -378,19 +378,32 @@ void main() {
 
   float n = fireFbm(normalize(vObjPos) * 3.2, uTime);
 
-  // A ball of fire: a bright hot core fading toward a softer limb (the optically-thick
-  // photosphere is brightest seen face-on), broken up by the turbulent cells.
-  float core = 0.35 + 0.65 * smoothstep(0.0, 0.9, mu);
-  float edge = smoothstep(0.0, 0.16, mu);                  // soft round silhouette (no hard disk rim)
+  // Two brightness PROFILES, cross-faded by uFade — the physical arc of the ejecta as they
+  // go optically thin (photosphere → nebula):
+  //   YOUNG (uFade→0): a filled ball of fire, brightest face-on (the optically-THICK
+  //     photosphere), broken up by turbulent cells.
+  //   OLD  (uFade→1): a limb-brightened, HOLLOW SHELL — a young supernova remnant. When the
+  //     ejecta thin, the line of sight crosses more emitting gas near the edge (limb
+  //     brightening → a bright rim) and the centre goes transparent, so the compact remnant
+  //     shows THROUGH it. This is what actually happens, and it makes the late frame read as
+  //     an expanding nebula with the remnant inside — never as "a new star appeared".
+  float core = 0.35 + 0.65 * smoothstep(0.0, 0.9, mu);     // face-on bright (young filled ball)
+  float shell = smoothstep(0.55, 0.97, 1.0 - mu);          // edge-on bright (limb-lit shell rim)
+  float profile = mix(core, shell, uFade);
+
+  // The soft silhouette relaxes toward the limb as the shell forms (uFade→1) so the limb-lit
+  // rim — the whole point of the nebula look — isn't clipped by the young ball's round edge.
+  float edge = smoothstep(0.0, mix(0.16, 0.06, uFade), mu);
   float cells = mix(0.45, 1.15, smoothstep(0.25, 0.85, n));
 
-  // As the ejecta thin (uFade→1) the smooth photosphere breaks into sparse bright
-  // filaments and the whole ball dims toward nothing — the dissipation that reveals the remnant.
-  float wisp = smoothstep(0.58, 0.86, n);
+  // As the ejecta thin (uFade→1) the smooth photosphere breaks into sparse RADIAL filaments
+  // (the clumpy SNR shell) and the ball dims — but not fully to nothing: a thin shell still
+  // glows faintly, so the nebula persists around the uncovered remnant instead of vanishing.
+  float wisp = smoothstep(0.5, 0.82, n);
   float body = mix(cells, wisp, uFade);
-  float dim  = 1.0 - 0.97 * uFade;
+  float dim  = 1.0 - 0.62 * uFade;
 
-  float a = uIntensity * core * edge * body * dim;
+  float a = uIntensity * profile * edge * body * dim;
   // Bounded so a single additive sphere layer keeps the Teff hue + cell structure (never white-out).
   gl_FragColor = vec4(lin2srgb(uColor), clamp(a, 0.0, 0.8));
 }`;
