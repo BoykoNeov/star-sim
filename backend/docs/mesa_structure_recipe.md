@@ -228,6 +228,46 @@ core (r/R ≈ 0.19–0.21) are MESA's own `mixing_type == 1` (real receding-core
 not OR-invented. Playwright-verified 1440 px (caption "15 M☉ … convective core → canonical
 n = 3/2", zero console errors).
 
+## 8. The 25 M☉ slice (bracketing the upper SN progenitor range) — BUILT
+
+Same recipe, `initial_mass = 25.0` (same `Z=0.0152`, same TAMS stop). The payoff is to
+**bracket the upper end** of the core-collapse SN progenitor range: the SN arc is
+anchored at 15 M☉, and this extends the 1→2→6→15 "deepest convective core yet" ladder
+into heavier-progenitor territory. It is the **deepest convective core of the shipped
+set** — the same flip as 6/15 M☉, just bigger, hotter, and lower-density.
+
+Operationally identical to §6/§7 (separate work/LOGS dir, compile with `./mk`, run
+detached; ≈4–5 min to TAMS incl. the first-run rates-cache build). The snapshot-selection
+caution is **sharpest** here — a 25 M☉ convective core recedes fastest toward TAMS — so
+the mid-MS anchor was chosen by central `mixing_type == 1` **and** a healthy Xc, *not* by
+age (advisor-reinforced: ship a near-TAMS profile and the core has shrunk and the flip,
+the whole point of the slice, is gone). The run wrote 15 profiles; the shipped slice keeps
+five (profiles 9/10/11/12/13, near-ZAMS → TAMS), with the **mid-MS anchor at profile11**
+(model 250, age 3.25 Myr, Xc = 0.465, central `mixing_type == 1`). The **runtime needed no
+code change** (the "drops in as a bucket" property again); the accompanying change is one
+new gated test (`test_massive_25msun_brackets_the_upper_sn_range`, under the same
+`requires_structure_massive` marker — no conftest change, the ≥4 M☉ gate already covers it)
+and this record. Snapping topology is unaffected (the off-grid `test_out_of_grid_mass_snaps`
+uses 0.3 M☉ → still snaps to the lightest run; no existing test asserts a high mass snaps
+to 6/15).
+
+### Measured result (the shipped 25 M☉ slice)
+
+| slice | mid-MS snapshot | Xc | ρ_c | T_c | R | convective core (r/R) | envelope |
+|---|---|---|---|---|---|---|---|
+| 25 M☉ | profile11 | 0.465 | 3.79 g/cm³ | 3.78×10⁷ K | 8.47 R☉ | 0 → 0.228 | radiative (n=3/2 core) |
+
+The core is **hotter and less dense** than the 15 M☉ core (CNO burning at still higher T,
+lower ρ) and reaches the **largest fraction of R** of the whole set (0.228 vs 0.178 at
+15 M☉, 0.131 at 6 M☉) — the deepest convective core of the 2/6/15/25 progression, as the
+task intended ("bracket the SN range"). `expected_n` = 3/2, envelope radiative at r/R = 0.9.
+The **semiconvection/Ledoux OR-clause caveat was re-checked at this slice** (advisor-flagged
+since §7): across the mid-MS anchor the served `mixing_type ∪ Schwarzschild` OR adds 10 cells
+beyond `mixing_type == 1`, all sitting either just above the core (r/R ≈ 0.23–0.27,
+receding-core convection) or at the near-surface opacity bump (r/R ≈ 0.97) — **zero at
+mid-radius (0.3 < r/R < 0.95)** — so the OR does **not** over-shade, exactly as at 6/15 M☉
+(the inlist is still default-Schwarzschild).
+
 **Next:** other-Z buckets (a metallicity axis — but verify the structural effect is
 *visible in the panel* before shipping a control, per the project honesty rule) drop in
 the same way.

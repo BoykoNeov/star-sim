@@ -255,6 +255,41 @@ def test_massive_15msun_has_the_deepest_convective_core():
     assert abs(c["M_total_msun"] - 15.0) < 0.1, c["M_total_msun"]
 
 
+@requires_structure_massive
+def test_massive_25msun_brackets_the_upper_sn_range():
+    """The 25 M☉ slice brackets the *upper* end of the core-collapse SN progenitor
+    range (the arc is anchored at 15 M☉; heavier progenitors extend past it). It is
+    the deepest convective core of the whole 1→2→6→15→25 ladder: a hotter, even
+    lower-density CNO-burning core drives a convective core reaching a *larger*
+    fraction of R than the 15 M☉ core (~0.18, measured ~0.23), still under a
+    radiative envelope.
+
+    Uses the mid-MS 25 M☉ snapshot (Xc≈0.46) — a massive-star convective core recedes
+    fastest here, so the shipped slice deliberately anchors mid-MS (recipe §6/§8)."""
+    s = interior_structure(25.0, 0.0, 3.2e6)
+    assert s["snapped"]["mass_msun"] == 25.0
+
+    # core convective -> n=3/2, the flipped overlay hint (mirror of the Sun).
+    assert s["convective"][0] is True, "a 25 M☉ MS star has a convective core"
+    assert s["expected_n"] == 1.5
+
+    zones = s["convective_zones"]
+    core = [z for z in zones if z[0] < 0.02]
+    assert core, f"expected a convective core anchored at r/R~0, got {zones}"
+    # the 25 M☉ core is the deepest of the ladder — larger than the 15 M☉ core
+    # (~0.18, measured ~0.23).
+    assert core[0][1] > 0.20, f"25 M☉ convective core should be the deepest: {core}"
+
+    # radiative envelope: r/R=0.9 must be radiative (the Sun is convective there).
+    assert not _conv_at(zones, 0.9), f"25 M☉ envelope should be radiative at r/R=0.9: {zones}"
+
+    # central values of the right order for the hottest massive-star core of the set —
+    # hotter and less dense than the 15 M☉ core (CNO burning at higher T, lower ρ).
+    c = s["central"]
+    assert 2.5e7 < c["T_c_K"] < 5.0e7, c["T_c_K"]
+    assert abs(c["M_total_msun"] - 25.0) < 0.1, c["M_total_msun"]
+
+
 # --- the route ---------------------------------------------------------------
 
 @requires_structure_data

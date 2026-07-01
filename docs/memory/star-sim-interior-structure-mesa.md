@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6/15 M☉ slices; the convective-core↔radiative-envelope flip built, 15 M☉ = the SN progenitor)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6/15/25 M☉ slices; the convective-core↔radiative-envelope flip built, 15 M☉ = the SN progenitor, 25 M☉ brackets the upper SN range)"
 metadata: 
   node_type: memory
   type: project
@@ -129,6 +129,34 @@ row flipped idea→done. 232 pytest.
   (inlist still default-Schwarzschild). The little shells at r/R≈0.19–0.21 just above the core
   are MESA's own `mixing_type==1` (real receding-core convection), not OR-invented. Playwright
   1440 px: caption "15 M☉ … convective core → canonical n = 3/2", zero console errors.
+
+## The 25 M☉ slice (BUILT — brackets the upper SN progenitor range)
+- Extends the massive end **past** the canonical 15 M☉ SN progenitor to bracket the *upper*
+  core-collapse range — the 1→2→6→15→**25** "deepest convective core yet" ladder into
+  heavier-progenitor territory (advisor: "bracket the SN range" = go heavier, 25 over the
+  weaker gap-filler 10; "cheapest" just meant *mechanical*, don't deliberate). Same recipe
+  (`initial_mass=25.0`, Z=0.0152, TAMS stop), **NO runtime code change** (drops in as a
+  bucket) — the accompanying change is one new gated test
+  (`test_massive_25msun_brackets_the_upper_sn_range`, same `requires_structure_massive`
+  marker, **no conftest change** — the ≥4 M☉ gate already covers it) + the recipe §8 record.
+  Snapping topology unaffected (off-grid 0.3 M☉ still snaps to the lightest). **234 pytest**
+  (was 233, +1).
+- Shipped **5 snapshots** (profiles 9/10/11/12/13, near-ZAMS→TAMS), mid-MS anchor **profile11**
+  (model 250, age 3.25 Myr, Xc 0.465, central `mixing_type==1`) — the selection caution is
+  **sharpest of the whole set** (a 25 M☉ core recedes fastest), so anchored by central mixing
+  type + Xc, not age. The run wrote 15 profiles. Measured mid-MS: **ρ_c≈3.79 g/cc, T_c≈3.78×10⁷ K,
+  R≈8.47 R☉, convective core 0→0.228** — the **deepest** of the 2/6/15/25 set (0.131→0.178→0.228),
+  hottest + lowest-density core; `expected_n`→3/2, envelope radiative at r/R=0.9. Test threshold
+  set FROM the measurement (core > 0.20).
+- **Advisor OR-clause re-check** (as at 15 M☉): the served OR adds 10 cells beyond
+  `mixing_type==1` at the mid-MS anchor, all either just above the core (r/R≈0.23–0.27,
+  receding-core convection) or at the near-surface opacity bump (r/R≈0.97) — **zero at
+  mid-radius (0.3<r/R<0.95)** — so no over-shading, same as 6/15 M☉ (inlist still
+  default-Schwarzschild).
+- **Playwright skipped** (unlike prior slices): the change is pure data + one gated test + doc,
+  **zero frontend/runtime code touched**, and the served `/structure` payload was verified
+  directly through the real `interior_structure()` code path — a screenshot would only
+  re-exercise the unchanged 15 M☉ render path with structurally identical data.
 
 **Next:** other-Z buckets drop in the same way (but verify the structural effect is *visible in
 the panel* before shipping a control, per the honesty rule). See ROADMAP + [[star-sim-roadmap]].
