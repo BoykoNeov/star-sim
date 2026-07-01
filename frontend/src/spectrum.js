@@ -80,6 +80,23 @@ const LINES = [
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
 const COL_GRID = "#283149";
 
+// --- rotational (v sin i) line broadening -----------------------------------
+// A cheap client-side post-process on the baked spectrum (whirling-cohort-atlas.md,
+// Tier B): a fast rotator's absorption lines are Doppler-smeared across ±Δλ_L =
+// λ·v sin i/c, so they go SHALLOWER and WIDER while conserving equivalent width. We
+// convolve the served flux with Gray's analytic rotation profile (Gray, *The
+// Observation and Analysis of Stellar Photospheres*, the linear-limb-darkening form).
+// v sin i is driven from the star's real surface rotation (state.v_rot_kms, from the
+// MIST vvcrit axis) taken EDGE-ON (i = 90°, sin i = 1) — the MAXIMUM projected
+// broadening; at other inclinations the lines would be sharper. The vvcrit toggle
+// sets *whether* the star spins fast; this *shows* it in the lines.
+const C_KMS = 299792.458;
+const ROT_EPS = 0.6;             // linear limb-darkening coefficient (Gray's ε)
+// Below this the smear is sub-pixel at the grid's R≈2400 (2.5 Å bins → ~115–190 km/s
+// per pixel), so the kernel is ~identity and the note is suppressed (the Sun, v_rot=0,
+// is correctly untouched). Reachable rotators run ~200–420 km/s, well above it.
+const ROT_VISIBLE_KMS = 120;
+
 // Wolf-Rayet wind-EMISSION lines (endgame Chunk 7) — drawn rising ABOVE the continuum,
 // the opposite of the absorption guides above. The defining optical features: He II
 // 4686 (THE WR line, all subtypes) + the He II Pickering series; nitrogen lines for WN
@@ -110,6 +127,8 @@ export function createSpectrum({ api }) {
 
   let data = null;        // last /spectrum result
   let lastKey = null;     // dedup: skip a refetch if (Teff,logg,feh) didn't move
+  let vRot = 0;           // marker's surface rotation (km/s) — drives v sin i broadening
+  let broadenedMemo = null;   // {src, v, flux} — cache so resize() doesn't reconvolve
   // A caller-supplied placeholder message (the WD endgame: log g 7–9 is off the
   // main-sequence atmosphere grid, and the central-star rows would silently return a
   // wrong lower-gravity spectrum, so we draw an honest "no model yet" frame instead of
@@ -153,8 +172,20 @@ export function createSpectrum({ api }) {
     placeholderMsg = null;   // a live star supersedes any endgame placeholder
     const teff = state.Teff_K, logg = state.logg, feh = state.feh_init;
     if (teff == null || logg == null) return;
+    const newV = state.v_rot_kms ?? 0;
     const key = `${Math.round(teff)}|${logg.toFixed(2)}|${(feh ?? 0).toFixed(2)}`;
-    if (key === lastKey) return;
+    if (key === lastKey) {
+      // Same model atmosphere — but the marker's rotation may have moved (a rotation
+      // toggle, or scrubbing along the track as the star spins down). Re-broaden the
+      // cached spectrum and redraw, NO refetch (v sin i is a pure client-side post-
+      // process). Only the live absorption cube reacts; a WD/WR frame ignores it.
+      if (Math.abs(newV - vRot) > 0.5) {
+        vRot = newV;
+        if (data && !data.isWD && !data.isWR) { draw(); renderCaption(); }
+      }
+      return;
+    }
+    vRot = newV;
     lastKey = key;
     if (debounce) clearTimeout(debounce);
     debounce = setTimeout(() => fetchSpectrum(teff, logg, feh ?? 0), 90);
@@ -276,6 +307,54 @@ export function createSpectrum({ api }) {
       data.teff_requested > data.teff_max + 0.5;
   }
 
+  // Convolve `flux` with Gray's rotation profile at v sin i = `vsini` km/s. The grid
+  // is uniform in λ (2.5 Å), but Δλ_L = λ·v sin i/c grows with λ, so the kernel is
+  // built PER PIXEL in local-pixel units — physically constant in velocity, wider in
+  // the red. Weights follow Gray's linear-limb-darkening profile over x = Δλ/Δλ_L ∈
+  // (−1, 1): 2(1−ε)√(1−x²) + (π ε/2)(1−x²), then normalized to sum = 1 so equivalent
+  // width is conserved (lines get shallower + wider, not weaker). Sub-pixel widths
+  // (slow rotators) collapse to identity; ends are edge-replicated (flat continuum).
+  function rotBroaden(lam, flux, vsini) {
+    const n = flux.length;
+    const out = new Float64Array(n);
+    const inv = vsini / C_KMS;                 // Δλ_L / λ
+    for (let i = 0; i < n; i++) {
+      const dl = i + 1 < n ? lam[i + 1] - lam[i] : lam[i] - lam[i - 1];
+      const dLpix = (lam[i] * inv) / dl;       // half-width Δλ_L in pixels at this λ
+      if (dLpix < 0.5) { out[i] = flux[i]; continue; }   // sub-pixel → identity
+      const half = Math.ceil(dLpix);
+      let acc = 0, sum = 0;
+      for (let j = -half; j <= half; j++) {
+        const x = j / dLpix;
+        if (x <= -1 || x >= 1) continue;
+        const s = 1 - x * x;
+        const w = 2 * (1 - ROT_EPS) * Math.sqrt(s) + 0.5 * Math.PI * ROT_EPS * s;
+        let idx = i + j;
+        if (idx < 0) idx = 0; else if (idx >= n) idx = n - 1;   // edge-replicate
+        acc += w * flux[idx];
+        sum += w;
+      }
+      out[i] = sum > 0 ? acc / sum : flux[i];
+    }
+    return out;
+  }
+
+  // The flux to draw for the main absorption cube: the rotationally-broadened version
+  // when the star spins fast enough to matter, else the raw served array. WD/WR frames
+  // are NEVER broadened — a degenerate remnant rotates slowly (and its lines are
+  // pressure-broadened), and a WR is already wind-broadened, so the progenitor's
+  // v_rot would be meaningless there. Memoized on (source array, v_rot) so a resize
+  // redraw reuses the last convolution.
+  function mainFlux() {
+    const raw = data.flux;
+    if (data.isWD || data.isWR || !(vRot >= 1)) return raw;
+    if (broadenedMemo && broadenedMemo.src === raw && broadenedMemo.v === vRot)
+      return broadenedMemo.flux;
+    const flux = rotBroaden(data.wavelength, raw, vRot);
+    broadenedMemo = { src: raw, v: vRot, flux };
+    return flux;
+  }
+
   // --- drawing ---------------------------------------------------------------
   function draw() {
     ctx.clearRect(0, 0, W, H);
@@ -287,7 +366,7 @@ export function createSpectrum({ api }) {
     if (data.isWR && data.off_grid) { drawNoModel(); return; }
     if (data.isWR) { drawWR(); return; }
 
-    const lam = data.wavelength, flux = data.flux;
+    const lam = data.wavelength, flux = mainFlux();
     const n = lam.length;
     const lamLo = lam[0], lamHi = lam[n - 1];
     let fmax = 0;
@@ -648,6 +727,13 @@ export function createSpectrum({ api }) {
     if (!data.feh_varies) {
       txt += " — solar-metallicity grid: the [Fe/H] control does not change this " +
         "panel yet (awaiting a metallicity-varying spectral grid).";
+    }
+    // Rotational broadening note — only when v sin i is above the ~one-pixel visibility
+    // floor (below it the smear is sub-pixel and the lines are visibly untouched).
+    if (vRot >= ROT_VISIBLE_KMS) {
+      txt += ` · v sin i ≈ ${Math.round(vRot)} km/s (shown edge-on) — rotation ` +
+        "Doppler-broadens the absorption lines (shallower & wider); this is the maximum " +
+        "projection, at lower inclination they'd be sharper.";
     }
     caption.textContent = txt;
   }

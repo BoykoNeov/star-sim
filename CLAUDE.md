@@ -144,9 +144,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   Teff/[Fe/H]/logg + OSTAR2002 hot >30000). The bake is axis-generic (single→
   multi-grid via `--cool-grid`/`--hot-grid`, **no `BAKE_VERSION` bump**). Payoffs:
   [Fe/H] deepens metal lines; He I/II `minTeff`-gated; TiO `maxTeff`-gated;
-  past-ceiling no-model notice keyed off `teff_max`. [[star-sim-phase5-spectra]];
-  recipe `backend/docs/msg_spectra_build_recipe.md`; plan
-  `docs/plans/graceful-toasting-thimble.md`.
+  past-ceiling no-model notice keyed off `teff_max`. **v sin i line broadening** (the
+  rotation-axis spectral follow-on, `spectrum.js` only): a client-side convolution with
+  Gray's rotation profile (ε=0.6, per-pixel width Δλ_L=λ·v sin i/c, EW-conserving),
+  driven by the marker's real `v_rot_kms` **edge-on** (sin i=1, the max projection — no
+  inclination slider, it'd be incoherent with no oblateness model); scoped to the main
+  absorption cube (WD/WR/SN exempt), no refetch, caption gated ≥120 km/s (the ~1-px
+  R≈2400 floor). Backend byte-unchanged. [[star-sim-phase5-spectra]],
+  [[star-sim-rotation-subpop-atlas]]; recipe `backend/docs/msg_spectra_build_recipe.md`;
+  plan `docs/plans/graceful-toasting-thimble.md`.
 
 ### Endgame (WR/WD — `/endgame` goes **through** PROVIDER; an endgame state IS a StellarState)
 - Both endgames are already on disk in the MIST tracks (clipped by the `phase>=5`

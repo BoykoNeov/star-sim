@@ -147,12 +147,20 @@ at their respective fidelities; see "Cross-cutting design" below.
   in like the CAP18 swap). Honest, bounded to the spectrum panel — the *track* won't
   follow α. (To make evolution follow α we'd need α-enhanced MESA runs — a Tier-D
   effort.)
-- **Rotational line broadening (v sin i).** Cheap **frontend convolution** of the
-  baked spectrum with a rotation kernel. Honest, but **narrow payoff**: visible only
-  above ~125 km/s (our bake resolution) → it lights up for genuine fast rotators
-  (Be/A/B) and is correctly invisible for the Sun. Needs v·sin i (rotation ×
-  inclination). A nice pairing with the rotation axis: the vvcrit axis sets *whether*
-  the star spins fast; the broadening *shows* it in the lines.
+- **Rotational line broadening (v sin i). ✅ DONE.** A pure **client-side convolution**
+  of the baked spectrum with Gray's rotation profile (`spectrum.js` only; `rotBroaden`
+  ε=0.6, per-pixel variable width Δλ_L=λ·v sin i/c, normalized so equivalent width is
+  conserved → lines go shallower & wider, not weaker). Driven by the marker's real
+  `v_rot_kms` (the MIST vvcrit axis) taken **edge-on** (sin i=1) — the maximum
+  projection; advisor settled *against* a lone inclination slider (it would be
+  incoherent with no oblateness/gravity-darkening model anywhere else, so only the
+  lines would respond to a "tilt"). Honest **narrow payoff**, exactly as forecast:
+  visible above ~120 km/s (the ~1-pixel floor at R≈2400), and the vvcrit toggle sets
+  *whether* the star spins fast while the broadening *shows* it in the lines. Scoped to
+  the **main absorption cube only** (WD/WR/SN exempt). No refetch (re-broaden cached
+  flux + redraw on v_rot change, memoized). **Measured visible through the runtime
+  path**: 2.5 M☉ vvcrit0.4 → v sin i 212 km/s, Ca K core depth 0.43→0.30 with Balmer
+  lines shallowing; the Sun (v_rot=0) untouched. Backend byte-unchanged.
 - **Microturbulence (ξ).** Spectral-only line-saturation knob; CAP18-large carries
   it. Real but minor pedagogy — probably not worth a dedicated control.
 

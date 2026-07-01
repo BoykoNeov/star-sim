@@ -1,6 +1,6 @@
 ---
 name: star-sim-rotation-subpop-atlas
-description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-4 ALL BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms, and Chunk 4 fetched the remaining rotating feh grids → rotating axis now spans the full -1.0..+0.5 [Fe/H] axis). Rotation arc complete. User said \"nothing is out of scope.\""
+description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-4 ALL BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms, and Chunk 4 fetched the remaining rotating feh grids → rotating axis now spans the full -1.0..+0.5 [Fe/H] axis). Rotation arc complete. Tier-B v sin i line broadening now ALSO BUILT (client-side Gray-profile convolution driven by v_rot_kms, edge-on). User said \"nothing is out of scope.\""
 metadata: 
   node_type: memory
   type: project
@@ -123,6 +123,32 @@ break = honest "negligible"), NOT a slider.
   glob silently grabs the non-rotating dir). New conftest markers
   `requires_mist_rotation_multifeh` / `requires_mist_rotation_heldout_feh`. **194 pytest** (+2).
 
+**v sin i line broadening — BUILT (2026-07-01, Tier B, the rotation-axis spectral
+follow-on).** `spectrum.js` ONLY, no backend touch. `rotBroaden(lam, flux, vsini)`
+convolves the served flux with Gray's rotation profile (ε=0.6 linear limb darkening;
+weight ∝ 2(1−ε)√(1−x²)+(πε/2)(1−x²) over x=Δλ/Δλ_L∈(−1,1)); **per-pixel variable
+width** Δλ_L=λ·v sin i/c (constant in velocity, wider in the red — the grid is uniform
+2.5 Å/linear, R≈2400), **normalized to sum=1** so equivalent width is conserved (lines
+go shallower+wider, not weaker). Driven by the marker's real `v_rot_kms` (the MIST
+vvcrit axis) taken **EDGE-ON (sin i=1)** — the maximum projection. **Advisor settled
+the one open decision AGAINST an inclination slider**: it'd be incoherent here (the 3D
+star doesn't go oblate, Teff/L don't shift — gravity darkening is deferred Tier-C), so
+only the spectral lines responding to a "tilt" implies a viewing-geometry model that
+exists nowhere else; revisit a slider only if oblateness ever lands. Caption framed as
+the *maximum* broadening (upper bound), not the textbook "v sin i is a lower bound on
+v". **Scoped to the main absorption cube only** — WD (slow, Stark-dominated remnant;
+progenitor v_rot meaningless), WR (intrinsically wind-broadened), SN (placeholder) all
+exempt via `data.isWD/isWR` guards in `mainFlux()`. **No refetch** — `update()`
+re-broadens the cached flux + redraws when only v_rot moved (same Teff/logg/feh key);
+memoized on (source array, v_rot) so `resize()` doesn't reconvolve. Caption note gated
+≥120 km/s (the ~1-pixel visibility floor). **Measured visible through the runtime path
+("don't label a non-feature"):** reachable rotators run 200–420 km/s (peak ~418 at
+100 M☉/[Fe/H]−1.0 vvcrit0.4); on the real served spectrum of a 2.5 M☉ vvcrit0.4 star
+(v sin i 212 km/s) Ca K core depth 0.43→0.30, Hβ 0.67→0.60, Balmer lines shallow+widen
+while EW is exactly conserved; the Sun (v_rot=0) is byte-identical. Playwright-verified
+1440 px, zero console errors. Plan: `whirling-cohort-atlas.md` Tier B. See
+[[star-sim-phase5-spectra]].
+
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime
 shift, lowered WR threshold, CHE at low Z). B (real, spectrum-only) = **[α/Fe]**
@@ -146,8 +172,8 @@ rotation, basis of SED Chunk 3); hot/WR stars have NO braking (radiative envelop
 vs pins activity/X-ray (age-derivable only for cool MS stars). See
 [[star-sim-nonthermal-sed-plan]] and [[star-sim-wr-wd-endgame-plan]].
 
-Suggested order if picked: instability-strip overlay → rotation toggle (after the
-mass-ramp diff) → v sin i broadening → [α/Fe] re-bake → binarity/live-solver.
+Suggested order if picked: instability-strip overlay ✓ → rotation toggle ✓ (after the
+mass-ramp diff) → v sin i broadening ✓ → [α/Fe] re-bake → binarity/live-solver.
 
 **UX correction (2026-07-01):** the vvcrit **track toggle now HIDES** where it is a
 data-derived no-op (below the ~1.2 M☉ Kraft break, `!rotStatus.active`) instead of showing
