@@ -227,6 +227,44 @@ row flipped idea→done. 232 pytest.
   to the Z→envelope-depth link. **237 pytest** (was 236, +1). Playwright-verified 1440 px (band
   spans r/R 0.69→1.0 at +0.5, a sliver at 0.97 at −1.0; zero console errors). Recipe §10.
 
-**Next:** metallicity at *other masses* (the grid is non-rectangular — only 1 M☉ has the Z axis
-today) or other mass-Z combinations if a specific pedagogy calls for it — always verify the
-structural effect is *visible in the panel* first. See ROADMAP + [[star-sim-roadmap]].
+## The [Fe/H] axis at a SECOND mass — the 0.8 M☉ K dwarf (recipe §11) — BUILT
+
+The metallicity axis now lives at **two masses (0.8 and 1 M☉)**, so the interior grid is a genuine
+**partial 2D (mass × [Fe/H]) grid** for the first time. The 0.8 M☉ K dwarf is the same *regime* as
+the Sun (radiative core + convective envelope) but a **deeper** envelope, so the Z-shallowing is
+stronger AND — the load-bearing difference — **stays a single unfragmented zone at every Z**.
+Matched-Xc envelope base **0.66 / 0.69 / 0.81** at [Fe/H] **+0.5 / 0 / −1**, monotone at every
+phase, core stays radiative (`expected_n`=3, not a flip).
+
+**Chosen by MEASUREMENT over two rejects** (the §10 non-ship discipline again — advisor-led fork:
+"measure, don't physics-guess"; user picked 0.8 after seeing the 1.3 result):
+- **6 M☉ convective-*core* edge vs Z** (the *novel* lesson — Z acting on a core, not an envelope)
+  **FAILED the gate**: core-edge r/R shift across [Fe/H] −1…+0.5 is only ~0.02–0.03 and **loses
+  monotonicity below Xc≈0.5** (metal-rich↔solar cross over). Massive stars respond to Z in R/Teff,
+  not convective-core mass fraction — nothing visibly-monotone to show. (Advisor predicted this.)
+- **1.3 M☉ envelope** (the transitional double-convective mass — a convective core AND a convective
+  envelope at once, unlike any shipped slice) gave a clean **2-point** trend (+0.5 base 0.82, solar
+  0.89) but its thin surface zone **fragments into ~0.99 slivers by [Fe/H]=−0.5** (real
+  `mixing_type==1`, NOT an OR-clause artifact — split-mask-checked), and −0.5 ≈ −1 (indistinguishable
+  from each other, the §10 non-ship condition). Not shipped as a Z axis; the double-convective
+  *structure* remains a possible future standalone slice.
+- **0.8 M☉ envelope** = the clean winner (deep K-dwarf envelope has room to shallow without breaking).
+
+**Two run changes vs §10:** cap with **`max_age = 2.0d10`** (a K-dwarf MS is ~25 Gyr — the central-H
+TAMS stop fires only after an unreasonable integration; 20 Gyr reaches mid-MS Xc≈0.3), and drop the
+pre-MS Hayashi profiles (all fully-convective `[0.16–1.0]`, misleading). Otherwise `initial_mass=0.8`
+with the three Zbase/initial_z pairs (0.048/0.0152/0.00152 — **change Zbase too**, §10 gotcha).
+
+**Runtime NO code change** again (mass→feh→age snap; a Z-less mass falls back to solar — BOTH the
+within-0.8 Z snap and the 2/6 M☉→solar fallback verified through the real `interior_structure()`
+path, closing the advisor's "partial-2D-grid topology" concern). +3 data dirs (`solar_0p8Msun` /
+`0p8Msun_fehp0p5` / `0p8Msun_fehm1p0`) + 1 test (`test_kdwarf_envelope_shallows_as_metallicity_drops`,
+reusing a **mass-parametrized** `_midms_envelope_base`, existing `requires_structure_multifeh` marker
+— no conftest change) + a `structure.js` comment refresh (grid now "0.8 and 1 M☉"; the snapped-far
+note reads the *snapped* result so it stays correct as the axis grows). **238 pytest** (was 237, +1).
+Playwright-verified 1440 px (conv. band visibly, monotonically shallows +0.5→−1: conv. base
+0.659→0.694→0.807; radiative core → n=3 at every Z; zero console errors).
+
+**Next:** extend [Fe/H] to still more masses the same way (clean on the lower MS, *fails* in the
+convective-core regime per the 6 M☉ measurement — verify visible first), or ship the 1.3 M☉
+double-convective structure on its own merits. See ROADMAP + [[star-sim-roadmap]].

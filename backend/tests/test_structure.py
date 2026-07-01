@@ -365,8 +365,8 @@ def test_fully_convective_mdwarf_hugs_the_n_onehalf_polytrope():
 # --- the metallicity axis (the [Fe/H]=−1 / +0.5 slices at 1 M☉) --------------
 
 
-def _midms_envelope_base(feh, target_xc=0.35):
-    """The outer convective-envelope base r/R of the 1 M☉ snapshot at this [Fe/H]
+def _midms_envelope_base(feh, target_xc=0.35, mass=1.0):
+    """The outer convective-envelope base r/R of the `mass` M☉ snapshot at this [Fe/H]
     whose central H is nearest `target_xc` — i.e. matched *evolutionary phase*, not
     matched age. A metal-poor star is hotter and shorter-lived, so equal age ≠ equal
     phase; comparing at equal Xc is the load-bearing discipline (recipe §10).
@@ -374,12 +374,12 @@ def _midms_envelope_base(feh, target_xc=0.35):
     Returns (snapped_feh, center_h, envelope_base r/R, expected_n)."""
     ages = sorted(
         m.age_yr for m in _INDEX.available()
-        if m.mass_init == 1.0 and abs(m.feh - feh) < 0.01
+        if m.mass_init == mass and abs(m.feh - feh) < 0.01
     )
-    assert ages, f"no 1 M☉ snapshots at [Fe/H]={feh}"
+    assert ages, f"no {mass} M☉ snapshots at [Fe/H]={feh}"
     best = None
     for a in ages:
-        s = interior_structure(1.0, feh, a)
+        s = interior_structure(mass, feh, a)
         xc = s["snapped"]["center_h"]
         if best is None or abs(xc - target_xc) < abs(best[1] - target_xc):
             best = (s, xc)
@@ -421,6 +421,45 @@ def test_convective_envelope_shallows_as_metallicity_drops():
     assert base_poor - base_sun > 0.1, (base_sun, base_poor)
 
     # NOT a core-type flip — the core stays radiative at every metallicity (n=3).
+    assert n_rich == n_sun == n_poor == 3.0
+
+
+@requires_structure_multifeh
+def test_kdwarf_envelope_shallows_as_metallicity_drops():
+    """The metallicity axis at a *second* mass — the 0.8 M☉ K dwarf (recipe §11). Same
+    regime as the 1 M☉ Sun (radiative core + convective envelope), but a lower-main-
+    sequence star has a *deeper* envelope, so the solar-abundance-problem effect is even
+    more pronounced and — crucially — stays a single clean zone at every metallicity
+    (unlike the transitional ~1.3 M☉ mass, whose thin surface zone fragments below solar
+    and so was not shipped). The three 0.8 M☉ buckets form a clean monotone trend:
+
+        [Fe/H] = +0.5 : deepest envelope (base ≈ 0.66, outer ~34%)
+        [Fe/H] =  0.0 : base ≈ 0.68
+        [Fe/H] = −1.0 : base ≈ 0.82 (outer ~18%)
+
+    This makes the panel a partial 2D (mass × [Fe/H]) grid — [Fe/H] now lives at both
+    0.8 and 1 M☉ — while the core stays radiative (expected_n = 3) at every Z, exactly
+    as at 1 M☉: the entire visible effect is envelope depth, not a core-type flip."""
+    fp, _, base_rich, n_rich = _midms_envelope_base(0.5, mass=0.8)
+    fz, _, base_sun, n_sun = _midms_envelope_base(0.0, mass=0.8)
+    fm, _, base_poor, n_poor = _midms_envelope_base(-1.0, mass=0.8)
+
+    # the three buckets snapped near the requested [Fe/H] at 0.8 M☉ (not fallen back to
+    # the 1 M☉ Z axis — the partial-grid snap is mass-then-feh).
+    assert abs(fp - 0.5) < 0.05 and fz == 0.0 and fm == -1.0
+
+    # every bucket has a single clean outer convective envelope reaching the surface.
+    assert base_rich is not None and base_sun is not None and base_poor is not None
+
+    # the monotone trend: envelope deepens with metallicity (base rises as Z falls).
+    assert base_rich < base_sun < base_poor, (base_rich, base_sun, base_poor)
+
+    # the metal-poor envelope is dramatically shallower than the metal-rich one — a deep
+    # K-dwarf envelope, so the spread survives even though no bucket fragments.
+    assert base_poor - base_rich > 0.1, (base_rich, base_poor)
+
+    # NOT a core-type flip — the core stays radiative at every metallicity (n=3), same
+    # as the 1 M☉ Sun (the K dwarf is well above the fully-convective boundary).
     assert n_rich == n_sun == n_poor == 3.0
 
 

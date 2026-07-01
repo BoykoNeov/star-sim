@@ -371,7 +371,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   is the lesson." NOT a pure drop-in: +`requires_structure_lowmass` marker (≤0.5 M☉ gate) + 2 tests +
   the off-grid snap probe re-pointed 0.3→0.15 (0.25 is now the grid floor) + a small `structure.js`
   caption refinement ("fully convective …the rare case the real profile follows it"; blank conv.base).
-  **17 tests** (`test_structure.py`); 237 pytest total. Playwright-verified 1440 px (6/15 M☉ "convective
+  **18 tests** (`test_structure.py`); 238 pytest total. Playwright-verified 1440 px (6/15 M☉ "convective
   core → canonical n = 3/2"; 0.25 M☉ "fully convective", ρ overlapping the n=1.5 dash, whole-panel
   convective shading; zero console errors). The **metallicity axis** added — the first non-mass slice
   (1 M☉ at [Fe/H]=−1.0 and +0.5): the solar-abundance-problem effect, lower Z → more transparent
@@ -384,8 +384,23 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   code change** (the index already snapped mass→feh→age; frontend already passed the marker's [Fe/H]);
   data (`1Msun_fehm1p0`/`1Msun_fehp0p5`) + `requires_structure_multifeh` marker + 1 trend test + a
   **[Fe/H]-snapped-far note** (`structure.js`, the Z grid is 1 M☉-only) + the conv.base tooltip Z-link.
-  Recipe §10. **Next:** metallicity at other masses (grid non-rectangular — only 1 M☉ has the Z axis
-  today); verify visible in the panel first. [[star-sim-interior-structure-mesa]].
+  Recipe §10. The **[Fe/H] axis now lives at a SECOND mass — the 0.8 M☉ K dwarf** (§11), so the
+  interior grid is a genuine **partial 2D (mass × [Fe/H]) grid** for the first time. Same regime as
+  the Sun (radiative core + conv. envelope) but a deeper envelope → the Z-shallowing is stronger AND
+  **stays a single unfragmented zone at every Z** (base **0.66/0.69/0.81** at [Fe/H] +0.5/0/−1,
+  matched-Xc-measured, monotone, core stays radiative n=3 — not a flip). **Chosen by measurement over
+  two rejects:** 6 M☉ convective-*core* edge (the novel Z-on-a-core lesson) **failed the gate** (~0.02
+  shift, non-monotonic below Xc 0.5 — massive stars respond to Z in R/Teff, not core fraction); 1.3 M☉
+  envelope gave a clean 2-point but **fragments into ~0.99 slivers by [Fe/H]=−0.5** (real mixing_type,
+  not OR-artifact — checked), so not shipped. **Runtime NO code change** again (mass→feh→age snap; a
+  Z-less mass falls back to solar — both verified through the real `interior_structure()` path); +3
+  data dirs (`solar_0p8Msun`/`0p8Msun_fehp0p5`/`0p8Msun_fehm1p0`) + 1 trend test (mass-parametrized
+  `_midms_envelope_base`, existing `requires_structure_multifeh` marker) + a `structure.js` comment
+  refresh (note reads the snapped result → correct as the axis grows). **238 pytest**, Playwright-
+  verified 1440 (conv. band shallows 0.659→0.694→0.807 across +0.5→−1, zero console errors). **Next:**
+  extend the [Fe/H] axis to more masses (clean on the lower MS, fails in the convective-core regime —
+  verify visible first), or ship the 1.3 M☉ double-convective structure on its own merits.
+  [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
@@ -400,7 +415,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **237 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **238 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
@@ -426,9 +441,11 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   n=3/2 + radiative-envelope-at-r/R=0.9, the direct Sun↔6 M☉ *mirror* on the same two probe
   radii, the 2 M☉ core-convective check, and the 15 M☉ SN-progenitor deepest-convective-core
   (core r/R 0→0.178, hotter/less-dense than 6 M☉); plus the **25 M☉ upper-SN-range** test and
-  the **2 low-mass M-dwarf** tests (`requires_structure_lowmass`); plus the **metallicity-axis
-  trend test** (`requires_structure_multifeh`, gated on |[Fe/H]|>0.3): the matched-Xc monotone
-  envelope-shallowing base(+0.5)<base(0)<base(−1), all `expected_n`=3 (not a core flip).
+  the **2 low-mass M-dwarf** tests (`requires_structure_lowmass`); plus **two metallicity-axis
+  trend tests** (`requires_structure_multifeh`, gated on |[Fe/H]|>0.3), one at **1 M☉** and one
+  at **0.8 M☉** (the second mass on the Z axis — the partial 2D grid): the matched-Xc monotone
+  envelope-shallowing base(+0.5)<base(0)<base(−1), all `expected_n`=3 (not a core flip). The 0.8 M☉
+  one reuses a mass-parametrized `_midms_envelope_base`.
 
 ### Next
 - **`docs/plans/ROADMAP.md`** is the canonical cross-plan index of everything

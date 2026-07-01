@@ -30,8 +30,10 @@ const COL_CONV = "rgba(120,170,255,0.16)";  // convective-zone shading
 
 // A requested vs snapped mass this close is "on grid" (no snapped-far note).
 const MASS_MATCH_TOL = 0.05;
-// The metallicity grid is coarse (a few [Fe/H] buckets, and only at 1 M☉), so a
-// request this far from the nearest saved [Fe/H] is a real snap worth flagging.
+// The metallicity grid is coarse and non-rectangular (a few [Fe/H] buckets, only at
+// 0.8 and 1 M☉ today — a partial 2D mass×[Fe/H] grid), so a request this far from the
+// nearest saved [Fe/H] is a real snap worth flagging. The note reads the *snapped*
+// result, so it stays correct as the [Fe/H] axis grows to more masses.
 const FEH_MATCH_TOL = 0.3;
 
 function fmt(x, sig = 3) {
