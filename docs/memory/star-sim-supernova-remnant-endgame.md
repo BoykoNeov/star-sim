@@ -329,3 +329,38 @@ that ALSO names the model's own two lines (L_total solid white, L_radio dashed a
 previously unlabeled); shifts down (`y0 = PAD + (failed?42:8)`) to clear the failed-SN
 top-centre banner. (3) **Rotation track toggle** — see [[star-sim-rotation-subpop-atlas]]:
 now HIDDEN below the Kraft break instead of greyed (confusing next to the period slider).
+
+## 3D/onion polish + nebula (two frontend-only commits, user-reported reads)
+
+Three reads on the SN 3D/onion, all fixed frontend-only (220 pytest unchanged;
+Playwright-verified at 1440+900/900px across NS 15 M☉, fallback BH 40/[Fe/H]−0.5,
+failed 50/[Fe/H]−1.0; zero console errors). Advisor-scoped: two clear bugs + a
+user-chosen "polish now, nebula next" split.
+
+**Polish commit:** (1) **Onion contradiction** — the "pre-collapse onion shell"
+(`comp.js drawSNOnion`) was drawing a *post*-collapse black-hole void + horizon
+ring / steel NS at its centre. Now the inner region is the hot degenerate **Fe/Si
+core that WILL collapse** (white-hot→iron radial gradient, SAME depiction for NS &
+BH — the fate is a label `Fe/CO core → neutron star/black hole`, and a BH's core
+just eats more of the onion). `COL_REM` removed → `COL_CORE`. (2) **Entry punch**
+(`star.js`+`main.js`) — the explosion no longer opens as a dim little ball: a brief
+**shock-breakout flash** `snShock = 1−smoothstep01(0,0.05,dayFrac)` (3D-only +
+evocative, NOT on the light curve) added to the fireball intensity, plus a higher
+brightness floor (0.72 base) and bigger entry ball (`snGrow` floor 0.55). A FAILED
+direct collapse gets **neither** (dim=0.3, shock=0) — that dimness was correct
+physics (the "disappearing supergiant"), so it's a *framing* fix (caption), not a
+brightness one. (3) **NS uncovering** — the remnant dot ramps from `fade 0.4`
+(was 0.6) so the thinning ejecta **uncover** it rather than it popping in against
+black; caption labels its **~20 km, not-to-scale** nature.
+
+**Nebula commit (Phase 2):** `FIREBALL_FRAG` late-phase profile cross-fades (by
+`uFade`) from the filled young ball into a **limb-brightened, HOLLOW, filamentary
+shell** — a young SNR. `shell = smoothstep(0.55,0.97,1−mu)` (edge-bright), the
+silhouette cutoff relaxes toward the limb as it forms (`mix(0.16,0.06,uFade)`) so
+the rim isn't clipped, dim floor raised (`1−0.62·uFade`). The centre goes
+transparent so the **remnant shows THROUGH** the nebula (fixes "a star appears at
+the end"; also distinguishes explosion-from-star). Failed SN never reaches a bright
+shell (capped intensity) — still winks out. Early spherical fireball kept (the young
+photosphere IS round — advisor). Honesty guardrail held: the realism is the NEBULA,
+the NS dot stays evocative/labeled (a real NS's optical thermal emission is
+negligible).
