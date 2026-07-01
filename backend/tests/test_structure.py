@@ -30,7 +30,11 @@ from fastapi.testclient import TestClient
 from star_sim.api import app
 from star_sim.structure import _INDEX, interior_structure
 
-from .conftest import requires_structure_data, requires_structure_massive
+from .conftest import (
+    requires_structure_data,
+    requires_structure_lowmass,
+    requires_structure_massive,
+)
 
 client = TestClient(app)
 
@@ -144,9 +148,10 @@ def test_snaps_to_nearest_saved_age_and_reports_true_values():
 def test_out_of_grid_mass_snaps_not_extrapolates():
     """A far-off-grid mass snaps to the nearest available run and reports that run's
     TRUE mass — never a silently extrapolated value (§3/§6 honesty). The snapped mass
-    is whatever slice is closest and on disk (1 M☉ alone, or the nearest of the
-    1/2/6 M☉ grid), and it is always one of the *saved* masses, never an interpolant."""
-    s = interior_structure(0.3, 0.0, 1.0e8)          # far below the grid floor
+    is whatever slice is closest and on disk (the lightest is 0.25 M☉ once the M-dwarf
+    slice is present, else 1 M☉), and it is always one of the *saved* masses, never an
+    interpolant."""
+    s = interior_structure(0.15, 0.0, 1.0e8)          # below the lightest grid floor
     masses = {m.mass_init for m in _INDEX.available()}
     assert s["snapped"]["mass_msun"] in masses
     assert s["snapped"]["mass_msun"] == min(masses)   # snaps to the lightest saved run
@@ -288,6 +293,72 @@ def test_massive_25msun_brackets_the_upper_sn_range():
     c = s["central"]
     assert 2.5e7 < c["T_c_K"] < 5.0e7, c["T_c_K"]
     assert abs(c["M_total_msun"] - 25.0) < 0.1, c["M_total_msun"]
+
+
+# --- the low-mass, fully-convective M dwarf (the 0.25 M☉ slice) ---------------
+
+
+@requires_structure_lowmass
+def test_lowmass_mdwarf_is_fully_convective():
+    """The 0.25 M☉ slice completes the trilogy of interior regimes: below the
+    ~0.35 M☉ boundary an M dwarf is **fully convective** — a single convection zone
+    spanning the whole star, center → surface. This is the third regime after the
+    1 M☉ Sun (radiative core + convective envelope) and the 6/15/25 M☉ massive stars
+    (convective core + radiative envelope):
+
+      * the core is convective  -> the canonical overlay is n=3/2,
+      * one convective zone is anchored at the centre AND reaches the surface — so,
+        unlike the massive case, r/R=0.9 is ALSO convective (the whole star is).
+    """
+    s = interior_structure(0.25, 0.0, 1.0e9)
+    assert s["snapped"]["mass_msun"] == 0.25
+
+    # core convective -> n=3/2 (fully-mixed adiabatic), same overlay hint as a massive
+    # convective core, but here it is the *whole star*, not just the core.
+    assert s["convective"][0] is True, "a 0.25 M☉ M dwarf is convective at the centre"
+    assert s["expected_n"] == 1.5
+
+    zones = s["convective_zones"]
+    # a single zone spanning ~centre -> surface (fully convective).
+    spanning = [z for z in zones if z[0] < 0.02 and z[1] > 0.95]
+    assert spanning, f"expected one convective zone spanning centre->surface, got {zones}"
+    # and the envelope IS convective (the mirror-image of the massive-star flip, where
+    # r/R=0.9 is radiative — here the whole star convects).
+    assert _conv_at(zones, 0.9), f"a fully-convective M dwarf convects at r/R=0.9: {zones}"
+
+    # an M dwarf: small radius, right mass, cooler/denser core than the Sun.
+    c = s["central"]
+    assert abs(c["M_total_msun"] - 0.25) < 0.02, c["M_total_msun"]
+    assert c["R_surface_rsun"] < 0.5, c["R_surface_rsun"]
+    assert c["T_c_K"] < 1.0e7, c["T_c_K"]  # below the Sun's ~1.5e7 (weak pp burning)
+
+
+@requires_structure_lowmass
+def test_fully_convective_mdwarf_hugs_the_n_onehalf_polytrope():
+    """The one bucket where the polytrope idealization is HONEST — the inversion of the
+    usual 'the departure is the lesson'. A fully-convective star is the textbook n=3/2
+    polytrope, so the real ρ(r)/ρ_c should track the n=1.5 overlay closely and sit far
+    above the (much more centrally-concentrated) n=3 overlay. Measured: within a few
+    percent of n=1.5 across the star (vs n=3 off by factors of a few to ~100)."""
+    s = interior_structure(0.25, 0.0, 1.0e9)
+    rr = np.array(s["r_over_R"])
+    rho = np.array(s["rho_over_rhoc"])
+    polys = {p["n"]: p for p in s["polytropes"]}
+
+    def at(p, frac):
+        return float(np.interp(frac, p["r_over_R"], p["rho_over_rhoc"]))
+
+    def real_at(frac):
+        return float(np.interp(frac, rr, rho))
+
+    for frac in (0.25, 0.5, 0.75):
+        real = real_at(frac)
+        n15 = at(polys[1.5], frac)
+        n3 = at(polys[3.0], frac)
+        # real hugs n=1.5 (within ~5%)...
+        assert abs(real - n15) < 0.05, f"r/R={frac}: real {real:.3f} not near n=1.5 {n15:.3f}"
+        # ...and is much closer to n=1.5 than to n=3 (the honesty-inversion payoff).
+        assert abs(real - n15) < abs(real - n3), f"r/R={frac}: real closer to n=3 than n=1.5"
 
 
 # --- the route ---------------------------------------------------------------

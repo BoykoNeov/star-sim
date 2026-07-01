@@ -207,18 +207,30 @@ export function createStructure({ api }) {
     }
     if (!data) return;
     const snap = data.snapped;
+    // A low-mass star can be FULLY convective — one zone spanning centre→surface. That
+    // is a third regime (vs the Sun's radiative core / a massive star's convective
+    // core), and it is the rare case where the idealized n=3/2 polytrope actually
+    // matches the real profile (the real ρ hugs the dashed n=1.5 line) — the inversion
+    // of the usual "the departure is the lesson".
+    const zones = data.convective_zones || [];
+    const fullyConvective =
+      zones.length === 1 && zones[0][0] < 0.02 && zones[0][1] > 0.95;
     // State the core's STRUCTURE type → its canonical idealization — NOT a fit claim
-    // (the real ρ visibly departs from that polytrope, which is the whole point).
-    const nName = data.expected_n === 1.5 ? "convective core → canonical n = 3/2"
-                                          : "radiative core → canonical n = 3";
+    // (for the Sun/massive stars the real ρ visibly departs from that polytrope, which
+    // is the whole point; the fully-convective M dwarf is the honest exception).
+    const nName = fullyConvective
+      ? "fully convective → canonical n = 3/2 — the rare case the real profile follows it"
+      : data.expected_n === 1.5 ? "convective core → canonical n = 3/2"
+                                : "radiative core → canonical n = 3";
     caption.innerHTML =
       `Nearest saved snapshot: <b>${fmt(snap.mass_msun)} M☉</b>, ` +
       `[Fe/H] ${snap.feh >= 0 ? "+" : ""}${snap.feh.toFixed(2)}, ` +
       `<b>${ageStr(snap.age_yr)}</b> — ${snap.phase}. <b>${nName}</b>.`;
 
     const c = data.central;
-    const convBase = (data.convective_zones || [])
-      .map((z) => z[0]).sort((a, b) => b - a)[0];   // outermost envelope base
+    const convBase = fullyConvective
+      ? null   // no envelope base — the star convects all the way to the centre
+      : zones.map((z) => z[0]).sort((a, b) => b - a)[0];   // outermost envelope base
     const rows = [
       ["ρc", "central density — how tightly the star's mass is packed into its core. The Sun's is ~150 g/cm³; a not-solar-calibrated MESA model lands near it.", `${fmt(c.rho_c_gcc)} g/cm³`],
       ["Tc", "central temperature — sets the nuclear burning rate. Hydrogen fusion needs ~10⁷ K; the Sun's core is ~1.5×10⁷ K.", `${fmt(c.T_c_K)} K`],

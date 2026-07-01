@@ -314,7 +314,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-nonthermal-sed-plan]]; plan `docs/plans/magnetic-ember-broadcast.md`.
 
 ### Interior structure (real MESA radial profiles — a **sibling**; the honest Lane–Emden successor)
-- **BUILT (1 M☉ solar + the 2/6 M☉ convective-core↔radiative-envelope FLIP).** `/structure` bypasses
+- **BUILT — the three interior regimes: 0.25 M☉ fully-convective M dwarf + 1 M☉ solar radiative-core↔
+  convective-envelope + the 2/6/15/25 M☉ convective-core↔radiative-envelope FLIP.** `/structure` bypasses
   `PROVIDER` (like `/polytrope`, `/spectrum`): interior structure is a sibling, not a
   `StellarState`. `structure.py` reads offline MESA `profile.data` snapshots under
   `data/mesa_profiles/` (gitignored) with its **own** MESA-profile parser (never imports
@@ -330,7 +331,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   is a **live consumer** wired into `paintState` (own debounced latest-wins fetch); draws
   ρ bold + T/X thinner + dashed polytrope references + shaded convective bands, a snapshot
   caption, a scalar readout, and a **snapped-far note** when the star is off-grid (snaps to
-  the nearest of the 1/2/6 M☉ slices — honestly stated). **Why MESA-only/offline:** MIST ships
+  the nearest of the 0.25/1/2/6/15/25 M☉ slices — honestly stated). **Why MESA-only/offline:** MIST ships
   no radial profiles and a live solve is out of scope (§2/§9), so profiles are self-run once
   (Docker MESA, the solar recipe + profile snapshots — `backend/docs/mesa_structure_recipe.md`).
   **Measured (mid-MS, ≈ solar age):** ρ_c≈190 g/cm³, T_c≈1.66×10⁷ K, R≈1.06 R☉, radiative
@@ -353,10 +354,26 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   (ρ_c≈5.9, T_c≈3.5×10⁷ K, R≈6.67 R☉, core r/R 0→0.178; mid-MS anchor profile11, Xc 0.41) — **NO
   runtime change** again (drops in as a bucket), +1 gated test (`requires_structure_massive` already
   covers it, no conftest change), advisor OR-clause re-checked at 15 M☉ (every OR-added cell r/R≥0.97
-  → no mid-radius over-shading). **13 tests** (`test_structure.py`); 233 pytest total. Playwright-
-  verified 1440 px (6 M☉ + 15 M☉, "convective core → canonical n = 3/2", zero console errors).
-  **Next:** other-Z buckets drop in the same way (verify the effect is *visible in the panel*
-  first). [[star-sim-interior-structure-mesa]].
+  → no mid-radius over-shading). The **25 M☉ slice** brackets the upper SN-progenitor range — the
+  **deepest** convective core of the ladder (ρ_c≈3.79, T_c≈3.78×10⁷ K, R≈8.47 R☉, core 0→0.228;
+  0.131→0.178→0.228), same drop-in (no runtime change), +1 gated test, OR-clause re-checked (zero
+  mid-radius over-shade). The **0.25 M☉ slice** is the **third regime — a fully-convective M dwarf**
+  (advisor chose it over the literal "Next: other-Z": a new *regime* is visible-by-construction so
+  the honesty gate is met automatically): a single convective zone spanning **0→1** (the whole star),
+  `expected_n`→3/2, ρ_c≈135–138, T_c≈7.4×10⁶ K (below the Sun's — weak pp), R≈0.247 R☉. Two
+  advisor-flagged **run** changes (unlike the pure drop-ins): **`max_age=2d9` replaces the TAMS stop**
+  (a 0.25 M☉ MS lifetime is ~10¹²⁻¹³ yr — the central-H stop never fires, Xc barely moves) and **ship a
+  settled-MS profile, not a pre-MS-contracting one** (profiles 20/21/22 of 22, L settled ~0.0105 L☉).
+  **The polytrope-honesty INVERSION** (measured before writing it into the caption): a fully-convective
+  star *is* the textbook n=3/2 polytrope, so the real ρ **hugs the n=1.5 overlay** (~1–5%) and sits far
+  above n=3 — **the one bucket where the idealization works**, inverting the panel's usual "the departure
+  is the lesson." NOT a pure drop-in: +`requires_structure_lowmass` marker (≤0.5 M☉ gate) + 2 tests +
+  the off-grid snap probe re-pointed 0.3→0.15 (0.25 is now the grid floor) + a small `structure.js`
+  caption refinement ("fully convective …the rare case the real profile follows it"; blank conv.base).
+  **16 tests** (`test_structure.py`); 236 pytest total. Playwright-verified 1440 px (6/15 M☉ "convective
+  core → canonical n = 3/2"; 0.25 M☉ "fully convective", ρ overlapping the n=1.5 dash, whole-panel
+  convective shading; zero console errors). **Next:** other-Z buckets drop in the same way (verify the
+  effect is *visible in the panel* first). [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
 - Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK

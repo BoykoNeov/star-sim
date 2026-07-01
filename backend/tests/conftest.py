@@ -229,6 +229,22 @@ def structure_massive_available() -> bool:
         return False
 
 
+def structure_lowmass_available() -> bool:
+    """True if a *low-mass, fully-convective* interior-structure slice is present.
+
+    The 1 M☉ (or 2/6 M☉) slices satisfy `structure_data_available()`, but the
+    fully-convective M-dwarf test needs a run below the ~0.35 M☉ fully-convective
+    boundary (the 0.25 M☉ slice — see the recipe §9). Detect it by a snapshot whose
+    initial mass is well below the solar slice, so that test *skips* (not fails) on a
+    checkout without the low-mass data."""
+    from star_sim.structure import _ProfileIndex, StructureDataMissing
+
+    try:
+        return any(m.mass_init <= 0.5 for m in _ProfileIndex().available())
+    except StructureDataMissing:
+        return False
+
+
 # The /structure (real MESA interior-structure) tests need offline MESA profile
 # snapshots — generated on the host, never committed (endgame's Lane-Emden successor).
 requires_structure_data = pytest.mark.skipif(
@@ -241,4 +257,11 @@ requires_structure_data = pytest.mark.skipif(
 requires_structure_massive = pytest.mark.skipif(
     not structure_massive_available(),
     reason="no massive MESA profile slice (2/6 M☉) — see backend/docs/mesa_structure_recipe.md §6",
+)
+
+# The fully-convective M-dwarf test needs the low-mass (0.25 M☉) slice — the solar/
+# massive data alone would make it FAIL, not skip. See mesa_structure_recipe.md §9.
+requires_structure_lowmass = pytest.mark.skipif(
+    not structure_lowmass_available(),
+    reason="no low-mass MESA profile slice (0.25 M☉) — see backend/docs/mesa_structure_recipe.md §9",
 )

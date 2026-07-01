@@ -268,6 +268,69 @@ receding-core convection) or at the near-surface opacity bump (r/R ≈ 0.97) —
 mid-radius (0.3 < r/R < 0.95)** — so the OR does **not** over-shade, exactly as at 6/15 M☉
 (the inlist is still default-Schwarzschild).
 
+## 9. The 0.25 M☉ slice (a fully-convective M dwarf — the third regime) — BUILT
+
+This one goes the *other* way from §6–§8: below the ~0.35 M☉ fully-convective boundary
+an M dwarf has **no radiative region at all** — a single convection zone spanning the
+whole star, centre → surface. It completes the trilogy of interior regimes the panel
+teaches:
+
+| regime | example | core | envelope | expected_n |
+|---|---|---|---|---|
+| radiative core + convective envelope | 1 M☉ Sun | radiative | convective | 3 |
+| convective core + radiative envelope | 6/15/25 M☉ | convective | radiative | 3/2 |
+| **fully convective** | **0.25 M☉** | **convective** | **convective** | **3/2** |
+
+**Two run changes vs §6–§8 (both flagged by the advisor before the run):**
+
+1. **The TAMS stop never fires.** A 0.25 M☉ MS lifetime is ~10¹²–10¹³ yr, so
+   `xa_central_lower_limit(h1)` is never reached (Xc barely moves from ~0.714 over
+   Gyr). Stop by age instead — `max_age = 2d9` — which is safely **settled onto the
+   ZAMS** (pre-MS contraction for 0.25 M☉ is a few hundred Myr). Drop the two
+   `xa_central_lower_limit*` lines and add `max_age`; everything else is identical.
+
+2. **Select a *settled-MS* profile, not a pre-MS-contracting one.** With the age stop,
+   the profiles cluster in early pre-MS (small timesteps) and only the last few are on
+   the MS (timesteps balloon once the star settles). Both pre-MS and MS are fully
+   convective, but the honest claim is about the **MS** structure — a pre-MS star is
+   large, luminous, and convective for a *different* reason (Hayashi contraction). Pick
+   profiles where L/Teff have settled: for this run L stabilizes at ~0.0105 L☉,
+   Teff ≈ 3707 K, R ≈ 0.25 R☉ (textbook M dwarf) only in the last three snapshots.
+
+   ```bash
+   # per profile: model(col1), age(col5), Teff(col7), L/Lsun(col8) — find where L settles
+   for f in $(ls LOGS/profile*.data | sort -V); do read -a h <<< "$(sed -n 3p $f)";
+     echo "$f model=${h[0]} age=${h[4]} Teff=${h[6]} L=${h[7]}"; done
+   ```
+
+The run wrote 22 profiles; the shipped slice keeps **three settled-MS** snapshots
+(profiles 20/21/22 — ages 177 Myr / 919 Myr / 2 Gyr; three is the slider minimum, and
+an M dwarf is genuinely static over this span, so their near-identical structure is
+honest). Central `mixing_type == 1` holds everywhere. **Runtime needed no code change**
+(drops in as a bucket); the accompanying changes are a **new marker**
+`requires_structure_lowmass` (gated on a ≤0.5 M☉ slice, mirroring
+`requires_structure_massive` — so the M-dwarf tests *skip*, not fail, on a checkout
+without the low-mass data), **two new tests**, the off-grid snap test's probe re-pointed
+(0.3 → 0.15, since 0.25 is now the grid floor), and a **small frontend caption
+refinement** in `structure.js` (detect the single centre→surface zone → say "fully
+convective", and blank the "conv. base" readout since there is no radiative base).
+
+### Measured result (the shipped 0.25 M☉ slice)
+
+| slice | mid-MS snapshot | Xc | ρ_c | T_c | R | convective zone (r/R) | expected_n |
+|---|---|---|---|---|---|---|---|
+| 0.25 M☉ | profile21 | 0.71 | 135–138 g/cm³ | 7.4×10⁶ K | 0.247 R☉ | **0 → 1** (whole star) | 3/2 |
+
+The **polytrope-honesty inversion** (advisor-flagged, measured before writing it into the
+caption): a fully-convective star *is* the textbook n=3/2 polytrope, so unlike every
+other slice the real ρ(r)/ρ_c **hugs the n=1.5 overlay** (within ~1–5% at r/R = 0.25/0.5/
+0.75) and sits far above the much-more-concentrated n=3 overlay. This is the one bucket
+where the idealization *works* — the inversion of the panel's usual "the departure is the
+lesson." T_c ≈ 7.4×10⁶ K is *below* the Sun's ~1.5×10⁷ K (weak pp burning), and X(r) is a
+flat ~0.71 line (fully mixed, unburned). Playwright-verified 1440 px (caption "fully
+convective → canonical n = 3/2 — the rare case the real profile follows it", the ρ line
+overlapping the n=1.5 dash, whole-panel convective shading, zero console errors).
+
 **Next:** other-Z buckets (a metallicity axis — but verify the structural effect is
 *visible in the panel* before shipping a control, per the project honesty rule) drop in
 the same way.

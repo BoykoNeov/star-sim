@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (1/2/6/15/25 M☉ slices; the convective-core↔radiative-envelope flip built, 15 M☉ = the SN progenitor, 25 M☉ brackets the upper SN range)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (0.25/1/2/6/15/25 M☉ slices — the three regimes: 0.25 fully convective, 1 radiative-core+conv-envelope, 6/15/25 convective-core+radiative-envelope; 15 = the SN progenitor, 25 brackets the upper SN range)"
 metadata: 
   node_type: memory
   type: project
@@ -157,6 +157,41 @@ row flipped idea→done. 232 pytest.
   **zero frontend/runtime code touched**, and the served `/structure` payload was verified
   directly through the real `interior_structure()` code path — a screenshot would only
   re-exercise the unchanged 15 M☉ render path with structurally identical data.
+
+## The 0.25 M☉ slice (BUILT — a fully-convective M dwarf, the third regime)
+- Goes the **other way** from the massive slices: below the ~0.35 M☉ boundary an M dwarf is
+  **fully convective** — a *single* convection zone spanning centre→surface, no radiative
+  region. Completes the **trilogy of regimes**: 0.25 fully convective / 1 M☉ radiative-core
+  +conv-envelope / 6·15·25 M☉ convective-core+radiative-envelope. (advisor decisively chose
+  this over the literal "Next: other-Z" — a third *regime* is visible-by-construction so the
+  honesty gate is met automatically; other-Z is subtler, envelope-CZ-depth, do it after.)
+- **Two run changes (both advisor-flagged pre-run):** (1) the **TAMS stop never fires**
+  (0.25 M☉ MS lifetime ~10¹²⁻¹³ yr, Xc barely leaves ~0.714) → stop by `max_age = 2d9`
+  (safely settled onto the ZAMS; pre-MS contraction is a few hundred Myr); (2) **ship a
+  *settled-MS* profile, not a pre-MS-contracting one** — with the age stop the profiles
+  cluster in early pre-MS (small timesteps) and only the last few are MS (timesteps balloon
+  once settled). Both are fully convective but the honest claim is the MS structure (a
+  pre-MS star convects for a *different* reason — Hayashi contraction). L settles at
+  ~0.0105 L☉, Teff≈3707 K, R≈0.25 R☉ only in the last 3 of 22 profiles. Shipped
+  **profiles 20/21/22** (177 Myr / 919 Myr / 2 Gyr; 3 = the slider minimum, and an M dwarf
+  is genuinely static over Gyr so near-identical snapshots are honest).
+- Measured mid-MS: **ρ_c≈135–138 g/cc, T_c≈7.4×10⁶ K** (*below* the Sun's ~1.5e7 — weak pp
+  burning), **R≈0.247 R☉**, M=0.25, convective zone **0→1** (whole star), `expected_n`→3/2,
+  X(r) a flat ~0.71 (fully mixed, unburned).
+- **The polytrope-honesty INVERSION** (advisor's bonus — measured *before* writing it into
+  the caption): a fully-convective star *is* the textbook n=3/2 polytrope, so unlike every
+  other slice the real ρ(r)/ρ_c **hugs the n=1.5 overlay** (within ~1–5% at r/R 0.25/0.5/
+  0.75) and sits far above the more-concentrated n=3. **The one bucket where the idealization
+  *works*** — inverting the panel's usual "the departure is the lesson."
+- **NOT a pure drop-in this time:** runtime `structure.py` unchanged, but the accompanying
+  changes are a new `requires_structure_lowmass` marker (≤0.5 M☉ gate, mirrors
+  `requires_structure_massive`), **2 new tests** (fully-convective span; ρ-hugs-n=1.5), the
+  off-grid snap probe re-pointed **0.3→0.15** (0.25 is now the grid floor, so 0.3 is no
+  longer far off-grid), and a **small frontend caption refinement** in `structure.js`
+  (detect the single centre→surface zone → "fully convective → …the rare case the real
+  profile follows it"; blank the "conv. base" readout — no radiative base). **236 pytest**
+  (was 234, +2). Playwright-verified 1440 px, zero console errors (screenshot: ρ overlapping
+  the n=1.5 dash, whole-panel convective shading).
 
 **Next:** other-Z buckets drop in the same way (but verify the structural effect is *visible in
 the panel* before shipping a control, per the honesty rule). See ROADMAP + [[star-sim-roadmap]].
