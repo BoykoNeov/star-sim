@@ -222,11 +222,23 @@ export function createStructure({ api }) {
     const zones = data.convective_zones || [];
     const fullyConvective =
       zones.length === 1 && zones[0][0] < 0.02 && zones[0][1] > 0.95;
+    // The transitional (~1.3 M☉) star is the *bridge* regime: a convective core AND a
+    // convective envelope at once, with a radiative layer between. Detect it as a
+    // convective core (z[0]<0.02) PLUS a separate DEEP surface envelope (reaches the
+    // surface, z[1]>0.99, but its base is well below it, z[0]<0.95 — so the massive
+    // stars' razor sub-surface sliver at r/R≈0.99 does NOT trip this). Exclude the
+    // fully-convective M dwarf, whose single spanning zone also matches by radius.
+    const hasCore = zones.some((z) => z[0] < 0.02);
+    const hasDeepEnvelope = zones.some((z) => z[1] > 0.99 && z[0] < 0.95);
+    const doubleConvective =
+      data.expected_n === 1.5 && hasCore && hasDeepEnvelope && !fullyConvective;
     // State the core's STRUCTURE type → its canonical idealization — NOT a fit claim
     // (for the Sun/massive stars the real ρ visibly departs from that polytrope, which
     // is the whole point; the fully-convective M dwarf is the honest exception).
     const nName = fullyConvective
       ? "fully convective → canonical n = 3/2 — the rare case the real profile follows it"
+      : doubleConvective
+      ? "convective core + convective envelope → canonical n = 3/2 (the transitional case)"
       : data.expected_n === 1.5 ? "convective core → canonical n = 3/2"
                                 : "radiative core → canonical n = 3";
     caption.innerHTML =

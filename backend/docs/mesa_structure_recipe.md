@@ -452,10 +452,10 @@ axis grows). **238 pytest** (was 237, +1). Playwright-verified 1440 px (the conv
 visibly, monotonically shallows +0.5→−1: conv. base 0.659 → 0.694 → 0.807; radiative core →
 n=3 at every Z; zero console errors).
 
-**Next:** the 1.3 M☉ double-convective structure could ship on its own merits (as a
-*structure* slice, not a metallicity axis) — but the [Fe/H] axis itself is now **measured
-to its clean-window edges** and cannot be extended further without hitting a gate failure
-(§12).
+**Next:** the 1.3 M☉ double-convective structure is now **BUILT as its own structure slice**
+(§13) — a mass with a convective core AND a convective envelope at once. The [Fe/H] axis
+itself is **measured to its clean-window edges** and cannot be extended further without
+hitting a gate failure (§12).
 
 ## 12. The [Fe/H]-axis clean window is 0.8–1.0 M☉ — 0.6 and 1.1 measured, NOT shipped
 
@@ -497,10 +497,76 @@ measurement**: both neighbours of the shipped 0.8/1.0 window fail the ship gate,
 it is *redundant*: a point *between* the two shipped masses, adding no new regime or lesson,
 so it is deliberately not shipped either. **The usable clean-envelope [Fe/H]-axis window is
 0.8–1.0 M☉, and it is fully covered.** Extending the metallicity axis further is not a
-productive thread; the 1.3 M☉ double-convective *structure* slice (§11's other Next) remains
-the live option — as a structure regime, not a Z axis.
+productive thread; the 1.3 M☉ double-convective *structure* slice (§11's other Next) is now
+**BUILT** (§13) — as a structure regime, not a Z axis.
 
 Measured via raw `mixing_type` (the correct tool for a non-ship — you are documenting
 "spread too small" / "it fragments", which raw mixing shows directly; the `interior_structure()`
 OR-clause only adds r/R≥0.97 near-surface cells and cannot rescue a <0.01 metal-rich/solar
 gap). The `mesa_struct06` container and temp inlists were removed after measurement.
+
+## 13. The 1.3 M☉ transitional, double-convective slice — BUILT
+
+The **bridge** between the two mass regimes: a ~1.3 M☉ solar-Z star has a **convective core**
+(CNO burning ramps up past the ~1.1 M☉ onset) **and** a **convective envelope** (a surface
+H/He-ionization zone still survives at F-type Teff) *at the same time*, with a radiative layer
+in between. It is the one slice showing **both** convective zones at once — no prior slice does:
+
+| regime | example | core | middle | envelope | expected_n |
+|---|---|---|---|---|---|
+| radiative core + convective envelope | 1 M☉ Sun | radiative | radiative | convective | 3 |
+| convective core + radiative envelope | 6/15/25 M☉ | convective | radiative | radiative | 3/2 |
+| fully convective | 0.25 M☉ | convective | convective | convective | 3/2 |
+| **convective core + convective envelope** | **1.3 M☉** | **convective** | **radiative** | **convective** | **3/2** |
+
+The three-layer sandwich (convective / **radiative gap** / convective) is the discriminator: the
+radiative mid-radius separates it from both the Sun (radiative core) and the fully-convective
+M dwarf (no gap), and the *deep* envelope (base ~0.88, not a razor r/R≈0.99 sliver) separates it
+from the massive stars.
+
+Operationally a **standard drop-in bucket** — `initial_mass = 1.3`, solar `Z = 0.0152`, the **normal
+TAMS stop** (a 1.3 M☉ MS lifetime is ~3.1 Gyr, so `xa_central_lower_limit(h1)` fires normally — no
+`max_age` hack, unlike the 0.25 / 0.8 M☉ long-lived slices). Same profile-column edit, same
+`profile_interval = 25`. The run wrote 13 profiles.
+
+**Snapshot selection — the two features have *opposing* age trends** (advisor-flagged): the
+convective core recedes toward TAMS while the surface CZ deepens, so there is a mid-MS window where
+both are healthy. Measured across the MS (both zones present, envelope a **single contiguous** zone
+at every one — no fragmentation, served-OR ≈ mixing-only):
+
+| profile | Xc | age | ρ_c | T_c | R | conv. core (r/R) | conv. envelope base | note |
+|---|---|---|---|---|---|---|---|---|
+| 8  | 0.712 | 30.4 Myr | 87.4  | 1.67×10⁷ | 1.29 | 0 → 0.071 | 0.918 | near ZAMS |
+| 9  | 0.557 | 0.88 Gyr | 107.0 | 1.81×10⁷ | 1.37 | 0 → 0.064 | 0.931 | mid-MS (thinnest envelope) |
+| **10** | **0.197** | **2.58 Gyr** | **155.9** | **2.11×10⁷** | **1.66** | **0 → 0.059** | **0.885** | **the anchor — both zones healthy + most-visible envelope** |
+| 11 | 0.006 | 3.08 Gyr | 296.7 | 2.52×10⁷ | 1.80 | 0 → 0.036 | 0.877 | ~TAMS |
+
+At TAMS (profiles 12/13, Xc→0) the **convective core vanishes** (H exhausted → radiative core, the
+Sun-like regime again), so those two are **not shipped** — the slice ships the **four MS snapshots
+that carry its defining double-convective structure** (8/9/10/11), the same discipline as dropping
+pre-MS Hayashi profiles for the M dwarf. The convective core is **small throughout** (~0.06 in r/R,
+far below a massive star's 0.13+) and barely recedes until TAMS, so the "core recedes fast" caution
+is milder here than for the massive slices.
+
+**Runtime needed NO code change** (the index globs the tree and snaps on the header — drops in as a
+bucket). The accompanying changes are data + one test + a small frontend caption branch:
+- data dir `data/mesa_profiles/solar_1p3Msun/` (profiles 8/9/10/11);
+- a new conftest marker `requires_structure_transitional` (gated on a snapshot in the **narrow**
+  band 1.1 ≤ mass ≤ 1.5 — deliberately excludes both the 1.0 M☉ Sun and the 2.0 M☉ convective-core
+  slice, either of which is otherwise on disk, so the test *skips* not *fails* without the 1.3 data);
+- one test `test_transitional_star_is_double_convective` (the three-layer probe: convective@0,
+  **radiative@0.5**, convective@0.95; a single contiguous surface envelope with base 0.5<z[0]<0.95);
+- a `structure.js` caption branch: `expected_n===1.5 && a convective core (z[0]<0.02) && a separate
+  DEEP surface envelope (z[1]>0.99 && z[0]<0.95)`, excluding the fully-convective single-zone case →
+  "convective core + convective envelope → canonical n = 3/2 (the transitional case)". **The
+  `z[0]<0.95` bound is load-bearing** (advisor): the 6/15/25 M☉ slices carry a razor sub-surface
+  sliver at r/R≈0.994–0.997 whose top edge exceeds 0.99, so a naive "a zone reaches the surface"
+  test would relabel *them* as double-convective and break a shipped regression — the sliver's base
+  ~0.994 is > 0.95 and so correctly excluded. Verified: 6/15/25 M☉ captions unchanged, the Sun stays
+  "radiative core → n=3", the M dwarf stays "fully convective".
+
+**239 pytest** (was 238, +1). Playwright-verified 1440 px: two distinct shaded bands (a narrow core
+at r/R 0→0.06 and a wide envelope from r/R≈0.88 to the surface, radiative gap clearly unshaded
+between), caption "convective core + convective envelope … (the transitional case)", conv. base
+0.885, and the 6 M☉ regression caption unchanged; zero console errors. The visible gate passes
+decisively — both thin bands read clearly as distinct shaded regions.

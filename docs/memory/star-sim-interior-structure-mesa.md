@@ -1,6 +1,6 @@
 ---
 name: star-sim-interior-structure-mesa
-description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (0.25/1/2/6/15/25 M☉ mass slices — the three regimes: 0.25 fully convective, 1 radiative-core+conv-envelope, 6/15/25 convective-core+radiative-envelope; 15 = the SN progenitor, 25 brackets the upper SN range — PLUS the metallicity axis: 1 M☉ at [Fe/H]=−1/+0.5, the convective envelope shallows as Z drops)"
+description: "Real interior-structure sibling — MESA radial profile.data behind /structure, the honest Lane–Emden successor (0.25/1/1.3/2/6/15/25 M☉ mass slices — FOUR regimes: 0.25 fully convective, 1 radiative-core+conv-envelope, 1.3 double-convective (core AND envelope — the transitional bridge), 6/15/25 convective-core+radiative-envelope; 15 = the SN progenitor, 25 brackets the upper SN range — PLUS the metallicity axis at 0.8 & 1 M☉ [Fe/H]=−1/+0.5, the convective envelope shallows as Z drops)"
 metadata: 
   node_type: memory
   type: project
@@ -289,6 +289,41 @@ raw `mixing_type` (correct for a non-ship — the OR-clause only adds r/R≥0.97
 <0.01 gap). Container/temp cleaned up. Advisor-confirmed: thread exhausted; extending Z further is
 not productive.
 
-**Next (a USER choice, not auto-pursued):** ship the **1.3 M☉ double-convective structure** on its
-own merits — a mass with a convective core AND convective envelope at once, a genuinely new
-*structure* regime (not a Z axis) the panel doesn't yet show. See ROADMAP + [[star-sim-roadmap]].
+## The 1.3 M☉ transitional double-convective slice (recipe §13) — BUILT
+
+The **fourth interior regime** — the *bridge*: a ~1.3 M☉ solar-Z star has a **convective core**
+(CNO ramps up past the ~1.1 M☉ onset) AND a **convective envelope** (surface H/He-ionization CZ
+survives at F-type Teff) **at once**, with a radiative layer between. No prior slice shows both
+convective zones simultaneously. The **three-layer sandwich** (convective / **radiative gap** /
+convective) is the discriminator vs the Sun (radiative core), the massive stars (radiative
+envelope), and the fully-convective M dwarf (no gap).
+
+- **Standard drop-in bucket** — `initial_mass=1.3`, solar Z=0.0152, the **normal TAMS stop** (1.3 M☉
+  MS lifetime ~3.1 Gyr, `xa_central_lower_limit(h1)` fires normally — no `max_age` hack). Runtime NO
+  code change (index globs tree, snaps on header). Ships **4 MS snapshots** (profiles 8/9/10/11) in
+  `solar_1p3Msun/`; **anchor profile10** (age 2.58 Gyr, Xc 0.197): ρ_c≈156, T_c≈2.11e7, R≈1.66,
+  core 0→0.059, **envelope base 0.885** (single contiguous zone). At **TAMS (p12/p13) the core
+  vanishes** (H exhausted → radiative core, Sun-like) → **not shipped** (ship only the snapshots
+  carrying the defining structure, same as dropping pre-MS Hayashi for the M dwarf).
+- **Opposing age trends** (advisor-flagged): core recedes toward TAMS while surface CZ deepens → a
+  mid-MS window where both are healthy. But the 1.3 M☉ core is **small throughout** (~0.06 in r/R,
+  far below a massive star's 0.13+) and barely recedes, so the caution is milder than for massive.
+- **Advisor's correctness trap (avoided):** the double-convective caption must NOT relabel the
+  6/15/25 M☉ slices, whose razor sub-surface sliver sits at r/R≈0.994–0.997 (z[1]>0.99). Gate the
+  caption on a **DEEP** envelope: `expected_n===1.5 && core (z[0]<0.02) && separate surface zone
+  (z[1]>0.99 && z[0]<0.95)`, excluding the fully-convective single-zone case. The **z[0]<0.95 bound
+  is load-bearing** — the sliver base ~0.994 > 0.95 is correctly excluded. Verified through the real
+  `interior_structure()` path: 6/15/25 M☉ NOT double-convective, Sun stays n=3, M dwarf stays fully
+  convective; Playwright confirmed the 6 M☉ caption unchanged.
+- **New conftest marker** `requires_structure_transitional` (gated on **narrow** 1.1≤mass≤1.5 — must
+  exclude both the 1.0 M☉ Sun AND the 2.0 M☉ slice, either otherwise on disk, else the test would
+  *fail* not *skip*). +1 test `test_transitional_star_is_double_convective` (three-layer probe:
+  conv@0, **rad@0.5**, conv@0.95; single contiguous surface envelope 0.5<base<0.95) + the
+  `structure.js` caption branch. **239 pytest** (was 238, +1). Playwright-verified 1440 px: two
+  distinct shaded bands (narrow core 0→0.06 + wide envelope 0.88→1.0, radiative gap unshaded
+  between), caption "convective core + convective envelope … (the transitional case)", conv. base
+  0.885, zero console errors — the visible gate passes decisively.
+
+**Next (a USER choice, not auto-pursued):** the interior-structure ladder is broad now
+(0.25/1/1.3/2/6/15/25 M☉ mass slices spanning all four regimes + the 0.8–1.0 M☉ [Fe/H] window).
+See ROADMAP for the remaining cross-plan threads (rotation-atlas stragglers, spectra density).

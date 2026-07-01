@@ -35,6 +35,7 @@ from .conftest import (
     requires_structure_lowmass,
     requires_structure_massive,
     requires_structure_multifeh,
+    requires_structure_transitional,
 )
 
 client = TestClient(app)
@@ -360,6 +361,64 @@ def test_fully_convective_mdwarf_hugs_the_n_onehalf_polytrope():
         assert abs(real - n15) < 0.05, f"r/R={frac}: real {real:.3f} not near n=1.5 {n15:.3f}"
         # ...and is much closer to n=1.5 than to n=3 (the honesty-inversion payoff).
         assert abs(real - n15) < abs(real - n3), f"r/R={frac}: real closer to n=3 than n=1.5"
+
+
+# --- the transitional, double-convective star (the ~1.3 M☉ slice) ------------
+
+
+@requires_structure_transitional
+def test_transitional_star_is_double_convective():
+    """The 1.3 M☉ slice is the *bridge* between the two mass regimes: a transitional
+    star that carries a **convective core** (CNO burning is ramping up past the
+    ~1.1 M☉ onset) AND a **convective envelope** (a surface H/He-ionization zone still
+    survives at F-type Teff) *at the same time* — with a radiative layer in between.
+    No other shipped slice shows both convective zones at once:
+
+        core (r/R≈0)   middle (r/R≈0.5)   envelope (r/R≈0.95)
+      Sun (1 M☉)   :  radiative       radiative          convective
+      6/15/25 M☉   :  convective      radiative          radiative
+      0.25 M☉      :  convective      convective         convective   (fully convective)
+      1.3 M☉       :  convective      radiative          convective   <- the bridge
+
+    So the discriminating probe is the three-layer sandwich: convective at the centre,
+    RADIATIVE at mid-radius (the gap that distinguishes it from both the Sun — radiative
+    core — and the fully-convective M dwarf — no gap), convective again at the surface.
+
+    Uses the mid-MS 1.3 M☉ snapshot (Xc≈0.2): the convective core is small (~0.06 in r/R,
+    far smaller than a massive star's ~0.13+) and recedes toward TAMS while the surface CZ
+    deepens, so the shipped slice anchors where both are healthy (recipe §13)."""
+    s = interior_structure(1.3, 0.0, 2.5e9)
+    assert s["snapped"]["mass_msun"] == 1.3
+
+    # core convective -> n=3/2, same overlay hint as a massive convective core.
+    assert s["convective"][0] is True, "a 1.3 M☉ MS star has a convective core"
+    assert s["expected_n"] == 1.5
+
+    zones = s["convective_zones"]
+
+    # (1) a convective core anchored at the centre — small, ~0.06 in r/R (set the
+    #     threshold from the measurement: far below a massive star's ~0.13).
+    core = [z for z in zones if z[0] < 0.02]
+    assert core, f"expected a convective core anchored at r/R~0, got {zones}"
+    assert core[0][1] > 0.03, f"1.3 M☉ convective core should be a small but real fraction: {core}"
+
+    # (2) a radiative GAP at mid-radius — the discriminator vs the Sun (radiative core)
+    #     and the fully-convective M dwarf (no gap). This is the crux of the slice.
+    assert not _conv_at(zones, 0.5), f"1.3 M☉ must be radiative at mid-radius (the gap): {zones}"
+
+    # (3) a convective envelope reaching the surface — a SINGLE contiguous deep zone
+    #     (base well below the surface, unlike the massive stars' razor r/R≈0.99 sliver),
+    #     and it convects at r/R=0.95 (its base is ~0.88, so 0.9 is inside it — this is
+    #     why the flip tests' `not _conv_at(0.9)` cannot be reused here).
+    assert _conv_at(zones, 0.95), f"1.3 M☉ envelope should be convective near the surface: {zones}"
+    surf = [z for z in zones if z[1] > 0.99]
+    assert len(surf) == 1, f"the convective envelope must be a single contiguous zone: {surf}"
+    assert 0.5 < surf[0][0] < 0.95, f"envelope base should be a genuine deep envelope: {surf}"
+
+    # central values of the right order for a slightly-more-massive-than-Sun core.
+    c = s["central"]
+    assert 1.5e7 < c["T_c_K"] < 3.0e7, c["T_c_K"]
+    assert abs(c["M_total_msun"] - 1.3) < 0.05, c["M_total_msun"]
 
 
 # --- the metallicity axis (the [Fe/H]=−1 / +0.5 slices at 1 M☉) --------------

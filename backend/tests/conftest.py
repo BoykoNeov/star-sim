@@ -229,6 +229,25 @@ def structure_massive_available() -> bool:
         return False
 
 
+def structure_transitional_available() -> bool:
+    """True if a *transitional* (double-convective) interior-structure slice is present.
+
+    The 1 M☉ Sun and the 6/15/25 M☉ massive slices satisfy `structure_data_available()`,
+    but the double-convective test — a ~1.3 M☉ star with a convective core AND a
+    convective envelope at once — needs the transitional slice (recipe §13). It falls in
+    the gating gap between `requires_structure_massive` (≥4 M☉) and
+    `requires_structure_lowmass` (≤0.5 M☉), so without its own marker the test would
+    *fail* (not skip) on a checkout without the 1.3 M☉ data. Detect it by a snapshot in
+    the narrow transitional band (1.1 ≤ mass ≤ 1.5) — this excludes both the 1.0 M☉ Sun
+    and the 2.0 M☉ convective-core slice, either of which is otherwise on disk."""
+    from star_sim.structure import _ProfileIndex, StructureDataMissing
+
+    try:
+        return any(1.1 <= m.mass_init <= 1.5 for m in _ProfileIndex().available())
+    except StructureDataMissing:
+        return False
+
+
 def structure_multifeh_available() -> bool:
     """True if a *non-solar-metallicity* interior-structure slice is present.
 
@@ -287,4 +306,12 @@ requires_structure_lowmass = pytest.mark.skipif(
 requires_structure_multifeh = pytest.mark.skipif(
     not structure_multifeh_available(),
     reason="no non-solar-Z MESA profile slice ([Fe/H]=−1/+0.5) — see backend/docs/mesa_structure_recipe.md §10",
+)
+
+# The double-convective test needs the transitional (~1.3 M☉) slice — a mass with a
+# convective core AND a convective envelope at once. The 1 M☉ / massive data alone would
+# make it FAIL, not skip. See mesa_structure_recipe.md §13.
+requires_structure_transitional = pytest.mark.skipif(
+    not structure_transitional_available(),
+    reason="no transitional MESA profile slice (~1.3 M☉) — see backend/docs/mesa_structure_recipe.md §13",
 )
