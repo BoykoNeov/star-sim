@@ -469,9 +469,14 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     const circle = (r) => { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); };
 
     // colors: a hot-inner → cool-outer onion. H blue / He gold reuse the bulk palette; the
-    // heavy ejecta band is copper; the remnant is degenerate steel (NS) or a void (BH).
+    // heavy ejecta band is copper. The centre is the hot degenerate Fe/Si CORE that *will*
+    // collapse — NOT the remnant itself. Drawing a black-hole void / steel neutron star in a
+    // diagram titled "pre-collapse" was the contradiction this view had; the collapsed object
+    // hasn't formed yet at this snapshot. NS-vs-BH stays legible from the label + from how much
+    // of the onion this core eats (a fallback BH swallows the copper C/O band), not by depicting
+    // the post-collapse object. Iron-core swatch for the label column.
     const COL_H = COL.X, COL_HE = COL.Y, COL_CO = "#cf8a52";
-    const COL_REM = isNS ? "#aab6cc" : "#070810";
+    const COL_CORE = "#b5522a";   // hot iron core (representative swatch)
     const COL_NI = "#8effc0";
 
     // shells outer→inner, nested fills (inner fills paint over the outer); the remnant is
@@ -489,19 +494,16 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
       }
     }
 
-    // the remnant core (collapsed): a steel degenerate sphere (NS) or a dark void with a
-    // faint horizon ring (BH). The ⁵⁶Ni ring sits just OUTSIDE it (synthesized & ejected).
+    // the inner core (collapses to the labeled remnant): a hot, dense degenerate Fe/Si core,
+    // NOT yet the neutron star or black hole it becomes. A white-hot centre → iron edge reads
+    // as "about to implode"; the same depiction for NS and BH (the fate is a label, and a BH's
+    // core simply eats more of the onion). The ⁵⁶Ni ring sits just OUTSIDE it (synthesized).
     const rRem = Math.max(rOf(rem), 3);
-    ctx.fillStyle = COL_REM; circle(rRem);
-    if (isNS) {
-      const grd = ctx.createRadialGradient(cx - rRem * 0.3, cy - rRem * 0.3, rRem * 0.1, cx, cy, rRem);
-      grd.addColorStop(0, "rgba(255,255,255,0.50)");
-      grd.addColorStop(1, "rgba(20,30,55,0.20)");
-      ctx.fillStyle = grd; circle(rRem);
-    } else {
-      ctx.strokeStyle = "rgba(150,130,255,0.55)"; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(cx, cy, rRem, 0, Math.PI * 2); ctx.stroke();
-    }
+    const cg = ctx.createRadialGradient(cx - rRem * 0.28, cy - rRem * 0.28, rRem * 0.08, cx, cy, rRem);
+    cg.addColorStop(0, "#ffe0b0");    // white-hot core
+    cg.addColorStop(0.55, "#b5522a"); // iron
+    cg.addColorStop(1, "#3a1710");    // cool iron edge
+    ctx.fillStyle = cg; circle(rRem);
     if (mni > 0.0005) {   // ⁵⁶Ni: exaggerated bright ring at the inner ejecta boundary (not to
       ctx.strokeStyle = COL_NI; ctx.lineWidth = 2.5;   // scale). Fallback swallows it → no ring
       ctx.beginPath(); ctx.arc(cx, cy, rRem + 2, 0, Math.PI * 2); ctx.stroke();   // on a failed SN
@@ -548,11 +550,11 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
         [`${mni.toFixed(3)} M☉ · ejected`, "exaggerated — your slider"]]);
     // the remnant label tracks the fallback continuum: a degenerate NS, a fallback BH that
     // ejected an envelope, or a direct collapse that swallowed (almost) the whole star.
-    const remTitle = failed ? "→ black hole (direct collapse)"
+    const remTitle = failed ? "Fe core → black hole (direct)"
       : isNS ? "Fe core → neutron star" : "C/O core → black hole";
     const remSub = failed ? "the whole star implodes — it winks out"
-      : isNS ? "degenerate remnant" : "core + fallback envelope";
-    entries.push([COL_REM, remTitle, [`${f1(rem)} M☉ · collapsed`, remSub]]);
+      : isNS ? "collapses to a degenerate remnant" : "core + fallback envelope collapse";
+    entries.push([COL_CORE, remTitle, [`${f1(rem)} M☉ · collapses`, remSub]]);
 
     const lx = W - PAD - LW + 2;
     const availH = bot - (top + 4);
@@ -562,7 +564,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     let ly = top + 4;
     for (const [col, title, lines] of entries) {
       ctx.fillStyle = col; ctx.fillRect(lx, ly + 2, 9, 9);
-      // a thin outline so the near-black BH-void swatch stays visible on the dark panel
+      // a thin outline keeps every swatch legible on the dark panel
       ctx.strokeStyle = "rgba(160,170,190,0.5)"; ctx.lineWidth = 1;
       ctx.strokeRect(lx + 0.5, ly + 2.5, 8, 8);
       ctx.fillStyle = "#e7ecf5"; ctx.font = "600 11px system-ui, sans-serif";

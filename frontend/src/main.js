@@ -1730,9 +1730,13 @@ function refreshSN() {
   // A normal SN expands then dissipates (grow → fade). A FAILED direct collapse does NOT
   // expand — it implodes — so we skip the "expanding" beat (a small steady ball) and let it
   // fade from the start: a dim supergiant that simply winks out (star.js dims it too).
-  const snGrow = failed ? 0.5 : 0.4 + 0.6 * smoothstep01(0, 0.14, dayFrac);
+  const snGrow = failed ? 0.5 : 0.55 + 0.45 * smoothstep01(0, 0.14, dayFrac);
   const snFade = failed ? smoothstep01(0.0, 0.6, dayFrac) : smoothstep01(0.55, 1.0, dayFrac);
-  star.update(s, { endgame: "sn", remnant: snModel.remnant_type, failed, snGrow, snFade });
+  // A brief shock-breakout FLASH at the explosion moment (first ~5% of the scrub) so the entry
+  // reads as a violent burst rather than a dim little ball — 3D-only + evocative, gated off for
+  // a failed direct collapse (there is no explosion to flash). star.js adds it to the intensity.
+  const snShock = failed ? 0 : 1 - smoothstep01(0, 0.05, dayFrac);
+  star.update(s, { endgame: "sn", remnant: snModel.remnant_type, failed, snGrow, snFade, snShock });
   classification.update(s, "sn", { failed });   // expanding-photosphere label (failed → direct-collapse)
   // true size — the fireball swells to ~AU scale; pass the model's PEAK radius so the scale
   // bar widens its axis to fit it (past Neptune) instead of pinning the marker to the edge.
@@ -1764,10 +1768,11 @@ function refreshSN() {
     // emerges as a faint dot; a fallback BLACK HOLE drove a real (if fainter) supernova that
     // now fades to a dark, invisible remnant — NOT a "wink out" (that's the failed case above).
     const rem = snModel.remnant_type === "NS"
-      ? `a neutron star emerges as a faint hot point`
+      ? `the thinning ejecta uncover a neutron star — a faint hot point (evocative: a real one ` +
+        `is only ~20 km across and optically almost invisible, so it is NOT to scale)`
       : `a black hole formed at the centre — the supernova fades to a dark, invisible remnant`;
-    cap = `Nebular phase — the ejecta thin and disperse; ${rem} (the 3D remnant is ` +
-      `evocative) · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;
+    cap = `Nebular phase — the ejecta thin and disperse; ${rem} · day ${fmt(day)} · ` +
+      `Teff ${fmt(s.Teff_K, 4)} K.`;
   } else if (snModel.has_plateau && day <= snModel.plateau_duration_days)
     cap = `Recombination plateau — the shock-heated hydrogen envelope recombines at roughly ` +
       `constant luminosity · day ${fmt(day)} · Teff ${fmt(s.Teff_K, 4)} K.`;

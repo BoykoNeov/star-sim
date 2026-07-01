@@ -677,26 +677,32 @@ export function createStar(canvas) {
       const grow = Math.max(0.2, Math.min(1.5, (opts && opts.snGrow) ?? 1));
       const failed = !!(opts && opts.failed);
       fireballMat.uniforms.uFade.value = fade;
-      // A gentle, clamped luminosity tie so the brightest moments read brighter — evocative,
-      // NOT a measured photometric scale (the light-curve panel carries the real L). A FAILED
-      // SN (direct collapse) barely glows: a dim red supergiant that fades straight to black —
-      // the "disappearing supergiant" (N6946-BH1) — so we knock its intensity right down.
+      // A supernova explosion is BRIGHT — this intensity is evocative (the light-curve panel
+      // carries the real photometry), so we keep a HIGH floor and add a brief shock-breakout
+      // FLASH at the explosion moment (snShock, 3D-only like the corona — not on the light
+      // curve) so the entry reads as a violent burst, not a dim little ball. A FAILED SN
+      // (direct collapse) gets neither: it barely glows and fades straight to black — the
+      // "disappearing supergiant" (N6946-BH1) — so its dim + zero shock keep it faint.
       const logL = Math.log10(Math.max(1, state.L_lsun));
       const dim = failed ? 0.3 : 1.0;
+      const shock = failed ? 0 : Math.max(0, Math.min(1, (opts && opts.snShock) ?? 0));
       fireballMat.uniforms.uIntensity.value =
-        dim * (0.6 + 0.4 * Math.max(0, Math.min(1, (logL - 5) / 4)));
+        dim * (0.72 + 0.28 * Math.max(0, Math.min(1, (logL - 5) / 4))) + shock * 0.5;
       fireball.scale.setScalar(rad * grow);
 
-      // The remnant: a neutron star emerges as a tiny hot dot once the ejecta thin. A black
-      // hole shows no dot — but a FALLBACK BH still drove a (real, if fainter) supernova, so the
-      // bright fireball plays first and only THEN the frame goes dark; only a FAILED direct
-      // collapse truly "winks out" with no bright phase (handled by `dim` above + main.js's fade).
+      // The remnant: a neutron star is UNCOVERED as the ejecta thin — not born at the end. It is
+      // faintly present the whole late phase and brightens as the fireball clears, so it reads
+      // as "a tiny dense object revealed" (the caption labels its ~20 km scale as not-to-scale),
+      // never as "a new star appears." A black hole shows no dot — a FALLBACK BH still drove a
+      // (real, if fainter) supernova, so the bright fireball plays first and only THEN the frame
+      // goes dark; only a FAILED direct collapse truly "winks out" (handled by `dim` + fade).
       const isNS = !!(opts && opts.remnant === "NS");
       remnant.visible = isNS;
-      // Ramp from fade 0.6 (where refreshSN's "a neutron star emerges" caption appears) to 1,
-      // so the dot begins emerging exactly when the text says it does — no caption/visual gap.
+      // Ramp from fade 0.4 (the fireball is still opaque, so the dot only becomes VISIBLE as the
+      // ejecta thin — an uncovering) to 1, reaching full glow at the end. It is clearly present
+      // by fade 0.6 where refreshSN's "a neutron star is uncovered" caption appears.
       remnantMat.uniforms.uIntensity.value =
-        isNS ? Math.max(0, Math.min(1, (fade - 0.6) / 0.4)) : 0;
+        isNS ? Math.max(0, Math.min(1, (fade - 0.4) / 0.6)) : 0;
     } else {
       remnant.visible = false;
     }
