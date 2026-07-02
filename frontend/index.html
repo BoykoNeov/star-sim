@@ -243,6 +243,22 @@
         </div>
       </div>
 
+      <!-- Chemically peculiar (Ap/Bp) — atlas Tier C, an EVOCATIVE surface what-if (spec §7,
+           like the corona). Shown only for A/B main-sequence stars (nowhere in MIST; only
+           ~10% of A/B stars are magnetic chemically-peculiar), hidden elsewhere and in every
+           endgame — absent, not a dead knob. Independent of the Rotation toggle: Ap/Bp is a
+           magnetic peculiarity, not a rotation-axis effect. It changes ONLY the 3D star's
+           look (co-rotating abundance spots), never the HR diagram, spectrum or composition. -->
+      <div class="peculiar-control" id="peculiar-control" hidden>
+        <label class="rot-toggle-row" for="peculiar-toggle">
+          <input id="peculiar-toggle" type="checkbox" />
+          <span>Chemically peculiar (Ap/Bp)
+            <span class="help" tabindex="0" data-tip="About 10% of A/B main-sequence stars are magnetic chemically-peculiar (Ap/Bp). A strong (~kilogauss) global magnetic field, tilted to the rotation axis, suppresses surface convection so radiative diffusion sorts elements into ABUNDANCE PATCHES near the magnetic poles (silicon, chromium, strontium, europium). Those spots are darker in visible light, and as the star rotates they sweep in and out of view — the α² Canum Venaticorum variables. This is an EVOCATIVE 'what-if' look, NOT a property of this particular star (MIST carries no magnetism or surface chemistry): it shows a few large, co-rotating spots on an oblique dipole, deliberately distinct from the smooth gravity-darkening temperature gradient. It changes only the 3D appearance — never the HR diagram, spectrum, or composition.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="peculiar-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

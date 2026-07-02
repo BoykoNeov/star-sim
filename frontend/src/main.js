@@ -52,6 +52,11 @@ const els = {
   incl: document.getElementById("incl"),
   inclNum: document.getElementById("incl-num"),
   inclNote: document.getElementById("incl-note"),
+  // Ap/Bp chemically-peculiar toggle (atlas Tier C): an evocative surface what-if, gated to
+  // the A/B main-sequence mass regime. Independent of the Rotation control.
+  peculiarControl: document.getElementById("peculiar-control"),
+  peculiarToggle: document.getElementById("peculiar-toggle"),
+  peculiarNote: document.getElementById("peculiar-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -347,6 +352,13 @@ function applyInclination(deg) {
       : `i = ${inclinationDeg}° — the hot pole and cool equatorial band both in view.`;
   }
 }
+
+// Ap/Bp chemically-peculiar toggle intent (atlas Tier C — evocative surface what-if).
+// Persisted across mass/[Fe/H]/age changes like rotationOn, and OFF the spine: it only
+// changes the 3D star's look (co-rotating magnetic abundance spots), never the HR marker,
+// spectrum or composition. Gated to the A/B main-sequence regime (updatePeculiarControl);
+// star.js additionally fades the effect per-state outside the A/B-MS Teff window.
+let peculiarOn = false;
 
 // Whether this star is in the cool main-sequence DYNAMO FAMILY — i.e. its track has any
 // cool MS row (Teff < 6500 K). This gates the rotation-PERIOD facet's VISIBILITY, and it
@@ -1512,6 +1524,26 @@ function updateRotControl() {
   }
 }
 
+// Ap/Bp chemically-peculiar toggle (atlas Tier C — evocative). A magnetic-chemical what-if
+// for A/B MAIN-SEQUENCE stars: nowhere in MIST, so the control appears only for the A/B mass
+// band (TRACK-STABLE on the ZAMS mass — massValue doesn't change on an age scrub, so it never
+// flickers), and star.js fades the effect per-state outside the A/B-MS Teff window. Hidden
+// below/above the band and in every endgame (mode != live) — absent, not a dead knob (the
+// rot/incl precedent). Gate is INDEPENDENT of the rotation toggle: Ap/Bp is a magnetic
+// peculiarity, not a rotation-axis effect (many Ap stars rotate slowly).
+function updatePeculiarControl() {
+  const c = els.peculiarControl;
+  if (!c) return;
+  const inRegime = mode === "live" && massValue >= 1.6 && massValue <= 5.0;
+  c.hidden = !inRegime;
+  if (inRegime && els.peculiarToggle) {
+    els.peculiarToggle.checked = peculiarOn;
+    if (els.peculiarNote) els.peculiarNote.textContent = peculiarOn
+      ? "Co-rotating abundance spots on the oblique magnetic dipole (the α² CVn look) — evocative."
+      : "";
+  }
+}
+
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
 // /endgame?meta=1) so the gateway button appears (greyed, foreshadowing) the instant a new
 // track lands — instead of waiting ~150 ms+ for the full ~1 MB /endgame the preview/enter
@@ -1611,6 +1643,7 @@ function enterWD() {
   if (!endgame || endgame.type !== "WD" || !endgame.states.length) return;
   mode = "wd";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
+  updatePeculiarControl();
   // Invalidate any in-flight live /track so it can't land and clobber the WD render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackToken++;
@@ -1642,6 +1675,7 @@ function enterWR() {
   if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
   mode = "wr";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
+  updatePeculiarControl();
   // Invalidate any in-flight live /track so it can't land and clobber the WR render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackToken++;
@@ -2021,6 +2055,7 @@ async function fetchSNModel(mni) {
 async function enterSN() {
   mode = "sn";
   updateRotControl();   // hide the rotation control inside the endgame (mode != live)
+  updatePeculiarControl();
   trackToken++;         // invalidate any in-flight live /track
   document.body.classList.add("sn-mode");
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
@@ -2111,7 +2146,10 @@ function endFirstLoad() {
 // place. (The WD/WR endgame modes have their own render paths — refreshWD/refreshWR.)
 function paintState(s) {
   endFirstLoad();   // first real paint — retire the first-load skeleton sheen
-  star.update(s);
+  // {peculiar} is the Ap/Bp evocative what-if (star.js regime-gates it per-state, and it's a
+  // no-op unless the toggle is on) — living path only; the endgame refreshers paint the star
+  // directly with their own {endgame:…} opts, so they're untouched.
+  star.update(s, { peculiar: peculiarOn });
   classification.update(s);
   scale.update(s);
   hr.update(s);
@@ -2159,6 +2197,7 @@ function refresh() {
   // disappears as age scrubs the star onto/off the main sequence — sed.update() (in
   // paintState) just refreshed sed.rotationAllowed(), so read it now.
   updateRotControl();
+  updatePeculiarControl();
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -2180,6 +2219,7 @@ async function refreshTrack() {
   if (token !== trackToken || mode !== "live") return;
   rotStatus = rs;
   updateRotControl();
+  updatePeculiarControl();
   try {
     const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // A newer track will drive its own refresh; and a track landing after we entered
@@ -2440,6 +2480,16 @@ async function init() {
     if (mode !== "live") return;
     rotationOn = els.rotToggle.checked;
     refreshTrack();
+  });
+
+  // Ap/Bp chemically-peculiar toggle (atlas Tier C): a pure 3D-look what-if — no fetch, no
+  // track/HR/spectrum change (off the spine). refresh() repaints the current EEP row through
+  // paintState -> star.update({peculiar}), so the spots appear/vanish instantly on the marker.
+  if (els.peculiarToggle) els.peculiarToggle.addEventListener("change", () => {
+    if (mode !== "live") return;
+    peculiarOn = els.peculiarToggle.checked;
+    updatePeculiarControl();
+    refresh();
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

@@ -101,6 +101,7 @@ uniform float uShear;     // differential-rotation fraction (poles slower)
 uniform float uLife;      // granule lifetime / reform cycle (s)
 uniform float uGran;      // granulation amount (1 = living star, 0 = smooth WD)
 uniform float uExpo;      // exposure (Teff-keyed): <1 deepens a cool star, >1 clips a hot one toward white
+uniform float uPeculiar;  // Ap/Bp chemical-spot amount (0 = clean/off, ~1 = full evocative patches)
 
 varying vec3 vObjPos;
 varying vec3 vViewNormal;
@@ -187,6 +188,29 @@ float granulation(vec3 p0, float time, float fw) {
   return (wA * fA + wB * fB) / max(1e-3, wA + wB);
 }
 
+// Ap/Bp chemical peculiarity (EVOCATIVE, NOT PREDICTIVE — the corona precedent, spec §7).
+// A magnetic chemically-peculiar A/B star: a strong (~kG) global magnetic field, tilted to
+// the rotation axis, suppresses surface convection so radiative diffusion sorts elements into
+// abundance PATCHES near the magnetic poles (Si/Cr/Sr/Eu). Those over-abundant spots are
+// darker in the optical (line blanketing), and as the star rotates they sweep in and out of
+// view — the α² CVn variables. NONE of this is in StellarState (MIST carries no magnetism or
+// surface chemistry), so it is driven ONLY by uPeculiar (regime-gated + toggled in JS), never
+// a claim about this star: a few LARGE coherent patches on an oblique dipole, rigidly
+// CO-ROTATING with the surface (uOmega·time, matching the granulation spin) so they carry
+// across the disk. Deliberately distinct from the smooth pole→equator gravity-darkening
+// temperature gradient and from the fine convective granulation.
+float peculiarSpots(vec3 p0, float time) {
+  // Co-rotate the sample point with the visible rigid spin -> patches fixed to the surface.
+  float ang = uOmega * time;
+  float ca = cos(ang), sa = sin(ang);
+  vec3 p = vec3(p0.x * ca - p0.z * sa, p0.y, p0.x * sa + p0.z * ca);
+  const vec3 mag = vec3(0.819, 0.574, 0.0);       // normalize(sin55°, cos55°, 0): dipole ~55° off spin
+  float md = abs(dot(p, mag));                     // 1 at the two magnetic poles, 0 at the mag. equator
+  float cap = smoothstep(0.45, 0.85, md);          // coherent polar caps
+  float mott = smoothstep(0.15, 0.70, worleyF1(p * 2.3 + 11.0, 0.0)); // broken into big irregular cells
+  return cap * mott;                               // 0 (clean) .. ~1 (deepest spot)
+}
+
 void main() {
   // A cooling white dwarf's photosphere is a featureless, limb-darkened disk — its
   // atmosphere is in radiative equilibrium, not the convective "boil" of a cool MS
@@ -242,7 +266,13 @@ void main() {
   // exposure and keeps its saturated hue; a hot star overexposes and clips
   // toward blue-white at disk centre while the chromatic limb keeps the honest
   // color at the edge — a camera cue, not a flux claim (the readout has L).
-  vec3 surface = min(gdColor * granule * limb * uExpo * gdBright, 1.0);
+  // Ap/Bp chemical spots (evocative): a BRIGHTNESS dip in the co-rotating polar abundance
+  // patches — brightness-only (a uniform per-channel scale keeps the chromaticity, so it
+  // never implies a false temperature map, which is the gravity-darkening gradient's job).
+  // uPeculiar = 0 for every non-Ap/Bp star (off, cool, hot-O, giant, endgame) -> spots = 1.0
+  // -> this line is byte-identical.
+  float spots = 1.0 - uPeculiar * peculiarSpots(vObjPos, uTime) * 0.4;
+  vec3 surface = min(gdColor * granule * limb * uExpo * gdBright * spots, 1.0);
   gl_FragColor = vec4(lin2srgb(surface), 1.0);
 }`;
 
@@ -612,6 +642,7 @@ export function createStar(canvas) {
       uLife: { value: 8.0 },     // granule reform cycle (s) — bounds the shear
       uGran: { value: 1.0 },     // granulation amount (0 = smooth degenerate WD)
       uExpo: { value: 1.0 },     // Teff-keyed exposure (set per-state in update())
+      uPeculiar: { value: 0.0 }, // Ap/Bp chemical-spot amount (0 = off/clean; set in update())
     },
   });
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
@@ -843,6 +874,15 @@ export function createStar(canvas) {
     // through it, so a cooling WD dims and reddens as its Teff falls.
     surfaceMat.uniforms.uExpo.value =
       0.85 + 0.15 * sstep(3000, 5800, state.Teff_K) + 0.5 * sstep(8000, 25000, state.Teff_K);
+    // Ap/Bp chemical peculiarity (evocative surface what-if, spec §7 — like the corona).
+    // Nowhere in MIST, so it's opts-gated (main.js toggle) AND regime-gated per-state to the
+    // A/B MAIN-SEQUENCE window: a smooth Teff bracket (~7–15 kK, edges to 6.8/17 kK) × a
+    // dwarf-gravity gate (log g ≳ 3.5, so an A/F giant crossing the same Teff on a blue loop
+    // stays clean). Off / out of regime / any endgame ⇒ 0 ⇒ the shader is byte-identical.
+    const abWindow = sstep(6800, 7400, state.Teff_K) * (1 - sstep(15000, 17000, state.Teff_K));
+    const dwarfGate = sstep(3.2, 3.8, state.logg);
+    surfaceMat.uniforms.uPeculiar.value =
+      (opts && opts.peculiar && !eg) ? abWindow * dwarfGate : 0.0;
     // Degeneracy gate (WD endgame only): 1 for a convective giant (log g ≲ 1), fading
     // to 0 as the bared core contracts into a degenerate remnant (log g ≳ 4). The SAME
     // gate drives BOTH the granulation AND the corona below, so the two fade together —

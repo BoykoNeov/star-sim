@@ -262,6 +262,12 @@ main {
    in the SED panel). Its label/note styling (.sed-rot*) is reused as-is. */
 .rot-control .sed-rot { max-width: none; margin: 8px 0 0; }
 .rot-control .sed-rot-note { text-align: left; }
+
+/* Ap/Bp chemically-peculiar toggle (atlas Tier C) — an evocative surface what-if for A/B
+   main-sequence stars; reuses the .rot-toggle-row / .rot-note idioms, gated to the A/B mass
+   regime (hidden otherwise, so it never reads as a dead knob). */
+.peculiar-control { margin: 12px 0 2px; }
+.peculiar-control[hidden] { display: none; }
 /* Pointer left in the SED panel after the slider moved to Controls. */
 .sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 

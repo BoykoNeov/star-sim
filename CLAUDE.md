@@ -89,7 +89,11 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   most — the limb warms) × Teff-keyed **exposure** (cool = deep/saturated, hot =
   clipped blue-white, Sun anchored at 1.0) × streak-proof rotation + activity corona
   quad (monotone outside-the-limb profile — never a rim ring) + a Teff×L-keyed
-  **glare** quad (hot luminous objects blaze; SN re-keys it to the light curve) —
+  **glare** quad (hot luminous objects blaze; SN re-keys it to the light curve) +
+  an opt-in **Ap/Bp chemical-peculiarity** what-if (`uPeculiar` + `peculiarSpots()`: co-
+  rotating oblique-dipole abundance spots, a brightness-only dip, EVOCATIVE like the corona;
+  a `#peculiar-toggle` track-stable on the A/B mass regime, faded per-state outside the
+  A/B-MS Teff window; composes with gravity darkening — see [[star-sim-apbp-peculiarity]]) —
   see [[star-sim-phase2-shaders]] for the rework) + a **deterministic static starfield
   backdrop** (seeded, a flat far sheet NOT a shell; pure backdrop, encodes no state —
   see [[star-sim-frontend-ux]]). `color.js` is the reference
