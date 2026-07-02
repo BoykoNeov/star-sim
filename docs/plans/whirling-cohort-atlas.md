@@ -220,23 +220,27 @@ at their respective fidelities; see "Cross-cutting design" below.
   both gitignored). **Widen [Fe/H] to {−1.0, +0.2} later = a pure data re-bake** (the CAP18/
   PoWR precedent: `fetch_coelho --feh -1.0,-0.5,0.0,0.2` then re-bake, no code change).
 
-  **Chunk 2 — the frontend α toggle (spectrum panel) — NEXT.** Two advisor carry-forward
-  decisions to settle in the wiring (banked so it doesn't trip):
-  1. **The α-mode-OFF baseline routing (the genuinely-undecided point).** Decision #1 above
-     governs the *comparison* (Coelho-α0 ↔ Coelho-α0.4). It does NOT say what a cool star
-     shows when α-mode is *off*: (a) stay on the main CAP18 cube — then *engaging* α-mode
-     swaps CAP18→Coelho-α0, a visible atmosphere-code change *before* any α change; or (b)
-     route cool stars to Coelho whenever the cube exists — then every cool star's default
-     silently drops from the multi-source CAP18 to Coelho. Decide explicitly; don't let it
-     fall out of the routing code.
-  2. **Spot-check baseline fidelity before wiring** — the tests verify the α *differential*
-     (clean regardless, since both α slabs are clamp-filled identically), NOT that a
-     *reachable* cool MS/giant (Teff, logg) locus lands on a real Coelho node vs a
-     gravity-substituted corner. Check the real loci the marker traverses against the node
-     list first (the 47%-fill risk is only wrong-gravity fills at unphysical corners bleeding
-     toward a real locus; the interior-logg interp itself is fine — it's what RGI does).
-  Plus: Teff-gate the α control off above ~9–10 kK (honest, like the TiO `maxTeff` gate),
-  label it a spectrum-only "what-if" (decisions #2/#3 above), hand off to the main cube hot.
+  **Chunk 2 — the frontend α toggle (spectrum panel) — NEXT (both advisor carry-forwards
+  now RESOLVED by measurement — 2026-07-02):**
+  1. **α-mode-OFF baseline routing → SETTLED: Option A.** Keep the main **CAP18 cube as the
+     α-off default** (it has cool M dwarfs via the Göttingen splice + a full 12-node [Fe/H]
+     axis); α-mode is an **explicit opt-in overlay** that plots **Coelho-α0 vs Coelho-α0.4**
+     (the pure-α comparison of decision #1 — both curves from the α cube, so the α *lesson*
+     is the gap between two plotted Coelho curves, not the one-time CAP18→Coelho view
+     switch on engaging). Option B (route all cool stars to Coelho) was **rejected by the
+     loci spot-check**: it would silently give cool M dwarfs wrong-gravity giant spectra by
+     default AND degrade the default [Fe/H] fidelity (MVP Coelho = 2 [Fe/H] nodes vs CAP18's
+     12).
+  2. **Baseline fidelity spot-check → DONE** (`M:\claud_projects\temp\alpha-gate1\
+     loci_check.py`). Reachable **cool giants (RGB/AGB) all land on REAL Coelho nodes** (dense
+     there — the classic α regime); **MS dwarfs Teff ≥ 4000 K all REAL**. But **cool M dwarfs
+     Teff ≲ 3800 K are NOT real** — Coelho computed only *giant* gravities (logg ≤ 1.0) below
+     ~3800 K, so a 3500 K/logg 4.9 dwarf clamp-fills a *giant* spectrum. ⇒ **Chunk 2 must
+     Teff-gate α off for cool dwarfs (Teff ≲ 3800–4000 K at dwarf gravity)** — an honest edge
+     like the WD DC floor / WR off-grid frame; giants + MS ≥4000 K are fine.
+  Plus (unchanged): Teff-gate the α control off above ~9–10 kK (hot end — like the TiO
+  `maxTeff` gate), label it a spectrum-only "what-if" (decisions #2/#3 above), hand off to
+  the main cube hot. So the honest α-domain = **~4000–10000 K dwarfs + all cool giants**.
 - **Rotational line broadening (v sin i). ✅ DONE.** A pure **client-side convolution**
   of the baked spectrum with Gray's rotation profile (`spectrum.js` only; `rotBroaden`
   ε=0.6, per-pixel variable width Δλ_L=λ·v sin i/c, normalized so equivalent width is
