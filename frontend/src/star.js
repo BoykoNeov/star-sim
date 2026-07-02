@@ -8,7 +8,11 @@
 //                 dwarf shows fine granules; a low-gravity giant shows a handful
 //                 of enormous convective cells. This single relation makes the
 //                 aesthetics encode genuine physics.
-//   * LIMB DARKENING — a standard quadratic law across the disk.
+//   * LIMB DARKENING — a standard quadratic law across the disk, CHROMATIC:
+//                 blue darkens more than red (real physics), so the limb warms.
+//   * EXPOSURE  — a Teff-keyed brightness cue: the color pipeline keeps only the
+//                 chromaticity, so a cool star renders under full exposure (deep
+//                 saturated hue) and a hot one overexposes toward blue-white.
 //   * ROTATION  — differential (faster equator) shear of the noise field, since
 //                 the v/vcrit=0 MIST grid gives no real v_rot (state.v_rot_kms is
 //                 null); the rate here is a plausible *visual* one, not measured.
@@ -17,6 +21,9 @@
 //                 coronae/winds are magnetic (cool stars) or radiatively driven
 //                 (hot O/B stars) structure we are not modeling. A hot, low-
 //                 activity star is therefore near-glowless on purpose.
+//   * GLARE     — a photographic bloom keyed to Teff (surface brightness) scaled
+//                 by L: hot luminous objects blaze, the Sun stays quiet. A camera
+//                 cue, EVOCATIVE like the corona — the readout carries the flux.
 //
 // All of it reads from the one StellarState the HR marker is showing, so the
 // picture, the diagram and the numbers always describe one consistent star (§3).
@@ -89,6 +96,7 @@ uniform float uOmega;     // equatorial angular rate (rad/s, visual)
 uniform float uShear;     // differential-rotation fraction (poles slower)
 uniform float uLife;      // granule lifetime / reform cycle (s)
 uniform float uGran;      // granulation amount (1 = living star, 0 = smooth WD)
+uniform float uExpo;      // exposure (Teff-keyed): <1 deepens a cool star, >1 clips a hot one toward white
 
 varying vec3 vObjPos;
 varying vec3 vViewNormal;
@@ -193,22 +201,40 @@ void main() {
 
   // Limb darkening (quadratic law): μ = cos(angle to the viewer). The camera is
   // at the origin in view space, so the view direction is -normalize(vViewPos).
+  // CHROMATIC on purpose: real limb darkening is wavelength-dependent — the
+  // coefficients are larger in the blue than the red (the Sun's limb genuinely
+  // looks reddened) — so the per-channel law both darkens AND warms the limb.
+  // The green coefficients match the old scalar (sun-like V-band) values, so the
+  // overall darkening depth is unchanged; only the hue gradient is new.
   vec3 viewDir = normalize(-vViewPos);
   float mu = clamp(dot(vViewNormal, viewDir), 0.0, 1.0);
-  const float u1 = 0.4, u2 = 0.26;            // sun-like quadratic coefficients
-  float limb = max(0.0, 1.0 - u1 * (1.0 - mu) - u2 * (1.0 - mu) * (1.0 - mu));
+  float w = 1.0 - mu;
+  const vec3 u1 = vec3(0.33, 0.40, 0.50);     // R, G, B — blue darkens most
+  const vec3 u2 = vec3(0.20, 0.26, 0.33);
+  vec3 limb = clamp(vec3(1.0) - u1 * w - u2 * w * w, 0.0, 1.0);
 
-  vec3 surface = uColor * granule * limb;
+  // Exposure: uColor is max-channel normalized (chromaticity only — the honest
+  // hue), so without this every star renders equally bright. uExpo restores a
+  // brightness CUE from Teff (set in update()): a cool star sits under full
+  // exposure and keeps its saturated hue; a hot star overexposes and clips
+  // toward blue-white at disk centre while the chromatic limb keeps the honest
+  // color at the edge — a camera cue, not a flux claim (the readout has L).
+  vec3 surface = min(uColor * granule * limb * uExpo, 1.0);
   gl_FragColor = vec4(lin2srgb(surface), 1.0);
 }`;
 
 // --- corona shader ------------------------------------------------------------
-// A camera-facing additive quad with a radial glow that is brightest right at
-// the star's limb and decays outward (an exponential falloff), so there's no
-// detached ring. `uInnerFrac` is the star's silhouette as a fraction of the
-// quad's half-size, so the glow is masked off the disk itself. The camera sits
-// fixed on the z-axis looking at the origin, so a plane in the xy-plane already
-// faces it — no billboard math needed.
+// A camera-facing additive quad with a radial glow that starts AT the star's
+// limb and decays monotonically outward (an exponential falloff). Strictly
+// OUTSIDE the silhouette, and dimmer than the limb-darkened disk edge: the disk
+// must stay the brightest thing in frame, with the glow reading as a fading
+// atmosphere around it. (The old profile ramped up ACROSS the limb and peaked
+// just outside it — additive over the darkened disk edge, it clipped to a white
+// annulus brighter than disk centre: a star that looked backwards, rim-bright
+// like an annular eclipse.) `uInnerFrac` is the star's silhouette as a fraction
+// of the quad's half-size, so the glow is masked off the disk itself. The camera
+// sits fixed on the z-axis looking at the origin, so a plane in the xy-plane
+// already faces it — no billboard math needed.
 const CORONA_VERT = `
 varying vec2 vUv;
 void main() {
@@ -229,14 +255,49 @@ ${GLSL_LIN2SRGB}
 void main() {
   float d = length(vUv - 0.5) * 2.0;          // 0 at center .. 1 at the quad edge
   // Work in units of the star's limb radius: rd = 1 exactly at the silhouette.
-  // This keeps the inner softness a fixed few-percent of the star, independent
-  // of how far the glow reaches.
   float rd = d / uInnerFrac;
-  float rim = smoothstep(0.92, 1.06, rd);             // soft rise hugging the limb
-  float decay = exp(-max(0.0, rd - 1.0) * uFalloff);  // fade outward (==1 over the disk)
+  // Zero over the disk AND over its antialiased edge (the rise starts a hair
+  // OUTSIDE the silhouette — additive glow stacked on the AA-blended limb pixels
+  // clips to a hairline bright ring), then a pure outward decay: the profile is
+  // monotone from the limb out, never a ring.
+  float outside = smoothstep(1.005, 1.06, rd);
+  float decay = exp(-max(0.0, rd - 1.0) * uFalloff);
   float edge = 1.0 - smoothstep(0.98, 1.0, d);        // clean cutoff at the quad edge
-  float a = clamp(rim * decay * edge * uIntensity, 0.0, 1.0);
+  float a = clamp(outside * decay * edge * uIntensity, 0.0, 1.0);
   // rgb = display hue, alpha = glow magnitude (AdditiveBlending: src.rgb*src.a).
+  gl_FragColor = vec4(lin2srgb(uColor), a);
+}`;
+
+// --- glare shader ---------------------------------------------------------------
+// Photographic glare — the "this object is violently bright" cue the max-normalized
+// disk color cannot carry. A second corona-style additive quad: a tight, fierce
+// sheath hugging the limb plus a faint wide bloom, in the star's own hue nudged
+// toward white (bright sources flare white). EVOCATIVE by construction (spec §7):
+// glare is a camera/eye artifact, not stellar structure — its strength is keyed in
+// update() to surface brightness (Teff) scaled by luminosity, so an O star or a
+// fresh 100 kK white dwarf blazes while the Sun stays quiet and a cool giant keeps
+// only its soft corona. The honest numbers live in the readout; this is the look.
+const GLARE_FRAG = `
+precision highp float;
+uniform vec3  uColor;       // display hue of the glare (star color, whitened in JS)
+uniform float uIntensity;   // overall strength (Teff/L-keyed, 0 = off)
+uniform float uInnerFrac;   // star limb as a fraction of the quad half-size
+varying vec2 vUv;
+
+${GLSL_LIN2SRGB}
+
+void main() {
+  float d = length(vUv - 0.5) * 2.0;
+  float rd = d / uInnerFrac;
+  // Strictly outside the disk's antialiased edge (same reasoning as the corona:
+  // additive light on the AA limb pixels clips to a hairline ring), and the limb
+  // alpha is capped BELOW the limb-darkened disk edge — the blaze reads from the
+  // wide bloom's reach, not from a rim brighter than the star.
+  float out1 = smoothstep(1.005, 1.05, rd);
+  float tight = 0.42 * exp(-max(0.0, rd - 1.0) * 5.5); // sheath hugging the limb
+  float wide  = 0.22 * exp(-max(0.0, rd - 1.0) * 1.6); // far-reaching bloom
+  float edge = 1.0 - smoothstep(0.97, 1.0, d);
+  float a = clamp(out1 * (tight + wide) * edge * uIntensity, 0.0, 1.0);
   gl_FragColor = vec4(lin2srgb(uColor), a);
 }`;
 
@@ -414,8 +475,15 @@ void main() {
   // dims out (the "disappearing supergiant"), so the bright filamentary nebula can't leak
   // onto it and contradict the winks-out framing (it also keeps uIntensity low, see JS).
   float a = mix(ballA, shellA, uFade * uNebula) * edge;
+  // Incandescence: the brightest young plume cores trend WHITE-HOT above the mean-Teff
+  // hue — evocative like the cells themselves (hotter rising gas), while the BASE hue
+  // stays the honest photosphere blackbody the readout shows. Dies with the ejecta
+  // (uFade) and with a failed collapse's dimming (uNebula-independent: gated by uFade
+  // only, and the failed ball's low uIntensity keeps the alpha — and so the mix — faint).
+  float hot = smoothstep(0.62, 1.05, nBall) * (1.0 - uFade) * smoothstep(0.3, 0.8, mu);
+  vec3 col = mix(uColor, vec3(1.0), 0.45 * hot);
   // Bounded so a single additive sphere layer keeps the Teff hue + thread structure (never white-out).
-  gl_FragColor = vec4(lin2srgb(uColor), clamp(a, 0.0, 0.85));
+  gl_FragColor = vec4(lin2srgb(col), clamp(a, 0.0, 0.95));
 }`;
 
 // --- compact-remnant dot shader (Chunk 3) -------------------------------------
@@ -467,6 +535,7 @@ export function createStar(canvas) {
       uShear: { value: 0.35 },   // poles ~35% slower than the equator
       uLife: { value: 8.0 },     // granule reform cycle (s) — bounds the shear
       uGran: { value: 1.0 },     // granulation amount (0 = smooth degenerate WD)
+      uExpo: { value: 1.0 },     // Teff-keyed exposure (set per-state in update())
     },
   });
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
@@ -493,6 +562,34 @@ export function createStar(canvas) {
   const corona = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), coronaMat);
   corona.renderOrder = 2;
   scene.add(corona);
+
+  // Photographic glare (see GLARE_FRAG): a third camera-facing additive quad, the
+  // "violently bright" cue. Driven per-state in update() — Teff×L keyed for the
+  // living star / WD / WR, light-curve-L keyed for the SN fireball, zero (hidden)
+  // for everything cool and quiet, so the Sun and the giants are untouched by it.
+  const glareMat = new THREE.ShaderMaterial({
+    vertexShader: CORONA_VERT,
+    fragmentShader: GLARE_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uIntensity: { value: 0 },
+      uInnerFrac: { value: 1 / 2.2 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const glare = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), glareMat);
+  glare.renderOrder = 2;
+  glare.visible = false;
+  scene.add(glare);
+
+  // clamped smoothstep in JS, for the update()-side keying curves below.
+  const sstep = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
 
   // Wolf–Rayet wind halo (Chunk 5): a second camera-facing additive quad, hidden except
   // in the WR endgame (it never co-displays with the corona — the WR path zeroes the
@@ -614,6 +711,14 @@ export function createStar(canvas) {
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
     surfaceMat.uniforms.uCells.value = granuleCells(state);
+    // Exposure (SURFACE_FRAG uExpo): uColor is chromaticity-only (max-normalized),
+    // so this restores a Teff brightness cue — a ~3000 K surface sits at 0.85
+    // exposure (deep, saturated hue), the Sun at exactly 1.0 (its face unchanged),
+    // and hot surfaces climb to ~1.5, clipping the disk centre toward blue-white
+    // while the chromatic limb keeps the honest hue at the edge. Every mode goes
+    // through it, so a cooling WD dims and reddens as its Teff falls.
+    surfaceMat.uniforms.uExpo.value =
+      0.85 + 0.15 * sstep(3000, 5800, state.Teff_K) + 0.5 * sstep(8000, 25000, state.Teff_K);
     // Degeneracy gate (WD endgame only): 1 for a convective giant (log g ≲ 1), fading
     // to 0 as the bared core contracts into a degenerate remnant (log g ≳ 4). The SAME
     // gate drives BOTH the granulation AND the corona below, so the two fade together —
@@ -644,21 +749,33 @@ export function createStar(canvas) {
     star.visible = !sn;
     fireball.visible = sn;
 
-    // Corona: activity drives both how bright and how far the glow reaches; a small
-    // floor keeps a faint neutral bloom so even a hot, inactive star isn't a hard-edged
-    // disk (the activity-driven part is what actually grows). The quad half-size is
-    // rad·extent, so the limb sits at fraction 1/extent of it; the falloff is scaled so
-    // the glow has faded by the quad edge. In the WD endgame the degeneracy gate fades
-    // the corona out over the SAME log g range as the granulation, so it doesn't vanish
-    // abruptly at the gateway — it persists on the AGB giant and dies with the dynamo as
-    // the remnant degenerates (a cold white dwarf has no steady corona; this is also why
-    // the SED drops its coronal X-ray overlay over the same range). gDeg=1 living.
+    // Corona: activity drives how far the glow reaches (extent) and, gently, how
+    // bright it starts. uIntensity is now the glow's alpha AT the limb, and it is
+    // deliberately capped below the limb-darkened disk edge so the radial profile
+    // stays monotone — disk centre brightest, then the darkened limb, then the
+    // decaying glow (never the old clipped-white ring). A hot, inactive star's
+    // bloom comes from the glare quad instead, so no floor is needed here beyond
+    // a faint one. The quad half-size is rad·extent, so the limb sits at fraction
+    // 1/extent of it; the falloff is scaled so the glow has faded by the quad
+    // edge. In the WD endgame the degeneracy gate fades the corona out over the
+    // SAME log g range as the granulation, so it doesn't vanish abruptly at the
+    // gateway — it persists on the AGB giant and dies with the dynamo as the
+    // remnant degenerates (a cold white dwarf has no steady corona; this is also
+    // why the SED drops its coronal X-ray overlay over the same range). gDeg=1 living.
     const act = activityOf(state);
     const extent = 1.12 + 1.4 * act * gDeg;
     corona.scale.setScalar(rad * extent);
     coronaMat.uniforms.uInnerFrac.value = 1.0 / extent;
     coronaMat.uniforms.uFalloff.value = 3.2 / (extent - 1.0);
-    coronaMat.uniforms.uIntensity.value = (0.3 + 1.4 * act) * gDeg;
+    coronaMat.uniforms.uIntensity.value = (0.12 + 0.3 * act) * gDeg;
+
+    // Glare (GLARE_FRAG): keyed to SURFACE brightness (Teff — a cool giant is huge
+    // but its surface is dim: soft corona, no glare) and scaled up by luminosity,
+    // so an O star or a fresh 100 kK white dwarf blazes while the Sun stays quiet.
+    // The SN branch below re-keys it to the fireball's light-curve luminosity.
+    const logL = Math.log10(Math.max(1, state.L_lsun));
+    let glareInt = sn ? 0 : sstep(7000, 22000, state.Teff_K) * (0.5 + 0.5 * sstep(0, 6, logL));
+    let glareRad = rad;
 
     // WR wind halo (Chunk 5): shown ONLY in the WR endgame — hidden for the living star and
     // the WD endgame, so neither is touched. The color is the honest blackbody at Teff; the
@@ -673,7 +790,6 @@ export function createStar(canvas) {
       const z = Math.max(0, Math.min(1, (state.Z_surf ?? 0) / 0.6)); // 0 (WN) → 1 (WC/WO)
       windMat.uniforms.uFalloff.value = 2.4 + 1.4 * z;               // WC/WO: tighter, denser
       windMat.uniforms.uDensity.value = 0.25 + 0.75 * z;             // WN: smoother, WC/WO: clumpy
-      const logL = Math.log10(Math.max(1, state.L_lsun));
       // The wind blazes UP as the star strips: ~0 while the entry star is still
       // hydrogen-rich (WNh, X_surf≈0.28), so the gateway is a CONTINUATION of the
       // near-glowless living CHeB star rather than a hard cut to a bright limb ring,
@@ -711,12 +827,17 @@ export function createStar(canvas) {
       // curve) so the entry reads as a violent burst, not a dim little ball. A FAILED SN
       // (direct collapse) gets neither: it barely glows and fades straight to black — the
       // "disappearing supergiant" (N6946-BH1) — so its dim + zero shock keep it faint.
-      const logL = Math.log10(Math.max(1, state.L_lsun));
       const dim = failed ? 0.3 : 1.0;
       const shock = failed ? 0 : Math.max(0, Math.min(1, (opts && opts.snShock) ?? 0));
       fireballMat.uniforms.uIntensity.value =
         dim * (0.72 + 0.28 * Math.max(0, Math.min(1, (logL - 5) / 4))) + shock * 0.5;
       fireball.scale.setScalar(rad * grow);
+
+      // Re-key the glare to the fireball: an incandescent bloom from the (enormous)
+      // light-curve luminosity, dying with the ejecta as they thin. A failed direct
+      // collapse gets none — it dims out, it never blazes.
+      glareInt = failed ? 0 : (1 - fade) * (0.55 + 0.45 * sstep(5, 9, logL));
+      glareRad = rad * grow;
 
       // The remnant: a neutron star is UNCOVERED as the ejecta thin — not born at the end. It is
       // faintly present the whole late phase and brightens as the fireball clears, so it reads
@@ -733,6 +854,19 @@ export function createStar(canvas) {
         isNS ? Math.max(0, Math.min(1, (fade - 0.4) / 0.6)) : 0;
     } else {
       remnant.visible = false;
+    }
+
+    // Apply the glare quad last (set unconditionally, like star.visible — a mode
+    // switch must never strand a stale glare on screen).
+    const GLARE_EXTENT = 2.2;
+    glare.visible = glareInt > 0.004;
+    if (glare.visible) {
+      // The star's own hue nudged toward white — bright sources flare white.
+      glareMat.uniforms.uColor.value.setRGB(
+        r + (1 - r) * 0.3, g + (1 - g) * 0.3, b + (1 - b) * 0.3);
+      glareMat.uniforms.uIntensity.value = glareInt;
+      glare.scale.setScalar(glareRad * GLARE_EXTENT);
+      glareMat.uniforms.uInnerFrac.value = 1 / GLARE_EXTENT;
     }
   }
 

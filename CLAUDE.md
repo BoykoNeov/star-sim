@@ -78,8 +78,13 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   canonical polytrope overlays (n=1.5/3, references, not fitted), and labels the
   nearest saved snapshot (jumps between snapshots; snapped-far note when off-grid).
   `star.js` is the Phase 2 §7
-  shader (Teff→color × H_p granulation × limb darkening × streak-proof rotation +
-  activity corona quad). `color.js` is the reference Planck→CIE→sRGB color pipeline
+  shader (Teff→color × H_p granulation × **chromatic** limb darkening (blue darkens
+  most — the limb warms) × Teff-keyed **exposure** (cool = deep/saturated, hot =
+  clipped blue-white, Sun anchored at 1.0) × streak-proof rotation + activity corona
+  quad (monotone outside-the-limb profile — never a rim ring) + a Teff×L-keyed
+  **glare** quad (hot luminous objects blaze; SN re-keys it to the light curve) —
+  see [[star-sim-phase2-shaders]] for the rework). `color.js` is the reference
+  Planck→CIE→sRGB color pipeline
   (`teffToLinearRGB` for the shader, `teffToRGB`/`teffToCSS`/`wavelengthToCSS` for
   the 2D UI). `canvas.js` is the shared HiDPI `fitCanvas` helper. Three.js via CDN
   importmap, served by FastAPI. Pedagogy is hover-revealed (a `?` glyph + dotted
