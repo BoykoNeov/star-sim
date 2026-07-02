@@ -8,7 +8,9 @@
 // glance), the marker carries a soft glow in the star's own color, and faint
 // O·B·A·F·G·K·M spectral-class bands anchor the reversed Teff axis along the top
 // edge (living view only — MK classes don't apply to the WD/WR remnant regimes the
-// endgame axes span).
+// endgame axes span). Dotted iso-radius diagonals (drawIsoRadius) underlie both the
+// living and endgame views — constant-R lines from L = 4πR²σT⁴, the diagram's
+// graph paper.
 
 import { teffToCSS, teffToRGB } from "./color.js";
 import { fitCanvas } from "./canvas.js";
@@ -285,6 +287,54 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       ctx.globalAlpha = 0.75;
       ctx.fillText(letter, (x0 + x1) / 2, PAD - 5);
       ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // Iso-radius diagonals: on the (log Teff, log L) plane every constant radius is a
+  // straight line — L/L☉ = (R/R☉)²·(Teff/T☉)⁴, i.e. logL = 2·logR + 4·(logT − logT☉).
+  // Decade lines make the diagram's geometry legible: the giant branch running
+  // up-RIGHT means SWELLING (bigger at the same Teff = brighter), the main sequence
+  // hugs ~1 R☉ near the Sun, and in the endgame view the WD cooling track slides DOWN
+  // a single iso-R line — constant radius, just fading and cooling (why a "dwarf").
+  // The physics holds on any axes, so this draws in the living AND endgame views
+  // (never the SN light curve — its x-axis is time). Dotted + very faint, behind
+  // everything: graph paper, not data. T☉ = 5772 K (the IAU nominal value).
+  const LOG_TSUN = Math.log10(5772);
+  function drawIsoRadius() {
+    const logLof = (logT, e) => 2 * e + 4 * (logT - LOG_TSUN);
+    const tAt = (logL, e) => (logL - 2 * e) / 4 + LOG_TSUN;
+    ctx.save();
+    ctx.font = "9px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    for (let e = -3; e <= 4; e++) {          // 0.001 … 10000 R☉; off-frame decades skip
+      // The visible sub-segment: clamp the line to the frame in BOTH axes. logL rises
+      // with logT along a line, so the L-window maps back to a T-window directly.
+      const tLo = Math.max(bT0, tAt(bL0, e));
+      const tHi = Math.min(bT1, tAt(bL1, e));
+      if (tHi - tLo < 0.02) continue;        // misses the frame (or a corner sliver)
+      const x0 = xOf(tLo), y0 = yOf(logLof(tLo, e));   // cool / faint end (lower right)
+      const x1 = xOf(tHi), y1 = yOf(logLof(tHi, e));   // hot / bright end (upper left)
+      ctx.strokeStyle = "rgba(138,147,166,0.28)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.setLineDash([]);
+      // Label tucked along the line just inside its cool (lower-right) end, rotated to
+      // the on-screen slope so it reads as part of the line. Skipped when the visible
+      // segment is too short to hold it.
+      const label = `${10 ** e} R☉`;
+      const labelW = ctx.measureText(label).width;
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      if (len < labelW + 18) continue;
+      const ux = (x1 - x0) / len, uy = (y1 - y0) / len;   // unit vector toward the hot end
+      const lx = x0 + ux * (labelW + 8), ly = y0 + uy * (labelW + 8);
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.rotate(Math.atan2(y0 - y1, x0 - x1));           // text runs hot→cool (down-right)
+      ctx.fillStyle = "rgba(138,147,166,0.65)";
+      ctx.fillText(label, 0, -3);
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -611,6 +661,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function draw() {
     if (snMode) { drawSupernova(); return; }
     drawAxes();
+    drawIsoRadius();                  // constant-R graph paper, under everything
     if (endgameMode) {
       drawEndgameTrack();
     } else {

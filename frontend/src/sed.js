@@ -819,16 +819,18 @@ export function createSED(canvas) {
         ctx.fillStyle = band.col;
         ctx.fillRect(x0, PAD_T, x1 - x0, H - PAD_T - PAD_B);
       }
-      // Band divider + label along the top.
+      // Band divider + label along the top. 11px + a brighter grey than the old
+      // 10px #7e88a0 — the band names were at the edge of legibility on 1440px.
       ctx.strokeStyle = "rgba(120,130,150,0.25)"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x1, PAD_T); ctx.lineTo(x1, H - PAD_B); ctx.stroke();
-      ctx.fillStyle = band.rainbow ? "#cdd6e6" : "#7e88a0";
-      ctx.font = "10px system-ui, sans-serif";
+      ctx.fillStyle = band.rainbow ? "#cdd6e6" : "#98a2b8";
+      ctx.font = "11px system-ui, sans-serif";
       ctx.textAlign = "center";
       const mid = (x0 + x1) / 2;
       // Skip a label that wouldn't fit its band (the visible sliver is too narrow —
       // it's covered by the legend + the "detailed spectrum" bracket below it).
-      if (x1 - x0 > 26) ctx.fillText(band.name, mid, PAD_T - 4);
+      // Threshold scaled up with the font so neighbors can't overprint.
+      if (x1 - x0 > 29) ctx.fillText(band.name, mid, PAD_T - 4);
     }
     ctx.textAlign = "left";
   }

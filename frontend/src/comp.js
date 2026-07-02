@@ -220,6 +220,10 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
     drawPhaseDividers(xOf);
     drawMarker(xOf, e0, e1);
+    if (marker) {
+      drawBoundaryDots(xOf, e0, e1, coreTop, chartH, marker.X_core ?? 0, marker.Y_core ?? 0);
+      drawBoundaryDots(xOf, e0, e1, surfTop, chartH, marker.X_surf ?? 0, marker.Y_surf ?? 0);
+    }
     drawAxis();
   }
 
@@ -717,20 +721,22 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   }
 
   // Faint full-height line wherever the phase label changes, labeled once at the
-  // top — turns the EEP axis into a readable MS | RGB map (a teaching cue).
+  // top — turns the EEP axis into a readable MS | RGB map (a teaching cue). Labels
+  // are semibold and a notch brighter than the axis grey — they name the acts of the
+  // whole panel, so they must not read as tick furniture.
   function drawPhaseDividers(xOf) {
-    ctx.font = "11px system-ui, sans-serif";
+    ctx.font = "600 11px system-ui, sans-serif";
     let prev = null, lastLabelX = -1e9;
     for (const s of track) {
       if (s.phase === prev) continue;
       prev = s.phase;
       const x = xOf(s.eep);
       if (x > PAD_L + 1) {
-        ctx.strokeStyle = "rgba(138,147,166,0.30)"; ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(138,147,166,0.40)"; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
       }
       if (x - lastLabelX > 42) {   // looser on the now-narrower axis so labels don't crowd
-        ctx.fillStyle = "#8a93a6";
+        ctx.fillStyle = "#aab4c6";
         ctx.fillText(s.phase, x + 3, PAD_T - 5);
         lastLabelX = x;
       }
@@ -741,12 +747,28 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     if (!marker) return;
     const eep = Math.min(Math.max(marker.eep, e0), e1);
     const x = xOf(eep);
-    ctx.strokeStyle = "#e7ecf5"; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#f4f7fc"; ctx.lineWidth = 1.75;
     ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
     // little caps so the marker reads as a marker, not a phase divider.
-    ctx.fillStyle = "#e7ecf5";
+    ctx.fillStyle = "#f4f7fc";
     ctx.beginPath(); ctx.arc(x, PAD_T, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(x, H - PAD_B, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Anchor dots where the cursor crosses the bulk view's stacked-band boundaries:
+  // at the marker's EEP, mark the current H→He and He→Z splits in a sub-chart, so
+  // the eye lands on the values the cursor is actually pointing at (the He→Z dot
+  // rides near the top — Z is ~1.5%, honest). Dark-ringed so they pop on the gold
+  // He band. Bulk view only — the line views have no band boundaries to anchor.
+  function drawBoundaryDots(xOf, e0, e1, top, h, X, Y) {
+    if (!marker) return;
+    const x = xOf(Math.min(Math.max(marker.eep, e0), e1));
+    for (const frac of [X, X + Y]) {
+      const y = top + h - clamp01(frac) * h;
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = "#f4f7fc"; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = "rgba(8,10,18,0.8)"; ctx.stroke();
+    }
   }
 
   function drawAxis() {

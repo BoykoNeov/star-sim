@@ -22,7 +22,9 @@
      error, so a cold cache reads as "loading", never as dead black boxes. -->
 <body class="loading">
   <header>
-    <h1>Star Simulator <span class="tag">Phase 5 · spectra</span>
+    <!-- The tag once tracked build phases ("Phase 5 · spectra"); those are complete,
+         so it now states the app's scope — a star's whole life, birth to remnant. -->
+    <h1>Star Simulator <span class="tag">ZAMS → remnant</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>
     </h1>
     <button id="reset-layout" class="reset-layout" type="button"
@@ -46,7 +48,7 @@
     </section>
 
     <section class="panel hr-panel" data-panel-id="hr">
-      <h2><span class="hr-title-live">HR diagram</span><span class="hr-title-sn">Supernova light curve</span> <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age. For a star that ends as a white dwarf, a faint dashed path previews its endgame — the cooling track heading off toward the hot, faint white-dwarf corner beyond the visible life (clipped to the plot; the full sequence is scrubbable inside the endgame). Toggle 'Variable-star zones' to overlay the instability strip and other variable-star classes as a labeled map.">?</span></h2>
+      <h2><span class="hr-title-live">HR diagram</span><span class="hr-title-sn">Supernova light curve</span> <span class="help" tabindex="0" data-tip="The Hertzsprung–Russell diagram — luminosity L (vertical) versus effective temperature Teff (horizontal, plotted hot on the left by long-standing convention). The grey curve is this star's full evolutionary track for the chosen mass &amp; [Fe/H]; the glowing dot is the star at the current age. For a star that ends as a white dwarf, a faint dashed path previews its endgame — the cooling track heading off toward the hot, faint white-dwarf corner beyond the visible life (clipped to the plot; the full sequence is scrubbable inside the endgame). The faint dotted diagonals are lines of CONSTANT RADIUS (from L = 4πR²σT⁴, labeled in solar radii): stars on the same diagonal are the same size, so the giant branch running up-right means the star is swelling — and a cooling white dwarf slides DOWN one line, shrinking not at all. Toggle 'Variable-star zones' to overlay the instability strip and other variable-star classes as a labeled map.">?</span></h2>
       <div class="hr-modes" role="group" aria-label="HR diagram overlays">
         <button type="button" class="mode-btn" data-overlay="vars" aria-pressed="false">Variable-star zones</button>
         <span class="help" tabindex="0" data-tip="Overlays the regions of the HR diagram where stars are known to pulsate or erupt — a labeled map of the major variable-star classes. The boundaries are SCHEMATIC (illustrative class positions, not a metallicity-calibrated instability strip): they show WHERE such stars sit, not a claim that this particular star is variable. The classical instability strip (gold) is one tilted band, driven by the same opacity (κ) mechanism in the helium-ionization zone, crossed by δ Scuti, RR Lyrae and Cepheids at rising luminosity. LBV and Mira are separate instabilities elsewhere on the diagram. Drag the star into a shaded zone to see when a star of this mass and age would be a pulsating (or eruptive) variable.">?</span>

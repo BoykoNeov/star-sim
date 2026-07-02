@@ -477,9 +477,12 @@ main {
   width: 1px; height: 5px; transform: translateX(-50%);
   background: var(--muted); opacity: 0.75;
 }
+/* One notch above the old 9.5px and brighter than --muted: the landmark names
+   (ZAMS, RGB tip…) were at the edge of legibility on a 1440px display. The strip's
+   collision logic is normalized (no pixel measurement), so the bump is layout-safe. */
 .tick-label {
   position: absolute; top: 7px; left: 0; transform: translateX(-50%);
-  font-size: 9.5px; line-height: 1; color: var(--muted);
+  font-size: 10.5px; line-height: 1; color: #a7b0c2;
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 /* Near an end, anchor the label so it extends inward (mark stays put). */

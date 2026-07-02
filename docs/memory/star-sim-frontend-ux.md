@@ -1,6 +1,6 @@
 ---
 name: star-sim-frontend-ux
-description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS; + the 2026-07 HR pass (Teff-colored living track, glowing marker, O·B·A·F·G·K·M class bands) + the tier-2 pass (past/future track split, swallowed-orbit rings, starfield backdrop, first-load skeletons)."
+description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS; + the 2026-07 HR pass (Teff-colored living track, glowing marker, O·B·A·F·G·K·M class bands) + the tier-2 pass (past/future track split, swallowed-orbit rings, starfield backdrop, first-load skeletons) + the polish pass (iso-radius HR diagonals, comp boundary dots + brighter phase labels, tick/SED label legibility, header tag ZAMS → remnant)."
 metadata: 
   node_type: memory
   type: project
@@ -120,6 +120,31 @@ frontend-only, commit after b2fb6e9):**
   Verify via computed style (`animationName === "skeleton-sheen"` while a Playwright
   route holds `/track` open, `none` after first paint) — a still screenshot can't
   prove a moving sheen.
+
+**The polish pass (2026-07, the review's last batch — iso-radius lines + three
+small-polish items; frontend-only, commit after c598252):**
+- **Iso-radius diagonals (`hr.js` drawIsoRadius):** dotted constant-R lines,
+  `logL = 2·logR + 4·(logT − log 5772)`, decades 0.001–10000 R☉ clamped to the frame
+  in both axes (off-frame decades skip analytically — no clip needed). Drawn right
+  after `drawAxes()` in the living AND endgame views (never SN — its x-axis is time).
+  Labels 9px, rotated to the on-screen slope, tucked at each line's COOL (lower-right)
+  end — they form a tidy column along the right edge; skipped when the visible segment
+  is shorter than the label. Verified payoffs: the Sun sits ON the 1 R☉ line; the WD
+  cooling track slides DOWN a single iso-R line (constant radius, just fading — why
+  "dwarf"); the 120 M☉ expanded frame regenerates the lines on the new bounds. The HR
+  `?` tooltip gained the L=4πR²σT⁴ sentence.
+- **Comp boundary dots + brighter acts (`comp.js`):** `drawBoundaryDots` puts
+  dark-ringed white dots where the cursor crosses the bulk view's H→He and He→Z
+  stack boundaries (both sub-charts, values read straight off the marker row — bulk
+  view only, the line views have no bands). Phase labels went semibold `#aab4c6`
+  (they name the acts, not tick furniture), dividers α0.30→0.40, cursor 1.5→1.75px
+  `#f4f7fc`.
+- **Label legibility:** `.tick-label` 9.5px→10.5px + `#a7b0c2` (safe: the strip's
+  collision logic is normalized MIN_GAP, no pixel measurement); SED band names
+  10px→11px + `#98a2b8`, fit-skip threshold 26→29px (the "visible" sliver was
+  already skipped at 12px wide — covered by Wien-peak/detailed-spectrum labels).
+- **Header tag:** "Phase 5 · spectra" (stale build-phase tag) → **"ZAMS → remnant"**,
+  a durable scope statement now the build phases are complete.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the

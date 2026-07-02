@@ -67,9 +67,11 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail),
   a **Teff-colored living track** + glowing marker (one shared `drawMarker`), a
   **past/future split at the marker** (traversed solid, ahead dim — living AND endgame
-  tracks, `splitIndex` = marker array identity + age fallback), and faint
+  tracks, `splitIndex` = marker array identity + age fallback), faint
   **O·B·A·F·G·K·M spectral-class bands** (letters above the top frame line, living view
-  only — see [[star-sim-frontend-ux]]).
+  only), and dotted **iso-radius diagonals** (constant-R graph paper from L=4πR²σT⁴,
+  living AND endgame views — the WD cooling track slides down one; never the SN light
+  curve — see [[star-sim-frontend-ux]]).
   `layout.js` is the draggable/responsive **dashboard** layer (a reorder-in-flow
   sortable over the flex-wrap panel container, see [[star-sim-draggable-responsive-panels]]).
   `comp.js` is the §5.4 composition panel — **three** views via `setMode` (bulk
@@ -420,7 +422,10 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   classification, instability-strip HR overlay, tooltip singleton, age-slider
   landmark ticks, responsive draggable dashboard, **first-load skeleton sheen**
   (`<body class="loading">`, removed on first paint/error; per-ID CSS selectors —
-  the canvas `#id` background shorthand outranks a class rule). **No JS test harness → the
+  the canvas `#id` background shorthand outranks a class rule), the **polish batch**
+  (comp bulk-view boundary dots at the cursor + brighter phase labels; tick-label
+  10.5px / SED band-name 11px legibility bumps; header tag → "ZAMS → remnant"
+  — the stale "Phase 5 · spectra" retired). **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).
   [[star-sim-frontend-ux]], [[star-sim-draggable-responsive-panels]],
