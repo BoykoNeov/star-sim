@@ -334,9 +334,12 @@ main {
    a phone; the "?" help pushes to the right like .comp-modes. */
 .spectrum-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
 /* `display:flex` above beats the UA [hidden]{display:none} (equal specificity, later rule),
-   so re-assert it — else the zoom presets leak into the endgame / stripped modes, where the
-   draw path ignores the band window and the buttons would be dead (matches the .alpha-toggle-
-   row[hidden] / .rot-toggle-row[hidden] idiom above). */
+   so re-assert it — else the row's [hidden]=true (set by updateWD/updateWR/updateStripped/
+   showPlaceholder) silently fails and the zoom presets leak into every endgame + stripped
+   mode. In WR/SN/stripped the buttons would also be DEAD (those draw paths ignore the band
+   window); in WD they'd work (WD renders through the main path), but updateWD explicitly
+   hides them, so this restores that intent uniformly. Matches the .alpha-toggle-row[hidden]
+   / .rot-toggle-row[hidden] idiom above. */
 .spectrum-zoom[hidden] { display: none; }
 .spectrum-zoom .zoom-label { font-size: 12px; color: var(--muted); }
 .spectrum-zoom .mode-btn { font-size: 11px; padding: 2px 8px; }

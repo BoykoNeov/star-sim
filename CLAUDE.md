@@ -334,7 +334,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   **Measure-first gate CLOSED through the runtime:** the absorption→emission sequence is real & monotone
   (2 M☉ pure absorption Hα 0.50 → 18 M☉ He II 4686 **7.2×** emission), distinct from the false O-star Balmer
   spectrum the Chunk-2 placeholder protected against. Bonus: fixed a pre-existing `.spectrum-zoom[hidden]`
-  CSS leak (dead zoom buttons in WD/WR/SN too). Recipe §10. Path (b) (two-star co-evolution) stays deferred.
+  CSS leak (zoom presets leaked into every endgame + stripped mode — dead in WR/SN/stripped, working-but-
+  meant-hidden in WD). Recipe §10. Path (b) (two-star co-evolution) stays deferred.
   **Chunk 2** (frontend-only, 266 pytest
   UNCHANGED, Playwright 1440+390 zero console errors): the reversible `mode="stripped"`. Entry-point
   (i) settled — a **mass-gated TOGGLE** (`#stripped-toggle`, mirrors the Ap/Bp control) for eligible

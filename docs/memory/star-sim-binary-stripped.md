@@ -125,10 +125,13 @@ placeholder. A FOURTH spectrum sibling `/stripped_spectrum` over the Götberg CM
   emission peaks above), `STRIPPED_LINES` guides (He II 4686 diagnostic + Balmer/He I, no up/down
   gate), regime-branched caption ({absorption/hybrid/emission}). `main.js applyStrippedModel` swaps
   `showPlaceholder`→`updateStripped(s)`.
-- **Bonus bug the screenshot pass caught:** the `.spectrum-zoom` zoom-preset row LEAKED into the
-  endgame / stripped modes — `hidden=true` was set but `.spectrum-zoom{display:flex}` beat the UA
-  `[hidden]{display:none}` (missing the `[hidden]` re-assertion the `.alpha-toggle-row`/`.rot-toggle-row`
-  rules have) → dead zoom buttons in WD/WR/SN too; fixed with one CSS line `.spectrum-zoom[hidden]{display:none}`.
+- **Bonus bug the screenshot pass caught:** the `.spectrum-zoom` zoom-preset row LEAKED into every
+  endgame + stripped mode — `hidden=true` (set by updateWD/WR/updateStripped/showPlaceholder) silently
+  failed because `.spectrum-zoom{display:flex}` beat the UA `[hidden]{display:none}` (missing the
+  `[hidden]` re-assertion the `.alpha-toggle-row`/`.rot-toggle-row` rules have). Fixed with one CSS line
+  `.spectrum-zoom[hidden]{display:none}`. Nuance (advisor): the leaked buttons were DEAD only in WR/SN/
+  stripped (those draw paths ignore the band window); in WD they actually WORKED (WD renders through the
+  main draw path), but `updateWD` explicitly hides them anyway, so the fix restores that intent uniformly.
 
 **Path (a) is now COMPLETE** (Chunks 1–3). Path (b) (two-star co-evolution, companion drawn, Algol
 reversal) stays deferred (needs POSYDON/BPASS/MESA-binary + a new two-star render). Related:

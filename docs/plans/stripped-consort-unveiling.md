@@ -35,8 +35,10 @@ placeholder:
   guides (He II 4686 the diagnostic + Balmer/He I, no up/down gate), a regime-branched caption.
   `main.js` `applyStrippedModel` swaps `showPlaceholder` → `spectrum.updateStripped(s)`.
 - **Bonus bug fix caught by the screenshot pass:** the `.spectrum-zoom` zoom-preset row leaked into
-  the endgame / stripped modes (missing `[hidden]` re-assertion vs `display:flex`, unlike the
-  `.alpha-toggle-row[hidden]` idiom) → dead zoom buttons in WD/WR/SN too; fixed with one CSS line.
+  every endgame + stripped mode (`hidden=true` silently failed — missing the `[hidden]` re-assertion
+  vs `display:flex`, unlike the `.alpha-toggle-row[hidden]` idiom); fixed with one CSS line. (Advisor
+  nuance: the leaked buttons were dead only in WR/SN/stripped — those draw paths ignore the band
+  window; WD's zoom actually worked but `updateWD` intends to hide it, so the fix restores that intent.)
 - **Files:** `scripts/bake_stripped_spectra.py` (new), `spectra.py` (+`_StrippedSpectra`/
   `stripped_spectrum_data`/`STRIPPED_GRID_FILENAME`), `api.py` (`/stripped_spectrum`),
   `tests/test_stripped_spectra.py` (7, `requires_stripped_spectra_data` in `conftest.py`),
