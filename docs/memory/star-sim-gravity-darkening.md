@@ -52,9 +52,30 @@ disk; `uExpo` carries brightness; fixed camera (0,0,8), pole=+y, visual-only rot
 modelView, so vObjPos.y = sin(lat) survives an oblate `star.scale.set(eq,pol,eq)`); the limb-
 darkening normal `vViewNormal` uses `normalMatrix` so it correctly follows the oblate shape.
 
-**Chunk plan:** Gate 0 ✅ → **Chunk 1 BUILT (2026-07-02, frontend-only, 254 pytest green,
-zero console errors)** → **Chunk 2** inclination slider + v sin i coupling (retire sin i=1) +
-caption. Plan file TBD under `docs/plans/`.
+**Chunk plan:** Gate 0 ✅ → **Chunk 1 BUILT** → **Chunk 2 BUILT (2026-07-02, frontend-only,
+254 pytest unchanged, Playwright 1440+390 zero console errors) — the gravity-darkening arc is
+COMPLETE.** No plan file was needed (the memory + advisor rulings were the spec).
+
+**Chunk 2 (BUILT):** an **Inclination slider** (0°=pole-on … 90°=edge-on) — a persisted VIEWING
+choice OWNED by `main.js` (`inclinationDeg`, default **60°** = isotropic median) and pushed to
+BOTH consumers via `star.setInclination`/`spectrum.setInclination` (single source, no dual-default
+drift). ONE angle drives two things coherently: (1) `star.js` tilt `star.rotation.x = (π/2)(1−i/90)`
+= θ=90°−i (dropped Chunk 1's ω-ramp/fixed-0.6 tilt; `lastGd` cached so the slider re-tilts with no
+repaint) — pole-on looks down the hot pole (round disk), edge-on shows the oblate egg side-on; (2)
+`spectrum.js` `v sin i = v_rot·sin(i)` — **retires the fixed sin i=1 "edge-on" punt** (advisor ruling
+#2; the earlier v sin i work in [[star-sim-phase5-spectra]]/[[star-sim-rotation-subpop-atlas]] punted
+edge-on *because* no oblateness model existed — now reversed). sinI folded into all 4 spots: `mainFlux`
+guard, `rotBroaden` amount, the broaden **memo key** (was keyed only on v_rot → would strand a stale
+line on drag — advisor plumbing catch), and the caption+`ROT_VISIBLE_KMS` note. **OFF THE SPINE**
+(ruling #3): inclination never touches the HR marker — only what is SEEN (3D) + OBSERVED (lines).
+UI: a THIRD facet in the unified Rotation control (`#incl-control`, reuses `.sed-rot` styling),
+**gated track-stably on `showToggle && rotationOn`** (NOT per-state `gd.active` — advisor's key
+catch: gd.active varies along the track via the logg giant-gate, so gating on it would appear/
+disappear the facet mid-age-scrub and jitter the Age thumb; the track-stable gate keeps the control
+height fixed, and at giant ages star.js just sets tilt=0 while the slider stays put). Measured coherent
+story on the near-Regulus (5 M☉ [Fe/H]+0.5 MS): pole-on → round/uniformly-hot/sharp lines (v sin i→0,
+broadening clause suppressed below the 120 km/s floor); i=60 → tilted oblate, hot-pole + cool-equator
+band both visible, v sin i≈195; edge-on → fully oblate side-on, v sin i≈225 (max). Sun hides the facet.
 
 **Chunk 1 (BUILT):** new `frontend/src/gravdark.js` (`rotationDistortion(state)` → Roche ω from
 v_rot/v_crit, volume-preserving spheroid k_eq=q^(1/3)/k_pol=q^(-2/3) with q=R_eq/R_pol, gEq =

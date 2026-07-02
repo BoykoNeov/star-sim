@@ -159,6 +159,15 @@ export function createSpectrum({ api }) {
   let data = null;        // last /spectrum result
   let lastKey = null;     // dedup: skip a refetch if (Teff,logg,feh) didn't move
   let vRot = 0;           // marker's surface rotation (km/s) — drives v sin i broadening
+  // Viewing inclination (gravity-darkening Chunk 2). The observable broadening is v·sin i,
+  // NOT the full surface speed: only the projected rotation Doppler-smears the lines. The
+  // angle is set by main.js in lockstep with the 3D star's tilt (a shared viewing choice),
+  // so pole-on (i→0) sharpens the lines toward the rest spectrum and edge-on (i=90°) gives
+  // the maximum smear. 60° (isotropic median) is only a pre-push default; retires the old
+  // fixed sin i = 1 "edge-on" punt now that an inclination model exists.
+  let inclinationDeg = 60;
+  const inclDeg = () => inclinationDeg;
+  const vsiniEff = () => vRot * Math.sin((inclinationDeg * Math.PI) / 180);   // projected v sin i
   let broadenedMemo = null;   // {src, v, flux} — cache so resize() doesn't reconvolve
   // [α/Fe] enhancement (spectrum-only what-if). `alphaOn` is the user's persisted TOGGLE
   // INTENT (kept across mass/age/[Fe/H] changes, like main.js's rotationOn); `lastState`
@@ -476,11 +485,12 @@ export function createSpectrum({ api }) {
   // redraw reuses the last convolution.
   function mainFlux() {
     const raw = data.flux;
-    if (data.isWD || data.isWR || !(vRot >= 1)) return raw;
-    if (broadenedMemo && broadenedMemo.src === raw && broadenedMemo.v === vRot)
+    const vsini = vsiniEff();   // projected v sin i (inclination folded in) — the observable
+    if (data.isWD || data.isWR || !(vsini >= 1)) return raw;
+    if (broadenedMemo && broadenedMemo.src === raw && broadenedMemo.v === vsini)
       return broadenedMemo.flux;
-    const flux = rotBroaden(data.wavelength, raw, vRot);
-    broadenedMemo = { src: raw, v: vRot, flux };
+    const flux = rotBroaden(data.wavelength, raw, vsini);
+    broadenedMemo = { src: raw, v: vsini, flux };   // key on the projected speed, not v_rot
     return flux;
   }
 
@@ -960,12 +970,15 @@ export function createSpectrum({ api }) {
       txt += " — solar-metallicity grid: the [Fe/H] control does not change this " +
         "panel yet (awaiting a metallicity-varying spectral grid).";
     }
-    // Rotational broadening note — only when v sin i is above the ~one-pixel visibility
-    // floor (below it the smear is sub-pixel and the lines are visibly untouched).
-    if (vRot >= ROT_VISIBLE_KMS) {
-      txt += ` · v sin i ≈ ${Math.round(vRot)} km/s (shown edge-on) — rotation ` +
-        "Doppler-broadens the absorption lines (shallower & wider); this is the maximum " +
-        "projection, at lower inclination they'd be sharper.";
+    // Rotational broadening note — only when the PROJECTED v sin i is above the ~one-pixel
+    // visibility floor (below it the smear is sub-pixel and the lines are visibly
+    // untouched). v sin i folds in the viewing inclination (Chunk 2): pole-on it drops
+    // toward zero (sharp lines) and edge-on it maxes out.
+    const vsini = vsiniEff();
+    if (vsini >= ROT_VISIBLE_KMS) {
+      txt += ` · v sin i ≈ ${Math.round(vsini)} km/s (i = ${Math.round(inclDeg())}°) — ` +
+        "rotation Doppler-broadens the absorption lines (shallower & wider); tilt toward " +
+        "pole-on to sharpen them, edge-on to broaden them further.";
     }
     // The α toggle is on but this star is off its honest domain (hot / cool dwarf / off the
     // α grid's [Fe/H]) — say why the overlay isn't shown, rather than silently dropping it.
@@ -993,5 +1006,17 @@ export function createSpectrum({ api }) {
     });
   }
 
-  return { update, updateWD, updateWR, showPlaceholder, resize };
+  // Set the viewing inclination (0°=pole-on … 90°=edge-on) — folds sin i into the v sin i
+  // line broadening (gravity-darkening Chunk 2). A pure client-side post-process: no
+  // refetch (the served rest spectrum is unchanged), just re-broaden the cached flux and
+  // re-caption, mirroring the vRot-change path in update(). Only the live absorption cube
+  // reacts — a WD/WR/α frame ignores rotation entirely. main.js keeps this in lockstep
+  // with the 3D star's tilt so the two tell one coherent story.
+  function setInclination(deg) {
+    if (deg === inclinationDeg) return;
+    inclinationDeg = deg;
+    if (data && !data.isWD && !data.isWR && !data.isAlpha) { draw(); renderCaption(); }
+  }
+
+  return { update, updateWD, updateWR, setInclination, showPlaceholder, resize };
 }

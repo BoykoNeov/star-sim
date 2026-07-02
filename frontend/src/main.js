@@ -47,6 +47,11 @@ const els = {
   rotToggle: document.getElementById("rot-toggle"),
   rotNote: document.getElementById("rot-note"),
   sedRot: document.getElementById("sed-rot"),
+  // Inclination facet (gravity darkening Chunk 2): the viewing-angle slider, main.js-owned.
+  inclControl: document.getElementById("incl-control"),
+  incl: document.getElementById("incl"),
+  inclNum: document.getElementById("incl-num"),
+  inclNote: document.getElementById("incl-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -321,6 +326,26 @@ let rotationOn = false;
 // fetch on a mass/[Fe/H] change, so the effective vvcrit below is always current.
 let rotStatus = { has_grid: false, threshold_msun: null, active: false };
 const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
+
+// Viewing inclination (gravity darkening Chunk 2), a persisted VIEWING choice shared by the
+// 3D star (tilt) and the spectrum (v sin i). 0° = pole-on, 90° = edge-on; 60° is the
+// isotropic-median inclination for a randomly-oriented star (the honest default). It is
+// deliberately OFF the spine — intrinsic Teff/L is inclination-independent, so this never
+// touches the HR marker; it only changes what is SEEN (3D) and OBSERVED (line broadening).
+// The facet is gated on the rotating-track regime (updateRotControl); a round star ignores
+// it. Pushing it to both consumers keeps them in lockstep with no dual-default drift.
+let inclinationDeg = 60;
+function applyInclination(deg) {
+  inclinationDeg = Math.min(90, Math.max(0, Math.round(deg)));
+  star.setInclination(inclinationDeg);
+  spectrum.setInclination(inclinationDeg);
+  if (els.inclNote) {
+    els.inclNote.textContent =
+      inclinationDeg <= 12 ? "Pole-on: looking down the hot pole — round disk, sharp lines."
+      : inclinationDeg >= 78 ? "Edge-on: the oblate equator faces you — cool limb, broadest lines."
+      : `i = ${inclinationDeg}° — the hot pole and cool equatorial band both in view.`;
+  }
+}
 
 // Whether this star is in the cool main-sequence DYNAMO FAMILY — i.e. its track has any
 // cool MS row (Teff < 6500 K). This gates the rotation-PERIOD facet's VISIBILITY, and it
@@ -1326,7 +1351,15 @@ function updateRotControl() {
   // VISIBILITY of the period facet = the cool-MS family (also track-stable); sed.js greys it
   // per-age via rot.sync(). Both facets are track-stable, so an age scrub never changes height.
   const showPeriod = coolDynamoFamily();
-  c.hidden = !(showToggle || showPeriod);
+  // Inclination facet (Chunk 2): shown when the rotating track is SELECTED on a star massive
+  // enough for it to matter (showToggle ⇒ above the Kraft break) — i.e. exactly the gravity-
+  // darkened population (an oblate marker ⇒ v_rot>0 ⇒ rotationOn). This gate is mass/[Fe/H]-
+  // derived (TRACK-STABLE), so it never appears/disappears mid-age-scrub and can't jitter the
+  // Age thumb: at giant ages the star simply isn't oblate and star.js keeps the tilt at 0
+  // (round disk) while the slider stays put — per-age feedback lives in the note, not the
+  // visibility. No need to compute rotationDistortion here.
+  const showIncl = showToggle && rotationOn;
+  c.hidden = !(showToggle || showPeriod || showIncl);
   // -- track facet --
   els.rotToggleRow.hidden = !showToggle;
   els.rotNote.hidden = !showToggle;
@@ -1340,6 +1373,15 @@ function updateRotControl() {
   }
   // -- activity facet -- (sed.js syncs the slider/note internally via rot.sync())
   els.sedRot.hidden = !showPeriod;
+  // -- inclination facet -- reflect the persisted angle on the inputs when it (re)appears.
+  if (els.inclControl) {
+    els.inclControl.hidden = !showIncl;
+    if (showIncl) {
+      if (els.incl) els.incl.value = String(inclinationDeg);
+      if (els.inclNum) els.inclNum.value = String(inclinationDeg);
+      if (els.inclNote && !els.inclNote.textContent) applyInclination(inclinationDeg);
+    }
+  }
 }
 
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
@@ -2100,6 +2142,13 @@ async function init() {
     els.age.min = 0; els.age.max = 1; els.age.step = 0.0005;
     els.age.value = ageFraction;
 
+    // Inclination facet (Chunk 2): reflect the default (60°) on the inputs and push it to
+    // both consumers so main.js is the single source of truth (no dual-default drift). The
+    // facet stays hidden until updateRotControl shows it for a rotating massive star.
+    if (els.incl) els.incl.value = String(inclinationDeg);
+    if (els.inclNum) els.inclNum.value = String(inclinationDeg);
+    applyInclination(inclinationDeg);
+
     // Editable number inputs (the hand-entry path) + their bounds.
     els.massNum.min = ranges.mass_msun.min; els.massNum.max = ranges.mass_msun.max;
     els.massNum.step = 0.01;
@@ -2229,6 +2278,24 @@ async function init() {
     if (mode !== "live") return;
     rotationOn = els.rotToggle.checked;
     refreshTrack();
+  });
+
+  // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the
+  // 3D star and re-broadens the spectrum's lines (v sin i) with NO refetch and NO track/HR
+  // change (it's off the spine). Slider ↔ number input kept in sync; both drive
+  // applyInclination, which pushes the angle to both consumers in lockstep.
+  if (els.incl) els.incl.addEventListener("input", () => {
+    const v = Number(els.incl.value);
+    if (els.inclNum) els.inclNum.value = String(v);
+    applyInclination(v);
+  });
+  if (els.inclNum) els.inclNum.addEventListener("change", () => {
+    let v = Number(els.inclNum.value);
+    if (!Number.isFinite(v)) v = inclinationDeg;
+    v = Math.min(90, Math.max(0, Math.round(v)));
+    els.inclNum.value = String(v);
+    if (els.incl) els.incl.value = String(v);
+    applyInclination(v);
   });
 
   // The stellar-endgame gateway: enter the WD / WR / SN endgame from the button at the slider

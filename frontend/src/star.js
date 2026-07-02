@@ -667,6 +667,23 @@ export function createStar(canvas) {
     return t * t * (3 - 2 * t);
   };
 
+  // Viewing inclination (gravity-darkening Chunk 2): the angle between the rotation axis
+  // and the line of sight, i ∈ [0°, 90°]. Pole-on (i=0) looks straight down the hot pole
+  // → a round, uniformly-hot disk; edge-on (i=90) shows the oblate egg side-on with the
+  // hot poles at the top/bottom limb. It maps to the object tilt as θ = 90°−i, so the
+  // camera-relative pole rises toward view as i shrinks (star.rotation.x below). main.js
+  // owns the value (a shared viewing choice with the spectrum's v sin i) and pushes it via
+  // setInclination; 60° (the isotropic-median inclination) is only a pre-push default.
+  let inclinationDeg = 60;
+  // The last living gravity-darkening result, kept so setInclination can re-tilt without a
+  // full state repaint. `active` false ⇒ a round star (any inclination looks the same, so
+  // the tilt stays 0 and dragging the slider is a no-op on the 3D view — correct).
+  let lastGd = { active: false, omega: 0 };
+  // Object tilt (rad) for the current (inclination, gd): the pole tips θ=90°−i toward the
+  // camera, but only when the star is actually oblate — a round star stays pole-up.
+  const tiltForView = () =>
+    lastGd.active ? (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90) : 0;
+
   // Wolf–Rayet wind halo (Chunk 5): a second camera-facing additive quad, hidden except
   // in the WR endgame (it never co-displays with the corona — the WR path zeroes the
   // corona via gDeg=0). Its uTime is driven by the clock in animate() so the outflow
@@ -795,6 +812,7 @@ export function createStar(canvas) {
     // sets a round spheroid + flat single-tone gradient → byte-identical to before.
     const gd = eg ? { active: false, kEq: 1, kPol: 1, gEq: 1, tPole: state.Teff_K, tEq: state.Teff_K }
                   : rotationDistortion(state);
+    lastGd = gd;   // so setInclination can re-tilt without a full repaint
     if (gd.active) {
       const [pr, pg, pb] = teffToLinearRGB(gd.tPole);
       const [er, eg2, eb] = teffToLinearRGB(gd.tEq);
@@ -806,16 +824,16 @@ export function createStar(canvas) {
       surfaceMat.uniforms.uColorEq.value.setRGB(r, g, b);
       surfaceMat.uniforms.uGeq.value = 1.0;
     }
-    // Viewing tilt. Edge-on (spin axis vertical) shows the oblate SHAPE best but MASKS
-    // the temperature gradient: the hot bright poles sit at the top/bottom limb (fully
-    // limb-darkened) while the cool equator is at disk-centre (geometrically brightest),
-    // so the two darkenings nearly cancel. A fixed 3/4 view (inclination ≈ 55°) tips the
-    // pole toward the camera so BOTH the egg shape and the hot-pole/cool-equator gradient
-    // read honestly. Round stars stay pole-up (untilted) — byte-identical. Chunk 2 makes
-    // this an inclination slider (and feeds sin i into the v sin i line broadening).
-    // Ramp the tilt in with ω so a marginal rotator (a faint bulge, no real gradient)
-    // stays near pole-up instead of snapping to 34° for nothing.
-    star.rotation.x = gd.active ? 0.6 * sstep(0.1, 0.45, gd.omega) : 0.0;
+    // Viewing tilt (Chunk 2 — the inclination slider). Edge-on (i=90°, spin axis vertical)
+    // shows the oblate SHAPE best but MASKS the temperature gradient: the hot bright poles
+    // sit at the top/bottom limb (fully limb-darkened) while the cool equator is at
+    // disk-centre (geometrically brightest), so the two darkenings nearly cancel. Tipping
+    // the pole toward the camera (lower i) reveals BOTH the egg shape and the hot-pole/
+    // cool-equator gradient; at i=0° we look straight down the uniformly-hot pole and the
+    // disk goes round again. The user drives i; θ=90°−i (tiltForView). No ω ramp — the
+    // oblateness itself already scales with ω, so a marginal rotator stays near-round at
+    // any tilt. Round stars / endgames keep tilt 0 (byte-identical).
+    star.rotation.x = tiltForView();
     surfaceMat.uniforms.uCells.value = granuleCells(state);
     // Exposure (SURFACE_FRAG uExpo): uColor is chromaticity-only (max-normalized),
     // so this restores a Teff brightness cue — a ~3000 K surface sits at 0.85
@@ -1015,5 +1033,15 @@ export function createStar(canvas) {
   }
   animate();
 
-  return { update, dispose: () => cancelAnimationFrame(raf) };
+  // Set the viewing inclination (0°=pole-on … 90°=edge-on) and re-tilt the star in place
+  // from the last gravity-darkening result — no state repaint (the geometry/gradient are
+  // inclination-independent; only the camera-relative tilt changes). A no-op on a round
+  // star (lastGd.active false → tilt stays 0). main.js keeps this in lockstep with the
+  // spectrum's v sin i so the 3D view and the line broadening tell one coherent story.
+  function setInclination(deg) {
+    inclinationDeg = deg;
+    star.rotation.x = tiltForView();
+  }
+
+  return { update, setInclination, dispose: () => cancelAnimationFrame(raf) };
 }

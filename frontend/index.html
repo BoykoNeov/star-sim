@@ -222,6 +222,24 @@
           </div>
           <p class="note sed-rot-note" id="sed-rot-note"></p>
         </div>
+
+        <!-- Inclination facet (gravity darkening Chunk 2): the viewing angle for an oblate
+             fast rotator. Shown only when the rotating track is selected on a star massive
+             enough to be gravity-darkened (a track-stable gate — it never appears/disappears
+             mid-age-scrub). One angle drives BOTH the 3D star's tilt AND the spectrum's
+             v sin i: pole-on (0°) → round/hot/sharp lines; edge-on (90°) → oblate/cool-limb/
+             broad lines. Reuses the .sed-rot facet styling. -->
+        <div class="sed-rot" id="incl-control" hidden>
+          <label for="incl">Inclination
+            <input id="incl-num" class="val-input" type="number" min="0" max="90" step="1" />
+            <span class="incl-unit">°</span>
+            <span class="help" tabindex="0" data-tip="The angle between the star's rotation axis and your line of sight, i (0° = looking straight down the pole, 90° = edge-on in the equatorial plane). It is a VIEWING choice, not a property of the star, so it never touches the HR diagram — only what you SEE. A fast rotator is centrifugally flattened with hot bright poles and a cool dim equator (von Zeipel gravity darkening): pole-on you look down the uniformly-hot pole (a round, hot disk with sharp spectral lines, since v sin i → 0); edge-on you see the oblate egg side-on with a cool-limb equatorial band and the widest, shallowest lines (maximum v sin i). The default 60° is the statistically typical inclination for a randomly-oriented star. Round (slow) stars ignore this — any angle looks the same.">?</span>
+          </label>
+          <div class="slider-wrap">
+            <input id="incl" type="range" min="0" max="90" step="1" />
+          </div>
+          <p class="note sed-rot-note" id="incl-note"></p>
+        </div>
       </div>
 
       <label for="age">Age

@@ -130,13 +130,12 @@ weight ∝ 2(1−ε)√(1−x²)+(πε/2)(1−x²) over x=Δλ/Δλ_L∈(−1,1)
 width** Δλ_L=λ·v sin i/c (constant in velocity, wider in the red — the grid is uniform
 2.5 Å/linear, R≈2400), **normalized to sum=1** so equivalent width is conserved (lines
 go shallower+wider, not weaker). Driven by the marker's real `v_rot_kms` (the MIST
-vvcrit axis) taken **EDGE-ON (sin i=1)** — the maximum projection. **Advisor settled
-the one open decision AGAINST an inclination slider**: it'd be incoherent here (the 3D
-star doesn't go oblate, Teff/L don't shift — gravity darkening is deferred Tier-C), so
-only the spectral lines responding to a "tilt" implies a viewing-geometry model that
-exists nowhere else; revisit a slider only if oblateness ever lands. Caption framed as
-the *maximum* broadening (upper bound), not the textbook "v sin i is a lower bound on
-v". **Scoped to the main absorption cube only** — WD (slow, Stark-dominated remnant;
+vvcrit axis) taken **EDGE-ON (sin i=1)** — the maximum projection. This was originally
+punted AGAINST an inclination slider (incoherent with no oblateness model); **that punt
+is now REVERSED — [[star-sim-gravity-darkening]] Chunk 2 (2026-07-02) landed the oblateness
+model + an inclination slider, so `v sin i = v_rot·sin(i)` is now real** (the caption reads
+"i = X°", not "shown edge-on"; the default 60° drops the broadening below the old ×1). The
+old "maximum broadening upper bound" framing is superseded by the actual projected value. **Scoped to the main absorption cube only** — WD (slow, Stark-dominated remnant;
 progenitor v_rot meaningless), WR (intrinsically wind-broadened), SN (placeholder) all
 exempt via `data.isWD/isWR` guards in `mainFlux()`. **No refetch** — `update()`
 re-broadens the cached flux + redraws when only v_rot moved (same Teff/logg/feh key);

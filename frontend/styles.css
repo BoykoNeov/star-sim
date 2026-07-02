@@ -217,6 +217,7 @@ main {
    sequence dynamo regime (where rotation cannot drive a corona). */
 .sed-rot { max-width: 420px; margin: 12px auto 0; }
 .sed-rot.disabled { opacity: 0.5; }
+.incl-unit { margin-left: -4px; color: var(--muted); font-size: 13px; }   /* ° hug the number */
 .sed-rot > label {
   display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: var(--ink); font-weight: 600;
