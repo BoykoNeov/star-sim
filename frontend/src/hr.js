@@ -189,6 +189,10 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let endgameMode = false; // endgame view: auto-fit axes + the endgame track
   let endgameTrack = null; // the endgame StellarStates (the cooling / stripping sequence)
   let previewTrack = null; // LIVING-mode faint preview of where a WD-bound star is headed
+  let companion = null;    // binary-stripped path (b): the un-stripped companion (accretor),
+                           //   drawn as a SECOND marker so the Algol mass-ratio reversal is
+                           //   visible (the donor blue-left + hotter, the companion cooler).
+                           //   Only set in stripped-mode when "Show companion" is on.
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -734,6 +738,55 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.stroke();
   }
 
+  // A small text label pinned near a marker, clamped inside the frame (flips left if it
+  // would overflow the right edge). A dark 0.6-px offset makes it legible over gridlines.
+  function markerLabel(x, y, text, dyOff) {
+    ctx.font = "10px system-ui, -apple-system, sans-serif";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width;
+    let tx = x + 11;
+    if (tx + w > W - PAD) tx = x - 11 - w;
+    const ty = Math.max(PAD + 7, Math.min(H - PAD - 7, y + dyOff));
+    ctx.fillStyle = "rgba(9,11,17,0.72)";
+    ctx.fillText(text, tx + 0.6, ty + 0.6);
+    ctx.fillStyle = "#e7ecf5";
+    ctx.fillText(text, tx, ty);
+  }
+
+  // The binary-stripped path (b) second star: the companion (accretor) marker + a dotted
+  // link to the donor, drawn UNDER the donor marker so the donor (the focus) stays on top.
+  // The two dots directly show the Algol reversal — the hot stripped donor is blue-left,
+  // the cooler companion sits to its right (and, at low mass, ABOVE it: the "optically
+  // bright companion" that outshines the sub-luminous stripped star, Götberg 2018).
+  function drawCompanion() {
+    const dx = xOf(Math.log10(marker.Teff_K)), dy = yOf(Math.log10(marker.L_lsun));
+    const cx = xOf(Math.log10(companion.Teff_K)), cy = yOf(Math.log10(companion.L_lsun));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+    ctx.beginPath();                       // the binary link
+    ctx.setLineDash([3, 3]);
+    ctx.moveTo(dx, dy); ctx.lineTo(cx, cy);
+    ctx.strokeStyle = "rgba(231,236,245,0.4)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const [r, g, b] = teffToRGB(companion.Teff_K).map((v) => Math.round(v * 255));
+    const glow = ctx.createRadialGradient(cx, cy, 1, cx, cy, 14);
+    glow.addColorStop(0, `rgba(${r},${g},${b},0.45)`);
+    glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = teffToCSS(companion.Teff_K); ctx.fill();
+    ctx.setLineDash([2, 2]);               // dashed ring distinguishes it from the donor's solid ring
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "#e7ecf5"; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    markerLabel(dx, dy, "stripped star", -12);
+    markerLabel(cx, cy, "companion", 13);
+  }
+
   function draw() {
     if (pulseMode) { drawThermalPulses(); return; }
     if (snMode) { drawSupernova(); return; }
@@ -748,6 +801,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       drawTrack();
     }
     if (!marker) return;
+    if (endgameMode && companion) drawCompanion();   // the binary companion, under the donor
     drawMarker(xOf(Math.log10(marker.Teff_K)), yOf(Math.log10(marker.L_lsun)), marker.Teff_K);
   }
 
@@ -803,10 +857,25 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function setEndgame(states, _kind = "wd") {
     endgameMode = true;
     endgameTrack = states && states.length ? states : null;
-    const b = fitBounds(endgameTrack, track);
+    const b = fitBounds(endgameTrack, track, companion ? [companion] : null);
     bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
     gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
     gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
+    draw();
+  }
+  // Binary-stripped path (b): show/hide the companion (accretor) as a second marker.
+  // Pass its StellarState, or null to hide it (back to path (a), the stripped star alone).
+  // Re-fits the endgame bounds to enclose the companion too — at low progenitor mass it is
+  // MORE luminous than the sub-luminous stripped donor, so it can sit above the donor and
+  // would otherwise clip the top of the frame.
+  function setCompanion(state) {
+    companion = state || null;
+    if (endgameMode) {
+      const b = fitBounds(endgameTrack, track, companion ? [companion] : null);
+      bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
+      gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
+      gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
+    }
     draw();
   }
   // Enter/refresh the thermal-pulse showcase. Fits the y-axis to the TP slice's surface log L
@@ -835,6 +904,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   function clearEndgame() {
     endgameMode = false;
     endgameTrack = null;
+    companion = null;                                    // drop the binary companion marker
     snMode = false; snModel = null; snObserved = null;   // also leave the SN light-curve view
     pulseMode = false; pulseStates = null;               // ...and the thermal-pulse showcase
     applyLivingBounds();   // restore the living frame (re-fit, in case a massive star is selected)
@@ -849,5 +919,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize };
 }

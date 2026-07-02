@@ -1,6 +1,47 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: CHUNKS 1, 2 & 3 BUILT. The stripped-star arc is complete (path (b) deferred).
+## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNK 1 BUILT (the companion drawn — HR reversal).
+
+**Path (b) Chunk 1 done 2026-07-02 (backend + frontend HR two-marker reversal, 279 pytest,
+Playwright 1440+390 zero console errors).** "The companion drawn" — the second star of the Algol
+system on the HR diagram, the mass-ratio reversal made visible. **No new dataset:** it reuses the
+Götberg stripped DONOR (path (a)) + the single-star `PROVIDER` for the COMPANION (accretor).
+- **The measure-first gate (mirroring path (a)'s Gate 0) PASSED through the real consumers** across
+  the whole eligible grid: the Algol reversal is real at every node (`M_strip < M2_init`, 0.35<1.60
+  … 6.72<14.54), the companion is a sane MS star at every node (Teff 7.3–27.4 kK, phase MS, at the
+  donor's MS lifetime), and the donor is always hotter (blue-left). Bonus payoff: the L-ordering
+  *flips* — at low mass the companion OUTSHINES the sub-luminous stripped donor ("the optically
+  bright companion", Götberg 2018), at high mass the donor wins — but the donor is always hotter.
+- **The two advisor correctness catches, both baked in:** (1) the companion baseline is
+  `M2_init = 0.8·M_init` (the grid's fixed **q=0.8**, confirmed in the ReadMe — non-conservative,
+  so no accretion-efficiency guess enters; `ΔM = M_init−M_strip` is NOT attributed to the companion,
+  it's wind + non-conservative RLOF loss). (2) the companion's age/phase is defused by that baseline
+  — being *less massive* it lives longer, so at the donor's MS lifetime (= elapsed system age, `TAMS`
+  on the donor track) it's still mid-MS, never a degenerate off-track companion.
+- **Architecture:** `binary.py` stays a PURE §3 sibling — it never fetches the companion (that needs
+  `PROVIDER`, which a sibling must not import). The composition happens in the ROUTE: new
+  `/binary_pair` calls `stripped_star` (donor) + `PROVIDER.state_at(0.8·M_init, feh, τ)` (companion),
+  and `binary.binary_pair_payload` assembles the two-star payload + transfer scalars (`mass_msun`,
+  `mass_ratio_init`=0.8, `mass_ratio_final`=M2/M_strip >1 [both companion÷donor, one convention →
+  the reversal crosses 1.0; advisor caught a first cut mixing conventions], `elapsed_age_yr`). Both stars share the
+  snapped system Z (`feh_snapped`). `/binary` (path (a)) is byte-unchanged.
+- **Frontend:** an opt-in **"Show companion"** toggle in the endgame bar (stripped-mode only, CSS-
+  gated) — the literal path (a)→(b) transition ("companion named" → "companion drawn"). Path (a) is
+  the default (byte-unchanged when off). On: the stripped fetch routes to `/binary_pair`, `hr.js`
+  gains `setCompanion(state)` (a second Teff-colored marker with a dashed ring + a dotted link to the
+  donor + labels "stripped star"/"companion", re-fitting the axes to enclose it so the low-mass
+  brighter companion never clips), the caption narrates the reversal off the served scalars, and the
+  readout gains Companion + Mass-ratio(now) rows. Reversible; resets on mode enter/exit.
+- **Files:** `binary.py` (+`COMPANION_MASS_RATIO`/`companion_init_mass`/`binary_pair_payload`),
+  `api.py` (+`_donor_ms_lifetime`/`/binary_pair`), `test_binary.py` (+6: the reversal-across-grid
+  regression, the pair assembler, the route gate + snap-far + 422), `hr.js` (+`setCompanion`/
+  `drawCompanion`/`markerLabel`, companion in fitBounds + clearEndgame), `main.js` (companion toggle
+  + `companionOn` state + fetch route + caption/readout), `index.html` (toggle + narration), `styles.css`.
+- **Next (path (b) Chunk 2):** the **3D companion sphere** — draw the accretor as a second star in
+  the 3D view (the advisor's explicit next chunk). Then further: the mass-transfer geometry / Roche
+  lobes (needs a genuinely new two-star render), the on-ramp to a real binary grid (POSYDON/BPASS).
+
+## Status (historical): CHUNKS 1, 2 & 3 BUILT. The stripped-star arc is complete (path (b) deferred).
 
 **Chunk 3 done 2026-07-02 (backend + frontend, 273 pytest, Playwright 1440+390 zero console
 errors).** The stripped-star spectrum panel — the real CMFGEN spectrum replacing the Chunk-2

@@ -658,6 +658,18 @@ body.stripped-mode .endgame-title-stripped { display: inline; }
 }
 .pulse-toggle:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .pulse-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* "Show companion" (binary-stripped path (b), stripped-mode ONLY): draw the accretor as a
+   second HR marker. A compact checkbox row grouped with "Back" at the right of the bar's
+   top row (margin-left:auto, mirroring pulse-toggle's placement — pulse-toggle is WD-only,
+   so in stripped-mode this owns the right group). Hidden in every other mode. */
+.companion-toggle-wrap { display: none; }
+body.stripped-mode .companion-toggle-wrap {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+  font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+.companion-toggle-wrap input[type="checkbox"] {
+  accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer;
+}
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,

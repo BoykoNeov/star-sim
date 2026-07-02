@@ -32,7 +32,13 @@ from .spectra import (
     wd_spectrum_data,
     wr_spectrum_data,
 )
-from .binary import BinaryDataMissing, stripped_star_payload
+from .binary import (
+    BinaryDataMissing,
+    binary_pair_payload,
+    companion_init_mass,
+    stripped_star,
+    stripped_star_payload,
+)
 from .structure import StructureDataMissing, interior_structure
 from .supernova import Progenitor, supernova_model
 from .providers import MISTProvider
@@ -369,6 +375,58 @@ def binary(
         return stripped_star_payload(mass, feh)
     except BinaryDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _donor_ms_lifetime(mass: float, feh: float) -> float:
+    """Elapsed system age when the donor fills its Roche lobe and is stripped ≈ the
+    donor's single-star main-sequence lifetime = the age at TAMS (the first post-MS row)
+    on its own MIST track. The companion, being less massive (q=0.8), is still on the MS
+    at this age — so the two-star view never shows a degenerate off-track companion (the
+    path (b) measure-first gate confirmed this holds across the whole eligible grid)."""
+    track = PROVIDER.track(mass, feh)
+    for s in track:
+        if s.phase != "MS":
+            return s.age_yr
+    return track[-1].age_yr
+
+
+@app.get("/binary_pair")
+def binary_pair(
+    mass: float = Query(..., gt=0.0, description="progenitor (donor) initial mass / M_sun"),
+    feh: float = Query(0.0, description="initial [Fe/H]"),
+) -> dict:
+    """(donor initial mass, [Fe/H]) -> the two-star Algol system: the stripped He-star
+    DONOR (same top-level shape as `/binary`) PLUS its close companion (the accretor).
+    Path (b) of docs/plans/stripped-consort-unveiling.md — "the companion drawn."
+
+    The companion is composed HERE, in the route — NOT in `binary.py`, which stays a pure
+    §3 sibling. A *binary product* can't go through the single-star interface, but the
+    *companion* is an ordinary single star, so it comes straight from `PROVIDER`. Baseline
+    (non-conservative): the companion is a single star at its known initial mass
+    M2_init = 0.8·M_init (the grid's fixed q), observed at the elapsed system age = the
+    donor's MS lifetime (the donor is stripped at ≈TAMS). Because the companion is less
+    massive it is still on the MS then; the mass-ratio *reversal* (M_strip < M2_init) is
+    the payoff — see `binary.binary_pair_payload`.
+
+    Both stars share the snapped system metallicity (`feh_snapped`): the donor grid is
+    coarse in Z (solar-only for now), so the whole system snaps to the donor's grid Z and
+    the companion follows — a binary has one metallicity. Snap-always like `/binary`; a
+    missing committed table -> 503, and if the MIST grids are absent the companion fetch
+    surfaces the usual data-unavailable 503."""
+    try:
+        donor = stripped_star(mass, feh)
+    except BinaryDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    feh_sys = donor.feh_snapped                       # both stars at the snapped system Z
+    m2 = companion_init_mass(donor.m_init_msun)       # 0.8 × the snapped donor node
+    try:
+        tau = _donor_ms_lifetime(donor.m_init_msun, feh_sys)
+        companion = PROVIDER.state_at(m2, feh_sys, tau)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+    return binary_pair_payload(mass, feh, companion, tau)
 
 
 @app.get("/spectrum")

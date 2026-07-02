@@ -171,6 +171,93 @@ def test_route_422_on_invalid_mass():
     assert c.get("/binary", params={"mass": 0.0}).status_code == 422
 
 
+# --- path (b): the companion (two-star Algol co-evolution) --------------------
+
+def test_companion_init_mass_is_the_grid_q():
+    """The companion starts at M2_init = 0.8·M_init — the grid's fixed q (pure, no data)."""
+    assert b.COMPANION_MASS_RATIO == 0.8
+    assert b.companion_init_mass(9.0) == pytest.approx(7.2)
+    assert b.companion_init_mass(18.17) == pytest.approx(14.536)
+
+
+def test_pair_payload_assembles_donor_plus_companion():
+    """`binary_pair_payload` keeps `binary.py` a pure sibling: it takes the companion
+    StellarState (fetched by the route via PROVIDER) and only assembles the payload +
+    the transfer scalars. The donor block is byte-identical to the /binary payload."""
+    # a stand-in companion state (the assembler must not care where it came from)
+    comp = StellarState(
+        age_yr=3.0e7, eep=350.0, phase="MS", mass_init_msun=7.2, feh_init=0.0,
+        L_lsun=2.0e3, Teff_K=20_000.0, R_rsun=3.7, logg=4.1,
+        X_surf=0.70, Y_surf=0.28, Z_surf=0.02, X_core=0.3, Y_core=0.68, Z_core=0.02,
+    )
+    payload = b.binary_pair_payload(9.0, 0.0, comp, elapsed_age_yr=3.0e7)
+
+    # donor block == /binary payload, verbatim
+    assert payload["m_init_msun"] == pytest.approx(9.0)
+    assert payload["m_strip_msun"] == pytest.approx(2.49)
+    assert set(payload) >= set(b.stripped_star_payload(9.0, 0.0))
+
+    c = payload["companion"]
+    assert c["mass_msun"] == pytest.approx(7.2)                  # 0.8 × 9.0
+    # both ratios are companion÷donor (one convention): starts 0.8 (< 1, companion lighter)…
+    assert c["mass_ratio_init"] == pytest.approx(0.8)
+    # …and the Algol REVERSAL is the same ratio crossing 1: M2 (7.2) / M_strip (2.49) = 2.89 > 1
+    assert c["mass_ratio_final"] == pytest.approx(7.2 / 2.49)
+    assert c["mass_ratio_final"] > 1.0
+    assert c["elapsed_age_yr"] == pytest.approx(3.0e7)
+    assert c["state"]["Teff_K"] == pytest.approx(20_000.0)       # the passed-in companion
+
+
+def test_reversal_holds_across_the_whole_grid():
+    """The mass-ratio reversal is robust — M_strip < M2_init at EVERY grid node — so the
+    headline never rests on a fragile assumption (the accretor is always the heavier star
+    after stripping, regardless of the companion's exact fate)."""
+    solar = [m for m in b.available_models() if abs(m.grid_z - 0.014) < 1e-9]
+    for m in solar:
+        m2 = b.companion_init_mass(m.m_init)
+        assert m.m_strip < m2, f"M_init={m.m_init}: M_strip {m.m_strip} !< M2_init {m2}"
+
+
+@requires_mist_data
+def test_pair_route_companion_is_a_sane_ms_star():
+    """The path (b) measure-first gate, as a regression: through the REAL route the
+    companion comes back a sane MAIN-SEQUENCE star (hotter than the Sun, cooler than the
+    stripped donor, still burning H), and the donor is always the hotter, blue-left marker."""
+    c = TestClient(app)
+    for mass in [2.0, 9.0, 18.17]:
+        r = c.get("/binary_pair", params={"mass": mass, "feh": 0.0})
+        assert r.status_code == 200
+        d = r.json()
+        comp = d["companion"]
+        cs = comp["state"]
+        # the companion is a real MS star of the expected mass
+        assert cs["phase"] in ("MS", "PMS")
+        assert comp["mass_msun"] == pytest.approx(0.8 * d["m_init_msun"])
+        assert cs["mass_init_msun"] == pytest.approx(0.8 * d["m_init_msun"], abs=1e-6)
+        # the donor (stripped He-star) is ALWAYS hotter than the companion (blue-left)
+        assert d["state"]["Teff_K"] > cs["Teff_K"]
+        # a real elapsed age was used (the donor's MS lifetime — positive, sub-Hubble)
+        assert 1.0e6 < comp["elapsed_age_yr"] < 2.0e10
+
+
+def test_pair_route_snaps_far_in_band_not_422():
+    """Snap-always like /binary: an out-of-grid request snaps + flags in-band; the
+    companion is still assembled off the snapped donor node."""
+    c = TestClient(app)
+    r = c.get("/binary_pair", params={"mass": 25.0, "feh": 0.0})   # above the grid
+    assert r.status_code == 200
+    d = r.json()
+    assert d["mass_snapped_far"] is True
+    assert d["m_init_msun"] == pytest.approx(18.17)                 # snapped to the top node
+    assert "companion" in d and d["companion"]["mass_msun"] == pytest.approx(0.8 * 18.17)
+
+
+def test_pair_route_422_on_invalid_mass():
+    c = TestClient(app)
+    assert c.get("/binary_pair", params={"mass": -1.0}).status_code == 422
+    assert c.get("/binary_pair", params={"mass": 0.0}).status_code == 422
+
+
 # --- the SED-consistency regression (why we trust the transcribed table) ------
 
 _KPC_CM = 3.0856775814913673e21

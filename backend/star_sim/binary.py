@@ -280,3 +280,57 @@ def stripped_star_payload(mass: float, feh: float = 0.0) -> dict:
         "mass_grid_min": result.mass_grid_min,
         "mass_grid_max": result.mass_grid_max,
     }
+
+
+# --- path (b): the companion (accretor) — the two-star co-evolution view ------
+
+# The Götberg grid's fixed companion mass ratio. Every model is labelled
+# `M1_<Minit>q0.8P<P>Z<Z>_vinf1.5` (see data/gotberg_stripped/ReadMe), i.e. the companion
+# (secondary) starts at M2_init = 0.8 * M_init. This is the ONE number path (b) needs
+# from the grid to place the companion: the accretor is then an ordinary single star at
+# that known mass, produced by the single-star PROVIDER with ZERO accretion-efficiency
+# guess. See docs/plans/stripped-consort-unveiling.md (path (b)).
+COMPANION_MASS_RATIO = 0.8
+
+
+def companion_init_mass(m_init: float) -> float:
+    """The companion's initial mass M2_init = 0.8 * M_init (the grid's fixed q=0.8)."""
+    return COMPANION_MASS_RATIO * m_init
+
+
+def binary_pair_payload(mass: float, feh: float, companion_state: StellarState,
+                        elapsed_age_yr: float) -> dict:
+    """The `/binary_pair` payload: the stripped DONOR (verbatim `/binary` shape) plus a
+    `companion` block — the two-star Algol co-evolution view, path (b).
+
+    `binary.py` stays a pure §3 sibling: it never fetches the companion itself (that needs
+    the single-star `StellarStateProvider`, which a sibling must not import). The route
+    computes the companion `StellarState` via `PROVIDER.state_at(0.8*M_init, feh, elapsed)`
+    and hands it in here; this function only assembles the payload and the transfer scalars.
+
+    The companion is the ACCRETOR of the Algol system: it starts LESS massive than the
+    donor (q=0.8) but ends up MORE massive than the stripped donor product — the
+    mass-ratio *reversal* (`mass_ratio_final < 1`) that is the intellectual payoff. The
+    baseline is deliberately NON-conservative — the companion stays at its known M2_init:
+    the envelope the donor loses is dominated by wind + non-conservative RLOF loss, and
+    critically-rotating accretors reject most of it, so attributing that mass to the
+    companion would stack two guesses (an accretion efficiency AND the ΔM attribution)
+    onto a headline that is already visible without either. Any accretion boost is a
+    labeled refinement, not the baseline."""
+    from dataclasses import asdict
+
+    payload = stripped_star_payload(mass, feh)     # the donor, exactly as /binary serves it
+    m_init = payload["m_init_msun"]                # the snapped node (state↔companion consistency)
+    m_strip = payload["m_strip_msun"]
+    m2 = companion_init_mass(m_init)
+    # Both ratios are COMPANION ÷ DONOR (one convention, so the reversal reads as crossing 1.0):
+    # before RLOF the companion is 0.8× the donor (< 1, lighter); after stripping it is
+    # M2 / M_strip > 1 (heavier). That single number crossing 1 IS the Algol reversal.
+    payload["companion"] = {
+        "state": asdict(companion_state),
+        "mass_msun": m2,                            # M2_init = current mass (non-conservative baseline)
+        "mass_ratio_init": COMPANION_MASS_RATIO,    # M2_init / M1_init = 0.8 (companion lighter)
+        "mass_ratio_final": m2 / m_strip,           # M2 / M_strip after stripping (companion now heavier, > 1)
+        "elapsed_age_yr": elapsed_age_yr,           # system age at stripping ~ donor's MS lifetime
+    }
+    return payload

@@ -62,6 +62,9 @@ const els = {
   strippedControl: document.getElementById("stripped-control"),
   strippedToggle: document.getElementById("stripped-toggle"),
   strippedNote: document.getElementById("stripped-note"),
+  // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
+  // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
+  companionToggle: document.getElementById("companion-toggle"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -428,8 +431,13 @@ let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for th
 // gateway button — but it's still a reversible MODE that snaps the whole display (like
 // wd/wr/sn), fetched from /binary (a sibling route, snap-always, no vvcrit). The exit is the
 // SHARED endgame-bar "Back" (= exitEndgame), and unchecking the toggle calls the same path.
-let strippedData = null;        // the latest /binary payload (state + routing scalars)
+let strippedData = null;        // the latest /binary (or /binary_pair) payload (state + scalars)
 let strippedToken = 0;          // latest-wins guard for /binary fetches (enter + re-snap)
+// path (b): when true the stripped fetch hits /binary_pair (donor + companion) and the HR
+// draws the companion as a second marker. Reset on every mode enter/exit — path (a) (the
+// stripped star alone, "companion named not drawn") is the default; ticking "Show companion"
+// reveals the accretor and the Algol mass-ratio reversal.
+let companionOn = false;
 // The eligible progenitor-mass range for the toggle's gate (the Götberg Z=0.014 grid spans
 // ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
 // snapped-far note rather than reverting; the toggle just doesn't OFFER entry outside them.
@@ -1737,6 +1745,7 @@ function exitEndgame() {
   endgame = null; endgameKey = null;
   snModel = null; snToken++;     // drop the SN model + invalidate any in-flight /supernova fetch
   strippedData = null; strippedToken++;   // drop the stripped model + invalidate its in-flight fetch
+  companionOn = false;                     // reset the path (b) companion reveal (hr.clearEndgame drops its marker)
   // Return to the LIVING version of the endgame progenitor we were viewing
   // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
   // the focus/blur race where a still-focused mass box re-commits a reverted-away value
@@ -2178,11 +2187,14 @@ function updateStrippedControl() {
       : "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)";
 }
 
-// Fetch the computed /binary model for the current (mass, [Fe/H]). No vvcrit — the stripped
-// grid is single-star-progenitor-parameterized only. Throws on a network/HTTP error.
+// Fetch the computed stripped model for the current (mass, [Fe/H]). No vvcrit — the stripped
+// grid is single-star-progenitor-parameterized only. When "Show companion" is on (path (b))
+// this hits /binary_pair, whose payload is a strict superset of /binary (same top-level donor
+// fields + a `companion` block); otherwise /binary (donor only). Throws on a network/HTTP error.
 async function fetchStripped() {
   const mass = massValue, feh = Number(els.feh.value);
-  return fetchJSON(`/binary?mass=${mass}&feh=${feh}`);
+  const route = companionOn ? "binary_pair" : "binary";
+  return fetchJSON(`/${route}?mass=${mass}&feh=${feh}`);
 }
 
 // Apply a freshly-fetched stripped model to the panels (shared by enter + re-snap). The HR
@@ -2196,6 +2208,10 @@ function applyStrippedModel(data) {
   strippedData = data;
   const s = data.state;
   hr.setEndgame([s], "stripped");   // faint living context + fitted axes (single point, no line)
+  // path (b): the companion (accretor) as a second HR marker, when "Show companion" is on and
+  // the payload carried one (/binary_pair). setCompanion re-fits the axes to enclose it (at low
+  // mass it outshines the sub-luminous donor and would otherwise clip the top).
+  hr.setCompanion(companionOn && data.companion ? data.companion.state : null);
   comp.setStripped(s);
   spectrum.updateStripped(s);       // real stripped-star spectrum (replaces the Chunk-2 placeholder)
   refreshStripped();
@@ -2238,7 +2254,19 @@ function refreshStripped() {
   let cap =
     `Stripped in a close binary — ${fmt(mStrip)} M☉ of ${core} from a ` +
     `${fmt(strippedData.m_init_msun)} M☉ progenitor (one representative state, halfway ` +
-    `through core-helium burning). The companion is named, not drawn.`;
+    `through core-helium burning). `;
+  // path (b): with the companion drawn, narrate the Algol mass-ratio reversal off the served
+  // scalars; otherwise the path (a) framing (companion named, not drawn).
+  const cpn = companionOn ? strippedData.companion : null;
+  if (cpn) {
+    cap +=
+      `Its companion (the accretor, shown on the HR) started at ${fmt(cpn.mass_msun)} M☉ — ` +
+      `0.8× the donor — and is now the HEAVIER star: the Algol mass-ratio reversal ` +
+      `(donor ${fmt(mStrip)} < companion ${fmt(cpn.mass_msun)} M☉). It is a ` +
+      `~${Math.round(cpn.state.Teff_K / 1000)} kK main-sequence star, still burning hydrogen.`;
+  } else {
+    cap += `The companion is named, not drawn — tick “Show companion” to add it.`;
+  }
   if (strippedData.mass_snapped_far || strippedData.feh_snapped_far) {
     const bits = [];
     if (strippedData.mass_snapped_far)
@@ -2289,6 +2317,18 @@ function renderStrippedReadout(s, d) {
       "surface mass fractions: hydrogen (X) / helium (Y) / metals (Z) — the measured headline. It runs the whole stripped sequence: hydrogen-rich (a thin envelope survives) at the low-mass subdwarf end, hydrogen-poor and helium-rich (the bared core) at higher mass",
       `${fmt(s.X_surf)} / ${fmt(s.Y_surf)} / ${fmt(s.Z_surf, 2)}`],
   ];
+  // path (b): with "Show companion" on, add the accretor + the mass-ratio reversal (the payoff).
+  if (companionOn && d.companion) {
+    const cpn = d.companion, cs = cpn.state;
+    rows.push(
+      ["Companion",
+        "the un-stripped companion (the accretor) — an ordinary main-sequence star produced by the single-star model at its known initial mass (0.8× the donor, the grid's fixed mass ratio), observed at the elapsed system age. Drawn as the second marker on the HR diagram",
+        `${fmt(cpn.mass_msun)} M☉ · ${fmt(cs.Teff_K, 4)} K`],
+      ["Mass ratio (now)",
+        "companion mass ÷ stripped-donor mass. It starts at 0.8 (the companion is the lighter star); after stripping it rises above 1 — the Algol mass-ratio REVERSAL, the once-lighter companion is now the heavier one",
+        fmt(cpn.mass_ratio_final, 2)],
+    );
+  }
   els.readout.innerHTML = rows
     .map(([k, dsc, v]) =>
       `<div class="row"><div class="term">${k} ${help(dsc)}</div>` +
@@ -2306,6 +2346,8 @@ async function enterStripped() {
   updateStrippedControl();  // keep the toggle visible + checked as the exit
   trackToken++;             // invalidate any in-flight live /track
   document.body.classList.add("stripped-mode");
+  companionOn = false;      // path (a) by default — the companion is revealed by the toggle
+  if (els.companionToggle) els.companionToggle.checked = false;
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -2717,6 +2759,15 @@ async function init() {
     } else if (mode === "stripped") {
       exitEndgame();
     }
+  });
+
+  // path (b): "Show companion" — reveal/hide the un-stripped accretor as a second HR marker.
+  // Flipping it re-fetches the current node (now via /binary_pair or /binary) and re-applies,
+  // so the companion appears/disappears with the reversal caption + readout in lockstep.
+  if (els.companionToggle) els.companionToggle.addEventListener("change", () => {
+    if (mode !== "stripped") return;
+    companionOn = els.companionToggle.checked;
+    tryStrippedResnap();   // re-fetch the current (mass, [Fe/H]) via the now-correct route + re-apply
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

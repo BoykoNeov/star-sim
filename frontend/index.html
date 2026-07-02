@@ -127,6 +127,9 @@
           <span class="endgame-title endgame-title-wr">Wolf–Rayet endgame</span>
           <span class="endgame-title endgame-title-sn">Supernova endgame</span>
           <span class="endgame-title endgame-title-stripped">Binary-stripped star</span>
+          <label class="companion-toggle-wrap" for="companion-toggle" title="Draw the un-stripped companion (the accretor) as a second star on the HR diagram — the two-star Algol system.">
+            <input id="companion-toggle" type="checkbox" /> Show companion
+          </label>
           <button id="pulse-toggle" class="pulse-toggle" type="button" hidden>🔍 Thermal pulses</button>
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
@@ -174,8 +177,11 @@
           helium-rich core) as one sequence. It is <b>one representative state</b> (halfway
           through core-helium burning), not a time-track — so the age slider is disabled. Only
           the <b>surface</b> composition is measured (helium-rich at higher mass, hydrogen-rich
-          at the low-mass subdwarf end — watch it flip with mass); the spectrum is a later
-          feature. Mass and [Fe/H] stay live (they re-snap to a different stripped star).
+          at the low-mass subdwarf end — watch it flip with mass); the spectrum panel shows the
+          star's real <b>CMFGEN</b> spectrum. Tick <b>Show companion</b> to draw the un-stripped
+          companion (the accretor) as a second star on the HR diagram — the <b>Algol mass-ratio
+          reversal</b>: the donor, once the heavier star, is now the lighter one. Mass and [Fe/H]
+          stay live (they re-snap to a different stripped star).
         </p>
       </div>
 

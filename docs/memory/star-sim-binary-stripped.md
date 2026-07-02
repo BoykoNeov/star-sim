@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; Chunks 1 (backend) & 2 (frontend what-if mode) & 3 (stripped-star spectra) built — path (a) complete.
+description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete (backend + what-if mode + spectra), path (b) Chunk 1 built (the companion drawn — HR Algol reversal via /binary_pair, no new dataset).
 metadata:
   type: project
 ---
@@ -133,8 +133,46 @@ placeholder. A FOURTH spectrum sibling `/stripped_spectrum` over the Götberg CM
   stripped (those draw paths ignore the band window); in WD they actually WORKED (WD renders through the
   main draw path), but `updateWD` explicitly hides them anyway, so the fix restores that intent uniformly.
 
-**Path (a) is now COMPLETE** (Chunks 1–3). Path (b) (two-star co-evolution, companion drawn, Algol
-reversal) stays deferred (needs POSYDON/BPASS/MESA-binary + a new two-star render). Related:
+**PATH (b) CHUNK 1 BUILT 2026-07-02 (backend + frontend HR two-marker reversal, 279 pytest,
+Playwright 1440+390 zero console errors):** "the companion drawn" — the second star of the Algol
+system on the HR, the mass-ratio reversal made visible. **NO new dataset** (POSYDON/BPASS NOT
+needed — the advisor's key steer): reuse the Götberg stripped DONOR (path (a)) + the single-star
+`PROVIDER` for the COMPANION (accretor).
+- **Measure-first gate PASSED through the real consumers** (mirrors path (a) Gate 0) across the
+  whole grid: reversal real at every node (`M_strip < M2_init`, 0.35<1.60 … 6.72<14.54), companion
+  a sane MS star at every node (Teff 7.3–27.4 kK, phase MS, at the donor's MS lifetime), donor always
+  hotter (blue-left). Bonus: the **L-ordering FLIPS** — low mass the companion OUTSHINES the
+  sub-luminous donor ("the optically bright companion", Götberg), high mass the donor wins; donor
+  always hotter. (The path (a) L-sign-flip, now a teaching payoff on the HR.)
+- **Two advisor correctness catches, baked in:** (1) baseline companion = `M2_init = 0.8·M_init`
+  (the grid's fixed **q=0.8**, confirmed in the ReadMe; non-conservative → NO accretion-efficiency
+  guess; `ΔM=M_init−M_strip` is NOT the companion's — it's wind + non-conservative RLOF loss, and
+  critically-rotating accretors reject most of it). (2) the companion age/phase trap is DEFUSED by
+  that baseline — being *less massive* it lives longer, so at the donor's MS lifetime (=elapsed
+  system age, TAMS on the donor track) it's still mid-MS, never degenerate/off-track.
+- **Architecture — `binary.py` stays a PURE §3 sibling** (never imports/fetches the companion, which
+  needs `PROVIDER`): the composition is in the ROUTE. New **`/binary_pair`** = `stripped_star`
+  (donor) + `PROVIDER.state_at(0.8·M_init, feh, τ)` (companion, τ=`_donor_ms_lifetime`=age at first
+  post-MS row); `binary.binary_pair_payload` assembles donor (verbatim /binary shape) + a `companion`
+  block (`mass_msun`, `mass_ratio_init`=0.8, `mass_ratio_final`=M2/M_strip >1, `elapsed_age_yr`;
+  BOTH ratios are companion÷donor — one convention, so the reversal reads as crossing 1.0. The
+  advisor caught the first cut mixing conventions [init=M2/M1, final=M_strip/M2] → a self-
+  contradictory readout; pytest checked the number + Playwright the row's existence, neither the prose).
+  Both stars at the snapped system Z (`feh_snapped`). `/binary` (path (a)) byte-unchanged.
+- **Frontend — an opt-in "Show companion" toggle** in the endgame bar (stripped-mode only, CSS-gated)
+  = the literal path (a)→(b) transition. Path (a) is the default (byte-unchanged when off). On: the
+  stripped fetch routes to `/binary_pair`; `hr.js` `setCompanion(state)` draws a 2nd Teff-colored
+  marker (dashed ring vs the donor's solid, a dotted link + labels "stripped star"/"companion"),
+  re-fitting the axes to enclose it (low-mass brighter companion would else clip); caption narrates
+  the reversal; readout gains Companion + Mass-ratio(now) rows. Reversible; resets on enter/exit.
+  `hr.js` companion added to `fitBounds`+`clearEndgame`+the export.
+- **Files:** `binary.py`, `api.py`, `test_binary.py` (+6), `hr.js` (`setCompanion`/`drawCompanion`/
+  `markerLabel`), `main.js` (`companionOn` + toggle + route + caption/readout), `index.html`, `styles.css`.
+- **Next (path (b) Chunk 2): the 3D companion sphere** (the accretor as a second star in the 3D view
+  — the advisor's explicit next chunk); then Roche-lobe geometry / a real binary grid (POSYDON/BPASS).
+
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunk 1 (HR reversal) is now BUILT** — the full
+two-star co-evolution (3D companion, Roche geometry) continues in path (b) Chunks 2+. Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).
