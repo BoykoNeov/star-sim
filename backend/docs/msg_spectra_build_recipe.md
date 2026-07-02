@@ -612,3 +612,46 @@ wired in `main.js` `refreshWR`) draws the emission spectrum or the off-grid no-m
   CAP18 precedent — `fetch_powr --grids all` then re-bake, no code change). One filename trap:
   the LMC WC tarball is `lmc-wcgrid.200-80000.tgz` (no `_2016`); the fetcher is resilient (a
   404 on one grid skips it, the batch continues).
+
+
+## 10. Building the stripped-star cube (binary Chunk 3 — Götberg CMFGEN — BUILT)
+
+The binary-stripped-star what-if (`binary.py`, `/binary`, frontend `stripped-mode`) needs the
+hot He-star's real spectrum — else the H-atmosphere main cube paints a FALSE O-star Balmer
+spectrum (why Chunk 2 drew a placeholder). It comes from the SAME Götberg 2018 grid `binary.py`
+snaps (the gitignored spectra tree under `data/gotberg_stripped/`; see `fetch_gotberg.py`'s
+browser-past-Anubis recipe). Host-only, numpy — no pymsg/Docker, exactly the WD/WR precedent.
+
+```bash
+# (host, from backend/) validate the spectra tree is present, then bake:
+python -m star_sim.fetch_gotberg          # counts grids/models, parse-checks a SED
+python scripts/bake_stripped_spectra.py   # -> data/spectra/stripped_spectra_grid.npz (0.2 MB)
+```
+
+Like the WR cube it is a **flat-node** cube (`_StrippedSpectra`, not the axis-generic `_Spectra`):
+the grid is 1-D in initial mass per Z (a ragged (Teff, log g) footprint), so it stores a flat list
+of `(Z, M_init)` nodes + spectra and the runtime **snaps to the node `/binary` already resolved**
+(state↔spectrum consistency — the panel spectrum is the SAME star as the marker). **Solar-only** by
+default (grid_014, 23 nodes) matching `binary.py`'s committed solar param table — a non-solar
+spectrum node is unreachable until its param table lands; `--grids "grid_014,grid_006,..."` bakes
+more.
+
+The bake gotchas (measured 2026-07-02):
+- **The file is `normalised_spectrum.txt` — CMFGEN continuum-normalized Fnorm** (≈1 continuum,
+  absorption below, emission above), so NO continuum estimation (unlike the WR cube). Served as-is;
+  the runtime labels a `regime` ∈ {absorption, hybrid, emission} from the peak optical Fnorm and a
+  `display_max` y-cap (floored 1.2 for an absorption node, capped 8 so a He II 4686 emission peak —
+  up to ~7× at 18 M☉ — can't squash the continuum).
+- **Vacuum → air.** The Götberg spectra are vacuum (Balmer minima land at the vacuum wavelengths to
+  <0.1 Å, off air 1.1–1.7 Å) → Morton 2000, like TMAP/PoWR (sub-bin but for guide alignment).
+- **Sort by λ before binning.** CMFGEN band-concatenation can be non-monotone (the SED verifier hit
+  it); the solar `normalised_spectrum.txt` files measured monotone, but the empty-bin `np.interp`
+  fallback needs monotone λ — cheap insurance against a silently-corrupted bin on a non-solar grid.
+- **`BAKE_VERSION` shared** with the other cubes (bump in lockstep); the on-disk schema is its own
+  flat-node `.npz` (nodes_z / nodes_minit / flux), like the WR cube.
+
+The payoff, measured through the runtime (the measure-first gate): the sequence runs from pure
+ABSORPTION at the low-mass subdwarf end (2 M☉, He II 4686 flat, Hα 0.50) → hybrid (6.66 M☉, He II
+4686 crosses into emission) → strong EMISSION at the He-star end (18 M☉, He II 4686 ~7× continuum) —
+Götberg's subdwarf↔Wolf-Rayet thesis, and visibly distinct from the placeholder's false O-star
+spectrum.

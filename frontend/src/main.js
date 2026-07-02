@@ -2188,25 +2188,26 @@ async function fetchStripped() {
 // Apply a freshly-fetched stripped model to the panels (shared by enter + re-snap). The HR
 // keeps the progenitor's LIVING track as faint context and drops the marker blue-left of it
 // (reuse setEndgame's auto-fit over [strippedState] + the living track so neither clips); the
-// comp panel shows the single-state SURFACE view; the spectrum is an honest placeholder (the
-// main cube is H-atmosphere models — feeding a He-star's Teff/log g would paint a false
-// O-star Balmer spectrum). Then paint the current state.
+// comp panel shows the single-state SURFACE view; the spectrum is the star's REAL CMFGEN
+// spectrum (Chunk 3) — the /stripped_spectrum cube keyed on the SAME (Z, M_init) node
+// /binary snapped, so it's guaranteed the same star as the marker (absorption at the
+// subdwarf end → He II 4686 emission at the He-star end). Then paint the current state.
 function applyStrippedModel(data) {
   strippedData = data;
   const s = data.state;
   hr.setEndgame([s], "stripped");   // faint living context + fitted axes (single point, no line)
   comp.setStripped(s);
-  spectrum.showPlaceholder(
-    "Stripped-star spectra (Götberg CMFGEN wind models) aren't modeled yet — a later feature.");
+  spectrum.updateStripped(s);       // real stripped-star spectrum (replaces the Chunk-2 placeholder)
   refreshStripped();
 }
 
 // Paint the stripped star. UNLIKE the wd/wr/sn scrubbers there is nothing to scrub (one
 // representative state), so this is a one-shot paint (re-run only on a mass/[Fe/H] re-snap).
-// The consumers that would paint FABRICATED data are deliberately NOT called: spectrum (H-atm
-// cube → false Balmer lines; placeholder set in applyStrippedModel), structure (would fetch a
-// normal ZAMS profile for the progenitor mass; keeps its last profile like the wd/wr/sn modes),
-// and comp's burning-abundance views (no measured core; the surface view is set separately).
+// The spectrum is set once in applyStrippedModel (the real /stripped_spectrum cube, Chunk 3),
+// not per-frame — there's nothing to scrub. Structure is still deliberately NOT called (it
+// would fetch a normal ZAMS profile for the progenitor mass; keeps its last profile like the
+// wd/wr/sn modes), and comp's burning-abundance views are skipped (no measured core; the
+// surface view is set separately).
 function refreshStripped() {
   if (!strippedData) return;
   const s = strippedData.state;

@@ -116,6 +116,24 @@ const WR_LINES = [
   { lam: 6560, label: "He II" },          // Pickering (blends with Hα)
 ];
 
+// Binary-stripped-star lines (Chunk 3) — a BIDIRECTIONAL set: on the CMFGEN
+// continuum-normalized spectrum these features are ABSORPTION at the low-mass subdwarf end
+// (dip below the continuum) and EMISSION at the high-mass He-star end (rise above it), so
+// unlike the WR/absorption sets they carry no up/down assumption. He II 4686 is Götberg's
+// defining diagnostic (emission at the He-star end); the Balmer series + He I trace the
+// subdwarf↔He-star transition. Tinted like the He guides (a stripped star is a hot He object).
+const COL_STRIP = "rgba(150,205,255,0.5)";
+const STRIPPED_LINES = [
+  { lam: 4102, label: "Hδ" },
+  { lam: 4340, label: "Hγ" },
+  { lam: 4471, label: "He I" },
+  { lam: 4686, label: "He II" },   // the defining stripped-star / WR diagnostic
+  { lam: 4861, label: "Hβ" },
+  { lam: 5411, label: "He II" },   // Pickering
+  { lam: 5876, label: "He I" },
+  { lam: 6563, label: "Hα" },
+];
+
 // --- [α/Fe] enhancement overlay (atlas Tier B, whirling-cohort-atlas.md) -----
 // A spectrum-only "what-if": the α-rich thick-disk/halo subpopulation. When the toggle
 // is on we plot TWO Coelho-2014 model spectra from /alpha_spectrum — solar-scaled
@@ -437,6 +455,52 @@ export function createSpectrum({ api }) {
     debounce = setTimeout(() => fetchWR(teff, lum, xs, ys, zs, feh), 90);
   }
 
+  // The binary-stripped-star spectrum (Chunk 3): a FOURTH backend cube (Götberg CMFGEN
+  // continuum-normalized) served at /stripped_spectrum, keyed on the (Z, M_init) grid node
+  // — the SAME node /binary snapped, so the spectrum is guaranteed to be the same star as
+  // the marker. The draw is BIDIRECTIONAL: absorption dips at the subdwarf end, emission
+  // peaks at the He-star end (data.regime names which). Replaces the Chunk-2 placeholder
+  // (which existed because the H-atmosphere main cube would paint a FALSE O-star spectrum).
+  async function fetchStripped(minit, feh) {
+    const mine = ++token;
+    try {
+      const res = await fetch(`${api}/stripped_spectrum?minit=${minit}&feh=${feh}`);
+      if (!res.ok) throw new Error(`/stripped_spectrum -> ${res.status}`);
+      const d = await res.json();
+      if (mine !== token) return;
+      d.isStripped = true;    // steer draw()/guides/caption onto the stripped branch
+      data = d;
+      draw();
+      renderCaption();
+    } catch {
+      if (mine !== token) return;
+      if (!data && caption) {
+        caption.textContent =
+          "Stripped-star spectrum unavailable — the Götberg cube may not be baked yet " +
+          "(python scripts/bake_stripped_spectra.py; needs the spectra tree, see " +
+          "python -m star_sim.fetch_gotberg).";
+      }
+    }
+  }
+
+  // Consume the stripped He-star state. Reads the RESOLVED grid node off the state itself:
+  // binary.py sets mass_init_msun / feh_init to the snapped node, so passing those keys the
+  // exact spectrum node (no independent re-snap that could drift from the marker).
+  function updateStripped(state) {
+    if (!state) return;
+    placeholderMsg = null;
+    if (alphaToggleRow) alphaToggleRow.hidden = true;   // the α main-cube what-if doesn't apply
+    if (zoomRow) zoomRow.hidden = true; resetZoom();     // …nor the main-cube zoom presets
+    const minit = state.mass_init_msun, feh = state.feh_init ?? 0;
+    if (minit == null) return;
+    // Distinct key prefix, like updateWD/updateWR — switching cubes always refetches.
+    const key = `st|${minit.toFixed(2)}|${feh.toFixed(2)}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    if (debounce) clearTimeout(debounce);
+    debounce = setTimeout(() => fetchStripped(minit, feh), 90);
+  }
+
   // Show an honest "no spectral model for this regime yet" frame instead of a
   // spectrum (the WD endgame, until the Chunk 6 white-dwarf grid lands). Bumps the
   // token + clears the dedup key so a pending live fetch can't overwrite it, and a
@@ -556,6 +620,7 @@ export function createSpectrum({ api }) {
     // frame; otherwise the wind-emission render (lines UP, not absorption notches).
     if (data.isWR && data.off_grid) { drawNoModel(); return; }
     if (data.isWR) { drawWR(); return; }
+    if (data.isStripped) { drawStripped(); return; }   // the bidirectional stripped-star draw
     if (data.isAlpha) { drawAlpha(); return; }   // the [α/Fe] two-curve overlay
 
     const lam = data.wavelength, flux = mainFlux();
@@ -927,6 +992,114 @@ export function createSpectrum({ api }) {
     ctx.textAlign = "left";
   }
 
+  // The binary-stripped-star render (Chunk 3): the same rainbow-shaded spectrograph as the
+  // WR draw, but BIDIRECTIONAL — the CMFGEN flux is continuum-normalized (continuum ≈ 1), so
+  // absorption lines dip BELOW the continuum (the low-mass subdwarf end) AND emission lines
+  // rise ABOVE it (the high-mass He-star end, He II 4686 up to ~7×). The y-scale is the
+  // backend's `display_max` (tight for an absorption node so its troughs fill the panel;
+  // tall for an emission node so a strong line can't squash the continuum).
+  function drawStripped() {
+    const lam = data.wavelength, flux = data.flux;
+    const n = lam.length;
+    const lamLo = lam[0], lamHi = lam[n - 1];
+    const ftop = data.display_max || 1.2;
+
+    const xOf = (l) => PAD_L + (l - lamLo) / (lamHi - lamLo) * (W - PAD_L - PAD_R);
+    const yOf = (f) => H - PAD_B - Math.min(f, ftop) / ftop * (H - PAD_T - PAD_B);
+    const yAxis = H - PAD_B;
+
+    // shade under the curve — spectral colour inside the visible band, muted grey outside.
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]);
+      const w = i + 1 < n ? xOf(lam[i + 1]) - x + 1 : 1.5;
+      const yTop = yOf(flux[i]);
+      if (lam[i] >= VIS_LO && lam[i] <= VIS_HI) {
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = wavelengthToCSS(lam[i] / 10);
+      } else {
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = "#9aa6bd";
+      }
+      ctx.fillRect(x, yTop, w, yAxis - yTop);
+    }
+    ctx.globalAlpha = 1;
+
+    // the continuum reference line at flux = 1, so "absorption below / emission above" is
+    // unambiguous (a subdwarf spectrum sits entirely under it; a He-star's lines cross it).
+    const yc = yOf(1.0);
+    ctx.strokeStyle = "rgba(180,190,205,0.30)"; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(PAD_L, yc); ctx.lineTo(W - PAD_R, yc); ctx.stroke();
+    ctx.setLineDash([]);
+
+    drawStrippedGuides(xOf, lamLo, lamHi);
+
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]), y = yOf(flux[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.3; ctx.stroke();
+
+    drawStrippedFrameAndAxes(xOf, lamLo, lamHi, ftop);
+  }
+
+  // Stripped-star line guides — He II 4686 (the defining diagnostic) + the Balmer/He I
+  // series that trace the subdwarf↔He-star transition. No up/down gate: these are
+  // absorption at the subdwarf end and emission at the He-star end (the same lines).
+  function drawStrippedGuides(xOf, lamLo, lamHi) {
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 1;
+    let lastLabelX = -1e9;
+    for (const ln of STRIPPED_LINES) {
+      if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
+      const x = xOf(ln.lam);
+      ctx.strokeStyle = COL_STRIP;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+      ctx.setLineDash([]);
+      if (x - lastLabelX >= 26) {
+        ctx.fillStyle = "#bcd8f4";
+        ctx.fillText(ln.label, x, PAD_T - 4);
+        lastLabelX = x;
+      }
+    }
+    ctx.textAlign = "left";
+  }
+
+  function drawStrippedFrameAndAxes(xOf, lamLo, lamHi, ftop) {
+    ctx.strokeStyle = COL_GRID; ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD_T, W - PAD_L - PAD_R, H - PAD_T - PAD_B);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
+
+    ctx.textAlign = "center";
+    for (let nm = 400; nm * 10 <= lamHi; nm += 100) {
+      const lA = nm * 10;
+      if (lA <= lamLo) continue;
+      const x = xOf(lA);
+      ctx.globalAlpha = 0.22;
+      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(String(nm), x, H - PAD_B + 14);
+    }
+    ctx.fillText("wavelength (nm)", W / 2, H - 6);
+
+    ctx.save();
+    ctx.translate(12, (H - PAD_B + PAD_T) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("flux / continuum", 0, 0);
+    ctx.restore();
+
+    // y ticks: 0, the continuum (1), and the display cap.
+    ctx.textAlign = "right";
+    const yFor = (f) => H - PAD_B - Math.min(f, ftop) / ftop * (H - PAD_T - PAD_B);
+    const ticks = ftop > 1.5 ? [0, 1, ftop] : [0, 0.5, 1];
+    for (const v of ticks) {
+      ctx.fillText(v.toFixed(v < 10 ? 1 : 0), PAD_L - 5, yFor(v) + 4);
+    }
+    ctx.textAlign = "left";
+  }
+
   // The "no model for this range" state: the star is hotter than every grid we
   // have, so there's nothing honest to plot. A faint frame keeps the panel reading
   // as intentionally empty (not broken); the message names the real ceiling and
@@ -1045,6 +1218,25 @@ export function createSpectrum({ api }) {
       }
       return;
     }
+    // The binary-stripped-star spectrum (Chunk 3): the real CMFGEN spectrum for the He-star
+    // /binary snapped, on the same (Z, M_init) node as the marker. HONEST that it runs the
+    // subdwarf↔He-star sequence (absorption → emission) and that He II 4686 is the diagnostic.
+    if (data.isStripped) {
+      const m = Number(data.minit).toFixed(2);
+      const seq = data.regime === "emission"
+        ? "emission lines (He II 4686 stands well above the continuum) — the helium-star / " +
+          "proto-Wolf–Rayet end of the sequence"
+        : data.regime === "hybrid"
+          ? "a hybrid of absorption and emission (He II 4686 just crossing into emission) — " +
+            "the semi-transparent-wind middle of the sequence"
+          : "absorption lines below the continuum (deep Balmer) — the hot subdwarf (sdB/sdO) " +
+            "end of the sequence";
+      caption.textContent =
+        `Binary-stripped star · ${m} M☉ progenitor · CMFGEN model (Götberg 2018) — ${seq}. ` +
+        `The continuum-normalized flux dips for absorption, rises for emission. Solar ` +
+        `metallicity grid, so [Fe/H] doesn't change this panel.`;
+      return;
+    }
     // The WD endgame: a DA's pressure-broadened Balmer lines, or — once the cinder
     // has cooled past the model floor — the featureless DC continuum. Pure hydrogen,
     // so [Fe/H] is meaningless (not merely "solar"), which the caption says plainly.
@@ -1151,5 +1343,5 @@ export function createSpectrum({ api }) {
     if (data && !data.isWD && !data.isWR && !data.isAlpha) { draw(); renderCaption(); }
   }
 
-  return { update, updateWD, updateWR, setInclination, showPlaceholder, resize };
+  return { update, updateWD, updateWR, updateStripped, setInclination, showPlaceholder, resize };
 }

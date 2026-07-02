@@ -25,6 +25,7 @@ from star_sim.spectra import (
     ALPHA_GRID_FILENAME,
     GRID_FILENAME,
     SPECTRA_DATA_DIR,
+    STRIPPED_GRID_FILENAME,
     WD_GRID_FILENAME,
     WR_GRID_FILENAME,
 )
@@ -215,6 +216,21 @@ def alpha_spectra_data_available() -> bool:
 requires_alpha_spectra_data = pytest.mark.skipif(
     not alpha_spectra_data_available(),
     reason="alpha spectrum grid not baked — run fetch_coelho + scripts/bake_alpha_spectra.py",
+)
+
+
+def stripped_spectra_data_available() -> bool:
+    return (SPECTRA_DATA_DIR / STRIPPED_GRID_FILENAME).is_file()
+
+
+# The /stripped_spectrum (Götberg binary-stripped-star cube, Chunk 3) tests need the
+# baked stripped cube — baked on the host from the gitignored Götberg spectra tree
+# (never committed): `python scripts/bake_stripped_spectra.py` (needs the tree from
+# `python -m star_sim.fetch_gotberg`'s recipe under data/gotberg_stripped/).
+requires_stripped_spectra_data = pytest.mark.skipif(
+    not stripped_spectra_data_available(),
+    reason="stripped-star spectrum grid not baked — run scripts/bake_stripped_spectra.py "
+    "(needs the Götberg spectra tree; see docs/plans/stripped-consort-unveiling.md)",
 )
 
 

@@ -1,6 +1,49 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: CHUNKS 1 & 2 BUILT. Next = Chunk 3 (stripped-star spectra, optional/deferred).
+## Status: CHUNKS 1, 2 & 3 BUILT. The stripped-star arc is complete (path (b) deferred).
+
+**Chunk 3 done 2026-07-02 (backend + frontend, 273 pytest, Playwright 1440+390 zero console
+errors).** The stripped-star spectrum panel — the real CMFGEN spectrum replacing the Chunk-2
+placeholder:
+- **`scripts/bake_stripped_spectra.py`** → a **flat-node** cube (like the WR cube, NOT
+  rectangular Teff×logg) keyed on the grid node `(Z, M_init)` — the SAME snap identity
+  `binary.py` uses — so the runtime snaps to the node `/binary` already resolved and the panel
+  spectrum is guaranteed to be the SAME star as the marker (advisor's tightest constraint).
+  **Solar-only** (grid_014, 23 nodes) matching the committed solar param table; grid-generic
+  (`--grids`) so the 3 non-solar Z append when their param tables land. Reads
+  `normalised_spectrum.txt` (CMFGEN **continuum-normalized** Fnorm, so NO continuum estimation),
+  **vac→air** (measured: Balmer minima land at vacuum <0.1 Å, off air 1.1–1.7 Å — Morton 2000,
+  TMAP/PoWR precedent), **sort-by-λ before binning** (CMFGEN band-concat can be non-monotone;
+  the solar files measured monotone but the empty-bin interp fallback needs it — cheap
+  insurance), bin to the shared 3000–9000 Å @ 2.5 Å grid. Cube 0.2 MB, gitignored.
+- **`spectra.py` `_StrippedSpectra` + `stripped_spectrum_data(minit, feh)`** — the flat-node
+  runtime (snap nearest Z-in-feh-space then nearest M_init). Serves Fnorm as-is + a `regime` ∈
+  {"absorption","hybrid","emission"} from the peak optical Fnorm (measured thresholds) + a WR-style
+  `display_max` y-cap (floored 1.2 so an absorption node fills the panel, capped 8 so a monster
+  He II 4686 can't squash it) + `continuum: 1.0`. `feh_varies` false (solar-only).
+- **`/stripped_spectrum` route** (snap-always like `/binary`; 422 only mass≤0; 503 if not baked).
+- **The measure-first gate CLOSED through the runtime (advisor BLOCKER):** the absorption→emission
+  sequence is real and monotone — 2 M☉ (20 kK) pure absorption (He II 4686 flat 1.0, Hα 0.50) → 3.65
+  absorption → 6.66 (54 kK) hybrid (He II 4686 emits 1.15) → 9 emission (2.48) → 18.17 (101 kK)
+  strong emission (He II 4686 **7.19×**, Hα 3.21). Distinct from the false O-star Balmer spectrum the
+  placeholder protected against (and the hot nodes are >55 kK where the main cube is a clamped "no
+  model" anyway) — the justification for a fourth cube, measured.
+- **Frontend `spectrum.js` `updateStripped`** — reads the RESOLVED node off the state itself
+  (`mass_init_msun`/`feh_init`, which binary.py sets to the snapped node → exact, no drift), a
+  **bidirectional** `drawStripped` (mirrors `drawWR`: rainbow shade + dashed continuum line at 1.0
+  + `display_max` y-scale, but absorption dips below AND emission peaks above), `STRIPPED_LINES`
+  guides (He II 4686 the diagnostic + Balmer/He I, no up/down gate), a regime-branched caption.
+  `main.js` `applyStrippedModel` swaps `showPlaceholder` → `spectrum.updateStripped(s)`.
+- **Bonus bug fix caught by the screenshot pass:** the `.spectrum-zoom` zoom-preset row leaked into
+  the endgame / stripped modes (missing `[hidden]` re-assertion vs `display:flex`, unlike the
+  `.alpha-toggle-row[hidden]` idiom) → dead zoom buttons in WD/WR/SN too; fixed with one CSS line.
+- **Files:** `scripts/bake_stripped_spectra.py` (new), `spectra.py` (+`_StrippedSpectra`/
+  `stripped_spectrum_data`/`STRIPPED_GRID_FILENAME`), `api.py` (`/stripped_spectrum`),
+  `tests/test_stripped_spectra.py` (7, `requires_stripped_spectra_data` in `conftest.py`),
+  `frontend/src/spectrum.js` (+`updateStripped`/`drawStripped`/guides/caption/export), `main.js`
+  (2 swaps), `styles.css` (the zoom-leak fix). `backend/docs/msg_spectra_build_recipe.md §10`.
+
+## Status (historical): CHUNKS 1 & 2 BUILT. Next = Chunk 3 (stripped-star spectra, optional/deferred).
 
 **Chunk 2 done 2026-07-02 (frontend-only, 266 pytest UNCHANGED, Playwright 1440+390 zero
 console errors).** The reversible what-if `stripped-mode` + payoff render:

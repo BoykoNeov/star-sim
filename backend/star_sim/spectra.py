@@ -65,6 +65,13 @@ WD_GRID_FILENAME = "wd_spectra_grid.npz"
 # and the runtime snaps to the nearest real node (`_WRSpectra`, not `_Spectra`). Baked
 # on the host by scripts/bake_wr_spectra.py (no pymsg). See recipe §7/§7a.
 WR_GRID_FILENAME = "wr_spectra_grid.npz"
+# The binary-stripped-star cube (Chunk 3): CMFGEN continuum-normalized spectra for the
+# hot He-stars `binary.py` snaps (Götberg 2018). Like the WR cube it has its OWN flat-node
+# schema — the grid is 1-D in initial mass per Z (a ragged (Teff, log g) footprint), so it
+# snaps to the node `/binary` already resolved (state<->spectrum consistency) rather than
+# interpolating a rectangular cube (`_StrippedSpectra`, not `_Spectra`). Baked on the host
+# by scripts/bake_stripped_spectra.py (no pymsg). See docs/plans/stripped-consort-unveiling.md.
+STRIPPED_GRID_FILENAME = "stripped_spectra_grid.npz"
 # The [alpha/Fe] cube (atlas Tier B): a SEPARATE 4-axis (Teff, log g, [Fe/H],
 # [alpha/Fe]) Coelho-2014 cube, the COOL subset only (Teff <= ~10000 K — Gate 1
 # measured alpha dead hotter, so the panel hands off to the main cube above). Same
@@ -604,6 +611,151 @@ def wr_spectrum_data(
         "off_grid": off_grid,
         "off_reason": off_reason,
         "feh_varies": False,
+        "flux_unit": s.flux_unit,
+        "grid_name": s.grid_name,
+    }
+
+
+# --- Binary-stripped stars (Chunk 3) ----------------------------------------
+#
+# The stripped-star spectrum is a CMFGEN continuum-normalized spectrum (Fnorm ≈ 1,
+# absorption dips below, emission peaks above) for the hot He-star `binary.py` snaps.
+# Like the WR cube it is keyed on a FLAT list of grid nodes — here (Z, M_init), the SAME
+# snap identity `binary.py` uses — and the runtime snaps to the node `/binary` already
+# resolved, so the panel's spectrum is guaranteed to be the SAME star as the marker.
+#
+# The measured payoff (Götberg 2018's thesis, confirmed on disk): the sequence bridges
+# pure ABSORPTION at the low-mass subdwarf end (Fnorm 0.4–1.0, He II 4686 flat) → a hybrid
+# mid-mass regime with mixed absorption+emission → strong EMISSION at the high-mass He-star
+# end (He II 4686 up to ~7× continuum). Unlike the WR cube we need NO continuum estimation:
+# the file is already continuum-normalized, so we serve Fnorm as-is.
+
+_GOTBERG_SOLAR_Z = 0.014   # mirrors binary.GOTBERG_SOLAR_Z (kept local — sibling discipline)
+
+# Optical-peak Fnorm thresholds that name the regime (measured across the solar grid:
+# 2–5 M☉ peak ≈ 1.00–1.01; 6.0/6.7 M☉ 1.11/1.20; 7.4 M☉ 1.52; 8–18 M☉ 2.0–7.2). The
+# label steers the caption + the emission/absorption framing, never the data.
+_STRIP_EMISSION_PEAK = 1.30
+_STRIP_ABSORPTION_PEAK = 1.05
+
+
+class _StrippedSpectra:
+    """Lazily-loaded Götberg stripped-star grid: a flat list of (Z, M_init) nodes + their
+    continuum-normalized spectra. The runtime snaps to the nearest node in (Z, then M_init)
+    — the same snap `binary.py` does — rather than interpolating (the grid is 1-D in mass
+    per Z, a ragged (Teff, log g) footprint; §6 snap-not-interpolate)."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        npz = np.load(path, allow_pickle=False)
+        ver = int(npz["bake_version"])
+        if ver != BAKE_VERSION:
+            raise SpectraDataMissing(
+                f"baked stripped grid {path} is BAKE_VERSION {ver}, runtime wants "
+                f"{BAKE_VERSION}; re-bake with scripts/bake_stripped_spectra.py"
+            )
+        self.grid_name = str(npz["grid_name"])
+        self.flux_unit = str(npz["flux_unit"])
+        self.lam = np.asarray(npz["lam"], dtype=float)
+        self.nodes_z = np.asarray(npz["nodes_z"], dtype=float)
+        self.nodes_minit = np.asarray(npz["nodes_minit"], dtype=float)
+        self.flux = np.asarray(npz["flux"], dtype=float)
+
+    def snap(self, minit: float, feh: float) -> int:
+        """Index of the nearest node: nearest Z (compared in [Fe/H] space, like binary.py),
+        then nearest M_init within that Z. Returns the flat node index."""
+        z_target = _GOTBERG_SOLAR_Z * 10.0 ** feh
+        zs = self.nodes_z
+        # nearest grid Z in [Fe/H] space
+        z_snap = min(
+            set(zs.tolist()),
+            key=lambda z: abs(np.log10(z / _GOTBERG_SOLAR_Z) - feh),
+        )
+        at_z = np.where(np.isclose(zs, z_snap))[0]
+        j = at_z[int(np.argmin(np.abs(self.nodes_minit[at_z] - minit)))]
+        return int(j)
+
+
+_STRIPPED_CACHE: _StrippedSpectra | None = None
+
+
+def _load_stripped() -> _StrippedSpectra:
+    global _STRIPPED_CACHE
+    if _STRIPPED_CACHE is None:
+        path = SPECTRA_DATA_DIR / STRIPPED_GRID_FILENAME
+        if not path.is_file():
+            raise SpectraDataMissing(
+                f"Binary-stripped-star spectrum grid not baked. Fetch the Götberg "
+                f"spectra tree + bake it once:\n"
+                f"    python -m star_sim.fetch_gotberg   # recipe to get data/gotberg_stripped/\n"
+                f"    python scripts/bake_stripped_spectra.py   # -> {path}\n"
+                f"(see docs/plans/stripped-consort-unveiling.md, Chunk 3)."
+            )
+        _STRIPPED_CACHE = _StrippedSpectra(path)
+    return _STRIPPED_CACHE
+
+
+def stripped_spectrum_data(
+    minit: float, feh: float = 0.0, *, n_display: int | None = None,
+) -> dict:
+    """The binary-stripped-star spectrum the `/stripped_spectrum` endpoint serves — a
+    FOURTH spectrum sibling beside `/spectrum`, `/wd_spectrum`, `/wr_spectrum`, reading the
+    Götberg CMFGEN cube. Takes the progenitor initial mass `minit` (and [Fe/H]) — the SAME
+    snap key `binary.py` uses — so the frontend passes the node `/binary` already resolved
+    (`m_init_msun`, `feh_snapped`) and the spectrum is guaranteed to be the SAME star as
+    the marker.
+
+    The flux is CMFGEN's continuum-normalized Fnorm (continuum ≈ 1), served as-is: a
+    BIDIRECTIONAL draw where absorption lines dip below 1 (the low-mass subdwarf end) and
+    emission lines rise above it (the high-mass He-star end, up to ~7× the continuum). The
+    `regime` ∈ {"absorption","hybrid","emission"} names where on that sequence this node
+    sits (from the peak optical Fnorm), and `display_max` is a y-cap a touch above this
+    node's tallest emission line (floored so an absorption-only node still fills the panel,
+    capped so a strong He II 4686 can't squash the continuum — the WR per-max gate).
+
+    `feh_varies` is false (the cube is solar-only, matching binary.py's committed table);
+    a non-solar request snaps to solar with that flag, honestly.
+    """
+    s = _load_stripped()
+    j = s.snap(minit, feh)
+    lam = s.lam
+    flux = s.flux[j].copy()
+    node_minit = float(s.nodes_minit[j])
+    node_z = float(s.nodes_z[j])
+
+    # Regime from the peak optical (visible-band) Fnorm — how far the lines stand ABOVE the
+    # continuum. Absorption-only nodes peak at ~1.0; a strong He-star emission node peaks
+    # several ×. Measured thresholds; the label is a caption cue, not a data change.
+    opt = (lam >= 3800) & (lam <= 7800)
+    peak = float(flux[opt].max()) if opt.any() else float(flux.max())
+    if peak >= _STRIP_EMISSION_PEAK:
+        regime = "emission"
+    elif peak <= _STRIP_ABSORPTION_PEAK:
+        regime = "absorption"
+    else:
+        regime = "hybrid"
+
+    # y-cap that frames THIS node's lines: a touch above its tallest emission peak, floored
+    # at 1.2 so a pure-absorption node still fills the panel (dips from the continuum at 1),
+    # capped at 8 so a monster He II 4686 line can't squash the continuum + weaker features.
+    display_max = float(min(max(peak * 1.08, 1.2), 8.0))
+
+    if n_display is not None and n_display < lam.size:
+        new_lam = np.linspace(lam[0], lam[-1], n_display)
+        flux = np.interp(new_lam, lam, flux)
+        lam = new_lam
+
+    return {
+        "wavelength": lam.tolist(),
+        "flux": flux.tolist(),
+        "continuum": 1.0,
+        "display_max": display_max,
+        "regime": regime,
+        "minit": node_minit,
+        "minit_requested": float(minit),
+        "z_grid": node_z,
+        "feh": float(np.log10(node_z / _GOTBERG_SOLAR_Z)),
+        "feh_varies": len(set(s.nodes_z.tolist())) > 1,
         "flux_unit": s.flux_unit,
         "grid_name": s.grid_name,
     }

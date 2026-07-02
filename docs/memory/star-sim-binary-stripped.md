@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; Chunks 1 (backend) & 2 (frontend what-if mode) built.
+description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; Chunks 1 (backend) & 2 (frontend what-if mode) & 3 (stripped-star spectra) built — path (a) complete.
 metadata:
   type: project
 ---
@@ -95,8 +95,43 @@ console errors):** the reversible what-if `mode="stripped"`.
   (`setStripped`/`drawStripped`), `classify.js` (`strippedLabel`), `index.html` (toggle + bar
   title/narration + `.age-stripped`), `styles.css` (stripped-mode rules mirror wd/wr/sn).
 
-**Next = Chunk 3** (stripped-star spectra, optional/deferred): a `/stripped_spectrum` sibling
-over the Götberg CMFGEN grid (host-baked like WD/WR), `spectrum.js updateStripped` — measure
-emission-vs-absorption per Teff. Related: [[star-sim-rotation-subpop-atlas]] (Tier D binarity),
-[[star-sim-wr-wd-endgame-plan]] (the single-star WR this complements),
-[[star-sim-supernova-remnant-endgame]] (sibling pattern).
+**Chunk 3 BUILT 2026-07-02 (backend + frontend, 273 pytest, Playwright 1440+390 zero console
+errors):** the stripped-star SPECTRUM panel — the real CMFGEN spectrum replacing the Chunk-2
+placeholder. A FOURTH spectrum sibling `/stripped_spectrum` over the Götberg CMFGEN cube.
+- **`scripts/bake_stripped_spectra.py`** → a **flat-node** cube (like WR, NOT rectangular
+  Teff×logg) keyed on the grid node `(Z, M_init)` — the SAME snap identity `binary.py` uses.
+  **Solar-only** (grid_014, 23 nodes; grid-generic `--grids` for the non-solar Z later). Reads
+  `normalised_spectrum.txt` = CMFGEN **continuum-normalized** Fnorm → NO continuum estimation
+  (unlike WR). `spectra.py _StrippedSpectra` + `stripped_spectrum_data(minit, feh)`; route
+  snap-always; `STRIPPED_GRID_FILENAME` + `requires_stripped_spectra_data` marker; 7 tests.
+- **Two measured gotchas (both verified on disk):** the spectra are **VACUUM** (Balmer minima
+  match vacuum <0.1 Å, off air 1.1–1.7 Å) → vac→air (Morton 2000, TMAP/PoWR precedent); **sort by
+  λ before binning** (CMFGEN band-concat CAN be non-monotone — the solar files measured monotone
+  but the empty-bin interp fallback needs it; cheap insurance).
+- **Advisor's tightest constraint — state↔spectrum consistency:** snap to the node `/binary`
+  already resolved, NOT the raw slider mass. `spectrum.js updateStripped` reads `state.mass_init_msun`/
+  `feh_init` (which binary.py sets to the snapped node) → the panel spectrum is guaranteed the SAME
+  star as the marker (binary's node list = the CSV, the cube's = the VizieR dirnames; re-snapping raw
+  mass independently could drift at a midpoint).
+- **The measure-first gate CLOSED through the runtime (advisor BLOCKER, ran before any frontend):**
+  the absorption→emission sequence is real & monotone — 2 M☉ (20 kK) pure absorption (He II 4686 flat
+  1.0, Hα 0.50) → 6.66 (54 kK) hybrid (He II 4686 emits 1.15) → 18.17 (101 kK) strong emission (He II
+  4686 **7.19×**, Hα 3.21). Distinct from the false O-star Balmer spectrum the placeholder protected
+  against (the hot nodes are >55 kK where the main cube is a clamped "no model" anyway) — the
+  justification for a fourth cube, measured. Götberg's abstract IS this: "a continuous sequence
+  bridging subdwarf-type stars at the low-mass end and Wolf-Rayet-like spectra at the high-mass end."
+- **Frontend:** a **bidirectional** `drawStripped` (mirrors `drawWR`: rainbow shade + dashed continuum
+  line at 1.0 + backend `display_max` y-cap floored 1.2/capped 8, but absorption dips below AND
+  emission peaks above), `STRIPPED_LINES` guides (He II 4686 diagnostic + Balmer/He I, no up/down
+  gate), regime-branched caption ({absorption/hybrid/emission}). `main.js applyStrippedModel` swaps
+  `showPlaceholder`→`updateStripped(s)`.
+- **Bonus bug the screenshot pass caught:** the `.spectrum-zoom` zoom-preset row LEAKED into the
+  endgame / stripped modes — `hidden=true` was set but `.spectrum-zoom{display:flex}` beat the UA
+  `[hidden]{display:none}` (missing the `[hidden]` re-assertion the `.alpha-toggle-row`/`.rot-toggle-row`
+  rules have) → dead zoom buttons in WD/WR/SN too; fixed with one CSS line `.spectrum-zoom[hidden]{display:none}`.
+
+**Path (a) is now COMPLETE** (Chunks 1–3). Path (b) (two-star co-evolution, companion drawn, Algol
+reversal) stays deferred (needs POSYDON/BPASS/MESA-binary + a new two-star render). Related:
+[[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
+spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
+(Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

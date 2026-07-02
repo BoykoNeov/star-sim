@@ -333,6 +333,11 @@ main {
    x-axis onto a narrow window (reusing the .mode-btn look). flex-wrap so it folds on
    a phone; the "?" help pushes to the right like .comp-modes. */
 .spectrum-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
+/* `display:flex` above beats the UA [hidden]{display:none} (equal specificity, later rule),
+   so re-assert it — else the zoom presets leak into the endgame / stripped modes, where the
+   draw path ignores the band window and the buttons would be dead (matches the .alpha-toggle-
+   row[hidden] / .rot-toggle-row[hidden] idiom above). */
+.spectrum-zoom[hidden] { display: none; }
 .spectrum-zoom .zoom-label { font-size: 12px; color: var(--muted); }
 .spectrum-zoom .mode-btn { font-size: 11px; padding: 2px 8px; }
 .spectrum-zoom .help { margin-left: auto; }

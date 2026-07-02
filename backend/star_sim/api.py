@@ -28,6 +28,7 @@ from .spectra import (
     SpectraDataMissing,
     alpha_spectrum_data,
     spectrum_data,
+    stripped_spectrum_data,
     wd_spectrum_data,
     wr_spectrum_data,
 )
@@ -482,6 +483,31 @@ def wr_spectrum(
     503 if the WR cube isn't baked."""
     try:
         return wr_spectrum_data(teff, lum, xsurf, ysurf, zsurf, feh)
+    except SpectraDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/stripped_spectrum")
+def stripped_spectrum(
+    minit: float = Query(..., gt=0.0, description="progenitor initial mass / M_sun"),
+    feh: float = Query(0.0, ge=-5.0, le=2.0, description="initial [Fe/H]"),
+) -> dict:
+    """(progenitor initial mass, [Fe/H]) -> the binary-stripped He-star's CMFGEN spectrum
+    (Chunk 3) — a FOURTH spectrum sibling beside `/spectrum`, `/wd_spectrum`, `/wr_spectrum`.
+
+    Reads the separate Götberg 2018 stripped-star cube, keyed on the SAME (Z, M_init) grid
+    node `/binary` snaps — so the frontend passes the node `/binary` already resolved
+    (`m_init_msun`, `feh_snapped`) and the served spectrum is guaranteed to be the SAME star
+    as the marker (state<->spectrum consistency). The flux is CMFGEN's continuum-normalized
+    Fnorm, a bidirectional draw: absorption lines dip below the continuum at the low-mass
+    subdwarf end, emission lines rise above it at the high-mass He-star end (He II 4686 up to
+    ~7× — Götberg's subdwarf↔Wolf-Rayet sequence). `regime` ∈ {"absorption","hybrid",
+    "emission"} names where the node sits; `feh_varies` is false (solar-only cube, matching
+    binary.py's committed table). Snap-always (mirrors `/binary`): the cube snaps to the
+    nearest node, so 422 is reserved for structurally invalid input (mass ≤ 0). 503 if not
+    yet baked."""
+    try:
+        return stripped_spectrum_data(minit, feh)
     except SpectraDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

@@ -322,7 +322,20 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
-- **Chunks 1 (backend) & 2 (frontend what-if mode) BUILT.** **Chunk 2** (frontend-only, 266 pytest
+- **Chunks 1 (backend) & 2 (frontend what-if mode) & 3 (stripped-star spectra) BUILT — path (a) COMPLETE.**
+  **Chunk 3** (backend + frontend, 273 pytest, Playwright 1440+390 zero console errors): a FOURTH
+  spectrum sibling **`/stripped_spectrum`** over the Götberg CMFGEN cube — `scripts/bake_stripped_spectra.py`
+  bakes a **flat-node** host-baked cube (like WR, not rectangular Teff×logg) keyed on the SAME `(Z, M_init)`
+  node `/binary` snaps (state↔spectrum consistency), **solar-only**, from `normalised_spectrum.txt`
+  (CMFGEN **continuum-normalized** Fnorm → no continuum estimation), **vac→air** + **sort-by-λ** (measured
+  gotchas). `spectra.py stripped_spectrum_data` + `spectrum.js updateStripped` = a **bidirectional** draw
+  (absorption dips at the subdwarf end, emission peaks at the He-star end; `display_max` cap, continuum line
+  at 1.0, regime-branched caption). Reads the resolved node off `state.mass_init_msun`/`feh_init` (no drift).
+  **Measure-first gate CLOSED through the runtime:** the absorption→emission sequence is real & monotone
+  (2 M☉ pure absorption Hα 0.50 → 18 M☉ He II 4686 **7.2×** emission), distinct from the false O-star Balmer
+  spectrum the Chunk-2 placeholder protected against. Bonus: fixed a pre-existing `.spectrum-zoom[hidden]`
+  CSS leak (dead zoom buttons in WD/WR/SN too). Recipe §10. Path (b) (two-star co-evolution) stays deferred.
+  **Chunk 2** (frontend-only, 266 pytest
   UNCHANGED, Playwright 1440+390 zero console errors): the reversible `mode="stripped"`. Entry-point
   (i) settled — a **mass-gated TOGGLE** (`#stripped-toggle`, mirrors the Ap/Bp control) for eligible
   progenitors (2–18.2 M☉), a MID-LIFE FORK (not an end-of-life gateway) that still snaps the whole
@@ -483,8 +496,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **266 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
+- **273 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The binary-stripped-star spectrum sibling (Chunk 3) adds **7**
+  tests (`test_stripped_spectra.py`, gated `requires_stripped_spectra_data`): the flat-node
+  snap honesty + state↔spectrum consistency, the absorption→emission sequence as a
+  regression (He II 4686 flat at the subdwarf end → strong emission at the He-star end),
+  the continuum-normalized shape, and the `/stripped_spectrum` route (snap-always + 422).
+  The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
   non-rotating ones — gated by `requires_mist_rotation_multifeh` /
