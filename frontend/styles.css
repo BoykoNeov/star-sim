@@ -264,6 +264,19 @@ main {
 /* Pointer left in the SED panel after the slider moved to Controls. */
 .sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 
+/* [α/Fe] enhancement toggle in the spectrum panel (atlas Tier B) — a spectrum-only
+   what-if. Compact row under the canvas; mirrors the .rot-toggle-row idiom. */
+.alpha-toggle-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted); cursor: pointer; margin: 8px 0 2px;
+}
+/* display:flex would beat the UA [hidden]{display:none}, so re-assert it (the row is
+   hidden in the WD/WR/SN endgames, where the α main-cube comparison doesn't apply). */
+.alpha-toggle-row[hidden] { display: none; }
+.alpha-toggle-row > span { color: var(--ink); font-weight: 600; }
+.alpha-toggle-row input[type="checkbox"] { accent-color: #ff9e64; width: 16px; height: 16px; cursor: inherit; }
+.alpha-afe { color: var(--muted) !important; font-weight: 400 !important; font-size: 12px; }
+
 /* Composition panel legend: small color swatches keyed to the stacked bands. */
 .legend {
   display: flex; flex-wrap: wrap; gap: 4px 14px;

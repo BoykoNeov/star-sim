@@ -220,8 +220,26 @@ at their respective fidelities; see "Cross-cutting design" below.
   both gitignored). **Widen [Fe/H] to {−1.0, +0.2} later = a pure data re-bake** (the CAP18/
   PoWR precedent: `fetch_coelho --feh -1.0,-0.5,0.0,0.2` then re-bake, no code change).
 
-  **Chunk 2 — the frontend α toggle (spectrum panel) — NEXT (both advisor carry-forwards
-  now RESOLVED by measurement — 2026-07-02):**
+  **Chunk 2 — the frontend α toggle (spectrum panel) — BUILT (2026-07-02, frontend-only,
+  254 pytest unchanged, Playwright-verified 1440 + 390 px, zero console errors; WR/SN
+  endgame row-hide + the toggle-OFF round-trip explicitly asserted, not assumed).** A spectrum-only
+  "what-if" TOGGLE in the spectrum panel (`#alpha-toggle`, owned by `spectrum.js` by id like
+  `sed.js` owns `#sed-rot` — NO `main.js` control surface). When on + in-domain it fetches
+  BOTH Coelho spectra under one token (`fetchAlpha`: `Promise.all` of `/alpha_spectrum?afe=0`
+  & `afe=0.4`, single latest-wins check) and `drawAlpha()` overlays them — the α=0 (solar-
+  scaled) curve shaded white/rainbow, the α=+0.4 (α-rich) curve as a coral line dipping
+  DEEPER at the Ca/Mg/Ti guides (+ the Na D "↓" odd-Z control that rides ABOVE), each
+  normalized to its own peak (measured to preserve both signatures). **The honest domain,
+  set from `loci_check.py` (not round numbers):** `ALPHA_TEFF_MAX=9000` (α washes out hotter),
+  `ALPHA_COOL_TEFF=3800` + `ALPHA_COOL_MAX_LOGG=1.0` (below 3800 K Coelho has only giant
+  gravities, so a cool DWARF is gated off), **plus the [Fe/H] window enforced at RUNTIME** from
+  the response's clamped `feh` vs the request (advisor blocker #1 — the MVP cube is [Fe/H]
+  {−0.5,0} but the slider spans −1→+0.5; this auto-widens on a re-bake). Off any of the three
+  edges it falls back to the standard `/spectrum` with a specific note (hot / cool-dwarf /
+  off-[Fe/H]-window). Hidden + overlay-suppressed in the WD/WR/SN endgames — the WD-giant
+  scrub still routes through `update(s, {endgame:"wd"})` (real main-cube spectrum) but the α
+  what-if is a living-star control. Caption is HONEST spectrum-only (the HR track/comp panel
+  are solar-scaled MIST and do NOT follow α). **The settled decisions (kept):**
   1. **α-mode-OFF baseline routing → SETTLED: Option A.** Keep the main **CAP18 cube as the
      α-off default** (it has cool M dwarfs via the Göttingen splice + a full 12-node [Fe/H]
      axis); α-mode is an **explicit opt-in overlay** that plots **Coelho-α0 vs Coelho-α0.4**

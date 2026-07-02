@@ -1136,7 +1136,7 @@ function refreshWD() {
   // cube's optical is log g-insensitive at those temperatures (measured Δ ~0.03), so
   // clamping the low-gravity rows up to the 6.5 floor is invisible.
   if (s.logg != null && (s.logg >= 6.0 || s.Teff_K > 55000)) spectrum.updateWD(s);
-  else spectrum.update(s);
+  else spectrum.update(s, { endgame: "wd" });   // giant rows use the main cube, but hide the α what-if
   renderWDReadout(s, z);
 
   els.status.style.color = teffToCSS(s.Teff_K);

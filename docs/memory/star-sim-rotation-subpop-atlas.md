@@ -212,20 +212,34 @@ to {−1.0, +0.2} = pure data re-bake** (`fetch_coelho --feh -1.0,-0.5,0.0,0.2` 
 code change — CAP18/PoWR precedent). Advisor confirmed the test points are REAL Coelho nodes
 (not clamp-filled) so the physics tests measure true spectra.
 
-**Chunk 2 (frontend α toggle in the spectrum panel) — NEXT; both advisor carry-forwards now
-RESOLVED by measurement (2026-07-02):** (1) **α-off baseline routing → Option A SETTLED:** keep
-the main **CAP18 cube as the α-off default** (it has cool M dwarfs via Göttingen + a 12-node
-[Fe/H] axis); α-mode = an **opt-in overlay** plotting **Coelho-α0 vs Coelho-α0.4** (pure-α, the
-α lesson is the gap between two Coelho curves, not the one-time CAP18→Coelho view switch).
-Option B (route all cool → Coelho) REJECTED by the loci check (M dwarfs would silently get
-wrong-gravity giant spectra; MVP 2-node [Fe/H] degrades the default). (2) **baseline-fidelity
-spot-check DONE** (`temp/alpha-gate1/loci_check.py`): reachable **cool GIANTS (RGB/AGB) all hit
-REAL Coelho nodes** (dense — the classic α regime); **MS dwarfs Teff≥4000 K REAL**; but **cool M
-dwarfs Teff≲3800 K NOT real** — Coelho computed only giant gravities (logg≤1.0) below ~3800 K, so
-a 3500 K/logg 4.9 dwarf clamp-fills a GIANT spectrum ⇒ **Chunk 2 must Teff-gate α off for cool
-dwarfs (≲3800–4000 K at dwarf gravity)** (honest edge, like the WD DC floor). Plus: gate off
-≥~9–10 kK (hot, like TiO `maxTeff`), spectrum-only "what-if" label (comp/track don't follow α),
-hand off to main cube hot. **Honest α-domain = ~4000–10000 K dwarfs + all cool giants.**
+**Chunk 2 (frontend α toggle in the spectrum panel) — BUILT (2026-07-02, frontend-only, 254
+pytest UNCHANGED, Playwright-verified 1440 + 390 px, zero console errors).** A spectrum-only "what-if"
+TOGGLE (`#alpha-toggle` in the spectrum panel) owned entirely by `spectrum.js` (by id, like
+`sed.js` owns `#sed-rot` — **NO `main.js` control surface**, one tiny call-site touch only). On +
+in-domain: `fetchAlpha` gets BOTH Coelho spectra under one token (`Promise.all` of
+`/alpha_spectrum?afe=0` & `afe=0.4`, single latest-wins check), `drawAlpha()` overlays them — α=0
+(solar-scaled) shaded white/rainbow, α=+0.4 (α-rich) a **coral line dipping DEEPER** at the
+Ca/Mg/Ti guides, with **Na D marked "↓"** (the odd-Z control riding ABOVE). Each curve normalized
+to its OWN peak — **measured (per-peak norm preserves BOTH the Ca deepening AND the Na-D-opposite**:
+Ca I 4227 +0.081 / Mg b +0.090 / Ca II 8542 +0.049 vs Na D −0.015). **The three honest edges, set
+from `loci_check.py` (not round numbers):** `ALPHA_TEFF_MAX=9000` (α washes out hotter →
+main cube), `ALPHA_COOL_TEFF=3800`+`ALPHA_COOL_MAX_LOGG=1.0` (below 3800 K Coelho has only giant
+gravities, so a cool DWARF clamp-fills a giant → gated off; giants stay), and **the [Fe/H] window
+enforced at RUNTIME** from the response's clamped `feh` vs the request — **advisor blocker #1:** the
+MVP cube is [Fe/H] {−0.5,0} but the slider spans −1→+0.5, so a naive (Teff,logg)-only gate would
+silently show a +0.5 star the solar-α comparison; the runtime clamp check **auto-widens on a
+re-bake**. Off any edge → fall back to `/spectrum` + a specific note (hot / cool-dwarf / off-window).
+**α is a LIVING-star control** — hidden + overlay-suppressed in WD/WR/SN; the WD-giant scrub routes
+through `update(s, {endgame:"wd"})` (real main-cube spectrum, α row hidden). **The gotcha that bit
+(caught by an explicit Playwright hide-check, not assumed):** the WD scrub OPENS on a TPAGB giant
+that goes through the living `spectrum.update()` path (`main.js` refreshWD line ~1139), so a naive
+"updateWD hides the row" left the α toggle visible in the WD endgame — fixed by the `{endgame}` opt
+on `update()` (mirrors `sed.update(s,{endgame})`). Caption HONEST spectrum-only (HR track/comp panel
+are solar-scaled MIST, do NOT follow α). Verified in-app: Sun [Fe/H]=0 + cool giant Teff 3961/[Fe/H]−0.5
+overlay; hot 27613 K + cool-dwarf 3324 K/logg 5 + [Fe/H]+0.5 all fall back with their notes; WD/WR
+(mass 60)/SN (mass 25) endgame modes hide the row; toggle-OFF returns cleanly to the standard
+spectrum; 390 px phone width no overflow. **Widen [Fe/H] later = pure data re-bake** (the runtime
+gate follows automatically).
 See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the

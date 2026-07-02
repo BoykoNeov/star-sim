@@ -115,9 +115,40 @@ const WR_LINES = [
   { lam: 6560, label: "He II" },          // Pickering (blends with Hα)
 ];
 
+// --- [α/Fe] enhancement overlay (atlas Tier B, whirling-cohort-atlas.md) -----
+// A spectrum-only "what-if": the α-rich thick-disk/halo subpopulation. When the toggle
+// is on we plot TWO Coelho-2014 model spectra from /alpha_spectrum — solar-scaled
+// (α = 0) vs α-enhanced (α = +0.4) — so the GAP between them is the lesson. Both come
+// from the SAME atmosphere code (never Coelho-α beside a CAP18-solar one — the code
+// seam would masquerade as the α signal; the load-bearing rule). MIST evolution is
+// solar-scaled, so this is a hypothesis about the SPECTRUM only: the HR track and the
+// composition panel do not follow [α/Fe] (the caption says so).
+const COL_ALPHA = "#ff9e64";                 // coral — the α = +0.4 overlay curve + guides
+const COL_ALPHA_GUIDE = "rgba(255,158,100,0.5)";
+// The honest α-domain, measured (Gate-1 depths + the loci fidelity spot-check):
+//   • α metal-line deepening washes out above ~9000 K (marginal at A, dead ≥12 kK).
+//   • Below 3800 K Coelho computed only GIANT gravities (log g ≤ 1.0); a cool DWARF
+//     there would clamp-fill a giant spectrum, so gate it off (giants stay valid).
+//   • The [Fe/H] window is enforced at runtime from the response's clamped `feh`
+//     (the MVP cube is [Fe/H] {−0.5, 0}; this auto-widens when the cube is re-baked).
+const ALPHA_TEFF_MAX = 9000;                 // hotter → hand off to the main cube
+const ALPHA_COOL_TEFF = 3800;                // below this, only giants are real
+const ALPHA_COOL_MAX_LOGG = 1.0;             // …so a cool dwarf (higher log g) is gated off
+// The α-sensitive absorption lines to guide (coral), plus the odd-Z Na D CONTROL that
+// moves the OPPOSITE way (shallower with α — the anti-normalization-artifact check).
+const ALPHA_LINES = [
+  { lam: 3933, label: "Ca K" },       // Ca II K — α (Ca) deepens
+  { lam: 4227, label: "Ca I" },       // Ca I 4227 — strong α deepening at cool Teff
+  { lam: 5175, label: "Mg b" },       // Mg b triplet — the classic α indicator
+  { lam: 5893, label: "Na D", control: true },  // odd-Z control: goes the OTHER way
+  { lam: 8542, label: "Ca II" },      // Ca II triplet — the giant α indicator
+];
+
 export function createSpectrum({ api }) {
   const canvas = document.getElementById("spectrum-canvas");
   const caption = document.getElementById("spectrum-caption");
+  const alphaToggle = document.getElementById("alpha-toggle");
+  const alphaToggleRow = document.getElementById("alpha-toggle-row");
   if (!canvas) return { update() {}, resize() {} };
 
   // W/H are `let` so resize() can re-fit to a new display width; draw() rebuilds
@@ -129,6 +160,14 @@ export function createSpectrum({ api }) {
   let lastKey = null;     // dedup: skip a refetch if (Teff,logg,feh) didn't move
   let vRot = 0;           // marker's surface rotation (km/s) — drives v sin i broadening
   let broadenedMemo = null;   // {src, v, flux} — cache so resize() doesn't reconvolve
+  // [α/Fe] enhancement (spectrum-only what-if). `alphaOn` is the user's persisted TOGGLE
+  // INTENT (kept across mass/age/[Fe/H] changes, like main.js's rotationOn); `lastState`
+  // lets the toggle re-render the current star without a caller round-trip; `alphaOffNote`
+  // carries the honest reason when α is enabled but off its domain (hot / cool dwarf /
+  // outside the α grid's [Fe/H]) so we fell back to the standard spectrum.
+  let alphaOn = false;
+  let lastState = null;
+  let alphaOffNote = null;
   // A caller-supplied placeholder message (the WD endgame: log g 7–9 is off the
   // main-sequence atmosphere grid, and the central-star rows would silently return a
   // wrong lower-gravity spectrum, so we draw an honest "no model yet" frame instead of
@@ -164,31 +203,118 @@ export function createSpectrum({ api }) {
     }
   }
 
+  // The [α/Fe] overlay: fetch BOTH Coelho spectra (α = 0 and α = +0.4) under ONE token
+  // (Promise.all, then a single latest-wins check) and draw them together. If the star's
+  // [Fe/H] falls outside the α cube's range the backend clamps it, so the returned `feh`
+  // diverges from the request — an honest edge: rather than plot an α comparison at the
+  // wrong metallicity we drop back to the standard main cube with a note. (This reads the
+  // clamp from the response, so it auto-widens when the cube is re-baked to more [Fe/H].)
+  async function fetchAlpha(teff, logg, feh) {
+    const mine = ++token;
+    try {
+      const q = `teff=${teff}&logg=${logg}&feh=${feh}`;
+      const [r0, r4] = await Promise.all([
+        fetch(`${api}/alpha_spectrum?${q}&afe=0`),
+        fetch(`${api}/alpha_spectrum?${q}&afe=0.4`),
+      ]);
+      if (!r0.ok || !r4.ok) throw new Error(`/alpha_spectrum -> ${r0.status}/${r4.status}`);
+      const [d0, d4] = await Promise.all([r0.json(), r4.json()]);
+      if (mine !== token) return;   // a newer star superseded this one
+      if (Math.abs((d0.feh ?? feh) - feh) > 0.05) {
+        // Off the α grid's [Fe/H] window → fall back honestly. fetchSpectrum takes the
+        // newest token, so latest-wins still holds through the chained fetch.
+        alphaOffNote =
+          `[α/Fe] comparison isn't available at [Fe/H] ${feh.toFixed(2)} ` +
+          `(outside the α grid's metallicity range) — showing the standard spectrum.`;
+        fetchSpectrum(teff, logg, feh);
+        return;
+      }
+      data = {
+        isAlpha: true,
+        wavelength: d0.wavelength,
+        flux0: d0.flux,          // α = 0 (solar-scaled) baseline
+        flux4: d4.flux,          // α = +0.4 (α-rich) overlay
+        teff: d0.teff, logg: d0.logg, feh: d0.feh, afe: d4.afe,
+        teff_requested: d0.teff_requested, teff_max: d0.teff_max,
+      };
+      alphaOffNote = null;
+      draw();
+      renderCaption();
+    } catch {
+      if (mine !== token) return;
+      if (!data && caption) {
+        caption.textContent =
+          "[α/Fe] spectrum unavailable — the Coelho α grid may not be baked yet " +
+          "(python -m star_sim.fetch_coelho; python scripts/bake_alpha_spectra.py).";
+      }
+    }
+  }
+
   // Consume the live StellarState: read the three numbers the spectrum depends on
   // and refetch (debounced). Dedup on a rounded key so an age scrub that doesn't
   // actually move Teff/log g won't hammer the endpoint.
-  function update(state) {
+  // Whether the [α/Fe] overlay is honest for this (Teff, log g): the metal-line deepening
+  // is visible only up to ALPHA_TEFF_MAX (it washes out hotter), and the Coelho grid has
+  // no cool-DWARF models below ALPHA_COOL_TEFF (only giants there). Off this domain we
+  // fall back to the standard spectrum. (The [Fe/H] window is enforced separately, at
+  // runtime, from the response's clamped feh — see fetchAlpha.)
+  function alphaTeffLoggOk(teff, logg) {
+    if (teff > ALPHA_TEFF_MAX) return false;                                  // hot: α dead
+    if (teff < ALPHA_COOL_TEFF && logg > ALPHA_COOL_MAX_LOGG) return false;   // cool dwarf
+    return true;
+  }
+
+  // `opts.endgame` marks a WD/WR/SN endgame render (e.g. the WD cooling scrub's opening
+  // TPAGB-giant rows, which still have a real MAIN-cube spectrum and so come through here,
+  // NOT updateWD). The α "what-if" is a LIVING-star control, so we hide its toggle and
+  // never draw the overlay in an endgame — the plain spectrum only.
+  function update(state, opts) {
     if (!state) return;
     placeholderMsg = null;   // a live star supersedes any endgame placeholder
+    const inEndgame = !!(opts && opts.endgame);
+    if (alphaToggleRow) alphaToggleRow.hidden = inEndgame;
+    lastState = inEndgame ? null : state;   // the α toggle must not re-render an endgame state
     const teff = state.Teff_K, logg = state.logg, feh = state.feh_init;
     if (teff == null || logg == null) return;
     const newV = state.v_rot_kms ?? 0;
-    const key = `${Math.round(teff)}|${logg.toFixed(2)}|${(feh ?? 0).toFixed(2)}`;
+    const useAlpha = alphaOn && !inEndgame;
+    // The key includes the α/endgame path so flipping the toggle (or entering an endgame at
+    // the same Teff/log g) always refetches — the α overlay and the main cube are different
+    // requests, never a stale dedup-skip.
+    const key = `${useAlpha ? "a" : ""}${inEndgame ? "e" : ""}` +
+      `${Math.round(teff)}|${logg.toFixed(2)}|${(feh ?? 0).toFixed(2)}`;
     if (key === lastKey) {
       // Same model atmosphere — but the marker's rotation may have moved (a rotation
       // toggle, or scrubbing along the track as the star spins down). Re-broaden the
       // cached spectrum and redraw, NO refetch (v sin i is a pure client-side post-
-      // process). Only the live absorption cube reacts; a WD/WR frame ignores it.
+      // process). Only the live absorption cube reacts; a WD/WR/α frame ignores it.
       if (Math.abs(newV - vRot) > 0.5) {
         vRot = newV;
-        if (data && !data.isWD && !data.isWR) { draw(); renderCaption(); }
+        if (data && !data.isWD && !data.isWR && !data.isAlpha) { draw(); renderCaption(); }
       }
       return;
     }
     vRot = newV;
     lastKey = key;
     if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => fetchSpectrum(teff, logg, feh ?? 0), 90);
+    debounce = setTimeout(() => dispatch(teff, logg, feh ?? 0, useAlpha), 90);
+  }
+
+  // Route the fetch: the [α/Fe] overlay cube when α-mode applies (on, and not in an endgame)
+  // AND the star is in the honest (Teff, log g) domain; else the standard main cube —
+  // recording WHY α was skipped (alphaOffNote) so the caption stays honest instead of
+  // silently dropping it.
+  function dispatch(teff, logg, feh, useAlpha) {
+    if (useAlpha && alphaTeffLoggOk(teff, logg)) {
+      alphaOffNote = null;
+      fetchAlpha(teff, logg, feh);
+    } else {
+      alphaOffNote = !useAlpha ? null
+        : teff > ALPHA_TEFF_MAX
+          ? `[α/Fe] metal-line enhancement washes out above ~${ALPHA_TEFF_MAX} K — showing the standard spectrum.`
+          : `the [α/Fe] grid has no cool-dwarf models below ~${ALPHA_COOL_TEFF} K (only giants there) — showing the standard spectrum.`;
+      fetchSpectrum(teff, logg, feh);
+    }
   }
 
   // The WD endgame's white-dwarf spectrum: a SECOND backend cube (Koester DA, log g
@@ -223,6 +349,7 @@ export function createSpectrum({ api }) {
   function updateWD(state) {
     if (!state) return;
     placeholderMsg = null;
+    if (alphaToggleRow) alphaToggleRow.hidden = true;   // the α main-cube what-if doesn't apply to a WD
     const teff = state.Teff_K, logg = state.logg;
     if (teff == null || logg == null) return;
     // A distinct key prefix from update()'s, so switching between cubes always
@@ -268,6 +395,7 @@ export function createSpectrum({ api }) {
   function updateWR(state) {
     if (!state) return;
     placeholderMsg = null;
+    if (alphaToggleRow) alphaToggleRow.hidden = true;   // …nor to a WR wind-emission spectrum
     const teff = state.Teff_K, lum = state.L_lsun;
     if (teff == null || lum == null) return;
     const xs = state.X_surf ?? 0, ys = state.Y_surf ?? 0, zs = state.Z_surf ?? 0;
@@ -286,6 +414,7 @@ export function createSpectrum({ api }) {
   // later live update() re-enables fetching.
   function showPlaceholder(msg) {
     token++;
+    if (alphaToggleRow) alphaToggleRow.hidden = true;   // …nor to a placeholder regime (the SN ejecta)
     placeholderMsg = msg || "No spectral model for this regime yet.";
     lastKey = null;
     draw();
@@ -365,6 +494,7 @@ export function createSpectrum({ api }) {
     // frame; otherwise the wind-emission render (lines UP, not absorption notches).
     if (data.isWR && data.off_grid) { drawNoModel(); return; }
     if (data.isWR) { drawWR(); return; }
+    if (data.isAlpha) { drawAlpha(); return; }   // the [α/Fe] two-curve overlay
 
     const lam = data.wavelength, flux = mainFlux();
     const n = lam.length;
@@ -492,6 +622,94 @@ export function createSpectrum({ api }) {
     for (const v of [0, 0.5, 1]) {
       const y = H - PAD_B - v * (H - PAD_T - PAD_B);
       ctx.fillText(v.toFixed(1), PAD_L - 5, y + 4);
+    }
+    ctx.textAlign = "left";
+  }
+
+  // The [α/Fe] overlay render: two Coelho spectra on the same rainbow-shaded panel. The
+  // α = 0 (solar-scaled) curve is the shaded white baseline — the star's own composition;
+  // the α = +0.4 (α-rich) curve is the coral line over it. Where α deepens a metal line the
+  // coral dips BELOW the white; at Na D (the odd-Z control) it rides ABOVE. Each curve is
+  // normalized to its OWN peak (continua align at 1), so the vertical gap reads as the
+  // line-DEPTH difference — the α signal — not an overall flux offset (measured: this
+  // preserves both the Ca/Mg deepening and the Na-D-opposite control).
+  function drawAlpha() {
+    const lam = data.wavelength, f0 = data.flux0, f4 = data.flux4;
+    const n = lam.length;
+    const lamLo = lam[0], lamHi = lam[n - 1];
+    let m0 = 0, m4 = 0;
+    for (let i = 0; i < n; i++) { if (f0[i] > m0) m0 = f0[i]; if (f4[i] > m4) m4 = f4[i]; }
+    if (!(m0 > 0)) m0 = 1;
+    if (!(m4 > 0)) m4 = 1;
+
+    const xOf = (l) => PAD_L + (l - lamLo) / (lamHi - lamLo) * (W - PAD_L - PAD_R);
+    const yOf = (v) => H - PAD_B - v * (H - PAD_T - PAD_B);   // v is already normalized to [0,1]
+    const yAxis = H - PAD_B;
+
+    // 1) shade under the α = 0 baseline — spectral colour inside the visible band, muted
+    //    grey outside; the coral overlay's deeper troughs then read against this reference.
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]);
+      const w = i + 1 < n ? xOf(lam[i + 1]) - x + 1 : 1.5;
+      const yTop = yOf(f0[i] / m0);
+      if (lam[i] >= VIS_LO && lam[i] <= VIS_HI) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = wavelengthToCSS(lam[i] / 10);
+      } else {
+        ctx.globalAlpha = 0.14;
+        ctx.fillStyle = "#9aa6bd";
+      }
+      ctx.fillRect(x, yTop, w, yAxis - yTop);
+    }
+    ctx.globalAlpha = 1;
+
+    drawAlphaGuides(xOf, lamLo, lamHi);
+
+    // 2) α = 0 baseline (white), then α = +0.4 (coral) on top so its deeper metal troughs
+    //    stand out against the solar-scaled reference.
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]), y = yOf(f0[i] / m0);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.1; ctx.stroke();
+
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = xOf(lam[i]), y = yOf(f4[i] / m4);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = COL_ALPHA; ctx.lineWidth = 1.3; ctx.stroke();
+
+    // 3) a small in-panel key (bottom-right, usually empty for the red end) so white vs
+    //    coral is unambiguous without reading the caption.
+    ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "right";
+    ctx.fillStyle = COL_CURVE; ctx.fillText("α = 0 (solar-scaled)", W - PAD_R - 6, H - PAD_B - 16);
+    ctx.fillStyle = COL_ALPHA; ctx.fillText("α = +0.4 (α-rich)", W - PAD_R - 6, H - PAD_B - 4);
+    ctx.textAlign = "left";
+
+    drawFrameAndAxes(xOf, lamLo, lamHi);
+  }
+
+  // The α-sensitive line guides (coral): the Ca / Mg deepeners + the Na D odd-Z CONTROL
+  // (marked ↓ because it moves the OPPOSITE way). "Watch these features."
+  function drawAlphaGuides(xOf, lamLo, lamHi) {
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 1;
+    let lastLabelX = -1e9;
+    for (const ln of ALPHA_LINES) {
+      if (ln.lam <= lamLo || ln.lam >= lamHi) continue;
+      const x = xOf(ln.lam);
+      ctx.strokeStyle = COL_ALPHA_GUIDE;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, H - PAD_B); ctx.stroke();
+      ctx.setLineDash([]);
+      if (x - lastLabelX >= 26) {
+        ctx.fillStyle = "#ffc79e";
+        ctx.fillText(ln.control ? ln.label + " ↓" : ln.label, x, PAD_T - 4);
+        lastLabelX = x;
+      }
     }
     ctx.textAlign = "left";
   }
@@ -673,6 +891,20 @@ export function createSpectrum({ api }) {
           `model atmosphere (${Math.round(data.teff_max)} K) — no spectrum to show.`;
       return;
     }
+    // The [α/Fe] overlay: the two-curve what-if. HONEST that it is spectrum-only — the
+    // track and composition panel are solar-scaled MIST and do not follow [α/Fe] — and
+    // names the Na-D-opposite control that makes the α signal trustworthy (not a scaling).
+    if (data.isAlpha) {
+      const t = Math.round(data.teff), g = Number(data.logg).toFixed(2);
+      caption.textContent =
+        `[α/Fe] what-if · Teff ${t} K · log g ${g} · [Fe/H] ${Number(data.feh).toFixed(2)} — ` +
+        `comparing solar-scaled (α = 0, white) with α-enhanced (α = +0.4, coral) model ` +
+        `spectra (Coelho 2014). An α-rich thick-disk / halo star shows DEEPER Ca, Mg and ` +
+        `Ti lines; Na D (an odd-Z element, not an α-element) moves the opposite way — a ` +
+        `control that this is real line chemistry, not a scaling shift. Spectrum-only: the ` +
+        `HR track and composition panel are solar-scaled and do NOT follow [α/Fe].`;
+      return;
+    }
     // The WR endgame: PoWR wind-emission spectra. The caption is HONEST about the
     // assumption-mapping (advisor): the deep temperature is mapped (Teff→T*) and the
     // wind density is a Nugis-Lamers estimate (→Rt), NOT a fit — and off the cool WNh
@@ -735,6 +967,9 @@ export function createSpectrum({ api }) {
         "Doppler-broadens the absorption lines (shallower & wider); this is the maximum " +
         "projection, at lower inclination they'd be sharper.";
     }
+    // The α toggle is on but this star is off its honest domain (hot / cool dwarf / off the
+    // α grid's [Fe/H]) — say why the overlay isn't shown, rather than silently dropping it.
+    if (alphaOffNote) txt += " · " + alphaOffNote;
     caption.textContent = txt;
   }
 
@@ -745,6 +980,17 @@ export function createSpectrum({ api }) {
     ({ ctx, W, H } = fitCanvas(canvas, cssW2, cssH2));
     draw();
     renderCaption();
+  }
+
+  // The [α/Fe] toggle (spectrum-only what-if). Flipping it forces a refetch of the current
+  // star onto the right cube (lastKey cleared so the dedup can't skip it); `alphaOn` then
+  // persists across mass/age/[Fe/H] changes, like main.js's rotationOn intent.
+  if (alphaToggle) {
+    alphaToggle.addEventListener("change", () => {
+      alphaOn = alphaToggle.checked;
+      lastKey = null;
+      if (lastState) update(lastState);
+    });
   }
 
   return { update, updateWD, updateWR, showPlaceholder, resize };
