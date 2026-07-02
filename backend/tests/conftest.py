@@ -9,6 +9,8 @@ A fresh checkout won't have them, so MIST-dependent tests must *skip*, not fail.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
@@ -328,4 +330,29 @@ requires_structure_multifeh = pytest.mark.skipif(
 requires_structure_transitional = pytest.mark.skipif(
     not structure_transitional_available(),
     reason="no transitional MESA profile slice (~1.3 M☉) — see backend/docs/mesa_structure_recipe.md §13",
+)
+
+
+def gotberg_seds_available() -> bool:
+    """True if the Götberg stripped-star SEDs (VizieR, gitignored) are on disk.
+
+    The *parameter table* is committed to the repo (star_sim/data/gotberg_z014.csv), so
+    the binary sibling's parse/snap/validity tests always run. Only the SED-consistency
+    regression — the check that the LLM-transcribed table matches the ground-truth SEDs
+    to ≤0.07 dex — reads the gitignored spectra tree, so it skips until those are fetched
+    (browser-past-Anubis VizieR tarball → data/gotberg_stripped/, see
+    docs/plans/stripped-consort-unveiling.md)."""
+    import glob
+
+    from star_sim.binary import GOTBERG_SOLAR_Z  # noqa: F401 (import-guard the package)
+
+    _REPO_ROOT = Path(__file__).resolve().parents[2]
+    grid = _REPO_ROOT / "data" / "gotberg_stripped" / "grid_014"
+    return len(glob.glob(str(grid / "**" / "SED.txt"), recursive=True)) > 0
+
+
+requires_gotberg_data = pytest.mark.skipif(
+    not gotberg_seds_available(),
+    reason="Götberg stripped-star SEDs not present — host-fetch the VizieR tarball "
+    "into data/gotberg_stripped/ (see docs/plans/stripped-consort-unveiling.md)",
 )

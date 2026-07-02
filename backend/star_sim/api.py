@@ -31,6 +31,7 @@ from .spectra import (
     wd_spectrum_data,
     wr_spectrum_data,
 )
+from .binary import BinaryDataMissing, stripped_star_payload
 from .structure import StructureDataMissing, interior_structure
 from .supernova import Progenitor, supernova_model
 from .providers import MISTProvider
@@ -337,6 +338,35 @@ def structure(
     try:
         return interior_structure(mass, feh, age)
     except StructureDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/binary")
+def binary(
+    mass: float = Query(..., gt=0.0, description="progenitor initial mass / M_sun"),
+    feh: float = Query(0.0, description="initial [Fe/H]"),
+) -> dict:
+    """(progenitor mass, [Fe/H]) -> the hot He-star it becomes if stripped in a close
+    binary — the ~70% binary WR/subdwarf channel (docs/plans/stripped-consort-unveiling.md).
+
+    Like `/polytrope`, `/structure` and `/supernova`, this does **not** go through
+    `PROVIDER`: a binary product cannot pass through the single-star `StellarState`
+    interface (§3). It is a sibling — `binary.py` reads the committed Götberg 2018
+    stripped-star table, **snaps** to the nearest grid model in (Z, initial mass) — never
+    interpolates (§6) — and returns a `StellarState` (exact §3 shape, under `state`, for
+    the existing 3D/HR/comp/spectrum consumers) plus routing scalars: the CURRENT stripped
+    mass `M_strip` (which has no home on the state), the true snapped `M_init`/Z, and the
+    eligible progenitor-mass range + snapped-far flags the frontend gates its stripped-mode
+    toggle and caption on.
+
+    Snap-always (like `/structure`): an out-of-grid request snaps to the nearest node and
+    is flagged in-band (`mass_snapped_far` / `feh_snapped_far`) rather than 422'd — the
+    hide-below-2 / note-above-18.2 UX decision is the frontend's, reading those flags. 422
+    is reserved for structurally invalid input (mass ≤ 0, enforced by the Query bound); a
+    missing committed table (should never happen) → 503."""
+    try:
+        return stripped_star_payload(mass, feh)
+    except BinaryDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

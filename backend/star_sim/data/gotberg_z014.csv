@@ -1,0 +1,58 @@
+# Götberg, Justham, de Mink et al. 2018, A&A 615, A78 — stripped-star grid, Z=0.014 (~solar, [Fe/H]≈0).
+#
+# The single hot, He-rich core a close binary companion exposes by Case-B Roche-lobe
+# overflow (the ~70% binary channel for stripped/WR stars). One representative state per
+# stripped star: "halfway through core-He burning" (X_He,c=0.5), the long-lived stage.
+#
+# PROVENANCE (two-source, see docs/plans/stripped-consort-unveiling.md):
+#   - The spectra/SEDs live on VizieR (CDS J/A+A/615/A78), gitignored under
+#     data/gotberg_stripped/. This table does NOT come from there.
+#   - These structural parameters are the PAPER's Table 1 (Z=0.014), transcribed from
+#     ar5iv. The transcription is LLM-summarized, so it was VERIFIED against the on-disk
+#     SEDs (ground-truth flux at 1 kpc): table logL vs SED-integrated logL, Stefan-
+#     Boltzmann L(Teff,R) vs SED logL, and logg vs (Mstrip,R). ALL 23 ROWS PASS,
+#     max |Δ| = 0.070 dex. The check is now a durable regression: test_binary.py
+#     ::test_table_matches_seds (gated requires_gotberg_data). Do not edit a row without
+#     re-running it.
+#
+# COLUMN NOTES (the two gotchas baked into binary.py, not this file):
+#   - Teff_kK / R_eff are the self-consistent spectroscopic Stefan-Boltzmann pair that
+#     place the star on the HR. They are NOT T_star (the inner hydrostatic/evolutionary
+#     temperature), which differs for a star with a wind — feeding T_star would misplace
+#     the marker (the evolutionary-vs-spectroscopic Teff gap, cf. WR spectra Chunk 7a).
+#   - X_H / X_He are rounded to 2 dp (so X_H+X_He rounds to 1.00). binary.py takes
+#     Z_surf = the grid Z (0.014), NOT 1−X_H−X_He, and renormalizes the (X_H, X_He) pair
+#     to close at 1−Z. The He-rich surface (Y_surf ≳ 0.7 at high mass) is the headline.
+#
+# M_init : progenitor initial mass / M_sun  (the slider's meaning — "what a star of this
+#          mass becomes if stripped by a close companion")
+# M_strip: the stripped star's CURRENT mass / M_sun  (rides as a routing scalar, not on
+#          StellarState, which has only mass_init)
+# Teff_kK: effective temperature / 1000 K       logL: log10(L / L_sun)
+# logg   : log10 surface gravity, cgs           R_eff: radius / R_sun
+# X_H, X_He: surface hydrogen / helium mass fractions (rounded; renormalized in binary.py)
+#
+# M_init,M_strip,Teff_kK,logL,logg,R_eff,X_H,X_He
+2.0,0.35,20.4,0.6,5.58,0.16,1.0,0.0
+2.21,0.38,22.5,0.8,5.54,0.17,1.0,0.0
+2.44,0.44,25.6,1.1,5.54,0.19,1.0,0.0
+2.7,0.51,28.2,1.4,5.49,0.21,0.96,0.04
+2.99,0.58,30.9,1.6,5.48,0.23,0.96,0.04
+3.3,0.66,33.6,1.9,5.45,0.25,0.96,0.04
+3.65,0.74,36.7,2.0,5.48,0.26,0.49,0.5
+4.04,0.85,39.5,2.3,5.45,0.29,0.46,0.54
+4.46,0.97,41.9,2.5,5.4,0.32,0.46,0.53
+4.93,1.11,44.6,2.7,5.37,0.36,0.42,0.57
+5.45,1.27,47.5,2.9,5.34,0.4,0.36,0.63
+6.03,1.43,50.8,3.0,5.35,0.42,0.29,0.7
+6.66,1.63,54.1,3.2,5.33,0.46,0.28,0.71
+7.37,1.88,57.5,3.4,5.31,0.5,0.25,0.73
+8.15,2.17,61.6,3.6,5.3,0.55,0.23,0.75
+9.0,2.49,65.5,3.8,5.29,0.59,0.23,0.76
+9.96,2.87,69.1,3.9,5.27,0.65,0.23,0.76
+11.01,3.32,73.7,4.1,5.27,0.7,0.22,0.77
+12.17,3.85,78.3,4.3,5.27,0.76,0.21,0.78
+13.45,4.45,83.4,4.4,5.28,0.8,0.2,0.79
+14.87,5.12,88.8,4.6,5.3,0.84,0.18,0.81
+16.44,5.88,94.6,4.7,5.33,0.87,0.16,0.83
+18.17,6.72,101.3,4.9,5.37,0.88,0.12,0.87

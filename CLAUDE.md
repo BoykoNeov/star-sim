@@ -44,9 +44,12 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   sibling), `structure.py` (the **real interior-structure** sibling — offline MESA
   radial `profile.data` snapshots behind `/structure`; the honest successor to
   Lane–Emden, its own MESA-profile parser, snaps (mass,[Fe/H],age) to the nearest
-  saved snapshot, never imports a provider), `api.py` (FastAPI, the swap point; also
-  hosts `/polytrope`, `/structure` and `/spectrum`, the routes that do NOT go through
-  `PROVIDER`).
+  saved snapshot, never imports a provider), `binary.py` (the **binary-stripped-star**
+  sibling behind `/binary` — the hot He-star a companion strips, Götberg 2018; its own
+  CSV parser over the *committed* `star_sim/data/gotberg_z014.csv`, snaps (Z,Minit),
+  never imports a provider — the ~70% WR channel, path (a)), `api.py` (FastAPI, the swap
+  point; also hosts `/polytrope`, `/structure`, `/spectrum` and `/binary`, the routes
+  that do NOT go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
@@ -318,6 +321,27 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `hr.js` violet failed-SN banner; readout "% fell back" + "direct collapse"; classify/SED branch on `failed`. 220 pytest,
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
+### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **Chunk 1 BUILT (backend vertical, solar-first).** The hot He-rich core a close companion
+  exposes by Case-B Roche-lobe overflow (Götberg+2018) — the dominant observed stripped/WR
+  channel, retiring the single-star-WR "minority channel" caveat. It's the first build from
+  the atlas Tier-D **binarity** item, **path (a)** (the stripped endpoint; path (b) two-star
+  co-evolution deferred). A **sibling** (a binary product can't pass the single-star §3
+  interface): `binary.py` imports only `state.StellarState`, `/binary` bypasses `PROVIDER`,
+  exactly like `supernova.py`/`structure.py`. `backend/star_sim/data/gotberg_z014.csv` is the
+  **committed** Z=0.014 table (23 rows, SED-verified ≤0.07 dex; only the spectra stay
+  gitignored under `data/gotberg_stripped/`). `stripped_star(mass, feh)` **snaps** (Z, Minit)
+  → nearest node (never interpolates, §6) → a `StrippedStar` = the §3-clean `StellarState` +
+  routing scalars (`m_strip_msun` [CURRENT mass — no home on the state], snapped m_init/Z,
+  `*_snapped_far` flags, `mass_grid_min/max`). Route is **snap-always** (out-of-grid flagged
+  in-band, 422 only for mass≤0). **Gotchas baked in:** Teff/Reff not T★; `Z_surf`=grid Z with
+  (X_H,X_He) renormalized to 1−Z; `mdot=None` + no lifetime (not in the 8-col table). The
+  **visibility gate keys Teff+Y_surf only, NEVER L** (advisor catch: L flips sign across the
+  grid — M_strip≪M_init). 266 pytest (12 new in `test_binary.py`; `requires_gotberg_data`
+  guards the SED regression). Adding the 3 non-solar Z tables = drop a CSV + one `_GRID_TABLES`
+  tuple. **Next = Chunk 2** (frontend what-if `stripped-mode`). [[star-sim-binary-stripped]];
+  plan `docs/plans/stripped-consort-unveiling.md`.
+
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
   bracket. Non-thermal overlay: a cool-star coronal X-ray band + Güdel–Benz radio
@@ -443,7 +467,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **238 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **266 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The §10 anchors are the regression gate (Sun: L≈1.07,
   Teff≈5834 K at 4.6 Gyr). The rotating axis now has its own within-bucket [Fe/H]
   interpolation tests (lies-between + held-out accuracy at vvcrit=0.4), mirroring the
