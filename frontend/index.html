@@ -312,6 +312,26 @@
     <section class="panel spectrum-panel" data-panel-id="spectrum">
       <h2>Spectrum <span class="help" tabindex="0" data-tip="The star's synthetic spectrum — flux versus wavelength, with real absorption lines — for the current effective temperature, surface gravity and metallicity. This is the spectrum the 3D star's single colour is the eye's average of: integrate this curve against the eye's response and you get that one pixel. Interpolated from a grid of model-atmosphere spectra (MSG / Townsend) baked once into the backend. The visible band (3800–7800 Å) is painted in its true per-wavelength colour, so you see a spectrograph's rainbow with dark absorption lines notched into it; the ultraviolet and near-infrared flanks are shown muted grey. Flux is normalized to each spectrum's own peak — the absolute brightness (which varies thousands-fold from cool to hot stars) lives in the 3D star and the luminosity readout; here the story is the CONTINUUM SLOPE (hot stars rise toward the blue, cool stars toward the red) and the LINES. Watch the hydrogen Balmer lines (Hα, Hβ, …) deepen to a maximum around A-type stars (~9500 K) and fade in both hotter and cooler stars, while the Ca II H&K and Na D lines are strong in cool stars and vanish when hot. In the hottest stars the helium lines take over — neutral He I (4471 Å) in B and A stars, and singly-ionized He II (4686 Å) only in O stars (above ~30000 K, where the spectra come from the OSTAR2002 hot-star grid spliced onto the high-temperature end); their cool-blue guides appear only once the star is hot enough to show them. At the cool end the reverse happens: below ~4000 K the gas is cool enough for molecules, and titanium-oxide (TiO) bands carve broad troughs across the optical spectrum, with vanadium oxide (VO) joining in the coolest M stars — these bands deepen fast as the star cools, so the spectra below 3500 K come from the Göttingen/PHOENIX grid spliced onto the LOW-temperature end (the coolest M-dwarfs and red-giant tips, ~2800 K, then show real molecular bands rather than a frozen 3500 K spectrum); their warm-tinted guides appear only once the star is cool enough. The dashed gold line is the Wien peak (the blackbody's brightest wavelength), shown when it falls in range.">?</span></h2>
       <canvas id="spectrum-canvas"></canvas>
+      <!-- Zoom / detail sub-band view. The baked grid is served at its NATIVE resolution
+           (3000–9000 Å in 2.5 Å bins, R≈2400); across the full-panel width a 2.5 Å bin is
+           sub-pixel, so the fine line structure is invisibly squashed. These preset bands
+           reframe the x-axis onto a narrow window — a pure client-side reframe of the SAME
+           served data, no refetch — so the individual line cores (and the grid's actual
+           sample points, marked as dots) become visible. This is the honest prerequisite
+           for ever deciding a finer bake is worthwhile: you can only see whether higher R
+           would help once the native sampling is on-screen. Owned by spectrum.js (by id);
+           shown for the living-star + [α/Fe] spectra, hidden (and reset to Full) in the
+           WD/WR/SN endgames, whose cubes cover different wavelength ranges. -->
+      <div class="spectrum-zoom" id="spectrum-zoom" role="group" aria-label="Spectrum detail band">
+        <span class="zoom-label">Zoom</span>
+        <button type="button" class="mode-btn active" data-lo="" data-hi="">Full</button>
+        <button type="button" class="mode-btn" data-lo="3880" data-hi="4030">Ca H&amp;K</button>
+        <button type="button" class="mode-btn" data-lo="5100" data-hi="5250">Mg b</button>
+        <button type="button" class="mode-btn" data-lo="5840" data-hi="5945">Na D</button>
+        <button type="button" class="mode-btn" data-lo="6480" data-hi="6640">Hα</button>
+        <button type="button" class="mode-btn" data-lo="4620" data-hi="4740">He 4686</button>
+        <span class="help" tabindex="0" data-tip="Zoom into a narrow wavelength band. The spectra are baked at the model grid's native resolution — 2.5 Å per sample (a resolving power R = λ/Δλ that runs from about 1200 in the blue to 3600 in the red) — but stretched across the whole panel a single 2.5 Å sample is thinner than a pixel, so the detailed line shapes are squashed to invisibility. Pick a band and the panel reframes onto that ~120–150 Å window (the same data, no refetch); now each sample is ~11 pixels wide, marked as a dot, and the individual line cores resolve. Ca II H (3968 Å) and K (3933 Å) split into two separate lines; the Mg b region shows the triplet against the continuum; Na D is a close doublet right at the sampling limit; Hα shows its broad pressure-broadened wings; He 4686 lights up only in the hottest O stars. This is where you can judge whether a finer (higher-resolution) bake would actually reveal more — the whole point of the view.">?</span>
+      </div>
       <!-- [α/Fe] enhancement (atlas Tier B, whirling-cohort-atlas.md): a spectrum-only
            "what-if" TOGGLE. It overlays two Coelho-2014 model spectra — solar-scaled
            (α = 0) vs α-enhanced (α = +0.4) — so the gap between them IS the lesson: a

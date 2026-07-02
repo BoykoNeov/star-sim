@@ -71,6 +71,7 @@ const LINES = [
   { lam: 4686, label: "He II", minTeff: 30000, col: COL_HE },  // ionized He — O stars (the OSTAR splice regime; below 30000 K it's ~continuum)
   { lam: 4861, label: "Hβ", balmer: true },
   { lam: 5167, label: "TiO", maxTeff: 4000, col: COL_MOL },    // TiO γ′ bandhead (near Mg b) — mid/late M
+  { lam: 5175, label: "Mg b", maxTeff: 8000 },                 // Mg b triplet (b1 5184/b2 5172/b4 5168) — solar/cool; gone in hot stars
   { lam: 5893, label: "Na D" },
   { lam: 6159, label: "TiO", maxTeff: 4300, col: COL_MOL },    // TiO γ bandhead — late K / M onward
   { lam: 6563, label: "Hα", balmer: true },
@@ -149,6 +150,7 @@ export function createSpectrum({ api }) {
   const caption = document.getElementById("spectrum-caption");
   const alphaToggle = document.getElementById("alpha-toggle");
   const alphaToggleRow = document.getElementById("alpha-toggle-row");
+  const zoomRow = document.getElementById("spectrum-zoom");
   if (!canvas) return { update() {}, resize() {} };
 
   // W/H are `let` so resize() can re-fit to a new display width; draw() rebuilds
@@ -182,6 +184,17 @@ export function createSpectrum({ api }) {
   // wrong lower-gravity spectrum, so we draw an honest "no model yet" frame instead of
   // fetching). Set by showPlaceholder(); cleared by the next live update().
   let placeholderMsg = null;
+
+  // --- zoom / detail sub-band view -------------------------------------------
+  // The baked grid is served at its native 2.5 Å sampling (R≈2400), but stretched over
+  // the whole panel a bin is sub-pixel, so the fine line structure is invisible. A band
+  // reframes the x-axis onto a ~120–150 Å window — a pure client-side reframe of the SAME
+  // served `data` (no refetch) — and the draw path marks the native sample points as dots
+  // so the grid's real density is on-screen. `viewBand` = {lo, hi} in Å, or null = full.
+  // Persisted across living-star mass/age/[Fe/H] changes (a view the user chose, like the
+  // α toggle); reset to Full on endgame entry (the WD/WR/SN cubes span other λ ranges).
+  let viewBand = null;
+  let viewBandLabel = null;
 
   // --- latest-wins + debounce (the lane.js idiom, on its OWN token) ----------
   let token = 0;
@@ -282,6 +295,11 @@ export function createSpectrum({ api }) {
     placeholderMsg = null;   // a live star supersedes any endgame placeholder
     const inEndgame = !!(opts && opts.endgame);
     if (alphaToggleRow) alphaToggleRow.hidden = inEndgame;
+    // The zoom presets belong to the living / α spectra; the endgame cubes span other λ
+    // ranges, so hide the row and drop back to Full there (a WD-giant row routes through
+    // here with opts.endgame set).
+    if (zoomRow) zoomRow.hidden = inEndgame;
+    if (inEndgame) resetZoom();
     lastState = inEndgame ? null : state;   // the α toggle must not re-render an endgame state
     const teff = state.Teff_K, logg = state.logg, feh = state.feh_init;
     if (teff == null || logg == null) return;
@@ -359,6 +377,7 @@ export function createSpectrum({ api }) {
     if (!state) return;
     placeholderMsg = null;
     if (alphaToggleRow) alphaToggleRow.hidden = true;   // the α main-cube what-if doesn't apply to a WD
+    if (zoomRow) zoomRow.hidden = true; resetZoom();     // …nor the main-cube zoom presets
     const teff = state.Teff_K, logg = state.logg;
     if (teff == null || logg == null) return;
     // A distinct key prefix from update()'s, so switching between cubes always
@@ -405,6 +424,7 @@ export function createSpectrum({ api }) {
     if (!state) return;
     placeholderMsg = null;
     if (alphaToggleRow) alphaToggleRow.hidden = true;   // …nor to a WR wind-emission spectrum
+    if (zoomRow) zoomRow.hidden = true; resetZoom();     // …nor the main-cube zoom presets
     const teff = state.Teff_K, lum = state.L_lsun;
     if (teff == null || lum == null) return;
     const xs = state.X_surf ?? 0, ys = state.Y_surf ?? 0, zs = state.Z_surf ?? 0;
@@ -424,6 +444,7 @@ export function createSpectrum({ api }) {
   function showPlaceholder(msg) {
     token++;
     if (alphaToggleRow) alphaToggleRow.hidden = true;   // …nor to a placeholder regime (the SN ejecta)
+    if (zoomRow) zoomRow.hidden = true; resetZoom();     // …nor the main-cube zoom presets
     placeholderMsg = msg || "No spectral model for this regime yet.";
     lastKey = null;
     draw();
@@ -494,6 +515,37 @@ export function createSpectrum({ api }) {
     return flux;
   }
 
+  // The wavelength window to frame: the selected band clamped to the served data's own
+  // range, or the full served range when no band is chosen (so full-view behaviour is
+  // byte-identical to before — the loop below spans every sample).
+  function viewWindow(lam) {
+    const lo0 = lam[0], hi0 = lam[lam.length - 1];
+    if (!viewBand) return [lo0, hi0];
+    return [Math.max(viewBand.lo, lo0), Math.min(viewBand.hi, hi0)];
+  }
+
+  // A round tick step (nm) for a zoomed window ~spanNm wide: the largest of a preset
+  // ladder that still yields ≥~2.5 intervals across the window.
+  function niceNmStep(spanNm) {
+    for (const s of [100, 50, 20, 10, 5, 2, 1]) if (spanNm / s >= 2.5) return s;
+    return 1;
+  }
+
+  // Mark the grid's native sample points as small dots — only when zoomed, where the
+  // ~11 px bin spacing makes them legible. This is the load-bearing honesty of the zoom
+  // view: a smooth polyline hides the 2.5 Å sampling, but the dots show exactly how finely
+  // the baked model is resolved, so one can judge whether a finer bake would reveal more.
+  // `yOfIndex(i)` returns the pixel y for sample i (each draw path has its own normalization).
+  function drawSamplePoints(xOf, lam, lamLo, lamHi, yOfIndex, color) {
+    ctx.fillStyle = color;
+    for (let i = 0; i < lam.length; i++) {
+      if (lam[i] < lamLo || lam[i] > lamHi) continue;
+      ctx.beginPath();
+      ctx.arc(xOf(lam[i]), yOfIndex(i), 1.4, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+
   // --- drawing ---------------------------------------------------------------
   function draw() {
     ctx.clearRect(0, 0, W, H);
@@ -508,19 +560,26 @@ export function createSpectrum({ api }) {
 
     const lam = data.wavelength, flux = mainFlux();
     const n = lam.length;
-    const lamLo = lam[0], lamHi = lam[n - 1];
+    const [lamLo, lamHi] = viewWindow(lam);
+    // fmax over the FRAMED window: for the full view this is the per-spectrum peak (as
+    // before); zoomed it is the local continuum, so a narrow band fills the panel
+    // vertically (its lines read against a continuum ≈ 1) instead of squashing to a sliver.
     let fmax = 0;
-    for (const v of flux) if (v > fmax) fmax = v;
+    for (let i = 0; i < n; i++) if (lam[i] >= lamLo && lam[i] <= lamHi && flux[i] > fmax) fmax = flux[i];
     if (!(fmax > 0)) fmax = 1;
 
     const xOf = (l) => PAD_L + (l - lamLo) / (lamHi - lamLo) * (W - PAD_L - PAD_R);
     const yOf = (f) => H - PAD_B - (f / fmax) * (H - PAD_T - PAD_B);
     const yAxis = H - PAD_B;
+    const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
 
     // 1) Shade the area under the curve. Each data point paints a thin column down
     //    to the axis: spectral colour inside the visible band, muted grey outside.
     //    The absorption lines (dips in the curve) therefore read as dark notches
-    //    cut into the rainbow continuum.
+    //    cut into the rainbow continuum. Clipped to the plot rect so samples outside
+    //    the zoom window don't spill columns over the axes/pads.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD_L, PAD_T, plotW, plotH); ctx.clip();
     for (let i = 0; i < n; i++) {
       const x = xOf(lam[i]);
       const w = i + 1 < n ? xOf(lam[i + 1]) - x + 1 : 1.5;
@@ -535,16 +594,23 @@ export function createSpectrum({ api }) {
       ctx.fillRect(x, yTop, w, yAxis - yTop);
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
 
     drawGuides(xOf, lamLo, lamHi);
 
-    // 2) The flux curve on top, bright so the line cores read crisply.
+    // 2) The flux curve on top, bright so the line cores read crisply (clipped so the
+    //    zoom window's edge samples don't draw into the pad region).
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD_L, PAD_T, plotW, plotH); ctx.clip();
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const x = xOf(lam[i]), y = yOf(flux[i]);
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.3; ctx.stroke();
+    // Zoomed: mark the native 2.5 Å sample points so the grid's real resolution shows.
+    if (viewBand) drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(flux[i]), COL_CURVE);
+    ctx.restore();
 
     drawFrameAndAxes(xOf, lamLo, lamHi);
   }
@@ -607,10 +673,18 @@ export function createSpectrum({ api }) {
 
     ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
 
-    // x ticks at round wavelengths. Data is in Å; the axis is labelled in nm, so
-    // we step in nm (every 100 nm = 1000 Å) and convert to Å for positioning.
+    // x ticks at round wavelengths. Data is in Å; the axis is labelled in nm. Full view
+    // steps every 100 nm (starting at 400, as before — no regression); a zoomed window
+    // picks a finer round step so the narrow band still gets a handful of labelled ticks.
     ctx.textAlign = "center";
-    for (let nm = 400; nm * 10 <= lamHi; nm += 100) {
+    let startNm, stepNm;
+    if (viewBand) {
+      stepNm = niceNmStep((lamHi - lamLo) / 10);
+      startNm = Math.ceil((lamLo / 10) / stepNm) * stepNm;
+    } else {
+      startNm = 400; stepNm = 100;
+    }
+    for (let nm = startNm; nm * 10 <= lamHi; nm += stepNm) {
       const lA = nm * 10;
       if (lA <= lamLo) continue;
       const x = xOf(lA);
@@ -621,10 +695,11 @@ export function createSpectrum({ api }) {
     }
     ctx.fillText("wavelength (nm)", W / 2, H - 6);
 
-    // y label (normalized flux — absolute scale lives in the L readout).
+    // y label (normalized flux — absolute scale lives in the L readout). Zoomed, the
+    // normalization is to the band's local continuum, so the label says so.
     ctx.save();
     ctx.translate(12, (H - PAD_B + PAD_T) / 2); ctx.rotate(-Math.PI / 2);
-    ctx.fillText("flux (per-spectrum max = 1)", 0, 0);
+    ctx.fillText(viewBand ? "flux (band max = 1)" : "flux (per-spectrum max = 1)", 0, 0);
     ctx.restore();
 
     // y ticks 0 / 0.5 / 1.
@@ -646,18 +721,27 @@ export function createSpectrum({ api }) {
   function drawAlpha() {
     const lam = data.wavelength, f0 = data.flux0, f4 = data.flux4;
     const n = lam.length;
-    const lamLo = lam[0], lamHi = lam[n - 1];
+    const [lamLo, lamHi] = viewWindow(lam);
+    // Normalize each curve to its OWN peak WITHIN the framed window (full view = global
+    // peak, as before). Both continua then align near 1, so the coral↔white gap reads as
+    // the α line-DEPTH difference even when zoomed onto a single feature.
     let m0 = 0, m4 = 0;
-    for (let i = 0; i < n; i++) { if (f0[i] > m0) m0 = f0[i]; if (f4[i] > m4) m4 = f4[i]; }
+    for (let i = 0; i < n; i++) {
+      if (lam[i] < lamLo || lam[i] > lamHi) continue;
+      if (f0[i] > m0) m0 = f0[i]; if (f4[i] > m4) m4 = f4[i];
+    }
     if (!(m0 > 0)) m0 = 1;
     if (!(m4 > 0)) m4 = 1;
 
     const xOf = (l) => PAD_L + (l - lamLo) / (lamHi - lamLo) * (W - PAD_L - PAD_R);
     const yOf = (v) => H - PAD_B - v * (H - PAD_T - PAD_B);   // v is already normalized to [0,1]
     const yAxis = H - PAD_B;
+    const plotW = W - PAD_L - PAD_R, plotH = H - PAD_T - PAD_B;
 
     // 1) shade under the α = 0 baseline — spectral colour inside the visible band, muted
     //    grey outside; the coral overlay's deeper troughs then read against this reference.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD_L, PAD_T, plotW, plotH); ctx.clip();
     for (let i = 0; i < n; i++) {
       const x = xOf(lam[i]);
       const w = i + 1 < n ? xOf(lam[i + 1]) - x + 1 : 1.5;
@@ -672,11 +756,14 @@ export function createSpectrum({ api }) {
       ctx.fillRect(x, yTop, w, yAxis - yTop);
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
 
     drawAlphaGuides(xOf, lamLo, lamHi);
 
     // 2) α = 0 baseline (white), then α = +0.4 (coral) on top so its deeper metal troughs
-    //    stand out against the solar-scaled reference.
+    //    stand out against the solar-scaled reference (clipped to the zoom window).
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD_L, PAD_T, plotW, plotH); ctx.clip();
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const x = xOf(lam[i]), y = yOf(f0[i] / m0);
@@ -690,6 +777,14 @@ export function createSpectrum({ api }) {
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.strokeStyle = COL_ALPHA; ctx.lineWidth = 1.3; ctx.stroke();
+
+    // Zoomed: mark the native sample points on both curves (white + coral) so the α
+    // comparison is visibly made at the grid's real resolution, not on a smoothed line.
+    if (viewBand) {
+      drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f0[i] / m0), COL_CURVE);
+      drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f4[i] / m4), COL_ALPHA);
+    }
+    ctx.restore();
 
     // 3) a small in-panel key (bottom-right, usually empty for the red end) so white vs
     //    coral is unambiguous without reading the caption.
@@ -889,6 +984,16 @@ export function createSpectrum({ api }) {
   // The honest "what am I looking at" caption: the parameters the spectrum stands
   // for, plus — when the grid has no metallicity axis — a plain note that the
   // [Fe/H] control does not (yet) change this panel.
+  // When zoomed, the honest payoff line: the dots ARE the native sampling, and this is
+  // the view that lets you judge whether a finer bake would help. Lead with the invariant
+  // (2.5 Å per sample); the resolving power R = λ/Δλ is NOT constant (≈1200 in the blue at
+  // Ca H&K, ≈3600 in the red), so we quote Δλ, not R.
+  function zoomNote() {
+    if (!viewBand) return "";
+    return ` · Zoomed to ${viewBandLabel} (${viewBand.lo}–${viewBand.hi} Å) — the dots are the ` +
+      `grid's native 2.5 Å sampling; a finer, higher-resolution bake would sharpen these line cores.`;
+  }
+
   function renderCaption() {
     if (!caption || !data) return;
     if (teffAboveGrid()) {
@@ -912,7 +1017,7 @@ export function createSpectrum({ api }) {
         `spectra (Coelho 2014). An α-rich thick-disk / halo star shows DEEPER Ca, Mg and ` +
         `Ti lines; Na D (an odd-Z element, not an α-element) moves the opposite way — a ` +
         `control that this is real line chemistry, not a scaling shift. Spectrum-only: the ` +
-        `HR track and composition panel are solar-scaled and do NOT follow [α/Fe].`;
+        `HR track and composition panel are solar-scaled and do NOT follow [α/Fe].` + zoomNote();
       return;
     }
     // The WR endgame: PoWR wind-emission spectra. The caption is HONEST about the
@@ -983,7 +1088,7 @@ export function createSpectrum({ api }) {
     // The α toggle is on but this star is off its honest domain (hot / cool dwarf / off the
     // α grid's [Fe/H]) — say why the overlay isn't shown, rather than silently dropping it.
     if (alphaOffNote) txt += " · " + alphaOffNote;
-    caption.textContent = txt;
+    caption.textContent = txt + zoomNote();
   }
 
   // Re-fit to a new display size (responsive layout); redraw + re-caption from the
@@ -1004,6 +1109,34 @@ export function createSpectrum({ api }) {
       lastKey = null;
       if (lastState) update(lastState);
     });
+  }
+
+  // The zoom / detail sub-band buttons. Each button carries its window in data-lo/data-hi
+  // (Å); "Full" has empty attrs → viewBand null. Picking a band is a pure client-side
+  // reframe of the cached `data` (draw + re-caption, NO refetch). `viewBand` persists
+  // across living-star updates (a chosen view) and is reset to Full on endgame entry.
+  function setActiveZoom(active) {
+    if (!zoomRow) return;
+    for (const b of zoomRow.querySelectorAll("button")) b.classList.toggle("active", b === active);
+  }
+  function resetZoom() {
+    viewBand = null;
+    viewBandLabel = null;
+    if (zoomRow) {
+      const btns = zoomRow.querySelectorAll("button");
+      btns.forEach((b, i) => b.classList.toggle("active", i === 0));   // the first is "Full"
+    }
+  }
+  if (zoomRow) {
+    for (const btn of zoomRow.querySelectorAll("button")) {
+      btn.addEventListener("click", () => {
+        const lo = btn.dataset.lo, hi = btn.dataset.hi;
+        viewBand = lo ? { lo: +lo, hi: +hi } : null;
+        viewBandLabel = lo ? btn.textContent : null;
+        setActiveZoom(btn);
+        if (data) { draw(); renderCaption(); }
+      });
+    }
   }
 
   // Set the viewing inclination (0°=pole-on … 90°=edge-on) — folds sin i into the v sin i

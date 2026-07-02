@@ -317,6 +317,17 @@ main {
   border-color: var(--accent); font-weight: 600;
 }
 .comp-modes .help { margin-left: auto; }
+
+/* Spectrum zoom / detail sub-band control — a row of preset bands that reframe the
+   x-axis onto a narrow window (reusing the .mode-btn look). flex-wrap so it folds on
+   a phone; the "?" help pushes to the right like .comp-modes. */
+.spectrum-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.spectrum-zoom .zoom-label { font-size: 12px; color: var(--muted); }
+.spectrum-zoom .mode-btn { font-size: 11px; padding: 2px 8px; }
+.spectrum-zoom .help { margin-left: auto; }
+/* The zoom presets are the LIVING-star / [α/Fe] spectra's control; the WD/WR/SN endgame
+   cubes cover different wavelength ranges, so spectrum.js hides the row (and resets it to
+   Full) on endgame entry — the same `.hidden` idiom as the [α/Fe] toggle row. */
 .legend-cno, .legend-light { display: none; }
 .comp-panel.mode-cno .legend-bulk,
 .comp-panel.mode-light .legend-bulk { display: none; }

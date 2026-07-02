@@ -287,10 +287,18 @@ slice. Not baked; Docker not brought up (baking-to-confirm would spend the exact
 exists to prevent). **BSTAR2006** stays dismissed (§5a: LTE→NLTE only, inside CAP18's range,
 adds nothing >30000 K).
 
-**The one honest payoff path — a frontend feature, not a bake:** a **spectrum zoom / detail
-sub-band view** (zoom into Ca H&K, the Mg b triplet, etc.) where finer λ + higher R would
-actually become visible. A finer bake becomes worthwhile *only after* that view exists. Recorded
-here + in `ROADMAP.md` so the density-bump re-bake is not re-proposed as a cheap win.
+**The one honest payoff path — a frontend feature, not a bake: BUILT (2026-07-02, frontend-only).**
+The **spectrum zoom / detail sub-band view** (preset bands Full · Ca H&K · Mg b · Na D · Hα · He 4686)
+reframes the x-axis onto a ~120–150 Å window — a pure client-side reframe of the already-full-res served
+data (2400 samples, 3001–8999 Å, 2.5 Å step; `/spectrum` serves no `n_display` downsample), so the native
+2.5 Å sampling stops being sub-pixel and the line cores resolve, with the **sample points marked as dots**
+so you can judge whether a finer bake would help. `spectrum.js` `viewBand`/`viewWindow()` + window-local
+normalization + adaptive ticks (all gated behind `viewBand` so full view is byte-identical); applies to the
+main cube AND the [α/Fe] overlay; reset+hidden in WD/WR/SN. Added `Mg b` to the main `LINES`. Playwright-
+verified (Ca H&K splits cleanly; Na D shows a double-dip *at* the 2.5 Å limit — the best on-screen argument
+for a finer bake; He 4686 lights up on a 34 kK O star), zero console errors, backend byte-unchanged.
+**So the density-bump re-bake is now *reconsiderable*** — but only per-band where the zoomed dots visibly
+under-sample a line (e.g. Na D). Recorded here + in `ROADMAP.md` + memory `star-sim-phase5-spectra.md`.
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

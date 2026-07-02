@@ -225,10 +225,41 @@ bump" (higher-res re-bake) was investigated 2026-07-02 → SKIP, measured real-b
 **resamples away** to the fixed 2.5 Å / 2400-bin λ grid; and the panel draws the full ~6000 Å over ~1200 px
 ≈ **5 Å/px** with no zoom (≈2.7 Å/px even at 2560 px), so the current 2.5 Å bins are already ≈1 bin/px —
 higher source R cannot render at any display width. Same skip as VO-7400 / boron-b8 / 0.6 M☉ structure. Docker
-NOT brought up (baking-to-confirm would spend the exact GB+Docker cost the gate exists to prevent). **The only
-honest payoff path is a frontend spectrum *zoom / detail sub-band view* first** (Ca H&K, Mg b) — a finer bake
-becomes worthwhile *only after* that view exists. Recorded in `ROADMAP.md` + `graceful-toasting-thimble.md`
-§Next. (Splice-for-coverage — new Teff/λ *range* — is still real data work; splice **`BSTAR2006`** only if
+NOT brought up (baking-to-confirm would spend the exact GB+Docker cost the gate exists to prevent). **The
+honest payoff path was a frontend spectrum *zoom / detail sub-band view* first** (Ca H&K, Mg b) — a finer bake
+becomes worthwhile *only after* that view exists — **and that view is now BUILT (2026-07-02, frontend-only, no
+re-bake, no backend touch).** Recorded in `ROADMAP.md` + `graceful-toasting-thimble.md`
+§Next.
+
+**SPECTRUM ZOOM / DETAIL SUB-BAND VIEW — DONE (2026-07-02, frontend-only, the density-skip's prerequisite).**
+Preset band buttons under the canvas (`#spectrum-zoom` in `index.html`; **Full · Ca H&K · Mg b · Na D · Hα ·
+He 4686**) reframe the x-axis onto a ~120–150 Å window. It is a **pure client-side reframe of the SAME served
+`data`** (no refetch, no `n_display` — `/spectrum` already serves the full native grid: **2400 samples,
+3001–8999 Å, 2.5 Å step**, confirmed via curl), so the grid's already-present 2.5 Å sampling — sub-pixel across
+the ~660 px full panel (~0.11 px/Å) — becomes ~11 px/bin and the line cores resolve. `spectrum.js` gained a
+`viewBand={lo,hi}|null` state + `viewWindow(lam)` (clamps the band to the data range), and the draw path:
+window-local vertical normalization (fmax over the framed window → band continuum ≈1, a flat band renders flat
+at the top — honest local-continuum norm, advisor-approved), a clip to the plot rect around shading+curve so
+out-of-window samples don't spill, **adaptive nm ticks** (`niceNmStep`, ≥~2.5 intervals) + a "flux (band max=1)"
+y-label — **all gated behind `viewBand != null` so the FULL view is byte-identical** (advisor point 4: my
+`firstNm` would otherwise add a stray 300 nm tick). **The load-bearing honesty (advisor point 2): native sample
+points are marked as dots** (`drawSamplePoints`, only when zoomed) — a smooth polyline hides the 2.5 Å sampling,
+the dots show exactly how finely the model is resolved, so you can judge whether a finer bake would help; the
+caption leads with the invariant "2.5 Å sampling" (**not** R — Δλ is constant so R runs ~1200 blue → ~3600 red).
+Applies to the **main cube AND the [α/Fe] overlay** (both curves get dots — the α Mg b/Ca deepening made legible
+at native res; Coelho grid confirmed same 3001–8999 range). Reset-to-Full + row `.hidden` in WD/WR/SN endgames
+(mirrors the α-toggle-row idiom; the endgame cubes span other λ ranges — **verified on-screen: zoomed to Mg b →
+enter WD mode → row hidden + reset to Full + zoom-caption gone → exit → row back, Full active**). **Added
+`{lam:5175,"Mg b",maxTeff:8000}` to the main `LINES`** (advisor point 1 — it was α-only, so the "Mg b" button in
+the normal view would have zoomed to an unlabeled band). **Playwright-verified 1440 + 390 px** (the responsive bar
+— the new 7-item button row wraps cleanly at 390 px, Ca H&K still legible at ~2px/Å), **zero console errors** (the WebGL ReadPixels stalls are the
+pre-existing Three.js-canvas-screenshot noise, not errors): Ca H&K splits cleanly into K 3933 + H 3968; **Na D
+shows a marginal double-dip right at the 2.5 Å limit** (6 Å ≈ 2.4 bins — so the caption stays GENERIC, never
+claims "resolves into two"; this band is actually the best on-screen argument for *why* a finer bake could pay
+off, exactly the view's purpose — advisor point 3, verify-before-claiming); He 4686 lights up on a 34 kK O star
+(in-grid; a 40 M☉ ZAMS star is 61 kK > the 55 kK ceiling → the no-model frame, so pick an in-grid O star);
+M-dwarf blue band legible. Backend byte-unchanged (no `.py` touched → pytest unaffected). Plan
+`graceful-toasting-thimble.md` §Next; ROADMAP row promoted from skip→done. (Splice-for-coverage — new Teff/λ *range* — is still real data work; splice **`BSTAR2006`** only if
 NLTE B-star fidelity 15–30 kK is ever specifically wanted, not as a density bump.) The runtime stays
 axis-generic for any such re-bake. **Splice mechanics
 that paid off (reuse for BSTAR / any future grid):** `bake_spectra.py --hot-grid` *appends* Teff nodes above
