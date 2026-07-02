@@ -125,8 +125,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
 ### Providers (the §3 spine)
 - `PROVIDER` in `api.py` is **`MISTProvider`** — the live provider. Real MIST v2.5
   tracks, EEP-fixed **2D (mass × [Fe/H])** interpolation (blend-then-invert), full
-  mass grid **0.1–300 M☉** per metallicity, window **ZAMS → end of early-AGB**
-  (TPAGB thermal pulses hard-stopped — §6 "messy, defer"). Non-rectangular valid
+  mass grid **0.1–300 M☉** per metallicity, window **ZAMS → end of early-AGB** (the
+  LIVING track hard-stops at φ5 per §6 "messy, defer" — but the TPAGB thermal-pulse rows
+  are NOT lost: `endgame()` snaps to one real track and exposes them, and they ship two ways
+  — the WD gateway's cooling scrub (loops compressed to 12%, `WD_FP`) AND an opt-in
+  **thermal-pulse showcase** that decompresses the He-shell-flash sawtooth to the full HR
+  panel, gated on a data-derived amplitude floor). Non-rectangular valid
   domain (`mass_range(feh)` tightens the floor for [Fe/H]>0). Per-grid
   `_parsed_tracks.npz` parse cache (**`CACHE_VERSION` 11**; ~50–110 s cold reparse on
   a bump, ~0.35 s warm). A **third selection axis — rotation `vvcrit`** — is on the

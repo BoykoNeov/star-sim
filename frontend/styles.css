@@ -601,6 +601,9 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 }
 .endgame-bar-top {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  /* WD mode adds a third child (the pulse toggle); on phone widths the title + two buttons
+     exceed the row, so allow wrap rather than clip (the bar has an overflow-bug history). */
+  flex-wrap: wrap;
 }
 .endgame-title { font-weight: 650; color: var(--accent); }
 /* The bar's title + narration come in a WD and a WR variant; the body mode class
@@ -622,6 +625,18 @@ body.sn-mode .endgame-title-sn { display: inline; }
 }
 .endgame-back:hover { filter: brightness(1.08); }
 .endgame-back:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* The thermal-pulse showcase toggle (WD mode only): a compact SECONDARY button — outlined
+   accent, transparent fill — so it reads as a subordinate "zoom in" affordance next to the
+   filled "Back" button. margin-left:auto groups it with Back at the right of the bar's top
+   row (the shown title stays at the far left). */
+.pulse-toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  color: var(--accent); background: transparent;
+  border: 1px solid var(--accent); border-radius: 6px;
+  padding: 3px 10px; white-space: nowrap; margin-left: auto;
+}
+.pulse-toggle:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.pulse-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn { display: none; }

@@ -133,5 +133,24 @@ regression). Frontend needed no slider-logic change (log-scaled, reads `/ranges`
 only added 60/100/200/300 snap-tick landmarks. **All 35 tests pass.** This completes
 Phase 1.
 
+**TPAGB is exposed, not lost — + a showcase (2026-07-02):** the LIVING window still
+hard-stops at φ5 (above), but `endgame()` **snaps to one real grid track** (no cross-mass/
+[Fe/H] interp — the §6 hazard sidestepped) and its clipped slice INCLUDES the ~601 TPAGB
+rows. So the He-shell-flash loops already shipped via the WD gateway's cooling scrub — just
+**compressed into 12% of the slider** (`WD_FP` in `main.js`) to protect the ~100 kK central-
+star spike. **Measured faithful** (1–3 M☉ ≈ 0.26–0.34 dex/loop, metallicity-tracking; 5 M☉
+collapses to ~0.02 dex — real hot-bottom burning, verified not a resampling artifact via a
+local-extrema amplitude probe). **The thermal-pulse showcase (frontend-only):** an opt-in
+"🔍 Thermal pulses" toggle inside wd-mode (`.pulse-toggle`, `hr.setThermalPulses()` +
+`pulseMode` mirroring the `setSupernova`/`snMode` pattern) gives the TPAGB slice the WHOLE
+HR panel + slider — surface **log L vs LINEAR kyr-since-TPAGB-onset** (~6× vertical
+decompression → the classic sawtooth: slow quiescent rise, brief flash, deep dip). A
+**data-derived visibility gate** (`tpMedianPulseAmplitude ≥ 0.15 dex`) hides the toggle for
+the ≥5 M☉ near-flat pulses (the honesty gate — only offer it where there's something to
+see). Marker rides with the past/future split; x-origin honestly labeled "TPAGB onset" (row
+0 = phase onset, ~½ Myr before the first actual flash — advisor-caught). Playwright-verified
+1440 + 390 px (`flex-wrap` on `.endgame-bar-top`), zero console errors. This retires the old
+"TPAGB remains the next deferred phase" note above. See [[star-sim-wr-wd-endgame-plan]].
+
 **Next:** Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
 `activity`). See [[star-sim-init-scope]] and [[star-sim-composition-panel]].

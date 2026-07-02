@@ -204,6 +204,18 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let snLlo = 40, snLhi = 43;   // y-axis extent, log10(L / erg s⁻¹)
   const LSUN_ERG_S = 3.828e33;  // erg/s — to put the photosphere L_lsun on the erg/s axis
 
+  // --- thermal-pulse showcase (TPAGB): a DECOMPRESSED zoom of the He-shell-flash loops ---
+  // The WD scrub deliberately crushes the ~600 chaotic TPAGB rows into 12% of the slider to
+  // protect the dramatic ~100 kK central-star spike (see main.js WD_FP). This opt-in view is
+  // the inverse: the TPAGB rows alone get the WHOLE panel — surface log L vs age-since-first-
+  // pulse (kyr, LINEAR so the sawtooth reads as physical time) — so the 0.3–0.8 dex He-shell-
+  // flash loops (a slow quiescent H-shell rise, a brief flash, then a deep dip) are actually
+  // legible instead of a squashed sliver. Its own coordinate transforms (xTP/yTP) and draw
+  // path (drawThermalPulses), scoped to just the TP slice, like snMode.
+  let pulseMode = false;
+  let pulseStates = null;                        // the TPAGB-only StellarState slice
+  let pAge0 = 0, pAgeMaxKyr = 1, pLlo = 0, pLhi = 1;  // first-pulse age ref + axis extents
+
   // Fill + dashed outline the current path with a zone's colors.
   function fillZone(fill, stroke) {
     ctx.fillStyle = fill;
@@ -459,6 +471,70 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   const xSN = (day) => PAD_L + (day / snTmax) * (W - PAD_L - PAD);
   const ySN = (logL) => H - PAD - (logL - snLlo) / (snLhi - snLlo) * (H - 2 * PAD);
 
+  // --- thermal-pulse view (linear kyr-since-first-pulse x / surface log L y) -----------
+  const xTP = (ageYr) => PAD_L + ((ageYr - pAge0) / 1e3 / pAgeMaxKyr) * (W - PAD_L - PAD);
+  const yTP = (logL) => H - PAD - (logL - pLlo) / (pLhi - pLlo) * (H - 2 * PAD);
+
+  // The thermal-pulse showcase: surface log L vs LINEAR kyr since the first pulse, over just
+  // the TPAGB slice. The polyline is Teff-colored + past/future-split at the marker (the same
+  // idiom as the living/endgame tracks), so the He-shell-flash sawtooth reads as a journey.
+  function drawThermalPulses() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.strokeStyle = "#283149";
+    ctx.fillStyle = "#8a93a6";
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+
+    // x gridlines: age since first pulse (kyr), a nice round step for the span.
+    ctx.textAlign = "center";
+    const kStep = pAgeMaxKyr <= 20 ? 5 : pAgeMaxKyr <= 60 ? 10 : pAgeMaxKyr <= 150 ? 25 :
+                  pAgeMaxKyr <= 400 ? 50 : pAgeMaxKyr <= 800 ? 100 : 250;
+    for (let a = 0; a <= pAgeMaxKyr + 1e-6; a += kStep) {
+      const x = xTP(pAge0 + a * 1e3);
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(`${Math.round(a)}`, x, H - PAD + 15);
+    }
+    // y gridlines: surface log L / L☉.
+    ctx.textAlign = "right";
+    for (const ll of genTicks(pLlo, pLhi, niceStepL(pLhi - pLlo))) {
+      const y = yTP(ll);
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillText(ll.toFixed(1), PAD_L - 6, y + 4);
+    }
+    ctx.textAlign = "center";
+    ctx.fillText("kyr since TPAGB onset", W / 2, H - 6);
+    ctx.save();
+    ctx.translate(12, H / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("surface log L / L☉", 0, 0);
+    ctx.restore();
+
+    if (pulseStates && pulseStates.length > 1) {
+      const split = splitIndex(pulseStates);
+      for (let i = 1; i < pulseStates.length; i++) {
+        const a = pulseStates[i - 1], b = pulseStates[i];
+        const past = i <= split;
+        ctx.lineWidth = past ? 1.8 : 1.1;
+        ctx.globalAlpha = past ? 0.9 : 0.3;
+        ctx.beginPath();
+        ctx.moveTo(xTP(a.age_yr), yTP(Math.log10(a.L_lsun)));
+        ctx.lineTo(xTP(b.age_yr), yTP(Math.log10(b.L_lsun)));
+        ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (marker) {
+      const ll = Math.max(pLlo, Math.min(pLhi, Math.log10(marker.L_lsun)));
+      drawMarker(xTP(Math.max(pAge0, marker.age_yr)), yTP(ll), marker.Teff_K);
+    }
+  }
+
   // Draw a {t (days), L (erg/s)} polyline on the SN axes, clipped to the frame; L≤0 or an
   // off-bottom value clamps to the floor so a fading tail runs along the axis (no gap).
   function drawSNCurve(points, stroke, width, dash) {
@@ -659,6 +735,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   }
 
   function draw() {
+    if (pulseMode) { drawThermalPulses(); return; }
     if (snMode) { drawSupernova(); return; }
     drawAxes();
     drawIsoRadius();                  // constant-R graph paper, under everything
@@ -732,10 +809,34 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
     draw();
   }
+  // Enter/refresh the thermal-pulse showcase. Fits the y-axis to the TP slice's surface log L
+  // range and the x-axis to its total span (kyr since the first pulse), both scoped to the TP
+  // rows ONLY — this decompression IS the feature. Re-fittable (idempotent); the marker rides
+  // via the usual update(). clearThermalPulses / clearEndgame drop back out.
+  function setThermalPulses(states) {
+    pulseMode = true;
+    pulseStates = states && states.length ? states : null;
+    if (pulseStates) {
+      pAge0 = pulseStates[0].age_yr;
+      let lo = Infinity, hi = -Infinity, tmax = 0;
+      for (const s of pulseStates) {
+        const ll = Math.log10(s.L_lsun);
+        if (ll < lo) lo = ll; if (ll > hi) hi = ll;
+        const kyr = (s.age_yr - pAge0) / 1e3; if (kyr > tmax) tmax = kyr;
+      }
+      pLlo = Math.floor((lo - 0.05) * 10) / 10;
+      pLhi = Math.ceil((hi + 0.05) * 10) / 10;
+      pAgeMaxKyr = Math.max(1, tmax * 1.02);   // a hair of right margin so the last pulse isn't on the frame
+    }
+    draw();
+  }
+  function clearThermalPulses() { pulseMode = false; pulseStates = null; draw(); }
+
   function clearEndgame() {
     endgameMode = false;
     endgameTrack = null;
     snMode = false; snModel = null; snObserved = null;   // also leave the SN light-curve view
+    pulseMode = false; pulseStates = null;               // ...and the thermal-pulse showcase
     applyLivingBounds();   // restore the living frame (re-fit, in case a massive star is selected)
     draw();
   }
@@ -748,5 +849,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setSupernova, clearEndgame, resize };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize };
 }

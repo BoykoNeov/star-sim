@@ -61,6 +61,7 @@ const els = {
   gatewayLoading: document.getElementById("gateway-loading"),
   endgameBar: document.getElementById("endgame-bar"),
   endgameBack: document.getElementById("endgame-back"),
+  pulseToggle: document.getElementById("pulse-toggle"),   // WD-mode: open/close the thermal-pulse showcase
   endgameResnapNote: document.getElementById("endgame-resnap-note"),
   endgameAgeCaption: document.getElementById("endgame-age-caption"),
   // The ⁵⁶Ni-mass slider (SN endgame, Tier-3) — the one free knob of the light curve.
@@ -378,6 +379,18 @@ let endgameMetaToken = 0;       // latest-wins guard, SEPARATE from endgameToken
                                 // fetch's stabilized machinery (Chunk D) is left untouched
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
 let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
+// --- thermal-pulse showcase (a WD-mode sub-view) -----------------------------
+// An opt-in zoom that lives INSIDE wd-mode: the WD scrub crushes the ~600 chaotic TPAGB
+// rows into 12% of the slider (WD_FP) to protect the central-star spike; this sub-view
+// gives that TPAGB slice the whole panel + slider so the He-shell-flash loops are legible.
+// It's a boolean sub-state of wd-mode (NOT a top-level mode) — the endgame progenitor,
+// re-snap, and Back button are all shared. `pulseGateOK` is the data-derived visibility
+// gate (median per-pulse ΔlogL ≥ threshold); the toggle only appears when it passes.
+let pulseView = false;          // true = the decompressed TPAGB view is active (still mode==="wd")
+let pulseFraction = 0;          // slider position 0..1 across the TPAGB rows only
+let pulseStates = null;         // the TPAGB-only slice of endgame.states (cached on enterWD)
+let pulseGateOK = false;        // does the pulse amplitude clear the visibility gate?
+const PULSE_GATE_DEX = 0.15;    // median per-pulse ΔlogL floor (measured: 1–3 M☉ ~0.3, 5 M☉ ~0.02)
 // --- supernova endgame (SN Chunk 2) ------------------------------------------
 // Unlike WD/WR (which snap to a pre-fetched track and scrub states[i]), the SN endgame is a
 // COMPUTED model fetched from /supernova (the sibling route): a ⁵⁶Ni light curve + a set of
@@ -477,6 +490,51 @@ function rebuildWDTicks() {
     { pos01: 1, label: "cold WD" },
   ]);
   els.ageTicks.innerHTML = "";   // the WD snap uses its own targets, not the datalist
+}
+
+// --- the thermal-pulse showcase (a wd-mode sub-view) -------------------------
+// The TPAGB rows of a snapped endgame sequence (the He-shell-flash phase). Contiguous by
+// construction (endgame() clips ZAMS→…→TPAGB→post-AGB in order), so a phase filter is exact.
+function pulseTPSlice(states) {
+  return states.filter((s) => s.phase === "TPAGB");
+}
+
+// The visibility gate: median per-pulse ΔlogL via local-extrema detection on surface log L.
+// Consecutive turning points alternate peak/trough, so |Δ| between them is a flash amplitude;
+// the median tracks metallicity and is NOT fooled by MIST's fine flash sampling (measured:
+// 1–3 M☉ ≈ 0.26–0.34 dex, 5 M☉ ≈ 0.02 dex where hot-bottom burning flattens the loops). Below
+// PULSE_GATE_DEX the "showcase" would be a near-flat line — so the toggle stays hidden (the
+// honesty gate: only offer the view where there's something real to see).
+function tpMedianPulseAmplitude(tp) {
+  if (!tp || tp.length < 5) return 0;
+  const y = tp.map((s) => Math.log10(s.L_lsun));
+  const ext = [];
+  for (let i = 1; i < y.length - 1; i++) {
+    if ((y[i] > y[i - 1] && y[i] >= y[i + 1]) || (y[i] < y[i - 1] && y[i] <= y[i + 1])) ext.push(y[i]);
+  }
+  if (ext.length < 2) return 0;
+  const amps = [];
+  for (let i = 1; i < ext.length; i++) amps.push(Math.abs(ext[i] - ext[i - 1]));
+  amps.sort((a, b) => a - b);
+  return amps[Math.floor(amps.length / 2)];
+}
+
+// slider fraction (0..1) -> index within the TPAGB slice (linear — the whole point is that
+// each pulse row gets equal travel, unlike the compressed WD_FP band).
+function pulseIndexFromFraction(frac) {
+  if (!pulseStates || !pulseStates.length) return 0;
+  return Math.max(0, Math.min(pulseStates.length - 1, Math.round(clamp01(frac) * (pulseStates.length - 1))));
+}
+
+// Landmark ticks for the pulse scrub: the TPAGB onset (row 0 — the quiescent early-AGB rise
+// begins here; the first ACTUAL flash comes ~½ Myr later) and the end of the AGB. The loops
+// between are too many and too even to individually label — the sawtooth itself is the map.
+function rebuildPulseTicks() {
+  buildTickStrip(els.ageMarks, [
+    { pos01: 0, label: "TPAGB onset" },
+    { pos01: 1, label: "end of AGB" },
+  ]);
+  els.ageTicks.innerHTML = "";
 }
 
 // --- the Wolf–Rayet endgame scrub (Chunk 4) ----------------------------------
@@ -1188,6 +1246,76 @@ function refreshWD() {
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
 }
 
+// Render the current thermal-pulse showcase state (a wd-mode sub-view). The consumers behave
+// exactly as in refreshWD's TPAGB branch — a TPAGB row is a cool, low-gravity giant, so the 3D
+// star, comp cross-section, SED and (main-cube) spectrum are unchanged; ONLY the HR panel
+// differs (it's in pulseMode via hr.setThermalPulses → the decompressed L-vs-kyr sawtooth) and
+// the caption speaks to the flashes. A pure function of pulseStates + pulseFraction (no fetch).
+function refreshPulse() {
+  if (!pulseStates || !pulseStates.length) return;
+  const i = pulseIndexFromFraction(pulseFraction);
+  const s = pulseStates[i];
+
+  star.update(s, { endgame: "wd" });   // smooth degenerate-envelope giant, cooling color
+  classification.update(s, "wd");
+  scale.update(s);
+  hr.update(s);                         // hr is in pulseMode → the marker rides the sawtooth
+  comp.update(s);
+  sed.update(s, { endgame: true });
+  spectrum.update(s, { endgame: "wd" });   // a TPAGB row is a cool giant → always the main cube
+  renderWDReadout(s, wdZones(endgame.states));
+
+  els.status.style.color = teffToCSS(s.Teff_K);
+  els.status.innerHTML =
+    tipSpan("thermal pulses",
+      "The decompressed TPAGB helium-shell-flash phase — the same real grid track as the " +
+      "white-dwarf scrub, given the whole panel so the luminosity loops are actually visible.") +
+    " · " + tipSpan(s.phase, phaseTip(s.phase)) +
+    (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+
+  // Honest caption: this star's own median loop amplitude, the row count + no-interp
+  // provenance, and where in the ~Myr pulse sequence the marker sits.
+  const amp = tpMedianPulseAmplitude(pulseStates);
+  const kyr = (s.age_yr - pulseStates[0].age_yr) / 1e3;
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent =
+    `Thermal pulses — helium-shell flashes on the TPAGB, ~${amp.toFixed(2)} dex per loop, ` +
+    `${pulseStates.length} MIST rows snapped to one real track (no interpolation) · ` +
+    `${kyr.toFixed(0)} kyr since TPAGB onset · total age ${gyr(s.age_yr)} since ZAMS.`;
+}
+
+// Show the pulse toggle only in wd-mode when the amplitude gate passes; label it by state.
+function updatePulseToggle() {
+  if (!els.pulseToggle) return;
+  els.pulseToggle.hidden = !(mode === "wd" && pulseGateOK);
+  els.pulseToggle.textContent = pulseView ? "← Back to cooling" : "🔍 Thermal pulses";
+}
+
+// Enter the decompressed thermal-pulse view from the toggle (wd-mode only, gate already passed).
+function enterPulseView() {
+  if (mode !== "wd" || !pulseStates || !pulseStates.length) return;
+  pulseView = true;
+  hr.setThermalPulses(pulseStates);   // hr → pulseMode (endgameMode stays set underneath)
+  rebuildPulseTicks();
+  pulseFraction = 0;                  // land at the first pulse — scrub forward
+  els.age.value = pulseFraction;
+  updatePulseToggle();
+  refreshPulse();
+}
+
+// Leave the pulse view back to the normal WD cooling scrub. Land the WD slider back inside its
+// (compressed) pulse band, proportional to where we were in the decompressed scrub — so the
+// round-trip is continuous (you return to roughly the same pulse you were watching).
+function exitPulseView() {
+  if (mode !== "wd") return;
+  pulseView = false;
+  hr.clearThermalPulses();            // hr → back to the endgame HR view (bounds unchanged)
+  rebuildWDTicks();
+  wdFraction = clamp01(pulseFraction * WD_FP);
+  els.age.value = wdFraction;
+  updatePulseToggle();
+  refreshWD();
+}
+
 // Render the current Wolf–Rayet endgame state (a pure function of the pre-fetched
 // `endgame.states` + `wrFraction` — no fetch, mirrors refreshWD). The composition panel
 // uses its NORMAL burning-abundance views (the WR sub-track is a real EEP axis with an
@@ -1493,6 +1621,13 @@ function enterWD() {
   els.endgameBar.hidden = false;
   hr.setEndgame(endgame.states);
   comp.setEndgame(endgame.states);
+  // Prep the thermal-pulse showcase gate (the opt-in decompressed sub-view). Cache the TPAGB
+  // slice + test its median loop amplitude ONCE here; the toggle only appears when it clears
+  // the visibility gate (weak ≥5 M☉ hot-bottom-burning pulses don't earn a "showcase").
+  pulseView = false;
+  pulseStates = pulseTPSlice(endgame.states);
+  pulseGateOK = tpMedianPulseAmplitude(pulseStates) >= PULSE_GATE_DEX;
+  updatePulseToggle();
   rebuildWDTicks();
   wdFraction = 0;                 // start at the first thermal pulse — scrub forward
   els.age.value = wdFraction;
@@ -1511,6 +1646,7 @@ function enterWR() {
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackToken++;
   document.body.classList.add("wr-mode");
+  if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
   els.gateway.hidden = true;
@@ -1531,6 +1667,8 @@ function exitEndgame() {
   document.body.classList.remove("wd-mode", "wr-mode", "sn-mode");
   els.endgameBar.hidden = true;
   els.snControl.hidden = true;   // hide the ⁵⁶Ni slider (SN-only)
+  pulseView = false; pulseStates = null; pulseGateOK = false;   // drop the thermal-pulse sub-view
+  updatePulseToggle();           // hides the toggle (mode is now live)
   setWDResnapNote("");
   hr.clearEndgame();
   comp.clearEndgame();
@@ -1571,10 +1709,25 @@ async function tryWDResnap() {
     endgame = eg; endgameKey = egKey();
     lastEgMass = mass; lastEgFeh = feh;
     setWDResnapNote("");
-    hr.setEndgame(eg.states);
-    comp.setEndgame(eg.states);
-    rebuildWDTicks();
-    refreshWD();
+    // Recompute the thermal-pulse slice + gate for the new progenitor.
+    pulseStates = pulseTPSlice(eg.states);
+    pulseGateOK = tpMedianPulseAmplitude(pulseStates) >= PULSE_GATE_DEX;
+    if (pulseView && pulseGateOK) {
+      // Stay in the decompressed pulse view — re-fit to the new star's loops (keep the scrub).
+      hr.setThermalPulses(pulseStates);
+      rebuildPulseTicks();
+      updatePulseToggle();
+      refreshPulse();
+    } else {
+      // The cooling scrub (or the new star's pulses are too weak to show → fall back to it).
+      pulseView = false;
+      hr.setEndgame(eg.states);
+      comp.setEndgame(eg.states);
+      rebuildWDTicks();
+      els.age.value = wdFraction;
+      updatePulseToggle();
+      refreshWD();
+    }
   } else {
     // Not a white-dwarf progenitor — revert to the last WD star.
     massValue = lastEgMass;
@@ -1589,7 +1742,8 @@ async function tryWDResnap() {
         ? `That star strips to a Wolf–Rayet, not a white dwarf — reverted to ` +
           `${fmt(lastEgMass)} M☉.`
         : `No white-dwarf endgame for that star — reverted to ${fmt(lastEgMass)} M☉.`);
-    refreshWD();
+    // endgame (hence pulseStates) is unchanged on a revert — stay in whichever view is active.
+    if (pulseView) refreshPulse(); else refreshWD();
   }
 }
 
@@ -1869,6 +2023,7 @@ async function enterSN() {
   updateRotControl();   // hide the rotation control inside the endgame (mode != live)
   trackToken++;         // invalidate any in-flight live /track
   document.body.classList.add("sn-mode");
+  if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
   els.gateway.hidden = true;
@@ -2201,6 +2356,13 @@ async function init() {
     // In an endgame the age slider is the endgame scrubber (a pure pick from the
     // pre-fetched states — no fetch). Branch here, before the living-star age logic.
     if (mode === "wd") {
+      if (pulseView) {
+        // The decompressed pulse scrub: linear across the TPAGB rows (no snapping — every
+        // pulse row is a wanted in-between frame, like the living age scrub).
+        pulseFraction = clamp01(Number(els.age.value));
+        refreshPulse();
+        return;
+      }
       wdFraction = snapWDFraction(Number(els.age.value));
       els.age.value = wdFraction;
       refreshWD();
@@ -2304,6 +2466,11 @@ async function init() {
   if (els.gatewayWr) els.gatewayWr.addEventListener("click", enterWR);
   if (els.gatewaySn) els.gatewaySn.addEventListener("click", enterSN);
   if (els.endgameBack) els.endgameBack.addEventListener("click", exitEndgame);
+  // The thermal-pulse showcase toggle (wd-mode sub-view): open the decompressed loop view,
+  // or return to the cooling scrub. Only visible when the amplitude gate passed (enterWD).
+  if (els.pulseToggle) els.pulseToggle.addEventListener("click", () => {
+    if (pulseView) exitPulseView(); else enterPulseView();
+  });
 
   // The ⁵⁶Ni-mass slider (SN endgame, Tier-3): moving it REFETCHES the light curve (the
   // tail/peak rescale; mass/[Fe/H] fixed, so the progenitor can't change). Debounced +
