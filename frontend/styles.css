@@ -39,6 +39,36 @@ header .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 }
 code { color: var(--accent); }
 
+/* First-load skeletons: on a cold cache the panels sit as blank black boxes for a
+   few seconds while the first /track (and the CDN three.js) land — which reads as
+   "broken", not "loading". The markup ships <body class="loading">; main.js removes
+   it on the first successful paint (or the first hard error, so a dead backend
+   doesn't shimmer forever). While it's on, every panel canvas gets a slow, faint
+   diagonal sheen sweeping across it. Selectors are per-id because the canvases'
+   own #id rules set the `background` SHORTHAND (which resets background-image) —
+   a class-level rule would lose that specificity fight. */
+body.loading #star-canvas, body.loading #scale-canvas,
+body.loading #hr-canvas, body.loading #comp-canvas,
+body.loading #spectrum-canvas, body.loading #sed-canvas,
+body.loading #lane-canvas, body.loading #structure-canvas {
+  background-image: linear-gradient(100deg,
+    transparent 32%, rgba(170,195,255,0.05) 44%, rgba(170,195,255,0.09) 50%,
+    rgba(170,195,255,0.05) 56%, transparent 68%);
+  background-repeat: no-repeat;
+  background-size: 220% 100%;
+  animation: skeleton-sheen 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-sheen {
+  from { background-position: 130% 0; }
+  to   { background-position: -130% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.loading #star-canvas, body.loading #scale-canvas,
+  body.loading #hr-canvas, body.loading #comp-canvas,
+  body.loading #spectrum-canvas, body.loading #sed-canvas,
+  body.loading #lane-canvas, body.loading #structure-canvas { animation: none; }
+}
+
 main {
   /* A reorder-in-flow dashboard (see layout.js): a flex-wrap container is what
      makes the panels "auto-stack to screen width" for free — it packs as many
@@ -80,10 +110,14 @@ main {
 /* The 3D star: a modest square that shrinks to fit a narrow (phone) panel. star.js
    resizes its WebGL renderer from the canvas's clientWidth/clientHeight every frame,
    so a responsive CSS box is all it needs — no JS wiring here. */
+/* Deep-space vignette behind the WebGL scene (the renderer is alpha:true, so this
+   shows through): a faint blue lift behind the star fading to darker corners. The
+   in-scene starfield (star.js makeStarfield) supplies the dim background stars. */
 #star-canvas {
   width: min(420px, 100%); aspect-ratio: 1 / 1; height: auto;
   display: block; margin: 0 auto;
-  background: #05070d; border-radius: 8px;
+  background: #05070d radial-gradient(circle at 50% 46%, #0b101f 0%, #06080f 58%, #020308 100%);
+  border-radius: 8px;
 }
 
 /* Spectral-classification line under the 3D star: the schematic MK type (tinted with

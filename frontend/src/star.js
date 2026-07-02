@@ -519,6 +519,56 @@ export function createStar(canvas) {
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   camera.position.set(0, 0, 8);
 
+  // --- Starfield backdrop -----------------------------------------------------
+  // A deterministic, STATIC scatter of dim background stars — pure backdrop, not
+  // data (it encodes no StellarState field, so there is no honesty cost; it just
+  // gives the dead-black frame depth, with the CSS vignette on the canvas doing
+  // the rest). Deterministic: a seeded PRNG (mulberry32), so every load and every
+  // regression screenshot sees the identical sky. Static: no drift, so it can
+  // never read as the star itself moving. Placement is a flat scatter on a plane
+  // far behind the star (z = −40) sized to overfill the fixed camera's frustum
+  // there (the camera never moves and the canvas is CSS-locked square, so a ±20
+  // sheet covers the ±17.5 the 40° FOV sees, with margin) — a shell would put
+  // ~97% of its points outside the view cone. The opaque star mesh writes depth
+  // and the points keep depthTest, so the disk occludes the stars behind it; the
+  // additive quads (corona/glare/wind/fireball) have higher renderOrder and just
+  // glow over them.
+  function makeStarfield() {
+    let seed = 0x9e3779b9;
+    const rand = () => {              // mulberry32 — tiny deterministic PRNG
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const group = new THREE.Group();
+    // Two layers: a dense faint dust + a sparse handful of brighter stars.
+    for (const [count, size, bLo, bHi] of [[240, 1.6, 0.16, 0.4], [42, 2.6, 0.35, 0.8]]) {
+      const pos = new Float32Array(count * 3), col = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        pos.set([40 * rand() - 20, 40 * rand() - 20, -40], i * 3);
+        // Planck-flavored palette — mostly blue-white/white, a few warm (evocative
+        // backdrop only, not a modeled population).
+        const warm = rand();
+        const tint = warm < 0.14 ? [1.0, 0.8, 0.6]
+          : warm < 0.3 ? [1.0, 0.93, 0.84]
+          : [0.8 + 0.2 * rand(), 0.87 + 0.13 * rand(), 1.0];
+        const b = bLo + (bHi - bLo) * rand();
+        col.set([tint[0] * b, tint[1] * b, tint[2] * b], i * 3);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      group.add(new THREE.Points(g, new THREE.PointsMaterial({
+        size, sizeAttenuation: false, vertexColors: true,
+        transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      })));
+    }
+    return group;
+  }
+  scene.add(makeStarfield());
+
   const surfaceMat = new THREE.ShaderMaterial({
     vertexShader: SURFACE_VERT,
     fragmentShader: SURFACE_FRAG,

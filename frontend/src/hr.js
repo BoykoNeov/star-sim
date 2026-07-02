@@ -3,10 +3,12 @@
 // a marker at the current age — setTrack() takes the list from /track, update()
 // moves the marker from /state (same split the composition panel uses). The living
 // track is painted segment-by-segment with the local Teff color (like the endgame
-// track) so the line itself narrates the journey, the marker carries a soft glow in
-// the star's own color, and faint O·B·A·F·G·K·M spectral-class bands anchor the
-// reversed Teff axis along the top edge (living view only — MK classes don't apply
-// to the WD/WR remnant regimes the endgame axes span).
+// track) so the line itself narrates the journey, split at the marker into a solid
+// PAST and a dimmer FUTURE (so "how far along its life is this star" reads at a
+// glance), the marker carries a soft glow in the star's own color, and faint
+// O·B·A·F·G·K·M spectral-class bands anchor the reversed Teff axis along the top
+// edge (living view only — MK classes don't apply to the WD/WR remnant regimes the
+// endgame axes span).
 
 import { teffToCSS, teffToRGB } from "./color.js";
 import { fitCanvas } from "./canvas.js";
@@ -287,16 +289,36 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.restore();
   }
 
+  // The marker's row index along `list` — the past/future split point. The marker IS
+  // an element of the current track array in every scrub mode (live: refresh() picks
+  // currentTrack[i], the same array setTrack received; WD/WR: refreshWD/WR pick
+  // endgame.states[i], the same array setEndgame received), so indexOf is exact. The
+  // age fallback covers any state that arrives from elsewhere: every scrub sequence
+  // is age-monotone, so "last row not younger than the marker" is the right split.
+  function splitIndex(list) {
+    if (!marker || !list) return list ? list.length - 1 : -1;
+    const idx = list.indexOf(marker);
+    if (idx >= 0) return idx;
+    let s = list.length - 1;
+    for (let i = 0; i < list.length; i++)
+      if (list[i].age_yr > marker.age_yr) { s = i - 1; break; }
+    return s;
+  }
+
   function drawTrack() {
     if (!track || track.length < 2) return;
     // Painted segment-by-segment with the local Teff color (the same idiom as the
     // endgame track below) so the polyline itself tells the story — blue-white on
     // the upper main sequence, deepening through gold to red up the giant branch —
-    // slightly translucent so the glowing marker stays the brightest thing on it.
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.75;
+    // and SPLIT at the marker: the traversed past draws solid, the future dimmer,
+    // so the marker's place in the whole life is legible without touching the age
+    // slider. (With no marker yet, everything draws as "past" for one frame.)
+    const split = splitIndex(track);
     for (let i = 1; i < track.length; i++) {
       const a = track[i - 1], b = track[i];
+      const past = i <= split;
+      ctx.lineWidth = past ? 1.8 : 1.1;
+      ctx.globalAlpha = past ? 0.9 : 0.3;
       ctx.beginPath();
       ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
       ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
@@ -321,15 +343,21 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       ctx.lineWidth = 1.5; ctx.stroke();
     }
     if (!endgameTrack || endgameTrack.length < 2) return;
-    ctx.lineWidth = 2;
+    // Same past/future split as the living track: the scrubbed-through part of the
+    // cooling/stripping journey draws solid, what's still ahead dimmer.
+    const split = splitIndex(endgameTrack);
     for (let i = 1; i < endgameTrack.length; i++) {
       const a = endgameTrack[i - 1], b = endgameTrack[i];
+      const past = i <= split;
+      ctx.lineWidth = past ? 2 : 1.3;
+      ctx.globalAlpha = past ? 1 : 0.35;
       ctx.beginPath();
       ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
       ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
       ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
   }
 
   // A faint preview of where a WD-bound star is headed once its visible life ends, drawn on

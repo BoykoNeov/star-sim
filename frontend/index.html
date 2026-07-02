@@ -17,7 +17,10 @@
   }
   </script>
 </head>
-<body>
+<!-- class="loading" drives the first-load skeleton sheen on every panel canvas
+     (styles.css); main.js removes it on the first successful paint or first hard
+     error, so a cold cache reads as "loading", never as dead black boxes. -->
+<body class="loading">
   <header>
     <h1>Star Simulator <span class="tag">Phase 5 · spectra</span>
       <span class="help" tabindex="0" data-tip="Every panel below is a function of one StellarState (spec §3). The data source is interchangeable behind one interface — stub or real MIST grids — and nothing here changes.">?</span>

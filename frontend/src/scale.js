@@ -9,6 +9,8 @@
 // Earth, Jupiter and the Sun, and the ORBITS of the inner planets. The orbits are
 // the payoff: a giant's radius isn't measured in Suns but in planetary orbits — an
 // early-AGB giant's surface, placed at the Sun, would reach past Mercury toward Mars.
+// Orbits the star has already engulfed (R ≥ orbit) render SWALLOWED: the open ring
+// fills with the star's tint and the label dims (see drawOrbits).
 //
 // A SIBLING to the §3 spine, like sed.js: it reads ONE number off the marker (the
 // radius R_rsun) and redraws — no fetch, no backend. The "this star" marker is tinted
@@ -211,16 +213,30 @@ export function createScale(canvas) {
     const rowRight = [-1e9, -1e9];      // last label's right edge, per stagger row
     orbits.forEach((o, i) => {
       const x = xOf(o.r);
-      ctx.strokeStyle = COL_ORBIT; ctx.globalAlpha = 0.85; ctx.lineWidth = 1;
+      // Swallowed orbits — the star's surface is already past this orbit, so the
+      // planet is INSIDE the star: the open ring fills with the star's own tint and
+      // its label dims. The caption narrates it; this makes it visible at a glance
+      // (and in SN mode the expanding fireball engulfs the rings one by one).
+      const swallowed = R != null && R >= o.r;
+      ctx.strokeStyle = COL_ORBIT; ctx.globalAlpha = swallowed ? 0.35 : 0.85;
+      ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x, AXIS_Y); ctx.lineTo(x, ORBIT_TOP + 3); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, ORBIT_TOP, 3.2, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, ORBIT_TOP, 3.2, 0, Math.PI * 2);
+      if (swallowed) {
+        ctx.globalAlpha = 0.9; ctx.fillStyle = css; ctx.fill();
+        ctx.globalAlpha = 0.5; ctx.stroke();
+      } else {
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
       const row = i % 2;                // 0 -> upper, 1 -> lower
       const ly = row === 0 ? 30 : 44;
       const w = ctx.measureText(o.name).width;
       if (x - w / 2 > rowRight[row] + 5) {
         ctx.fillStyle = COL_ORBIT; ctx.textAlign = "center";
+        ctx.globalAlpha = swallowed ? 0.45 : 1;
         ctx.fillText(o.name, x, ly);
+        ctx.globalAlpha = 1;
         rowRight[row] = x + w / 2;
       }
     });

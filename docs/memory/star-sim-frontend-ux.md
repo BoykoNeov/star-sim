@@ -1,6 +1,6 @@
 ---
 name: star-sim-frontend-ux
-description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS; + the 2026-07 HR pass (Teff-colored living track, glowing marker, O·B·A·F·G·K·M class bands)."
+description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS; + the 2026-07 HR pass (Teff-colored living track, glowing marker, O·B·A·F·G·K·M class bands) + the tier-2 pass (past/future track split, swallowed-orbit rings, starfield backdrop, first-load skeletons)."
 metadata: 
   node_type: memory
   type: project
@@ -80,6 +80,46 @@ plus `comp.js`/`hr.js`/`canvas.js`). Non-obvious decisions worth not re-litigati
   12** — 12 dropped the G letter at phone width (the G band is the narrowest at
   0.062 dex ≈ 10.5px on a 300px canvas), and the Sun's own class is the one letter a
   teaching app can't shed.
+
+**The tier-2 visual pass (2026-07, follow-up to the HR pass — four review items,
+frontend-only, commit after b2fb6e9):**
+- **Past/future HR track split (`hr.js`):** the traversed portion draws solid (1.8px /
+  α0.9), the future dimmer (1.1px / α0.3); same split on the endgame cooling/stripping
+  track (2/1.0 vs 1.3/0.35). Split point = `splitIndex(list)`: `list.indexOf(marker)`
+  is EXACT because the marker IS an element of the drawn array in every scrub mode
+  (live: `refresh()` picks `currentTrack[i]`, the same array `setTrack` received;
+  WD/WR: `refreshWD/WR` pick `endgame.states[i]`, the same array `setEndgame` got) —
+  with an age-monotone fallback for any state from elsewhere. Physics note: the Sun's
+  past is geometrically tiny in log-space (ZAMS→4.6 Gyr moves ~nothing on the HR), so
+  the split only "pops" once the star leaves the MS — correct, not a bug.
+- **Swallowed-orbit rings (`scale.js` drawOrbits):** an orbit with `R ≥ o.r` renders
+  engulfed — the open blue ring fills with the star's own `teffToCSS` tint (α0.9),
+  stem+label dim to ~0.4. The caption already narrated swallowing; this makes it
+  visible, and in SN mode the expanding fireball engulfs the rings one by one.
+  **Demo gotcha:** the 1 M☉ track's exposed window ends at EAGB R≈83 R☉ — one solar
+  radius UNDER Mercury's 83.2 R☉ orbit (the bigger RGB-tip swell is mid-track), so
+  demo with ≥2 M☉ (5 M☉ EAGB-end → 327 R☉ = Mercury+Venus+Earth filled, Mars at
+  328 R☉ still open).
+- **Starfield backdrop (`star.js` makeStarfield):** deterministic (seeded mulberry32 —
+  byte-stable screenshots), STATIC (no drift — must never read as the star moving),
+  a flat ±20 scatter sheet at z=−40, NOT a shell (a radius-60 shell puts ~97% of its
+  points outside the fixed camera's 40° cone — measured before building; the canvas is
+  CSS-locked square so aspect stays 1 and ±20 overfills the ±17.5 frustum). Two layers
+  (240 dim + 42 brighter), additive Points, `depthWrite:false` + depthTest on so the
+  opaque star disk occludes them; corona/glare/wind/fireball quads (renderOrder ≥1)
+  just glow over them. Pure backdrop — encodes no StellarState, no honesty cost. The
+  CSS vignette rides `#star-canvas`'s background (color + radial-gradient in the
+  shorthand — the color is explicit so the loading override can't drop it). Bonus
+  narrative beat: in the SN winks-out/failed reveals the sky REMAINS — verified.
+- **First-load skeletons:** markup ships `<body class="loading">`; `endFirstLoad()`
+  (main.js) removes it on the first `paintState` AND on both first-load error paths
+  (a dead backend must show its error, not shimmer forever). The sheen rule MUST use
+  per-ID selectors (`body.loading #hr-canvas`, …): the canvases' own `#id` rules set
+  the `background` SHORTHAND, which resets `background-image` at ID specificity, so a
+  class-level rule loses the cascade. `prefers-reduced-motion` kills the animation.
+  Verify via computed style (`animationName === "skeleton-sheen"` while a Playwright
+  route holds `/track` open, `none` after first paint) — a still screenshot can't
+  prove a moving sheen.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the

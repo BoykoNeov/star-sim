@@ -1901,11 +1901,19 @@ function tryResnap() {
   if (mode === "sn") return trySNResnap();
 }
 
+// Retire the first-load skeleton sheen (<body class="loading">, styles.css). Called on
+// the first successful paint AND on the first-load error paths — an unreachable backend
+// must show its error over quiet panels, not shimmer forever. Idempotent.
+function endFirstLoad() {
+  document.body.classList.remove("loading");
+}
+
 // Paint every living consumer (the 3D star, HR, composition, scale, spectrum, SED,
 // classification + the readout/status) from one StellarState — the living marker.
 // Shared by refresh() (the track-pick path) so the source of the state stays in one
 // place. (The WD/WR endgame modes have their own render paths — refreshWD/refreshWR.)
 function paintState(s) {
+  endFirstLoad();   // first real paint — retire the first-load skeleton sheen
   star.update(s);
   classification.update(s);
   scale.update(s);
@@ -2036,6 +2044,7 @@ async function refreshTrack() {
     // there's nothing for refresh() to paint, so surface the error here (refresh() no
     // longer fetches /state, Chunk E, so it can't surface it as it used to).
     if (!currentTrack) {
+      endFirstLoad();   // surface the error over quiet panels, not a skeleton shimmer
       els.status.style.color = "#ff6b6b";
       els.status.textContent = `Error: ${err.message}`;
       return;
@@ -2100,6 +2109,7 @@ async function init() {
     rebuildMassTicks();
     rebuildFehTicks();   // age ticks wait for the first track + age window
   } catch (err) {
+    endFirstLoad();   // surface the error over quiet panels, not a skeleton shimmer
     els.status.style.color = "#ff6b6b";
     els.status.textContent =
       `Cannot reach backend (${err.message}). Start it with: ` +

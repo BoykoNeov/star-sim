@@ -65,7 +65,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `sn.js` is the SN endgame's cited observed-photometry dataset (SN 1987A ⁵⁶Co tail +
   SN 1999em IIP plateau, published bolometric fits — the Tier-1 overlay anchor); `hr.js`
   gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail),
-  a **Teff-colored living track** + glowing marker (one shared `drawMarker`), and faint
+  a **Teff-colored living track** + glowing marker (one shared `drawMarker`), a
+  **past/future split at the marker** (traversed solid, ahead dim — living AND endgame
+  tracks, `splitIndex` = marker array identity + age fallback), and faint
   **O·B·A·F·G·K·M spectral-class bands** (letters above the top frame line, living view
   only — see [[star-sim-frontend-ux]]).
   `layout.js` is the draggable/responsive **dashboard** layer (a reorder-in-flow
@@ -86,7 +88,9 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   clipped blue-white, Sun anchored at 1.0) × streak-proof rotation + activity corona
   quad (monotone outside-the-limb profile — never a rim ring) + a Teff×L-keyed
   **glare** quad (hot luminous objects blaze; SN re-keys it to the light curve) —
-  see [[star-sim-phase2-shaders]] for the rework). `color.js` is the reference
+  see [[star-sim-phase2-shaders]] for the rework) + a **deterministic static starfield
+  backdrop** (seeded, a flat far sheet NOT a shell; pure backdrop, encodes no state —
+  see [[star-sim-frontend-ux]]). `color.js` is the reference
   Planck→CIE→sRGB color pipeline
   (`teffToLinearRGB` for the shader, `teffToRGB`/`teffToCSS`/`wavelengthToCSS` for
   the 2D UI). `canvas.js` is the shared HiDPI `fitCanvas` helper. Three.js via CDN
@@ -411,9 +415,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-interior-structure-mesa]].
 
 ### Frontend & UX
-- Other panels/features: Lane–Emden interior (§8), true-size scale bar, MK
+- Other panels/features: Lane–Emden interior (§8), true-size scale bar (with
+  **swallowed-orbit rings** — an engulfed orbit fills with the star's tint), MK
   classification, instability-strip HR overlay, tooltip singleton, age-slider
-  landmark ticks, responsive draggable dashboard. **No JS test harness → the
+  landmark ticks, responsive draggable dashboard, **first-load skeleton sheen**
+  (`<body class="loading">`, removed on first paint/error; per-ID CSS selectors —
+  the canvas `#id` background shorthand outranks a class rule). **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).
   [[star-sim-frontend-ux]], [[star-sim-draggable-responsive-panels]],
