@@ -59,6 +59,14 @@ const WD_CAPTION =
 // boundaries are real (snapped core masses), sized by ENCLOSED MASS not radius; the inner
 // heavy shells are BEYOND what MIST computed — the tracks end before the iron core forms —
 // so they're the canonical pre-collapse structure theory predicts, never measured here.
+// Honesty caption for the binary-stripped-star SURFACE view (see drawStripped). Only the
+// surface X/Y/Z is measured (from the Götberg grid); the grid carries no interior
+// composition, so the core is a He-burning core by construction — not shown as if measured.
+const STRIPPED_CAPTION =
+  "The MEASURED surface of the stripped star (Götberg 2018) — hydrogen-poor and " +
+  "helium-rich, the bared core. This is one representative state (halfway through " +
+  "core-helium burning); the grid carries no interior profile, so only the surface is " +
+  "shown. The core is a helium-burning core by construction, not a measured value.";
 const SN_ONION_CAPTION =
   "Schematic pre-collapse cross-section. The H envelope, He shell and C/O-core boundaries " +
   "are sized by ENCLOSED MASS from the model (the disk is the mass budget, not physical " +
@@ -123,24 +131,32 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
                        // model's snapped core masses, the inner heavy shells labeled
                        // schematic (MIST ends before the iron core forms). See drawSNOnion.
   let snData = null;   // the latest SupernovaModel scalars (final/he/CO/remnant masses, ⁵⁶Ni)
+  let stripped = false;      // binary-stripped what-if: a single-state SURFACE composition view
+                             // (the measured He-rich surface IS the story; no EEP track, and the
+                             // core is by-construction, so the burning-abundance views don't apply)
+  let strippedState = null;  // the stripped StellarState (drawStripped reads its surface X/Y/Z)
   // Per-element visibility for the cno view (legend-click toggles). Session-only
   // (not persisted). Scoped to the cno view — the light view is only three lines.
   const hidden = new Set();
 
   function setTrack(t) { track = t && t.length ? t : null; draw(); }
-  // The marker drives the bulk/cno/light/WD views; the SN onion is the static pre-collapse
-  // structure (it ignores the scrub), so skip the per-frame redraw in SN mode.
-  function update(state) { marker = state; if (sn) return; draw(); }
+  // The marker drives the bulk/cno/light/WD views; the SN onion and the stripped-star surface
+  // view are static single-state cross-sections (they ignore the scrub), so skip the per-frame
+  // redraw in those modes.
+  function update(state) { marker = state; if (sn || stripped) return; draw(); }
   function setMode(m) { mode = (m === "cno" || m === "light") ? m : "bulk"; draw(); }
   // Enter/leave the white-dwarf endgame structure view (mirrors hr.setEndgame). It
   // swaps the burning-abundance views for the layered cross-section, driven by the
   // marker state alone (the EEP-vs-track machinery doesn't apply to a structure view).
-  function setEndgame(states) { wd = true; sn = false; track = states && states.length ? states : track; draw(); }
+  function setEndgame(states) { wd = true; sn = false; stripped = false; track = states && states.length ? states : track; draw(); }
   // Enter the SN endgame: show the progenitor's pre-collapse onion shell, sized from the
   // model's snapped core masses (`final/he/CO/remnant` + the ⁵⁶Ni slider value). Driven by
   // the model scalars alone (the EEP-vs-track machinery doesn't apply to a structure view).
-  function setSupernova(model) { sn = true; wd = false; if (model) snData = model; draw(); }
-  function clearEndgame() { wd = false; sn = false; draw(); }
+  function setSupernova(model) { sn = true; wd = false; stripped = false; if (model) snData = model; draw(); }
+  // Enter the binary-stripped what-if: the single-state SURFACE composition view (drawStripped),
+  // driven by the stripped StellarState's surface X/Y/Z alone (no track — one representative state).
+  function setStripped(state) { stripped = true; wd = false; sn = false; if (state) strippedState = state; draw(); }
+  function clearEndgame() { wd = false; sn = false; stripped = false; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
   // Toggle one per-element line in the cno view on/off, returning its new
   // visibility. Hiding doesn't just declutter: region() autoscales over only the
@@ -171,6 +187,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    if (stripped) { drawStripped(); return; }   // single-state surface view (drives off strippedState)
     if (sn) { drawSNOnion(); return; }   // pre-collapse onion shell (drives off snData, not the track)
     if (wd) { drawWD(); return; }   // structure view drives off the marker, not the track
     if (!track) return;
@@ -591,6 +608,67 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
       W - PAD_L - PAD_R - 16, 18);
   }
 
+  // -- binary-stripped-star SURFACE composition view ----------------------------
+  // A stripped star is ONE representative state (halfway through core-He burning), not a
+  // time-track — so the EEP-axis bulk/cno/light views don't apply. What IS the story is its
+  // SURFACE: hydrogen-poor, helium-rich (the exposed core), the headline of the whole feature.
+  // So this draws a single wide stacked bar of the surface X/Y/Z, honest about what's measured:
+  //   * The surface X/Y/Z is READ FROM THE GRID (Götberg 2018) — the measured payoff.
+  //   * The CORE is NOT shown: the grid carries no interior composition (the state's core is a
+  //     He-burning core by construction), so drawing it would be fabricating data — the same
+  //     discipline as the SN onion's schematic-inner-shells / the WD's canonical layers.
+  function drawStripped() {
+    const s = strippedState;
+    if (!s) return;
+    const PAD = 12;
+    const X = clamp01(s.X_surf ?? 0), Y = clamp01(s.Y_surf ?? 0), Z = clamp01(s.Z_surf ?? 0);
+    const coolCol = teffToCSS(s.Teff_K);
+
+    // dynamic caption reserve (wraps to more lines on a narrow canvas — mirrors drawWD)
+    const titleH = 24, capLh = 11;
+    ctx.font = "10px system-ui, sans-serif";
+    const capH = wrapText(STRIPPED_CAPTION, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
+    const top = PAD + titleH, bot = H - PAD - capH;
+
+    // title + type tag (tinted by the star's true blackbody color)
+    labelPill("surface composition", PAD, PAD);
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.fillStyle = coolCol; ctx.textAlign = "right";
+    ctx.fillText("helium-rich surface", W - PAD, PAD + 12);
+    ctx.textAlign = "left";
+
+    // one wide horizontal stacked bar: H | He | Z, segment widths ∝ surface mass fraction.
+    const barX = PAD, barW = W - 2 * PAD;
+    const barH = Math.max(40, Math.min(70, (bot - top) * 0.4));
+    const barY = top + 12;
+    let x = barX;
+    for (const [name, frac, col] of [["H", X, COL.X], ["He", Y, COL.Y], ["Z", Z, COL.Z]]) {
+      const w = frac * barW;
+      ctx.fillStyle = col; ctx.fillRect(x, barY, w, barH);
+      if (w > 40) {   // label inside only if the segment is wide enough to hold it
+        ctx.fillStyle = "#0b0e16"; ctx.font = "600 12px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`${name} ${Math.round(frac * 100)}%`, x + w / 2, barY + barH / 2 + 4);
+        ctx.textAlign = "left";
+      }
+      x += w;
+    }
+    ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // exact fractions + the normal-star contrast (the He-richness is the lesson)
+    ctx.fillStyle = "#c7d0e0"; ctx.font = "12px system-ui, sans-serif";
+    ctx.fillText(`X ${fmtFrac(X)} · Y ${fmtFrac(Y)} · Z ${fmtFrac(Z)}`, barX, barY + barH + 22);
+    ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
+    // Kept short so it doesn't clip on a phone-width canvas (drawn unwrapped, unlike the caption).
+    ctx.fillText("Normal surface: ~74% H — the bared core is helium.",
+      barX, barY + barH + 40);
+
+    // honesty caption (wrapped; capH reserved its exact line count above)
+    ctx.fillStyle = "#7e879a"; ctx.font = "10px system-ui, sans-serif";
+    wrapText(STRIPPED_CAPTION, PAD, bot + 12, W - 2 * PAD, capLh);
+  }
+
   // Minimal word-wrap for canvas text: draw `text` from (x,y) wrapping to maxW, and
   // return the number of lines used. With dry=true it measures only (no draw), so a
   // caller can reserve the right height before laying out — the panel must stay
@@ -776,5 +854,5 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText("EEP →  (evolutionary phase)", W / 2 - 80, H - 8);
   }
 
-  return { setTrack, update, setMode, setScale, toggleElem, setEndgame, setSupernova, clearEndgame, resize };
+  return { setTrack, update, setMode, setScale, toggleElem, setEndgame, setSupernova, setStripped, clearEndgame, resize };
 }

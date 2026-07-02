@@ -268,6 +268,11 @@ main {
    regime (hidden otherwise, so it never reads as a dead knob). */
 .peculiar-control { margin: 12px 0 2px; }
 .peculiar-control[hidden] { display: none; }
+/* Binary-stripped-star what-if toggle (mirrors the Ap/Bp control): a mass-gated reversible
+   MODE toggle, shown only for eligible progenitors (2–18.2 M☉) in live mode and while the
+   mode is active. */
+.stripped-control { margin: 12px 0 2px; }
+.stripped-control[hidden] { display: none; }
 /* Pointer left in the SED panel after the slider moved to Controls. */
 .sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 
@@ -615,10 +620,12 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
 /* The bar's title + narration come in a WD and a WR variant; the body mode class
    reveals exactly one (the WR un-modeled gap is at the END — core-collapse — so its
    text differs from the WD's PN-ejection-at-entry framing). */
-.endgame-title-wd, .endgame-title-wr, .endgame-title-sn { display: none; }
+.endgame-title-wd, .endgame-title-wr, .endgame-title-sn,
+.endgame-title-stripped { display: none; }
 body.wd-mode .endgame-title-wd { display: inline; }
 body.wr-mode .endgame-title-wr { display: inline; }
 body.sn-mode .endgame-title-sn { display: inline; }
+body.stripped-mode .endgame-title-stripped { display: inline; }
 /* The "Back to the living star" button (item 9): a compact filled-accent (yellow)
    button, matching the gateway button's treatment, so the two endgame controls read
    as the same affordance. Kept compact (not full-width) so the bar's title-+-back
@@ -645,10 +652,12 @@ body.sn-mode .endgame-title-sn { display: inline; }
 .pulse-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
-.endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn { display: none; }
+.endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,
+.endgame-narrate-stripped { display: none; }
 body.wd-mode .endgame-narrate-wd { display: block; }
 body.wr-mode .endgame-narrate-wr { display: block; }
 body.sn-mode .endgame-narrate-sn { display: block; }
+body.stripped-mode .endgame-narrate-stripped { display: block; }
 
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
@@ -657,19 +666,23 @@ body.sn-mode .endgame-narrate-sn { display: block; }
 
 /* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling
    time / WR stripping sequence). */
-.age-wd, .age-wr, .age-sn { display: none; color: var(--accent); }
+.age-wd, .age-wr, .age-sn, .age-stripped { display: none; color: var(--accent); }
 
 /* In an endgame: the age input becomes a scrubber (no number entry), the endgame
    caption shows, and the SED's rotation control is hidden (neither a degenerate WD
    nor a wind-driven WR has the cool convective dynamo that control models). */
-body.wd-mode .age-live, body.wr-mode .age-live, body.sn-mode .age-live { display: none; }
+body.wd-mode .age-live, body.wr-mode .age-live, body.sn-mode .age-live,
+body.stripped-mode .age-live { display: none; }
 body.wd-mode .age-wd { display: inline; }
 body.wr-mode .age-wr { display: inline; }
 body.sn-mode .age-sn { display: inline; }
+body.stripped-mode .age-stripped { display: inline; }
 body.wd-mode .endgame-age-caption,
 body.wr-mode .endgame-age-caption,
-body.sn-mode .endgame-age-caption { display: block; }
-body.wd-mode #sed-rot, body.wr-mode #sed-rot, body.sn-mode #sed-rot { display: none; }
+body.sn-mode .endgame-age-caption,
+body.stripped-mode .endgame-age-caption { display: block; }
+body.wd-mode #sed-rot, body.wr-mode #sed-rot, body.sn-mode #sed-rot,
+body.stripped-mode #sed-rot { display: none; }
 /* WR draws NO coronal X-ray band or rotation→activity line (a wind, not a dynamo), so
    hide those two SED legend entries — don't label a non-feature. (The WD endgame still
    draws a faded band, so it keeps the legend; only WR hides it.) */
@@ -680,8 +693,9 @@ body.wr-mode .sed-nonthermal-legend, body.sn-mode .sed-nonthermal-legend { displ
    same way #sed-rot is hidden. Without this the toggle stayed clickable but drew
    nothing (hr.js draw() skips the overlay in endgame mode), leaving a dead button +
    an orphaned legend. The overlay's on/off state is preserved and re-shown on exit. */
-body.wd-mode .hr-modes, body.wr-mode .hr-modes, body.sn-mode .hr-modes,
-body.wd-mode .legend-vars, body.wr-mode .legend-vars, body.sn-mode .legend-vars { display: none; }
+body.wd-mode .hr-modes, body.wr-mode .hr-modes, body.sn-mode .hr-modes, body.stripped-mode .hr-modes,
+body.wd-mode .legend-vars, body.wr-mode .legend-vars, body.sn-mode .legend-vars,
+body.stripped-mode .legend-vars { display: none; }
 /* In the SN endgame the HR panel is repurposed as the light curve (L vs time) — a
    genuinely different plot, NOT an HR diagram (unlike the WD/WR cooling/stripping tracks,
    which keep real L-vs-Teff axes). So swap the panel title to match. */
@@ -704,6 +718,12 @@ body.wd-mode .comp-panel .legend { display: none; }
    hide them, the same as the WD structure view. */
 body.sn-mode .comp-modes,
 body.sn-mode .comp-panel .legend { display: none; }
+/* The stripped-star what-if shows a single-state SURFACE composition view (the measured
+   He-rich surface is the whole story; there is no EEP track and the core is by-construction,
+   so the burning-abundance toggle + legends are meaningless) — hide them like the WD/SN
+   structure views. */
+body.stripped-mode .comp-modes,
+body.stripped-mode .comp-panel .legend { display: none; }
 /* In the white-dwarf endgame the Lane–Emden panel finally earns its keep: a white
    dwarf genuinely IS a degenerate polytrope (n≈1.5 non-relativistic → n=3 near the
    Chandrasekhar mass), so swap the general "not the real interior" intro for a hint

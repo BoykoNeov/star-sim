@@ -1,6 +1,41 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: CHUNK 1 BUILT (backend vertical, solar-first, 266 pytest). Next = Chunk 2 (frontend what-if mode).
+## Status: CHUNKS 1 & 2 BUILT. Next = Chunk 3 (stripped-star spectra, optional/deferred).
+
+**Chunk 2 done 2026-07-02 (frontend-only, 266 pytest UNCHANGED, Playwright 1440+390 zero
+console errors).** The reversible what-if `stripped-mode` + payoff render:
+- **Entry point (i), settled:** a mass-gated TOGGLE (`#stripped-toggle`, mirroring the Ap/Bp
+  control), shown only for eligible progenitors (2–18.2 M☉) in live mode + while active. It's a
+  MID-LIFE FORK, not an end-of-life gateway — so a toggle, not a gateway button — but still a
+  reversible MODE (`mode="stripped"`) that snaps the whole display, fetched from `/binary`
+  (snap-always, no vvcrit). **One exit path:** the SHARED endgame-bar "Back" (= `exitEndgame`);
+  unchecking the toggle calls the same path. `exitEndgame` captures `prevMode` and pins-to-end
+  ONLY for the true endgames — the stripped fork returns to the age it forked FROM (ageValue
+  untouched inside the mode).
+- **Consumers rendered directly, with the THREE false-data leaks blocked (advisor):** HR keeps
+  the progenitor's living track as faint context and drops the marker BLUE-LEFT of it (reuses
+  `hr.setEndgame([s],"stripped")` auto-fit — no hr.js change); comp shows a NEW single-state
+  SURFACE view (`comp.setStripped`/`drawStripped` — the measured He-rich bar H/He/Z; the core is
+  by-construction so it is NOT drawn); classify a `strippedLabel` (sdO/B hot subdwarf < 1.5 M☉ →
+  He-star above; keyed on the CURRENT mass threaded via `opts.mStrip`); scale radius-based (no
+  mass_init read — the audit worry was moot); readout `renderStrippedReadout` (current m_strip +
+  progenitor + He surface). **spectrum → honest placeholder** (the main cube is H-atmosphere
+  models → a He-star's Teff/logg would paint a FALSE O-star Balmer spectrum); **structure → NOT
+  called** (keeps its last profile, like wd/wr/sn — else it'd fetch a normal ZAMS profile); the
+  age slider is DISABLED (one representative state — no lifetime in the table).
+- **SED wind free-free tail: naturally off + honest** — `mdot=None` so `sed.js`'s `computeWindTail`
+  returns null (no line drawn), AND a stripped star's fast wind wouldn't crest the floor anyway.
+  No gating code needed (the measure-first concern resolved itself in the data).
+- **Re-snap (`tryStrippedResnap`, in the `tryResnap` dispatch):** UNLIKE wd/wr/sn there's no fate
+  to revert on (`/binary` is snap-always), so a drag past the grid edges snaps to nearest + shows
+  an in-band snapped-far note in the caption, rather than reverting.
+- **Files:** `main.js` (the orchestration — els, state, `updateStrippedControl`/`fetchStripped`/
+  `applyStrippedModel`/`refreshStripped`/`renderStrippedReadout`/`enterStripped`/
+  `tryStrippedResnap`, `exitEndgame`+`tryResnap` extended, toggle handler), `comp.js`
+  (`setStripped`/`drawStripped`), `classify.js` (`strippedLabel`), `index.html` (toggle + bar
+  title/narration + age span), `styles.css` (stripped-mode rules). No backend touch.
+
+## Status (historical): CHUNK 1 BUILT (backend vertical, solar-first, 266 pytest).
 
 **Chunk 1 done 2026-07-02 (backend only, solar-first).** The data + runtime vertical:
 - **`backend/star_sim/data/gotberg_z014.csv`** — the verified Z=0.014 table committed to

@@ -126,6 +126,7 @@
           <span class="endgame-title endgame-title-wd">White-dwarf endgame</span>
           <span class="endgame-title endgame-title-wr">Wolf–Rayet endgame</span>
           <span class="endgame-title endgame-title-sn">Supernova endgame</span>
+          <span class="endgame-title endgame-title-stripped">Binary-stripped star</span>
           <button id="pulse-toggle" class="pulse-toggle" type="button" hidden>🔍 Thermal pulses</button>
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
@@ -162,6 +163,18 @@
           and radius; but the brightness SCALE is set by the (unmodeled) explosion's
           <b>nickel yield</b> — drag the ⁵⁶Ni slider and see where real supernovae land. Mass
           and [Fe/H] stay live (they re-snap to a different progenitor).
+        </p>
+        <p class="endgame-narrate endgame-narrate-stripped">
+          A <b>close companion</b> has stripped this star's hydrogen envelope near the end of
+          its main sequence — the step a full two-star model would show, <b>named but not
+          drawn</b> here — baring the hot, compact, <b>helium-rich core</b>: a
+          <b>stripped star</b> (Götberg&nbsp;2018). This is the dominant (~70%) channel for
+          stripped-envelope and Wolf–Rayet stars, unifying <b>hot subdwarfs</b> (low mass)
+          and <b>Wolf–Rayet stars</b> (high mass) as one sequence. It is <b>one representative
+          state</b> (halfway through core-helium burning), not a time-track — so the age
+          slider is disabled. Only the <b>surface</b> composition is measured (hydrogen-poor,
+          helium-rich); the spectrum is a later feature. Mass and [Fe/H] stay live (they
+          re-snap to a different stripped star).
         </p>
       </div>
 
@@ -259,11 +272,29 @@
         <p class="note rot-note" id="peculiar-note"></p>
       </div>
 
+      <!-- Binary-stripped star (Götberg 2018) — the ~70% binary WR/subdwarf channel. A
+           reversible what-if FORK (not an end-of-life endgame): "instead of expanding to a
+           red giant, a close companion strips the hydrogen envelope NOW → this hot, He-rich
+           stripped core." Shown only for eligible progenitors (2–18.2 M☉ — the grid range),
+           gated like the Ap/Bp toggle. Checking it enters the reversible stripped-mode (the
+           whole display snaps to the stripped product); unchecking, or the endgame bar's
+           "Back", returns to the living star. -->
+      <div class="stripped-control" id="stripped-control" hidden>
+        <label class="rot-toggle-row" for="stripped-toggle">
+          <input id="stripped-toggle" type="checkbox" />
+          <span>Stripped in a binary
+            <span class="help" tabindex="0" data-tip="A what-if: put this star in a close binary. Near the end of its main sequence it fills its Roche lobe and a companion strips off the hydrogen envelope (Case-B mass transfer), baring the hot, compact, HELIUM-rich core that then burns helium — a stripped star. This is the DOMINANT observed channel for stripped-envelope / Wolf–Rayet stars (~70%, Sana 2012), and it unifies hot subdwarfs (low mass) and Wolf–Rayet stars (high mass) as one sequence. Real data — the Götberg et al. 2018 CMFGEN model grid (snapped to the nearest progenitor mass and metallicity, never interpolated). It is ONE representative state (halfway through core-helium burning), not a time-track, so the age slider is disabled. The companion that did the stripping is named but not drawn (that is the full two-star model, a later feature). Only the SURFACE composition is measured (hydrogen-poor, helium-rich); the core is inferred.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="stripped-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>
         <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
         <span class="age-sn">· time since explosion (supernova)</span>
+        <span class="age-stripped">· one representative state (stripped star)</span>
         <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">

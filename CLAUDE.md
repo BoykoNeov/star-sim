@@ -322,6 +322,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **Chunks 1 (backend) & 2 (frontend what-if mode) BUILT.** **Chunk 2** (frontend-only, 266 pytest
+  UNCHANGED, Playwright 1440+390 zero console errors): the reversible `mode="stripped"`. Entry-point
+  (i) settled — a **mass-gated TOGGLE** (`#stripped-toggle`, mirrors the Ap/Bp control) for eligible
+  progenitors (2–18.2 M☉), a MID-LIFE FORK (not an end-of-life gateway) that still snaps the whole
+  display, fetched from `/binary`. **One exit** — the shared endgame-bar "Back" (`exitEndgame`, which
+  captures `prevMode` to return the fork to the age it forked FROM, not the track end); unchecking
+  calls the same. **The three false-data leaks blocked (advisor):** HR keeps the progenitor's living
+  track faint + drops the marker **blue-left** (reuses `hr.setEndgame([s],"stripped")` auto-fit, no
+  hr.js change); **comp = a NEW single-state SURFACE view** (`comp.setStripped`/`drawStripped` — the
+  measured He-rich H/He/Z bar; the core is by-construction so NOT drawn); **spectrum → placeholder**
+  (the main cube is H-atmosphere → a He-star would paint a FALSE O-star Balmer spectrum); **structure
+  → not called** (keeps its last profile). `classify.strippedLabel` (sdO/B < 1.5 M☉ → He-star above,
+  via `opts.mStrip`); age slider DISABLED (one representative state). SED wind tail off + honest for
+  free (`mdot=None` → `computeWindTail` null). Re-snap (`tryStrippedResnap`): snap-always, no revert —
+  a drag past the grid edges shows an in-band snapped-far caption note. [[star-sim-binary-stripped]];
+  plan `docs/plans/stripped-consort-unveiling.md`. **Next = Chunk 3** (stripped-star spectra, deferred).
 - **Chunk 1 BUILT (backend vertical, solar-first).** The hot He-rich core a close companion
   exposes by Case-B Roche-lobe overflow (Götberg+2018) — the dominant observed stripped/WR
   channel, retiring the single-star-WR "minority channel" caveat. It's the first build from

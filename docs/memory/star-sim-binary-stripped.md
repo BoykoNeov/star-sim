@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; Chunk 1 backend built.
+description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; Chunks 1 (backend) & 2 (frontend what-if mode) built.
 metadata:
   type: project
 ---
@@ -54,10 +54,39 @@ across the grid (logL 0.6 vs single ~1.05 at 2 M☉ → sub-luminous; 4.9 vs ~4.
 over-luminous). `stripped.L < single.L` would FAIL at high mass. Always-hotter +
 always-He-enriched are the robust discriminators.
 
-**Next = Chunk 2** (frontend what-if `stripped-mode`): entry-point (i) mid-life toggle vs
-(ii) end-of-life gateway (advisor consult); consumers render the stripped state directly
-(no new shader); **audit `scale.js`/`classify.js` to read the served CURRENT mass, not
-mass_init**; decide the age-slider (disable vs relabel to lifetime); **VERIFY the SED wind
-free-free tail** before showing it (fast wind → small Ṁ/v∞, may not crest the floor).
-Related: [[star-sim-rotation-subpop-atlas]] (Tier D binarity), [[star-sim-wr-wd-endgame-plan]]
-(the single-star WR this complements), [[star-sim-supernova-remnant-endgame]] (sibling pattern).
+**Chunk 2 BUILT 2026-07-02 (frontend-only, 266 pytest UNCHANGED, Playwright 1440+390 zero
+console errors):** the reversible what-if `mode="stripped"`.
+- **Entry point (i), settled:** a mass-gated TOGGLE (`#stripped-toggle`, mirrors the Ap/Bp
+  control) shown for eligible progenitors (2–18.2 M☉) in live mode + while active — a MID-LIFE
+  FORK, not an end-of-life gateway (so a toggle, not a gateway button), but still a reversible
+  MODE snapping the whole display, fetched from `/binary` (snap-always, no vvcrit). **One exit:**
+  the SHARED endgame-bar "Back" (=`exitEndgame`); unchecking calls the same. `exitEndgame`
+  captures `prevMode` and pins-to-end ONLY for real endgames — the fork returns to the age it
+  forked FROM (ageValue is untouched inside the mode; `els.age.disabled=true` — one representative
+  state, no lifetime).
+- **The three false-data leaks blocked (advisor's #1 point):** HR keeps the progenitor's living
+  track faint + drops the marker BLUE-LEFT (reuses `hr.setEndgame([s],"stripped")` auto-fit — NO
+  hr.js change); **comp = a NEW single-state SURFACE view** (`comp.setStripped`/`drawStripped` —
+  the measured He-rich bar H/He/Z; the core is by-construction so NOT drawn — the bulk/cno/light
+  views need an EEP track a single state lacks); **spectrum → honest placeholder** (the main cube
+  is H-atmosphere models → a He-star's Teff/logg would paint a FALSE O-star Balmer spectrum);
+  **structure → NOT called** (keeps its last profile, like wd/wr/sn — else it'd fetch a normal
+  ZAMS profile for the progenitor mass). classify=`strippedLabel` (sdO/B < 1.5 M☉ → He-star above,
+  keyed on the CURRENT `m_strip` via `opts.mStrip`); scale radius-based (the mass_init audit worry
+  was MOOT — scale reads no mass); readout=`renderStrippedReadout` (current m_strip + progenitor +
+  He surface).
+- **SED tail off + honest for free:** `mdot=None` → `sed.js computeWindTail` returns null (no
+  line), and a fast wind wouldn't crest the floor anyway — no gating code needed (the measure-first
+  concern resolved in the data).
+- **Re-snap (`tryStrippedResnap` in `tryResnap`):** UNLIKE wd/wr/sn there's no fate to revert on
+  (snap-always) → a drag past the grid edges snaps + shows an in-band snapped-far caption note,
+  never reverts.
+- **Files (frontend-only, no backend touch):** `main.js` (orchestration), `comp.js`
+  (`setStripped`/`drawStripped`), `classify.js` (`strippedLabel`), `index.html` (toggle + bar
+  title/narration + `.age-stripped`), `styles.css` (stripped-mode rules mirror wd/wr/sn).
+
+**Next = Chunk 3** (stripped-star spectra, optional/deferred): a `/stripped_spectrum` sibling
+over the Götberg CMFGEN grid (host-baked like WD/WR), `spectrum.js updateStripped` — measure
+emission-vs-absorption per Teff. Related: [[star-sim-rotation-subpop-atlas]] (Tier D binarity),
+[[star-sim-wr-wd-endgame-plan]] (the single-star WR this complements),
+[[star-sim-supernova-remnant-endgame]] (sibling pattern).

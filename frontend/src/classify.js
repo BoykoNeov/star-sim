@@ -127,6 +127,18 @@ function snLabel(state, failed) {
   return { tag: "SN II", name: "cool, vast ejecta — nebular phase" };
 }
 
+// The binary-stripped star is a hot, helium-surfaced object — not a normal MS type. It is the
+// missing link that unifies hot SUBDWARFS (low mass, sdO/sdB) with WOLF–RAYET stars (high mass)
+// as one stripped-envelope sequence (Götberg 2018), so the label is keyed on the CURRENT
+// (stripped) mass — threaded via opts.mStrip, since it has no home on the single-star state.
+function strippedLabel(state, mStrip) {
+  const heEnriched = (state.Y_surf ?? 0) > (state.X_surf ?? 0);
+  const kind = heEnriched ? "helium" : "hydrogen-rich helium";
+  if (mStrip != null && mStrip < 1.5)
+    return { tag: "sdO/B", name: `hot subdwarf — a binary-stripped ${kind} core` };
+  return { tag: "He★", name: `stripped ${kind} star (binary WR/subdwarf channel)` };
+}
+
 // Build the two child spans once; update() only rewrites their text + the type color.
 export function createClassification(el) {
   if (!el) return { update() {} };
@@ -135,12 +147,14 @@ export function createClassification(el) {
   const nameEl = el.querySelector(".sc-name");
 
   return {
-    // mode === "wd"/"wr"/"sn": show the endgame label instead of the MK type.
+    // mode === "wd"/"wr"/"sn"/"stripped": show the endgame/what-if label, not the MK type.
     update(state, mode, opts) {
       if (!state || state.Teff_K == null) return;
-      if (mode === "wd" || mode === "wr" || mode === "sn") {
+      if (mode === "wd" || mode === "wr" || mode === "sn" || mode === "stripped") {
         const w = mode === "wr" ? wrLabel(state)
-          : mode === "sn" ? snLabel(state, !!(opts && opts.failed)) : wdLabel(state);
+          : mode === "sn" ? snLabel(state, !!(opts && opts.failed))
+          : mode === "stripped" ? strippedLabel(state, opts && opts.mStrip)
+          : wdLabel(state);
         typeEl.textContent = w.tag;
         typeEl.style.color = teffToCSS(state.Teff_K);
         nameEl.textContent = w.name;

@@ -57,6 +57,11 @@ const els = {
   peculiarControl: document.getElementById("peculiar-control"),
   peculiarToggle: document.getElementById("peculiar-toggle"),
   peculiarNote: document.getElementById("peculiar-note"),
+  // Binary-stripped-star what-if toggle (Götberg 2018 — the ~70% WR channel). A mass-gated
+  // entry into the reversible `stripped-mode` (a mid-life fork, not an end-of-life endgame).
+  strippedControl: document.getElementById("stripped-control"),
+  strippedToggle: document.getElementById("stripped-toggle"),
+  strippedNote: document.getElementById("stripped-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -316,7 +321,7 @@ function posFromAge(age) {
 // endgame snaps to ONE real grid track (never interpolated — §6), so the WD scrub is
 // SIMPLER than the live path: it picks states[i] from the pre-fetched /endgame result
 // and feeds the consumers directly — no /state fetch, no window build, no phase snap.
-let mode = "live";              // "live" | "wd" | "wr" | "sn"
+let mode = "live";              // "live" | "wd" | "wr" | "sn" | "stripped"
 // --- rotation axis (rotation Chunk 3) ----------------------------------------
 // `rotationOn` is the user's TOGGLE INTENT (persisted across mass/[Fe/H] changes, like
 // massValue): turning rotation on at a massive star and dragging the mass down keeps the
@@ -415,6 +420,20 @@ let snModel = null;             // the latest /supernova SupernovaModel
 let snFraction = 0;             // slider position 0..1 in the SN time scrubber (linear in days)
 let snToken = 0;                // latest-wins guard for /supernova fetches (enter + M_Ni + resnap)
 let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
+
+// --- binary-stripped-star what-if (stripped-mode) ----------------------------
+// UNLIKE wd/wr/sn (end-of-life endgames reached at the slider's end), the stripped star is a
+// MID-LIFE FORK: "instead of expanding to a red giant, a close companion strips the envelope
+// NOW → this hot He-star." So it's entered by a mass-gated TOGGLE (like Ap/Bp), not a
+// gateway button — but it's still a reversible MODE that snaps the whole display (like
+// wd/wr/sn), fetched from /binary (a sibling route, snap-always, no vvcrit). The exit is the
+// SHARED endgame-bar "Back" (= exitEndgame), and unchecking the toggle calls the same path.
+let strippedData = null;        // the latest /binary payload (state + routing scalars)
+let strippedToken = 0;          // latest-wins guard for /binary fetches (enter + re-snap)
+// The eligible progenitor-mass range for the toggle's gate (the Götberg Z=0.014 grid spans
+// ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
+// snapped-far note rather than reverting; the toggle just doesn't OFFER entry outside them.
+const STRIP_MASS_MIN = 2.0, STRIP_MASS_MAX = 18.2;
 
 // The ⁵⁶Ni-mass control (Tier-3). Bounds are the observed range the backend clamps to; the
 // slider is LOG in M_Ni (it spans 0.001–0.3, ~2.5 decades). Canonical default 0.06.
@@ -844,6 +863,12 @@ const PHASE_TIP = {
     "The exposed surface tells the WN→WC→WO story: helium with nitrogen, then carbon and " +
     "oxygen. Shown only inside the Wolf–Rayet endgame (snapped to one real track). After " +
     "this the core collapses to a neutron star or black hole — which this simulator doesn't model.",
+  "stripped-envelope star":
+    "Stripped-envelope star — the hot, compact, helium-rich core a close companion has bared by " +
+    "stripping the hydrogen envelope (Case-B Roche-lobe overflow; Götberg 2018). The dominant " +
+    "(~70%) channel for stripped/Wolf–Rayet stars, unifying hot subdwarfs (low mass) and " +
+    "Wolf–Rayet stars (high mass). Shown as a what-if fork — one representative state (halfway " +
+    "through core-helium burning), snapped to the nearest grid model; the companion is not drawn.",
   SN: "Supernova — the iron core of a massive star has collapsed and the star explodes. " +
     "This is a COMPUTED semi-analytic model (the tracks end at collapse): a ⁵⁶Ni→⁵⁶Co→⁵⁶Fe " +
     "radioactive light curve powering a homologously expanding ejecta photosphere. The " +
@@ -1693,14 +1718,17 @@ function enterWR() {
   refreshWR();
 }
 
-// Leave the endgame (WD or WR), reversibly — back to the living star at the end of its
-// track. Shared by both modes: the only mode-specific consumer state is the comp panel's
-// WD structure flag (clearEndgame is a no-op for WR, which used the normal views).
+// Leave the endgame (WD / WR / SN) OR the binary-stripped what-if, reversibly — back to the
+// living star. Shared by all modes: mode-specific consumer state (the comp WD-structure /
+// SN-onion / stripped-surface flags) is all cleared by comp.clearEndgame(); hr.clearEndgame()
+// restores the living HR frame.
 function exitEndgame() {
+  const prevMode = mode;   // captured before the reset — decides the age landing (see below)
   mode = "live";
-  document.body.classList.remove("wd-mode", "wr-mode", "sn-mode");
+  document.body.classList.remove("wd-mode", "wr-mode", "sn-mode", "stripped-mode");
   els.endgameBar.hidden = true;
   els.snControl.hidden = true;   // hide the ⁵⁶Ni slider (SN-only)
+  els.age.disabled = false;      // re-enable the age slider (stripped-mode disabled it)
   pulseView = false; pulseStates = null; pulseGateOK = false;   // drop the thermal-pulse sub-view
   updatePulseToggle();           // hides the toggle (mode is now live)
   setWDResnapNote("");
@@ -1708,6 +1736,7 @@ function exitEndgame() {
   comp.clearEndgame();
   endgame = null; endgameKey = null;
   snModel = null; snToken++;     // drop the SN model + invalidate any in-flight /supernova fetch
+  strippedData = null; strippedToken++;   // drop the stripped model + invalidate its in-flight fetch
   // Return to the LIVING version of the endgame progenitor we were viewing
   // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
   // the focus/blur race where a still-focused mass box re-commits a reverted-away value
@@ -1717,7 +1746,11 @@ function exitEndgame() {
   els.mass.value = clamp01(sliderFromMass(massValue));
   setNum(els.massNum, fmt(massValue));
   setNum(els.fehNum, lastEgFeh.toFixed(2));
-  pinAgeToEnd = true;   // land the rebuilt track at its very end
+  // wd/wr/sn are END-of-life endgames → land at the very end. The stripped star is a MID-LIFE
+  // fork → return to the age we forked FROM (ageValue is untouched inside stripped-mode, so
+  // refreshTrack restores the thumb to it via posFromAge). So pin-to-end only when leaving a
+  // true endgame, not the stripped what-if.
+  pinAgeToEnd = prevMode !== "stripped";
   // feh/mass may have re-snapped in WD mode, so refresh the mass range too before the
   // track; refreshMassRangeThenTrack() rebuilds the live track + age window + marker.
   refreshMassRangeThenTrack();
@@ -2126,11 +2159,183 @@ async function trySNResnap() {
   }
 }
 
-// Dispatch a mass/[Fe/H] re-snap to the active endgame mode.
+// --- binary-stripped-star what-if (stripped-mode) ----------------------------
+// The mass-gated entry TOGGLE. Shown when a stripped model is offer-able for the current star:
+// in live mode within the eligible progenitor-mass range, OR while the mode is active (so the
+// checked toggle stays visible as an exit). Mirrors updatePeculiarControl (a track-stable gate
+// on massValue — no age-scrub flicker). The whole control hides in the wd/wr/sn endgames.
+function updateStrippedControl() {
+  const c = els.strippedControl;
+  if (!c) return;
+  const offerable = mode === "live" && massValue >= STRIP_MASS_MIN && massValue <= STRIP_MASS_MAX;
+  const show = offerable || mode === "stripped";
+  c.hidden = !show;
+  if (!show) return;
+  if (els.strippedToggle) els.strippedToggle.checked = mode === "stripped";
+  if (els.strippedNote)
+    els.strippedNote.textContent = mode === "stripped"
+      ? "The hot He-star a close companion would bare by stripping the envelope — untick to return."
+      : "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)";
+}
+
+// Fetch the computed /binary model for the current (mass, [Fe/H]). No vvcrit — the stripped
+// grid is single-star-progenitor-parameterized only. Throws on a network/HTTP error.
+async function fetchStripped() {
+  const mass = massValue, feh = Number(els.feh.value);
+  return fetchJSON(`/binary?mass=${mass}&feh=${feh}`);
+}
+
+// Apply a freshly-fetched stripped model to the panels (shared by enter + re-snap). The HR
+// keeps the progenitor's LIVING track as faint context and drops the marker blue-left of it
+// (reuse setEndgame's auto-fit over [strippedState] + the living track so neither clips); the
+// comp panel shows the single-state SURFACE view; the spectrum is an honest placeholder (the
+// main cube is H-atmosphere models — feeding a He-star's Teff/log g would paint a false
+// O-star Balmer spectrum). Then paint the current state.
+function applyStrippedModel(data) {
+  strippedData = data;
+  const s = data.state;
+  hr.setEndgame([s], "stripped");   // faint living context + fitted axes (single point, no line)
+  comp.setStripped(s);
+  spectrum.showPlaceholder(
+    "Stripped-star spectra (Götberg CMFGEN wind models) aren't modeled yet — a later feature.");
+  refreshStripped();
+}
+
+// Paint the stripped star. UNLIKE the wd/wr/sn scrubbers there is nothing to scrub (one
+// representative state), so this is a one-shot paint (re-run only on a mass/[Fe/H] re-snap).
+// The consumers that would paint FABRICATED data are deliberately NOT called: spectrum (H-atm
+// cube → false Balmer lines; placeholder set in applyStrippedModel), structure (would fetch a
+// normal ZAMS profile for the progenitor mass; keeps its last profile like the wd/wr/sn modes),
+// and comp's burning-abundance views (no measured core; the surface view is set separately).
+function refreshStripped() {
+  if (!strippedData) return;
+  const s = strippedData.state;
+  const mStrip = strippedData.m_strip_msun;
+  star.update(s);                                 // a plain hot blue star (existing shader)
+  classification.update(s, "stripped", { mStrip });
+  scale.update(s);                                // radius-based true-size bar (honest)
+  hr.update(s);                                   // the marker, blue-left of the living track
+  // comp: static SURFACE view (set by comp.setStripped) — no per-frame redraw
+  sed.update(s);                                  // blackbody only (mdot=None → no wind tail; hot → no corona)
+  // spectrum/structure: intentionally NOT called (see the header note)
+  renderStrippedReadout(s, strippedData);
+
+  els.status.style.color = teffToCSS(s.Teff_K);
+  els.status.innerHTML =
+    tipSpan("stripped what-if",
+      "A binary-stripped-star what-if (Götberg 2018): the hot He-star a close companion would " +
+      "bare by stripping the hydrogen envelope. Snapped to the nearest grid model (never " +
+      "interpolated). Untick ‘Stripped in a binary’, or ‘Back to the living star’, to leave.") +
+    " · " + tipSpan("stripped-envelope star", phaseTip("stripped-envelope star")) +
+    (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+
+  // The age caption owns the counterfactual + any snapped-far honesty.
+  let cap =
+    `Stripped in a close binary — ${fmt(mStrip)} M☉ of hot helium bared from a ` +
+    `${fmt(strippedData.m_init_msun)} M☉ progenitor (one representative state, halfway ` +
+    `through core-helium burning). The companion is named, not drawn.`;
+  if (strippedData.mass_snapped_far || strippedData.feh_snapped_far) {
+    const bits = [];
+    if (strippedData.mass_snapped_far)
+      bits.push(`no grid model at this mass — nearest progenitor ${fmt(strippedData.m_init_msun)} M☉ ` +
+        `(grid ${fmt(strippedData.mass_grid_min)}–${fmt(strippedData.mass_grid_max)} M☉)`);
+    if (strippedData.feh_snapped_far)
+      bits.push(`nearest grid [Fe/H] ${fmt(strippedData.feh_snapped, 2)}`);
+    cap += ` Snapped: ${bits.join("; ")}.`;
+  }
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = cap;
+}
+
+// The stripped-star readout — the CURRENT (stripped) mass + the progenitor it came from, plus
+// the measured surface (hydrogen-poor, helium-rich). The current mass `m_strip` is a routing
+// scalar with no home on the single-star state, so it's threaded from strippedData (not s).
+function renderStrippedReadout(s, d) {
+  const rows = [
+    ["Stripped mass",
+      "the stripped star's CURRENT mass, in Suns — the bared helium core after the companion removed the envelope (far less than the progenitor's initial mass)",
+      `${fmt(d.m_strip_msun)} M☉`],
+    ["Progenitor",
+      "the initial main-sequence mass this star was BEFORE stripping (snapped to the nearest grid model — never interpolated)",
+      `${fmt(d.m_init_msun)} M☉`],
+    ["[Fe/H]",
+      "metallicity of the model (snapped to the nearest grid value; the grid is solar-only for now, so a far snap is flagged in the caption)",
+      fmt(s.feh_init, 2)],
+    ["Class",
+      "a hot, helium-surfaced stripped star — a hot subdwarf at low mass grading into a Wolf–Rayet-like He-star at high mass (the unified stripped-envelope sequence)",
+      (d.m_strip_msun < 1.5 ? "hot subdwarf (sdO/B)" : "helium star")],
+    ["L",
+      "luminosity in Suns — a stripped star is sub-luminous FOR ITS TEMPERATURE (it sits blue-left of the single-star main sequence)",
+      `${fmt(s.L_lsun)} L☉`],
+    ["Teff",
+      "effective temperature — tens of thousands of kelvin; the cool envelope that hid the core is gone (this is the spectroscopic Teff, not the inner T★)",
+      `${fmt(s.Teff_K, 4)} K`],
+    ["R",
+      "radius in solar radii — small and compact, the bared core",
+      `${fmt(s.R_rsun)} R☉`],
+    ["log g",
+      "surface gravity, log₁₀ cgs — high, between a main-sequence star and a white dwarf",
+      fmt(s.logg, 3)],
+    ["X / Y / Z surface",
+      "surface mass fractions: hydrogen (X) / helium (Y) / metals (Z). The hydrogen-poor, helium-rich surface is the measured headline — a normal star's surface is ~74% hydrogen",
+      `${fmt(s.X_surf)} / ${fmt(s.Y_surf)} / ${fmt(s.Z_surf, 2)}`],
+  ];
+  els.readout.innerHTML = rows
+    .map(([k, dsc, v]) =>
+      `<div class="row"><div class="term">${k} ${help(dsc)}</div>` +
+      `<div class="v">${v}</div></div>`)
+    .join("");
+}
+
+// Enter the reversible binary-stripped what-if from the toggle. Mirrors enterSN (it FETCHES a
+// sibling route on entry, with a loading caption + latest-wins guard), but the entry is a
+// mid-life toggle, not an end-of-life gateway. The shared endgame bar carries the "Back".
+async function enterStripped() {
+  mode = "stripped";
+  updateRotControl();       // hide the rotation control inside the mode (mode != live)
+  updatePeculiarControl();
+  updateStrippedControl();  // keep the toggle visible + checked as the exit
+  trackToken++;             // invalidate any in-flight live /track
+  document.body.classList.add("stripped-mode");
+  if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
+  lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
+  setWDResnapNote("");
+  els.gateway.hidden = true;
+  els.endgameBar.hidden = false;
+  els.snControl.hidden = true;
+  els.age.disabled = true;   // one representative state — nothing to scrub
+  els.endgameAgeCaption.textContent = "Fetching the stripped-star model…";
+  const tok = ++strippedToken;
+  let data;
+  try { data = await fetchStripped(); }
+  catch {
+    if (tok === strippedToken && mode === "stripped")
+      els.endgameAgeCaption.textContent = "Could not fetch the stripped-star model.";
+    return;
+  }
+  if (tok !== strippedToken || mode !== "stripped") return;
+  applyStrippedModel(data);
+}
+
+// Re-snap the stripped star after a mass/[Fe/H] change inside the mode (mirrors trySNResnap).
+// UNLIKE the wd/wr/sn re-snaps there is no fate to revert on: /binary is snap-always, so a drag
+// past the grid edges snaps to the nearest node and shows an in-band snapped-far note (owned by
+// refreshStripped's caption) rather than reverting — the honest read of the Chunk-1 flags.
+async function tryStrippedResnap() {
+  if (mode !== "stripped") return;
+  const tok = ++strippedToken;
+  let data;
+  try { data = await fetchStripped(); } catch { return; }
+  if (tok !== strippedToken || mode !== "stripped") return;
+  lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
+  applyStrippedModel(data);
+}
+
+// Dispatch a mass/[Fe/H] re-snap to the active endgame / what-if mode.
 function tryResnap() {
   if (mode === "wd") return tryWDResnap();
   if (mode === "wr") return tryWRResnap();
   if (mode === "sn") return trySNResnap();
+  if (mode === "stripped") return tryStrippedResnap();
 }
 
 // Retire the first-load skeleton sheen (<body class="loading">, styles.css). Called on
@@ -2198,6 +2403,7 @@ function refresh() {
   // paintState) just refreshed sed.rotationAllowed(), so read it now.
   updateRotControl();
   updatePeculiarControl();
+  updateStrippedControl();   // the stripped what-if is offer-able only in the eligible mass band
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -2490,6 +2696,17 @@ async function init() {
     peculiarOn = els.peculiarToggle.checked;
     updatePeculiarControl();
     refresh();
+  });
+
+  // Binary-stripped-star what-if toggle: checking it enters the reversible stripped-mode (a
+  // mid-life fork — the whole display snaps to the stripped He-star, fetched from /binary);
+  // unchecking calls the SAME exit path as the endgame bar's "Back" (one exit, no divergence).
+  if (els.strippedToggle) els.strippedToggle.addEventListener("change", () => {
+    if (els.strippedToggle.checked) {
+      if (mode === "live") enterStripped();
+    } else if (mode === "stripped") {
+      exitEndgame();
+    }
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

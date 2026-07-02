@@ -1,6 +1,6 @@
 # Memory index
 
-- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel); Chunk 1 backend built (committed Z=0.014 table, snap (Z,Minit), Teff-not-T★, Z_surf=gridZ, mdot=None). Visibility gate keys Teff+Y only (L flips sign). Next=Chunk 2 frontend.
+- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel). Chunk 1 backend (committed Z=0.014 table, snap (Z,Minit), Teff-not-T★, Z_surf=gridZ, mdot=None; visibility gate Teff+Y only, L flips sign) + Chunk 2 frontend `mode="stripped"` (mass-gated toggle entry-i; HR blue-left marker via setEndgame reuse; comp NEW surface-only drawStripped; spectrum placeholder + structure omitted = the 3 false-data leaks blocked; age disabled; snap-always resnap-note). Next=Chunk 3 spectra.
 
 - [Star Simulator init scope](star-sim-init-scope.md) — what init delivered: the §3 provider spine, stub limits (historical).
 - [Star Simulator MISTProvider](star-sim-mist-provider.md) — live provider: MIST v2.5, 2D (mass×[Fe/H]) EEP interpolation, blend-then-invert, non-rectangular domain, ZAMS→EAGB window (TPAGB hard-stopped), full 0.1–300 M☉ grid, .npz parse cache. Phase 1.
