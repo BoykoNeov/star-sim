@@ -21,10 +21,10 @@ So we fetch only the **cool subset (Teff ≤ 10000 K by default)**; hotter stars
 off to the main cube, mirroring the WD-gravity cube switch. The matched-[α/Fe] [Fe/H]
 set on disk is {−1.0, −0.5, 0.0, +0.2} (α=0 exists only there; α=0.4 spans more).
 
-Run once after checkout (default = the {−0.5, 0.0} MVP; widen [Fe/H] with --feh):
+Run once after checkout (default = the full matched [Fe/H] axis; narrow it with --feh):
 
-    python -m star_sim.fetch_coelho                       # MVP: [Fe/H] -0.5, 0.0
-    python -m star_sim.fetch_coelho --feh -1.0,-0.5,0.0,0.2   # the full matched axis
+    python -m star_sim.fetch_coelho                       # full: [Fe/H] -1.0,-0.5,0.0,+0.2
+    python -m star_sim.fetch_coelho --feh -0.5,0.0        # the cheaper {−0.5, 0.0} subset
 
 It fetches the SSAP index (a VOTable listing every model + params + `fid`), then pulls
 each matched (Teff, log g, [Fe/H]) model at BOTH [α/Fe] into `data/spectra/grids/
@@ -141,9 +141,9 @@ def select(models: list[dict], fehs: list[float], teff_max: float) -> list[dict]
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Fetch Coelho 2014 highres spectra for the [alpha/Fe] axis.")
-    ap.add_argument("--feh", default="-0.5,0.0",
-                    help="comma [Fe/H] list to fetch (default the MVP '-0.5,0.0'; "
-                         "the full matched axis is '-1.0,-0.5,0.0,0.2')")
+    ap.add_argument("--feh", default="-1.0,-0.5,0.0,0.2",
+                    help="comma [Fe/H] list to fetch (default the full matched axis "
+                         "'-1.0,-0.5,0.0,0.2' — ~17 GB; the cheaper MVP is '-0.5,0.0')")
     ap.add_argument("--teff-max", type=float, default=10000.0,
                     help="fetch Teff <= this (default 10000 — α is dead hotter; the "
                          "panel hands off to the main cube above)")

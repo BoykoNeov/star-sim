@@ -206,11 +206,20 @@ all at unphysical extreme-logg corners NOT reachable loci); `spectra.py` `alpha_
 `test_alpha_spectra.py` (15 tests, `requires_alpha_spectra_data` marker) = **Gate 1 as
 regression** measured through the real route (α deepens Ca I 4227/Mg b/Ca II triplet at both
 [Fe/H] nodes; **Na D control does NOT deepen** = the anti-normalization-artifact gate;
-Teff-gated). MVP cube on disk = [Fe/H] {−0.5, 0.0}, Teff 3000–10000 K, all logg, both α (834
-Coelho models ≈ 8.4 GB → 13.3 MB `alpha_spectra_grid.npz`, both gitignored). **Widen [Fe/H]
-to {−1.0, +0.2} = pure data re-bake** (`fetch_coelho --feh -1.0,-0.5,0.0,0.2` + re-bake, no
-code change — CAP18/PoWR precedent). Advisor confirmed the test points are REAL Coelho nodes
-(not clamp-filled) so the physics tests measure true spectra.
+Teff-gated). **The cube now spans the FULL matched [Fe/H] axis {−1.0, −0.5, 0.0, +0.2}** (widened
+2026-07-02): 1630 Coelho models ≈ 17 GB → 26.5 MB `alpha_spectra_grid.npz`, cube (30 Teff × 13 logg
+× **4** [Fe/H] × 2 α × 2400 λ), both gitignored. The widen was the promised **pure data re-bake, no
+code change** (`fetch_coelho --feh -1.0,-0.5,0.0,0.2` + re-bake) EXCEPT the one honest scope touch:
+`fetch_coelho`'s `--feh` default flipped MVP `-0.5,0.0` → the full `-1.0,-0.5,0.0,0.2` so a fresh
+checkout reproduces the honest cube (doubles the one-time fetch ~8→17 GB; docstring already intended
+it). **Measured through the real route at the NEW nodes** (weighting −1.0, the metal-poor halo point
+= the whole point of α-enhancement, unmeasured before): feh returns UNCLAMPED (−1.00/+0.20 — the
+frontend fallback stops firing there, the user-visible payoff) AND α=0.4 deepens Ca lines at every
+node (−1.0: CaII 8542 +0.048, CaI 4227 **+0.132**; +0.2: +0.051/+0.044 — robust through the 2.5 Å
+binning). All test points are REAL Coelho nodes (not clamp-filled). The Teff intersection held at 30
+across all 4 slabs (all four have the full 30×13 matched grid) → no cube shrinkage. 254 pytest
+unchanged (the tests were written against {−0.5,0}, so the route-level new-node check above is the
+load-bearing verification, not green pytest).
 
 **Chunk 2 (frontend α toggle in the spectrum panel) — BUILT (2026-07-02, frontend-only, 254
 pytest UNCHANGED, Playwright-verified 1440 + 390 px, zero console errors).** A spectrum-only "what-if"
@@ -226,9 +235,10 @@ from `loci_check.py` (not round numbers):** `ALPHA_TEFF_MAX=9000` (α washes out
 main cube), `ALPHA_COOL_TEFF=3800`+`ALPHA_COOL_MAX_LOGG=1.0` (below 3800 K Coelho has only giant
 gravities, so a cool DWARF clamp-fills a giant → gated off; giants stay), and **the [Fe/H] window
 enforced at RUNTIME** from the response's clamped `feh` vs the request — **advisor blocker #1:** the
-MVP cube is [Fe/H] {−0.5,0} but the slider spans −1→+0.5, so a naive (Teff,logg)-only gate would
-silently show a +0.5 star the solar-α comparison; the runtime clamp check **auto-widens on a
-re-bake**. Off any edge → fall back to `/spectrum` + a specific note (hot / cool-dwarf / off-window).
+cube's [Fe/H] axis is narrower than the slider (−1→+0.5), so a naive (Teff,logg)-only gate would
+silently show an off-axis star the wrong-[Fe/H] α comparison; the runtime clamp check **auto-widens
+as the cube widens** (proven — the 2026-07-02 widen to {−1.0..+0.2} needed no frontend change; only
++0.5, beyond the axis, still falls back). Off any edge → fall back to `/spectrum` + a specific note (hot / cool-dwarf / off-window).
 **α is a LIVING-star control** — hidden + overlay-suppressed in WD/WR/SN; the WD-giant scrub routes
 through `update(s, {endgame:"wd"})` (real main-cube spectrum, α row hidden). **The gotcha that bit
 (caught by an explicit Playwright hide-check, not assumed):** the WD scrub OPENS on a TPAGB giant
@@ -238,8 +248,9 @@ on `update()` (mirrors `sed.update(s,{endgame})`). Caption HONEST spectrum-only 
 are solar-scaled MIST, do NOT follow α). Verified in-app: Sun [Fe/H]=0 + cool giant Teff 3961/[Fe/H]−0.5
 overlay; hot 27613 K + cool-dwarf 3324 K/logg 5 + [Fe/H]+0.5 all fall back with their notes; WD/WR
 (mass 60)/SN (mass 25) endgame modes hide the row; toggle-OFF returns cleanly to the standard
-spectrum; 390 px phone width no overflow. **Widen [Fe/H] later = pure data re-bake** (the runtime
-gate follows automatically).
+spectrum; 390 px phone width no overflow. **[Fe/H] axis widened to the full {−1.0..+0.2}
+2026-07-02** — a pure data re-bake, the runtime gate followed automatically (only the fetch default
+flipped; see the Chunk-1 note above).
 See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the

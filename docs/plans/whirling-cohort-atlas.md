@@ -215,10 +215,15 @@ at their respective fidelities; see "Cross-cutting design" below.
   data-gated tests are **Gate 1 turned into regression**, measured through the real route:
   α deepens Ca I 4227 / Mg b / Ca II triplet at cool stars (both [Fe/H] nodes), the **Na D
   control does NOT deepen** (the anti-normalization-artifact gate), and the effect is
-  Teff-gated (weaker at 9000 K). MVP cube on disk = [Fe/H] {−0.5, 0.0}, Teff 3000–10000 K,
-  all logg, both α (834 Coelho models ≈ 8.4 GB fetched → a 13.3 MB `alpha_spectra_grid.npz`,
-  both gitignored). **Widen [Fe/H] to {−1.0, +0.2} later = a pure data re-bake** (the CAP18/
-  PoWR precedent: `fetch_coelho --feh -1.0,-0.5,0.0,0.2` then re-bake, no code change).
+  Teff-gated (weaker at 9000 K). **Cube on disk = the FULL matched [Fe/H] axis {−1.0, −0.5,
+  0.0, +0.2}** (widened 2026-07-02 from the {−0.5,0} MVP), Teff 3000–10000 K, all logg, both α
+  (1630 Coelho models ≈ 17 GB fetched → a 26.5 MB `alpha_spectra_grid.npz`, cube 30×13×4×2×2400,
+  both gitignored). **The widen was the promised pure data re-bake** (`fetch_coelho --feh
+  -1.0,-0.5,0.0,0.2` then re-bake) — the CAP18/PoWR precedent — with ONE scope touch: the fetch
+  `--feh` default flipped MVP→full so a fresh checkout reproduces the honest cube. Verified through
+  the route at the new nodes (−1.0/+0.2 unclamped → the frontend [Fe/H]-window fallback stops firing;
+  α still deepens Ca lines, e.g. −1.0 CaI 4227 +0.132). **+0.5 stays a fallback** — Coelho's α=0
+  slab exists only at {−1.0,−0.5,0.0,+0.2}, so +0.5 has no matched pair to bake.
 
   **Chunk 2 — the frontend α toggle (spectrum panel) — BUILT (2026-07-02, frontend-only,
   254 pytest unchanged, Playwright-verified 1440 + 390 px, zero console errors; WR/SN
@@ -233,8 +238,9 @@ at their respective fidelities; see "Cross-cutting design" below.
   set from `loci_check.py` (not round numbers):** `ALPHA_TEFF_MAX=9000` (α washes out hotter),
   `ALPHA_COOL_TEFF=3800` + `ALPHA_COOL_MAX_LOGG=1.0` (below 3800 K Coelho has only giant
   gravities, so a cool DWARF is gated off), **plus the [Fe/H] window enforced at RUNTIME** from
-  the response's clamped `feh` vs the request (advisor blocker #1 — the MVP cube is [Fe/H]
-  {−0.5,0} but the slider spans −1→+0.5; this auto-widens on a re-bake). Off any of the three
+  the response's clamped `feh` vs the request (advisor blocker #1 — the cube's [Fe/H] axis is
+  narrower than the slider's −1→+0.5; this auto-widens as the cube widens — proven by the
+  2026-07-02 widen to {−1.0..+0.2}, which needed no frontend change). Off any of the three
   edges it falls back to the standard `/spectrum` with a specific note (hot / cool-dwarf /
   off-[Fe/H]-window). Hidden + overlay-suppressed in the WD/WR/SN endgames — the WD-giant
   scrub still routes through `update(s, {endgame:"wd"})` (real main-cube spectrum) but the α
