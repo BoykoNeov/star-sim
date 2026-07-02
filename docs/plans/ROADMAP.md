@@ -61,7 +61,7 @@ the plan and only the one-line hook here. CLAUDE.md's "what's next" points at th
 
 | Item | Status | Hook | Where |
 |---|---|---|---|
-| Gravity darkening / oblateness (von Zeipel) | idea | Beautiful Regulus-look for fast rotators; evocative, partly cosmetic (corona-tier honesty). Needs rotation × inclination. | `whirling-cohort-atlas.md` (Tier C) |
+| Gravity darkening / oblateness (von Zeipel) | **Chunk 1 done ✅ (of 2)** | The honest capstone to the rotation axis — driven by REAL ω from v_rot (not cosmetic). **Gate 0 PASSED:** median MS rotator ~8% bulge/8% ΔTeff, fastest reachable (5 M☉ [Fe/H]+0.5) a genuine 37% bulge/4900 K Regulus — all from vvcrit=0.4 data, no exaggeration. **Chunk 1 (frontend-only):** `gravdark.js` (Roche ω, volume-preserving oblate spheroid, von Zeipel β=0.25 pole-hot/equator-cool) + `star.js` surface-shader gradient + oblate scale + a fixed 3/4 tilt (edge-on masks the gradient — poles at the limb). Surface-gravity regime gate (MS only; evolved-giant ω is a v_crit-collapse artifact). Sun/round/endgames byte-identical. **Chunk 2 (next):** inclination slider + feed sin i into the v sin i broadening (retires the edge-on-only punt). | `whirling-cohort-atlas.md` (Tier C); memory `star-sim-gravity-darkening.md` |
 | Magnetic peculiarity (Ap/Bp, magnetic O) | idea | Chemically-peculiar / spotted flavor only — evocative surface-abundance visual. | `whirling-cohort-atlas.md` (Tier C) |
 | Microturbulence (ξ) | idea | Spectral line-saturation knob (CAP18-large carries it); real but thin pedagogy — likely not worth a control. | `whirling-cohort-atlas.md` (Tier B) |
 

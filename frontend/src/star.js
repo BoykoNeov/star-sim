@@ -31,6 +31,7 @@
 import * as THREE from "three";
 
 import { teffToLinearRGB } from "./color.js";
+import { rotationDistortion } from "./gravdark.js";
 
 // Map a physical radius (R_sun, ~0.05 .. ~1000) onto an on-screen sphere radius
 // via log scaling, so dwarfs and giants both stay visible. The true R is always
@@ -89,6 +90,9 @@ void main() {
 const SURFACE_FRAG = `
 precision highp float;
 uniform vec3  uColor;     // LINEAR sRGB base color (Teff)
+uniform vec3  uColorPole; // LINEAR sRGB at the (hot) rotation pole — = uColor if round
+uniform vec3  uColorEq;   // LINEAR sRGB at the (cool) equator — = uColor if round
+uniform float uGeq;       // g_eff(equator)/g_eff(pole); 1.0 = not rotating (flat gradient)
 uniform float uTime;      // seconds, from a real clock
 uniform float uCells;     // granule frequency (cells across a radius)
 uniform float uContrast;  // granule brightness contrast
@@ -213,13 +217,32 @@ void main() {
   const vec3 u2 = vec3(0.20, 0.26, 0.33);
   vec3 limb = clamp(vec3(1.0) - u1 * w - u2 * w * w, 0.0, 1.0);
 
+  // Gravity darkening (von Zeipel, β=0.25): a rotating star's effective gravity falls
+  // from pole to equator, so the poles run hotter/bluer/BRIGHTER and the equator
+  // cooler/redder/dimmer — the Regulus look. Driven by REAL rotation: uGeq<1 only for
+  // the stars MIST actually spins (radiative-envelope fast rotators). uGeq=1 collapses
+  // the color to a single flat tone and the brightness factor to 1, so a non-rotating
+  // star is byte-identical to the pre-gravity-darkening render. sinLat = vObjPos.y is the
+  // UNDISTORTED latitude — the oblate star.scale is applied via modelView and never
+  // touches normalize(position), so the gradient tracks true latitude, not the squash.
+  float sinLat = vObjPos.y;
+  float gRatio = uGeq + (1.0 - uGeq) * sinLat * sinLat;   // g_eff(lat)/g_pole ∈ [uGeq,1]
+  float tEqR = pow(max(uGeq, 1e-4), 0.25);                // T_eq/T_pol
+  float cw = (pow(gRatio, 0.25) - tEqR) / max(1e-3, 1.0 - tEqR);  // 0 at equator .. 1 pole
+  vec3 gdColor = mix(uColorEq, uColorPole, clamp(cw, 0.0, 1.0));
+  // Local emergent flux ∝ σ·T_eff(lat)⁴ ∝ g_eff(lat) (von Zeipel) — so the surface
+  // brightness IS gRatio, pole-normalized (pole = 1, equator = uGeq). Honest AND the
+  // form that reads: a near-critical rotator's equator drops to ~15% of pole flux (the
+  // Regulus dark band), a gentle one only dims a little. Exponent 1, not a softened one.
+  float gdBright = gRatio;
+
   // Exposure: uColor is max-channel normalized (chromaticity only — the honest
   // hue), so without this every star renders equally bright. uExpo restores a
   // brightness CUE from Teff (set in update()): a cool star sits under full
   // exposure and keeps its saturated hue; a hot star overexposes and clips
   // toward blue-white at disk centre while the chromatic limb keeps the honest
   // color at the edge — a camera cue, not a flux claim (the readout has L).
-  vec3 surface = min(uColor * granule * limb * uExpo, 1.0);
+  vec3 surface = min(gdColor * granule * limb * uExpo * gdBright, 1.0);
   gl_FragColor = vec4(lin2srgb(surface), 1.0);
 }`;
 
@@ -578,6 +601,9 @@ export function createStar(canvas) {
     extensions: { derivatives: true },
     uniforms: {
       uColor: { value: new THREE.Color(1, 1, 1) },
+      uColorPole: { value: new THREE.Color(1, 1, 1) },
+      uColorEq: { value: new THREE.Color(1, 1, 1) },
+      uGeq: { value: 1.0 },       // 1 = round / no gravity darkening
       uTime: { value: 0 },
       uCells: { value: 22 },
       uContrast: { value: 0.34 },
@@ -760,6 +786,36 @@ export function createStar(canvas) {
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
+
+    // Gravity darkening / oblateness — LIVING star only. A fast rotator (real
+    // state.v_rot_kms, from the MIST vvcrit axis) flattens into a spheroid with hot
+    // bright poles and a cool dim equator. Endgames (wd/wr/sn) keep their own looks and
+    // stay round: a degenerate remnant is a slow rigid body, a WR is wind-dominated, and
+    // the SN uses the fireball mesh. `gd.active` is false for any non-rotator, which
+    // sets a round spheroid + flat single-tone gradient → byte-identical to before.
+    const gd = eg ? { active: false, kEq: 1, kPol: 1, gEq: 1, tPole: state.Teff_K, tEq: state.Teff_K }
+                  : rotationDistortion(state);
+    if (gd.active) {
+      const [pr, pg, pb] = teffToLinearRGB(gd.tPole);
+      const [er, eg2, eb] = teffToLinearRGB(gd.tEq);
+      surfaceMat.uniforms.uColorPole.value.setRGB(pr, pg, pb);
+      surfaceMat.uniforms.uColorEq.value.setRGB(er, eg2, eb);
+      surfaceMat.uniforms.uGeq.value = gd.gEq;
+    } else {
+      surfaceMat.uniforms.uColorPole.value.setRGB(r, g, b);
+      surfaceMat.uniforms.uColorEq.value.setRGB(r, g, b);
+      surfaceMat.uniforms.uGeq.value = 1.0;
+    }
+    // Viewing tilt. Edge-on (spin axis vertical) shows the oblate SHAPE best but MASKS
+    // the temperature gradient: the hot bright poles sit at the top/bottom limb (fully
+    // limb-darkened) while the cool equator is at disk-centre (geometrically brightest),
+    // so the two darkenings nearly cancel. A fixed 3/4 view (inclination ≈ 55°) tips the
+    // pole toward the camera so BOTH the egg shape and the hot-pole/cool-equator gradient
+    // read honestly. Round stars stay pole-up (untilted) — byte-identical. Chunk 2 makes
+    // this an inclination slider (and feeds sin i into the v sin i line broadening).
+    // Ramp the tilt in with ω so a marginal rotator (a faint bulge, no real gradient)
+    // stays near pole-up instead of snapping to 34° for nothing.
+    star.rotation.x = gd.active ? 0.6 * sstep(0.1, 0.45, gd.omega) : 0.0;
     surfaceMat.uniforms.uCells.value = granuleCells(state);
     // Exposure (SURFACE_FRAG uExpo): uColor is chromaticity-only (max-normalized),
     // so this restores a Teff brightness cue — a ~3000 K surface sits at 0.85
@@ -791,7 +847,11 @@ export function createStar(canvas) {
     surfaceMat.uniforms.uGran.value = gDeg;
 
     const rad = displayRadius(state.R_rsun);
-    star.scale.setScalar(rad);
+    // Oblate spheroid for a fast rotator: wider at the equator (x,z), squashed at the
+    // poles (y is the spin axis). Volume-preserving (kEq²·kPol = 1), so the star's true
+    // size on the scale bar is unchanged — it's the same star, just flattened. gd.kEq =
+    // gd.kPol = 1 for a round star, so this reduces to setScalar(rad).
+    star.scale.set(rad * gd.kEq, rad * gd.kPol, rad * gd.kEq);
 
     // SN mode hides the living-star surface sphere and shows the fireball instead; every
     // other mode restores it. Set unconditionally (not just inside an `if (sn)`) so a mode
