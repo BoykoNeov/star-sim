@@ -1,9 +1,14 @@
 // HR diagram (STAR_SIM_SPEC.md §5): log L vs log Teff, Teff axis REVERSED (hot on
 // the left). Draws the full evolutionary track for the chosen (mass, [Fe/H]) with
 // a marker at the current age — setTrack() takes the list from /track, update()
-// moves the marker from /state (same split the composition panel uses).
+// moves the marker from /state (same split the composition panel uses). The living
+// track is painted segment-by-segment with the local Teff color (like the endgame
+// track) so the line itself narrates the journey, the marker carries a soft glow in
+// the star's own color, and faint O·B·A·F·G·K·M spectral-class bands anchor the
+// reversed Teff axis along the top edge (living view only — MK classes don't apply
+// to the WD/WR remnant regimes the endgame axes span).
 
-import { teffToCSS } from "./color.js";
+import { teffToCSS, teffToRGB } from "./color.js";
 import { fitCanvas } from "./canvas.js";
 
 // DEFAULT living-view plot bounds (log10): covers cool red dwarfs to hot O stars, and
@@ -96,6 +101,22 @@ const ZONE_LABELS = [
   ["Cepheids", 4.0, 5650, STRIP_GOLD],
   ["LBV / S Dor", 5.6, 15000, LBV_BLUE],
   ["Miras / LPV", 3.6, 3150, MIRA_RED],
+];
+
+// --- Spectral-class bands (living view) ----------------------------------------
+// The textbook O·B·A·F·G·K·M anchor: each class is [letter, cool-edge Teff (K),
+// letter-color Teff (K)]; its hot edge is the previous class's cool edge (O extends
+// to the hot frame edge). Boundaries are the standard MK Teff cuts. The letter color
+// is a representative mid-class Planck hue via teffToCSS, so the row itself runs
+// blue-white → red and doubles as a legend for the reversed axis.
+const SPECTRAL_CLASSES = [
+  ["O", 30000, 40000],
+  ["B", 10000, 17000],
+  ["A", 7500, 8600],
+  ["F", 6000, 6700],
+  ["G", 5200, 5600],
+  ["K", 3700, 4400],
+  ["M", 2400, 3050],
 ];
 
 export function createHR(canvas, cssW = 300, cssH = 260) {
@@ -235,16 +256,54 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     ctx.restore();
   }
 
+  // The spectral-class anchor row: ultra-faint vertical separators at the MK class
+  // boundaries inside the frame, with each class letter in its own Planck hue sitting
+  // just ABOVE the top frame line (the padding strip — inside the frame it would
+  // collide with the overlay's LBV label and with luminous tracks). Bands whose
+  // visible slice is too thin to hold a letter are skipped; on an expanded hot frame
+  // (massive stars) the O band simply widens to the new edge.
+  function drawClassBands() {
+    const xL = PAD_L, xR = W - PAD;
+    ctx.save();
+    ctx.font = "600 10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 1;
+    let hotEdgeX = xL;   // O's hot edge = the frame edge, however far it expands
+    for (const [letter, coolK, colorK] of SPECTRAL_CLASSES) {
+      const x0 = Math.max(xL, hotEdgeX);
+      const x1 = Math.min(xR, xOf(Math.log10(coolK)));
+      hotEdgeX = x1;
+      if (x1 - x0 < 9) continue;    // band off-frame or too thin at this zoom (a single
+                                    // 10px letter needs ~7px — 9 keeps G alive at phone width)
+      if (x1 < xR - 1) {            // cool-edge separator (skip when it IS the frame edge)
+        ctx.strokeStyle = "rgba(138,147,166,0.13)";
+        ctx.beginPath(); ctx.moveTo(x1, PAD); ctx.lineTo(x1, H - PAD); ctx.stroke();
+      }
+      ctx.fillStyle = teffToCSS(colorK);
+      ctx.globalAlpha = 0.75;
+      ctx.fillText(letter, (x0 + x1) / 2, PAD - 5);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
   function drawTrack() {
     if (!track || track.length < 2) return;
-    ctx.beginPath();
-    track.forEach((s, i) => {
-      const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = "rgba(231,236,245,0.45)";
+    // Painted segment-by-segment with the local Teff color (the same idiom as the
+    // endgame track below) so the polyline itself tells the story — blue-white on
+    // the upper main sequence, deepening through gold to red up the giant branch —
+    // slightly translucent so the glowing marker stays the brightest thing on it.
     ctx.lineWidth = 1.5;
-    ctx.stroke();
+    ctx.globalAlpha = 0.75;
+    for (let i = 1; i < track.length; i++) {
+      const a = track[i - 1], b = track[i];
+      ctx.beginPath();
+      ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
+      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
+      ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // The endgame cooling track, colored segment-by-segment by the local Teff so the
@@ -424,14 +483,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       const day = (marker.age_yr ?? 0) * 365.25;
       const L = (marker.L_lsun ?? 0) * LSUN_ERG_S;
       const ll = Math.max(snLlo, Math.min(snLhi, L > 0 ? Math.log10(L) : snLlo));
-      const x = xSN(Math.max(0, Math.min(snTmax, day))), y = ySN(ll);
-      ctx.beginPath();
-      ctx.arc(x, y, 7, 0, Math.PI * 2);
-      ctx.fillStyle = teffToCSS(marker.Teff_K);
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#e7ecf5";
-      ctx.stroke();
+      drawMarker(xSN(Math.max(0, Math.min(snTmax, day))), ySN(ll), marker.Teff_K);
     }
   }
 
@@ -501,26 +553,46 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
+  // The marker dot with a soft radial glow in the star's own color, so the live star
+  // reads as the bright "you are here" point on its like-colored track. The glow is
+  // clipped to the plot frame (a marker riding an axis edge must not bleed onto the
+  // tick labels); the dot itself stays unclipped, as before.
+  function drawMarker(x, y, teffK) {
+    const [r, g, b] = teffToRGB(teffK).map((v) => Math.round(v * 255));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+    const glow = ctx.createRadialGradient(x, y, 2, x, y, 20);
+    glow.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
+    glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI * 2);
+    ctx.fillStyle = teffToCSS(teffK);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#e7ecf5";
+    ctx.stroke();
+  }
+
   function draw() {
     if (snMode) { drawSupernova(); return; }
     drawAxes();
     if (endgameMode) {
       drawEndgameTrack();
     } else {
+      drawClassBands();               // the faint O·B·A·F·G·K·M anchor, behind everything
       if (showOverlay) drawOverlay(); // behind the track, so the live star stays on top
       drawPreviewEndgame();           // ghostly "headed for the WD corner" path, clipped
       drawTrack();
     }
     if (!marker) return;
-    const x = xOf(Math.log10(marker.Teff_K));
-    const y = yOf(Math.log10(marker.L_lsun));
-    ctx.beginPath();
-    ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = teffToCSS(marker.Teff_K);
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#e7ecf5";
-    ctx.stroke();
+    drawMarker(xOf(Math.log10(marker.Teff_K)), yOf(Math.log10(marker.L_lsun)), marker.Teff_K);
   }
 
   // Recompute the living frame from the current track. Each edge keeps the fixed teaching

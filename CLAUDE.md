@@ -64,7 +64,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `src/{main,star,hr,comp,lane,structure,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
   `sn.js` is the SN endgame's cited observed-photometry dataset (SN 1987A ⁵⁶Co tail +
   SN 1999em IIP plateau, published bolometric fits — the Tier-1 overlay anchor); `hr.js`
-  gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail).
+  gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail),
+  a **Teff-colored living track** + glowing marker (one shared `drawMarker`), and faint
+  **O·B·A·F·G·K·M spectral-class bands** (letters above the top frame line, living view
+  only — see [[star-sim-frontend-ux]]).
   `layout.js` is the draggable/responsive **dashboard** layer (a reorder-in-flow
   sortable over the flex-wrap panel container, see [[star-sim-draggable-responsive-panels]]).
   `comp.js` is the §5.4 composition panel — **three** views via `setMode` (bulk

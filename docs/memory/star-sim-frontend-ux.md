@@ -1,6 +1,6 @@
 ---
 name: star-sim-frontend-ux
-description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS."
+description: "Star Simulator frontend UX layer — single-source age window (track as driver), snap-tick strips + editable inputs, hover-revealed pedagogy (? glyphs + glyph-free status tooltips), canvas.js HiDPI helper, halved diagram sizes; age-slider left end labeled ZAMS; + the 2026-07 HR pass (Teff-colored living track, glowing marker, O·B·A·F·G·K·M class bands)."
 metadata: 
   node_type: memory
   type: project
@@ -54,6 +54,32 @@ plus `comp.js`/`hr.js`/`canvas.js`). Non-obvious decisions worth not re-litigati
   interp; rejected as scope creep). `rebuildAgeTicks()` prepends a **strip-only**
   `{pos01:0,label:"ZAMS"}` so the non-zero floor reads as a physical landmark, not an
   arbitrary cutoff. pos 0 is already a `snapAge` target; the age `?` tip explains it.
+
+**The HR pass (2026-07, hr.js-only — visual-review items 4–5, follow-up to the
+[[star-sim-phase2-shaders]] shading rework):**
+- **Living track colored per-segment by local Teff** (`teffToCSS` of the segment's
+  mean — the exact idiom `drawEndgameTrack` already used), at `globalAlpha 0.75` /
+  1.5px so the marker stays the brightest thing on it. The endgame view's faint-grey
+  living-context copy was deliberately left grey ("faint grey = the part of the
+  story you're not focused on").
+- **Marker glow:** one `drawMarker(x, y, teffK)` helper now serves both `draw()` and
+  `drawSupernova()` (the dot was previously duplicated). Radial gradient r2→20 at
+  0.55 alpha in the star's own color, **clipped to the plot frame** — a marker riding
+  an axis edge must not bleed onto tick labels; the 7px dot stays unclipped as
+  before. `teffToRGB` returns 0–1 floats — ×255 before building the rgba() strings.
+- **Spectral-class bands (`drawClassBands`):** standard MK Teff cuts (30000/10000/
+  7500/6000/5200/3700/2400), each letter tinted by a mid-class `teffToCSS` hue so the
+  row doubles as an axis legend. Three placement decisions: (1) letters sit **above
+  the top frame line** in the padding strip — inside the frame they collide with the
+  overlay's "LBV / S Dor" label (measured: both land at y≈38–42) and with luminous
+  tracks; (2) **living view only** — MK classes don't apply to the WD/WR remnant
+  regimes the auto-fit endgame axes span (a 30 kK WD is a D-class object, not a B
+  star — the honesty rule); (3) O's hot edge is **the frame edge, however far it
+  expands** (`hotEdgeX` carried through the loop), so a ≳120 M☉ expanded frame widens
+  the O band instead of leaving an unlabeled hot gap. Min visible band = **9px, not
+  12** — 12 dropped the G letter at phone width (the G band is the narrowest at
+  0.062 dex ≈ 10.5px on a 300px canvas), and the Sun's own class is the one letter a
+  teaching app can't shed.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the
