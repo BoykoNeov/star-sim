@@ -267,10 +267,30 @@ boron-b8 "don't label a non-feature" rule). New test `test_cool_grid_extends_bel
 (self-skips on a no-cool-grid cube). **121 tests pass.** Verified via Playwright: 3145 K M-dwarf
 → TiO guides lit + deep molecular troughs; Sun → no TiO guides; no JS errors.
 
-**Next (future, optional):** raise wavelength/Teff/[Fe/H] density (the `coarse` grid is
-the lowest-res CAP18 — `high`/`ultra` exist if more line detail is wanted); splice
-**BSTAR2006** for NLTE B-star spectra (15000–30000 K) if CAP18's LTE hot end is ever a
-concern; or a `medium`/`high` OSTAR tier for finer O-star line detail. All pure data work.
+**Next — spectra density bump investigated → SKIP (measured real-but-invisible, 2026-07-02).**
+The idea was to re-bake at higher source resolution (CAP18 `high`/`ultra`, a `medium`/`high`
+OSTAR tier) or splice **BSTAR2006**. It was gated with the project's measure-first rule and
+came back negative on **two independent supports**:
+
+1. **The recipe itself (§5):** CAP18 `coarse`→`high`/`ultra` differ *only* in spectral
+   resolution R (same Teff/log g/[Fe/H] node count), and this bake **resamples that R away**
+   to the fixed 2.5 Å / 2400-bin λ grid — "we resample away anyway."
+2. **Display physics (independent of the recipe author's judgment):** the panel draws the
+   full ~6000 Å over ~1200 px ≈ **5 Å/px** with no zoom (≈2.7 Å/px even on a 2560 px monitor).
+   The current **2.5 Å bins are already ≈1 bin/px** at the largest realistic width, so any line
+   narrower than a screen pixel is sub-pixel *regardless of bin size*. Higher source R only
+   manifests at finer λ bins, which cannot render at any display width.
+
+So a GB-scale download + Docker + re-bake would yield a cube **indistinguishable on screen**
+from the current one — the same skip already given to VO-7400 / boron-b8 / the 0.6 M☉ structure
+slice. Not baked; Docker not brought up (baking-to-confirm would spend the exact cost the gate
+exists to prevent). **BSTAR2006** stays dismissed (§5a: LTE→NLTE only, inside CAP18's range,
+adds nothing >30000 K).
+
+**The one honest payoff path — a frontend feature, not a bake:** a **spectrum zoom / detail
+sub-band view** (zoom into Ca H&K, the Mg b triplet, etc.) where finer λ + higher R would
+actually become visible. A finer bake becomes worthwhile *only after* that view exists. Recorded
+here + in `ROADMAP.md` so the density-bump re-bake is not re-proposed as a cheap win.
 
 **Done (original spike session, durable):**
 - **Spike proven** — MSG 2.2 + pymsg builds on a lean conda-forge stack (gfortran

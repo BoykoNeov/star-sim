@@ -219,10 +219,18 @@ notice, CAP18's 30000 K ceiling) — and that the CAP18 swap *did* pay off as a 
 exactly as designed.
 
 **How to apply:** the CAP18 swap, the OSTAR2002 hot splice AND the **Göttingen cool splice** are **done**
-(cube spans **2300–55000 K**: TiO bands at the cool end, He lines at the hot end). To go further (more line
-detail, or NLTE B-star spectra): re-bake from `sg-CAP18-high.h5`/`ultra`, OSTAR `medium`/`high`, or
-Göttingen `HiRes`/`MedRes-R` for finer spectra, or splice **`BSTAR2006`** (15000–30000 K, NLTE) if CAP18's
-LTE hot end is ever a concern — all re-bakes/data work, the runtime stays axis-generic. **Splice mechanics
+(cube spans **2300–55000 K**: TiO bands at the cool end, He lines at the hot end). **The "spectra density
+bump" (higher-res re-bake) was investigated 2026-07-02 → SKIP, measured real-but-invisible:** CAP18
+`coarse`→`high`/`ultra` differ *only* in spectral R (same Teff/logg/feh node count), which THIS bake
+**resamples away** to the fixed 2.5 Å / 2400-bin λ grid; and the panel draws the full ~6000 Å over ~1200 px
+≈ **5 Å/px** with no zoom (≈2.7 Å/px even at 2560 px), so the current 2.5 Å bins are already ≈1 bin/px —
+higher source R cannot render at any display width. Same skip as VO-7400 / boron-b8 / 0.6 M☉ structure. Docker
+NOT brought up (baking-to-confirm would spend the exact GB+Docker cost the gate exists to prevent). **The only
+honest payoff path is a frontend spectrum *zoom / detail sub-band view* first** (Ca H&K, Mg b) — a finer bake
+becomes worthwhile *only after* that view exists. Recorded in `ROADMAP.md` + `graceful-toasting-thimble.md`
+§Next. (Splice-for-coverage — new Teff/λ *range* — is still real data work; splice **`BSTAR2006`** only if
+NLTE B-star fidelity 15–30 kK is ever specifically wanted, not as a density bump.) The runtime stays
+axis-generic for any such re-bake. **Splice mechanics
 that paid off (reuse for BSTAR / any future grid):** `bake_spectra.py --hot-grid` *appends* Teff nodes above
 the ceiling, `--cool-grid` *prepends* below the floor — both at the primary axis' own log-step (never
 re-spread the CAP18 nodes; the ≥-/≤-overlap block stays bit-identical); translate any `Z/Zo`-axis grid via
