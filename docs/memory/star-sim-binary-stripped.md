@@ -81,6 +81,16 @@ console errors):** the reversible what-if `mode="stripped"`.
 - **Re-snap (`tryStrippedResnap` in `tryResnap`):** UNLIKE wd/wr/sn there's no fate to revert on
   (snap-always) → a drag past the grid edges snaps + shows an in-band snapped-far caption note,
   never reverts.
+- **The composition-honesty catch (advisor blocker, caught post-first-verify — the "verified the
+  easy He-rich 8 M☉ end, generalized to the whole range" trap):** the surface is NOT always He-rich.
+  The LOW-mass end is **hydrogen-rich** (measured: 2–3 M☉ progenitors → X_surf≈0.99, Y_surf≈0.0 —
+  an sdB-like hot subdwarf that keeps a thin H envelope; the crossover is ~3.5–4 M☉). Hardcoding
+  "helium-rich surface" would ship a FALSE measured label (boron-b8/VO-7400 discipline) AND
+  contradict `classify` (which already branched on Y vs X). Fix: EVERY per-state surface label
+  derives from `heRich = Y_surf > X_surf` — `comp.drawStripped` (tag/contrast-line + a
+  `strippedCaption(heRich)` function), `classify.strippedLabel` (sdB/O H-rich → sdO/He-star He-rich),
+  `renderStrippedReadout` (Class + help), the `refreshStripped` caption; the static narration/tooltip
+  say the surface "flips H→He with mass." Verified at BOTH mass=2 (H-rich) and mass=8 (He-rich).
 - **Files (frontend-only, no backend touch):** `main.js` (orchestration), `comp.js`
   (`setStripped`/`drawStripped`), `classify.js` (`strippedLabel`), `index.html` (toggle + bar
   title/narration + `.age-stripped`), `styles.css` (stripped-mode rules mirror wd/wr/sn).

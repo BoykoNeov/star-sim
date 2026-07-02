@@ -62,11 +62,19 @@ const WD_CAPTION =
 // Honesty caption for the binary-stripped-star SURFACE view (see drawStripped). Only the
 // surface X/Y/Z is measured (from the Götberg grid); the grid carries no interior
 // composition, so the core is a He-burning core by construction — not shown as if measured.
-const STRIPPED_CAPTION =
-  "The MEASURED surface of the stripped star (Götberg 2018) — hydrogen-poor and " +
-  "helium-rich, the bared core. This is one representative state (halfway through " +
-  "core-helium burning); the grid carries no interior profile, so only the surface is " +
-  "shown. The core is a helium-burning core by construction, not a measured value.";
+// It is composition-AWARE: the He-richness is the story only at the HIGH-mass end. At the
+// low-mass end (~2–3 M☉ progenitors) the stripped star keeps a thin hydrogen envelope and is
+// still H-rich (an sdB-like hot subdwarf) — asserting "helium-rich" there would be a false
+// measured label (the boron-b8 / VO-7400 discipline), so the clause follows the real X vs Y.
+function strippedCaption(heRich) {
+  const surf = heRich
+    ? "hydrogen-poor and helium-rich, the bared core"
+    : "still hydrogen-rich — a thin envelope survives (the hot-subdwarf low-mass end)";
+  return "The MEASURED surface of the stripped star (Götberg 2018) — " + surf + ". This is " +
+    "one representative state (halfway through core-helium burning); the grid carries no " +
+    "interior profile, so only the surface is shown. The core is a helium-burning core by " +
+    "construction, not a measured value.";
+}
 const SN_ONION_CAPTION =
   "Schematic pre-collapse cross-section. The H envelope, He shell and C/O-core boundaries " +
   "are sized by ENCLOSED MASS from the model (the disk is the mass budget, not physical " +
@@ -622,19 +630,21 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     if (!s) return;
     const PAD = 12;
     const X = clamp01(s.X_surf ?? 0), Y = clamp01(s.Y_surf ?? 0), Z = clamp01(s.Z_surf ?? 0);
+    const heRich = Y > X;   // the He story is the HIGH-mass end; the low-mass end stays H-rich
     const coolCol = teffToCSS(s.Teff_K);
+    const caption = strippedCaption(heRich);
 
     // dynamic caption reserve (wraps to more lines on a narrow canvas — mirrors drawWD)
     const titleH = 24, capLh = 11;
     ctx.font = "10px system-ui, sans-serif";
-    const capH = wrapText(STRIPPED_CAPTION, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
+    const capH = wrapText(caption, PAD, 0, W - 2 * PAD, capLh, true) * capLh + 6;
     const top = PAD + titleH, bot = H - PAD - capH;
 
-    // title + type tag (tinted by the star's true blackbody color)
+    // title + type tag (tinted by the star's true blackbody color; follows the real X vs Y)
     labelPill("surface composition", PAD, PAD);
     ctx.font = "600 12px system-ui, sans-serif";
     ctx.fillStyle = coolCol; ctx.textAlign = "right";
-    ctx.fillText("helium-rich surface", W - PAD, PAD + 12);
+    ctx.fillText(heRich ? "helium-rich surface" : "hydrogen-rich surface", W - PAD, PAD + 12);
     ctx.textAlign = "left";
 
     // one wide horizontal stacked bar: H | He | Z, segment widths ∝ surface mass fraction.
@@ -661,12 +671,15 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillText(`X ${fmtFrac(X)} · Y ${fmtFrac(Y)} · Z ${fmtFrac(Z)}`, barX, barY + barH + 22);
     ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
     // Kept short so it doesn't clip on a phone-width canvas (drawn unwrapped, unlike the caption).
-    ctx.fillText("Normal surface: ~74% H — the bared core is helium.",
+    // Follows the real composition: the bared-He story only holds where He actually dominates.
+    ctx.fillText(heRich
+      ? "Normal surface: ~74% H — the bared core is helium."
+      : "A thin hydrogen envelope survives — a hot subdwarf (sdB/O).",
       barX, barY + barH + 40);
 
     // honesty caption (wrapped; capH reserved its exact line count above)
     ctx.fillStyle = "#7e879a"; ctx.font = "10px system-ui, sans-serif";
-    wrapText(STRIPPED_CAPTION, PAD, bot + 12, W - 2 * PAD, capLh);
+    wrapText(caption, PAD, bot + 12, W - 2 * PAD, capLh);
   }
 
   // Minimal word-wrap for canvas text: draw `text` from (x,y) wrapping to maxW, and

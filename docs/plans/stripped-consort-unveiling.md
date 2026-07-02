@@ -29,6 +29,12 @@ console errors).** The reversible what-if `stripped-mode` + payoff render:
 - **Re-snap (`tryStrippedResnap`, in the `tryResnap` dispatch):** UNLIKE wd/wr/sn there's no fate
   to revert on (`/binary` is snap-always), so a drag past the grid edges snaps to nearest + shows
   an in-band snapped-far note in the caption, rather than reverting.
+- **Composition-honesty catch (advisor blocker, post-first-verify):** the surface is NOT always
+  He-rich — the LOW-mass end is H-rich (2–3 M☉ → X≈0.99, an sdB-like subdwarf keeping a thin H
+  envelope; crossover ~3.5–4 M☉). Hardcoding "helium-rich" would be a false measured label AND
+  contradict `classify`. Every per-state label now derives from `heRich = Y_surf > X_surf`
+  (`drawStripped` tag/line + `strippedCaption(heRich)`, `strippedLabel`, readout, caption); static
+  prose says the surface "flips H→He with mass." Verified at BOTH mass=2 and mass=8.
 - **Files:** `main.js` (the orchestration — els, state, `updateStrippedControl`/`fetchStripped`/
   `applyStrippedModel`/`refreshStripped`/`renderStrippedReadout`/`enterStripped`/
   `tryStrippedResnap`, `exitEndgame`+`tryResnap` extended, toggle handler), `comp.js`

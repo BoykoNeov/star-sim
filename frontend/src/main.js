@@ -864,7 +864,7 @@ const PHASE_TIP = {
     "oxygen. Shown only inside the Wolf–Rayet endgame (snapped to one real track). After " +
     "this the core collapses to a neutron star or black hole — which this simulator doesn't model.",
   "stripped-envelope star":
-    "Stripped-envelope star — the hot, compact, helium-rich core a close companion has bared by " +
+    "Stripped-envelope star — the hot, compact core a close companion has bared by " +
     "stripping the hydrogen envelope (Case-B Roche-lobe overflow; Götberg 2018). The dominant " +
     "(~70%) channel for stripped/Wolf–Rayet stars, unifying hot subdwarfs (low mass) and " +
     "Wolf–Rayet stars (high mass). Shown as a what-if fork — one representative state (halfway " +
@@ -2174,7 +2174,7 @@ function updateStrippedControl() {
   if (els.strippedToggle) els.strippedToggle.checked = mode === "stripped";
   if (els.strippedNote)
     els.strippedNote.textContent = mode === "stripped"
-      ? "The hot He-star a close companion would bare by stripping the envelope — untick to return."
+      ? "The hot stripped star a close companion would bare by stripping the envelope — untick to return."
       : "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)";
 }
 
@@ -2223,15 +2223,19 @@ function refreshStripped() {
   els.status.style.color = teffToCSS(s.Teff_K);
   els.status.innerHTML =
     tipSpan("stripped what-if",
-      "A binary-stripped-star what-if (Götberg 2018): the hot He-star a close companion would " +
-      "bare by stripping the hydrogen envelope. Snapped to the nearest grid model (never " +
+      "A binary-stripped-star what-if (Götberg 2018): the hot stripped star a close companion " +
+      "would bare by stripping the hydrogen envelope. Snapped to the nearest grid model (never " +
       "interpolated). Untick ‘Stripped in a binary’, or ‘Back to the living star’, to leave.") +
     " · " + tipSpan("stripped-envelope star", phaseTip("stripped-envelope star")) +
     (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
 
-  // The age caption owns the counterfactual + any snapped-far honesty.
+  // The age caption owns the counterfactual + any snapped-far honesty. The "hot helium" phrasing
+  // only holds where the surface is actually He-rich (the high-mass end); the low-mass end keeps
+  // a thin H envelope (an sdB-like subdwarf), so the wording follows the real surface X vs Y.
+  const heRich = (s.Y_surf ?? 0) > (s.X_surf ?? 0);
+  const core = heRich ? "hot helium bared" : "hot stripped core (a thin-H subdwarf)";
   let cap =
-    `Stripped in a close binary — ${fmt(mStrip)} M☉ of hot helium bared from a ` +
+    `Stripped in a close binary — ${fmt(mStrip)} M☉ of ${core} from a ` +
     `${fmt(strippedData.m_init_msun)} M☉ progenitor (one representative state, halfway ` +
     `through core-helium burning). The companion is named, not drawn.`;
   if (strippedData.mass_snapped_far || strippedData.feh_snapped_far) {
@@ -2250,6 +2254,11 @@ function refreshStripped() {
 // the measured surface (hydrogen-poor, helium-rich). The current mass `m_strip` is a routing
 // scalar with no home on the single-star state, so it's threaded from strippedData (not s).
 function renderStrippedReadout(s, d) {
+  // The He-richness is the HIGH-mass end; the low-mass end keeps a thin H envelope (sdB-like),
+  // so the class + surface framing follow the real X vs Y, never a hardcoded "helium".
+  const heRich = (s.Y_surf ?? 0) > (s.X_surf ?? 0);
+  const cls = !heRich ? "hot subdwarf (sdB/O)"
+    : d.m_strip_msun < 1.5 ? "helium subdwarf (sdO)" : "helium star";
   const rows = [
     ["Stripped mass",
       "the stripped star's CURRENT mass, in Suns — the bared helium core after the companion removed the envelope (far less than the progenitor's initial mass)",
@@ -2261,8 +2270,8 @@ function renderStrippedReadout(s, d) {
       "metallicity of the model (snapped to the nearest grid value; the grid is solar-only for now, so a far snap is flagged in the caption)",
       fmt(s.feh_init, 2)],
     ["Class",
-      "a hot, helium-surfaced stripped star — a hot subdwarf at low mass grading into a Wolf–Rayet-like He-star at high mass (the unified stripped-envelope sequence)",
-      (d.m_strip_msun < 1.5 ? "hot subdwarf (sdO/B)" : "helium star")],
+      "a hot stripped star — a thin-H-envelope subdwarf (sdB/sdO) at the low-mass end, grading into a helium-surfaced He-star / proto-Wolf–Rayet at high mass (the unified stripped-envelope sequence)",
+      cls],
     ["L",
       "luminosity in Suns — a stripped star is sub-luminous FOR ITS TEMPERATURE (it sits blue-left of the single-star main sequence)",
       `${fmt(s.L_lsun)} L☉`],
@@ -2276,7 +2285,7 @@ function renderStrippedReadout(s, d) {
       "surface gravity, log₁₀ cgs — high, between a main-sequence star and a white dwarf",
       fmt(s.logg, 3)],
     ["X / Y / Z surface",
-      "surface mass fractions: hydrogen (X) / helium (Y) / metals (Z). The hydrogen-poor, helium-rich surface is the measured headline — a normal star's surface is ~74% hydrogen",
+      "surface mass fractions: hydrogen (X) / helium (Y) / metals (Z) — the measured headline. It runs the whole stripped sequence: hydrogen-rich (a thin envelope survives) at the low-mass subdwarf end, hydrogen-poor and helium-rich (the bared core) at higher mass",
       `${fmt(s.X_surf)} / ${fmt(s.Y_surf)} / ${fmt(s.Z_surf, 2)}`],
   ];
   els.readout.innerHTML = rows

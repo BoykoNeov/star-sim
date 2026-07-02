@@ -132,11 +132,14 @@ function snLabel(state, failed) {
 // as one stripped-envelope sequence (Götberg 2018), so the label is keyed on the CURRENT
 // (stripped) mass — threaded via opts.mStrip, since it has no home on the single-star state.
 function strippedLabel(state, mStrip) {
-  const heEnriched = (state.Y_surf ?? 0) > (state.X_surf ?? 0);
-  const kind = heEnriched ? "helium" : "hydrogen-rich helium";
+  const heRich = (state.Y_surf ?? 0) > (state.X_surf ?? 0);
+  // The low-mass end keeps a thin hydrogen envelope — a hot subdwarf (sdB/sdO), still H-rich.
+  if (!heRich)
+    return { tag: "sdB/O", name: "hot subdwarf — a thin H envelope over the stripped core" };
+  // Helium-surfaced: a helium subdwarf at low mass, grading into a He-star / proto-WR above.
   if (mStrip != null && mStrip < 1.5)
-    return { tag: "sdO/B", name: `hot subdwarf — a binary-stripped ${kind} core` };
-  return { tag: "He★", name: `stripped ${kind} star (binary WR/subdwarf channel)` };
+    return { tag: "sdO", name: "helium subdwarf — a binary-stripped helium core" };
+  return { tag: "He★", name: "stripped helium star (proto-Wolf–Rayet)" };
 }
 
 // Build the two child spans once; update() only rewrites their text + the type color.
