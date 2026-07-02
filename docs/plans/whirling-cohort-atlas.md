@@ -166,8 +166,41 @@ at their respective fidelities; see "Cross-cutting design" below.
   CAP18 solar one (the atmosphere-code seam would contaminate the α comparison). **Gate
   1 (visibility through the R≈2400 runtime) still PENDING** — fetch a minimal matched
   Coelho slice, diff Mg b / Ca / Ti / O line depths α=0 vs +0.4, confirm the visible
-  Teff window BEFORE any full fetch/bake. This is the greenlit next action if [α/Fe] is
-  the chosen build.
+  Teff window BEFORE any full fetch/bake.
+  **Gate 1 CLOSED — GO (2026-07-02, measured through the 2.5 Å runtime binning).**
+  Fetched matched Coelho highres α=0 vs +0.4 (SVO `coelho_highres`, 3727 models,
+  Teff 3000–26000 K × logg −0.5…5.5 × [Fe/H] {−1.3…+0.2} × [α/Fe] {0,0.4}; ASCII
+  2-col λ[air]/F_λ, ~10.7 MB/model), binned to the project's 2.5 Å/3000–9000 Å grid.
+  **α is clearly visible and Teff-gated**, exactly the honest bounded feature: at the
+  cool→F window it *deepens* Ca I 4227 (Δdepth up to **+0.16**), Ca II K (+0.03…+0.12),
+  Mg b (+0.06), Ca II triplet 8542 (+0.03…+0.06), TiO 7053 (+0.045 at 4000 K); it goes
+  **marginal at A (~9000 K, only Ca II K)** and **dead ≥12000 K** (all Δ ≤ 0.006 — the
+  metals wash out). **Both controls pass:** the Na D **odd-Z control moves OPPOSITE
+  (shallower, Δ −0.04…−0.09)** — an α-heavier mix raises H⁻ continuum opacity and weakens
+  non-α lines — which rules out a global-normalization artifact (that would move
+  everything the *same* way); and hot stars are null. Comparable at [Fe/H]=0 and −0.5
+  (NOT metal-poor-only). **Giant check (logg=2.0) confirms + is stronger** — the Ca II
+  triplet (the classic giant α indicator) is robust across 4000–5500 K (Δ +0.036…+0.056),
+  so the panel's RGB/AGB stars are covered. (Scratch measurement:
+  `M:\claud_projects\temp\alpha-gate1\` — `gate1.py`/`gate1_giants.py`/`RESULTS.md`.)
+  **Three build-design decisions (advisor-settled, before implementing):**
+  1. **The toggle must bake BOTH baselines from Coelho** — flipping α is pure-α (Coelho
+     α0 ↔ Coelho α0.4), NEVER code+α. Do NOT show a Coelho α spectrum beside a CAP18
+     solar one; the atmosphere-code seam would masquerade as the α signal. *The*
+     load-bearing constraint.
+  2. **Spectrum-only "what-if" — extend cross-cutting #4 to the comp panel.** `comp.js`
+     shows surface metals from the *solar-scaled MIST* track; an α *spectrum* toggle
+     deepens Mg/Ca/Ti in the spectrum but won't move those elements in the composition
+     panel, so with both open they'd read as disagreeing. Label α as a spectrum-only
+     hypothesis (the track/comp don't follow it — that's Tier-D α-enhanced evolution).
+  3. **Scope the fetch to Teff ≲ 10 kK (the hot-null payoff) + hand off to the main
+     cube hot.** Since α dies ≥~9–10 kK, the Coelho α-cube only needs the cool subset —
+     bounds the fetch AND gives a clean regime switch: **α-cube for cool, existing main
+     cube for hot**, mirroring the WD-gravity `refreshWD` switch.
+  Build shape: a separate host-baked Coelho α-cube sibling (`/alpha_spectrum` or an
+  α axis on a Coelho-sourced cool cube) keyed (Teff, logg, [Fe/H]) with a 2-node
+  [α/Fe] toggle — the WD/WR-cube precedent (`fetch_*` + `bake_*` + a `_Spectra`-style
+  runtime), no Docker/pymsg/73 GB. **Ready to chunk into a build plan on user go.**
 - **Rotational line broadening (v sin i). ✅ DONE.** A pure **client-side convolution**
   of the baked spectrum with Gray's rotation profile (`spectrum.js` only; `rotBroaden`
   ε=0.6, per-pixel variable width Δλ_L=λ·v sin i/c, normalized so equivalent width is

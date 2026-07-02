@@ -170,11 +170,29 @@ metal-lines matter (washes out hot = the Teff-gated honesty predicted, like He I
 `minTeff` / TiO `maxTeff`). Castelli-Kurucz ODFNEW also has α+0.4 but only [Fe/H]≤−0.5 (not
 a clean full-grid pair). **Design rule:** compare Coelho-α=0 vs Coelho-α=+0.4 (same
 atmosphere code) — NEVER a Coelho α spectrum beside a CAP18 solar one (atmosphere-code seam
-would contaminate the α signal). **Gate 1 (visibility through the R≈2400 runtime) STILL
-PENDING — the greenlit next action** if [α/Fe] is chosen: fetch a minimal matched Coelho
-slice, diff Mg b / Ca / Ti / O line depths α=0 vs +0.4, confirm the visible Teff window
-BEFORE any full fetch/bake. Recipe `backend/docs/msg_spectra_build_recipe.md` §5/§8 (Koester/
-TMAP host-baked precedent). See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
+would contaminate the α signal). **Gate 1 CLOSED — GO (2026-07-02).** Fetched
+matched Coelho `coelho_highres` α=0 vs +0.4 (SVO SSAP, 3727 models, ~10.7 MB/model ASCII),
+binned to the 2.5 Å runtime grid: **α is clearly VISIBLE & Teff-gated** — deepens Ca I 4227
+(Δdepth up to **+0.16**), Ca II K (+0.03…+0.12), Mg b (+0.06), Ca II triplet 8542 (+0.03…
++0.06), TiO 7053 (+0.045@4000K) in the **cool→F window**; **marginal at A (~9000 K, Ca II K
+only), DEAD ≥12000 K** (all Δ≤0.006 — metals wash out). **Both controls pass:** Na D (odd-Z)
+moves **OPPOSITE (shallower, Δ −0.04…−0.09)** — an α-heavier mix raises H⁻ continuum, weakens
+non-α lines — so it's genuine differential chemistry, NOT a global-normalization artifact
+(which moves everything the same way); hot stars null. Comparable at [Fe/H]=0 & −0.5.
+**Giant check (logg=2.0) confirms + stronger** (Ca II triplet, the classic giant α indicator,
+Δ +0.036…+0.056 across 4000–5500 K). Scratch: `M:\claud_projects\temp\alpha-gate1\`
+(`gate1.py`/`gate1_giants.py`/`RESULTS.md`). **THREE build-design decisions (advisor-settled):**
+(1) **the toggle bakes BOTH baselines from Coelho** — pure-α (Coelho α0↔α0.4), NEVER code+α
+(don't show Coelho-α beside CAP18-solar — atmosphere-code seam masquerades as the α signal;
+*the* load-bearing constraint); (2) **spectrum-only "what-if"** — `comp.js` shows solar-scaled
+MIST metals so the α toggle deepens Mg/Ca/Ti in the *spectrum* but NOT the comp panel → label
+it a spectrum-only hypothesis (extend cross-cutting #4 to comp); track/comp don't follow α
+(that's Tier-D α-evolution); (3) **scope the fetch Teff≲10 kK** (the hot-null payoff bounds it)
+**+ hand off to the main cube hot** (α-cube cool / main cube hot, mirroring the WD-gravity
+`refreshWD` switch). Build shape = a separate host-baked Coelho α-cube sibling (WD/WR-cube
+precedent: `fetch_*`+`bake_*`+a `_Spectra`-style runtime), **ready to chunk on user go**.
+Recipe `backend/docs/msg_spectra_build_recipe.md` §5/§8 (Koester/TMAP host-baked precedent).
+See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime
