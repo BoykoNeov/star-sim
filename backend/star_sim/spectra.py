@@ -65,6 +65,14 @@ WD_GRID_FILENAME = "wd_spectra_grid.npz"
 # and the runtime snaps to the nearest real node (`_WRSpectra`, not `_Spectra`). Baked
 # on the host by scripts/bake_wr_spectra.py (no pymsg). See recipe §7/§7a.
 WR_GRID_FILENAME = "wr_spectra_grid.npz"
+# The [alpha/Fe] cube (atlas Tier B): a SEPARATE 4-axis (Teff, log g, [Fe/H],
+# [alpha/Fe]) Coelho-2014 cube, the COOL subset only (Teff <= ~10000 K — Gate 1
+# measured alpha dead hotter, so the panel hands off to the main cube above). Same
+# axis-generic .npz schema as the main cube, so the runtime reuses `_Spectra` verbatim
+# (a 4-D grid). alpha is a SPECTRUM-ONLY axis (MIST evolution is solar-scaled, so the
+# star's track/composition do NOT follow it — the panel labels it a "what-if"). Baked
+# on the host by scripts/bake_alpha_spectra.py (no pymsg). See the atlas plan Tier B.
+ALPHA_GRID_FILENAME = "alpha_spectra_grid.npz"
 
 _BAKE_HINT = (
     "Spectrum grid not baked. Build it once in the MSG container and copy it to "
@@ -139,6 +147,7 @@ class _Spectra:
 
 _CACHE: _Spectra | None = None
 _WD_CACHE: _Spectra | None = None
+_ALPHA_CACHE: _Spectra | None = None
 
 
 def _load() -> _Spectra:
@@ -165,6 +174,77 @@ def _load_wd() -> _Spectra:
             )
         _WD_CACHE = _Spectra(path)
     return _WD_CACHE
+
+
+def _load_alpha() -> _Spectra:
+    """The [alpha/Fe] cube, loaded once (separate cache from the main + WD cubes)."""
+    global _ALPHA_CACHE
+    if _ALPHA_CACHE is None:
+        path = SPECTRA_DATA_DIR / ALPHA_GRID_FILENAME
+        if not path.is_file():
+            raise SpectraDataMissing(
+                f"[alpha/Fe] spectrum grid not baked. Fetch + bake it once:\n"
+                f"    python -m star_sim.fetch_coelho\n"
+                f"    python scripts/bake_alpha_spectra.py   # -> {path}\n"
+                f"(see docs/plans/whirling-cohort-atlas.md, atlas Tier B)."
+            )
+        _ALPHA_CACHE = _Spectra(path)
+    return _ALPHA_CACHE
+
+
+def alpha_spectrum_data(
+    teff: float,
+    logg: float,
+    feh: float = 0.0,
+    afe: float = 0.0,
+    *,
+    n_display: int | None = None,
+) -> dict:
+    """The [alpha/Fe] spectrum the `/alpha_spectrum` endpoint serves — a sibling of
+    `spectrum_data`, reading the SEPARATE 4-axis Coelho cube (Teff, log g, [Fe/H],
+    [alpha/Fe]). Same JSON shape as `spectrum_data` plus `afe` (the clamped [alpha/Fe]
+    used) and `afe_varies` (always true for this cube — it exists to vary alpha).
+
+    [alpha/Fe] is a **spectrum-only** axis: at fixed [Fe/H] a higher [alpha/Fe] deepens
+    the O/Mg/Si/Ca/Ti (+ TiO) lines, but the star's *track* and *composition* are
+    solar-scaled MIST and do NOT follow it — so the panel presents alpha as a
+    hypothesis ("what a thick-disk/halo alpha-rich star at these parameters would
+    show"), never a claim the plotted star's evolution changed.
+
+    Both baselines (alpha=0 and alpha=0.4) come from THIS cube — a toggle flips between
+    two Coelho spectra, never Coelho-alpha vs a CAP18-solar one (the atmosphere-code
+    seam would masquerade as the alpha signal; advisor-settled, the load-bearing rule).
+
+    The cube is the COOL subset (Teff <= its `teff_max`, ~10000 K); a hotter star clamps
+    to `teff_max` here, but the panel routes it to the main `/spectrum` cube instead
+    (alpha is dead there — Gate 1), so the clamp is not normally hit.
+    """
+    s = _load_alpha()
+    flux, used = s.evaluate({"teff": teff, "logg": logg, "feh": feh, "afe": afe})
+    lam = s.lam
+    ti = s.axis_keys.index("teff")
+    teff_min, teff_max = s.bounds[ti]
+
+    if n_display is not None and n_display < lam.size:
+        new_lam = np.linspace(lam[0], lam[-1], n_display)
+        flux = np.interp(new_lam, lam, flux)
+        lam = new_lam
+
+    return {
+        "wavelength": lam.tolist(),
+        "flux": flux.tolist(),
+        "teff": used["teff"],
+        "logg": used["logg"],
+        "feh": used.get("feh", float(feh)),
+        "afe": used.get("afe", float(afe)),
+        "teff_requested": float(teff),
+        "teff_min": teff_min,
+        "teff_max": teff_max,
+        "feh_varies": s.feh_varies,
+        "afe_varies": "afe" in s.axis_keys,
+        "flux_unit": s.flux_unit,
+        "grid_name": s.grid_name,
+    }
 
 
 def spectrum_data(

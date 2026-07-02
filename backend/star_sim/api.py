@@ -26,6 +26,7 @@ from .provider import (
 )
 from .spectra import (
     SpectraDataMissing,
+    alpha_spectrum_data,
     spectrum_data,
     wd_spectrum_data,
     wr_spectrum_data,
@@ -369,6 +370,32 @@ def spectrum(
     missing provider grid)."""
     try:
         return spectrum_data(teff, logg, feh)
+    except SpectraDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/alpha_spectrum")
+def alpha_spectrum(
+    teff: float = Query(..., ge=1000.0, le=200000.0, description="effective temperature / K"),
+    logg: float = Query(..., ge=-2.0, le=7.0, description="surface gravity, cgs dex"),
+    feh: float = Query(0.0, ge=-5.0, le=2.0, description="initial [Fe/H]"),
+    afe: float = Query(0.0, ge=0.0, le=0.4, description="[alpha/Fe] (0.0 solar-scaled or 0.4 alpha-rich)"),
+) -> dict:
+    """(Teff, log g, [Fe/H], [alpha/Fe]) -> a Coelho-2014 synthetic spectrum — a
+    FOURTH spectrum sibling beside `/spectrum`, `/wd_spectrum`, `/wr_spectrum` (atlas
+    Tier B, the thick-disk/halo [alpha/Fe] axis).
+
+    Reads the separate 4-axis Coelho cube (the COOL subset, Teff <= ~10000 K — Gate 1
+    measured [alpha/Fe] dead hotter). [alpha/Fe] is a **spectrum-only** axis: at fixed
+    [Fe/H] it deepens the O/Mg/Si/Ca/Ti (+ TiO) lines, but MIST evolution is
+    solar-scaled so the star's track/composition do NOT follow it — the panel labels it
+    a "what-if". Both baselines (afe 0.0 and 0.4) come from THIS cube, so a toggle flips
+    two Coelho spectra (never Coelho-alpha vs a CAP18-solar one). The panel decides when
+    to call this vs `/spectrum` (cool routes here; the main cube serves hotter stars,
+    where alpha is dead). Wide `Query` bounds match `/spectrum` so dragging never trips a
+    422 (the cube clamps). 503 if not yet baked."""
+    try:
+        return alpha_spectrum_data(teff, logg, feh, afe)
     except SpectraDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

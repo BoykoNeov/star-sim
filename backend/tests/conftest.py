@@ -20,6 +20,7 @@ from star_sim.providers.mist import (
     _vvcrit_from_path,
 )
 from star_sim.spectra import (
+    ALPHA_GRID_FILENAME,
     GRID_FILENAME,
     SPECTRA_DATA_DIR,
     WD_GRID_FILENAME,
@@ -199,6 +200,19 @@ def wr_spectra_data_available() -> bool:
 requires_wr_spectra_data = pytest.mark.skipif(
     not wr_spectra_data_available(),
     reason="WR spectrum grid not baked — run fetch_powr + scripts/bake_wr_spectra.py",
+)
+
+
+def alpha_spectra_data_available() -> bool:
+    return (SPECTRA_DATA_DIR / ALPHA_GRID_FILENAME).is_file()
+
+
+# The /alpha_spectrum ([alpha/Fe] Coelho cube) tests need the baked alpha cube —
+# fetched + baked on the host (never committed): `python -m star_sim.fetch_coelho`
+# then `python scripts/bake_alpha_spectra.py` (atlas Tier B).
+requires_alpha_spectra_data = pytest.mark.skipif(
+    not alpha_spectra_data_available(),
+    reason="alpha spectrum grid not baked — run fetch_coelho + scripts/bake_alpha_spectra.py",
 )
 
 

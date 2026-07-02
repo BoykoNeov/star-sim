@@ -190,8 +190,38 @@ it a spectrum-only hypothesis (extend cross-cutting #4 to comp); track/comp don'
 (that's Tier-D α-evolution); (3) **scope the fetch Teff≲10 kK** (the hot-null payoff bounds it)
 **+ hand off to the main cube hot** (α-cube cool / main cube hot, mirroring the WD-gravity
 `refreshWD` switch). Build shape = a separate host-baked Coelho α-cube sibling (WD/WR-cube
-precedent: `fetch_*`+`bake_*`+a `_Spectra`-style runtime), **ready to chunk on user go**.
+precedent: `fetch_*`+`bake_*`+the axis-generic `_Spectra` runtime).
 Recipe `backend/docs/msg_spectra_build_recipe.md` §5/§8 (Koester/TMAP host-baked precedent).
+
+**Chunk 1 (backend data+runtime vertical) BUILT — 2026-07-02, 254 pytest.**
+`star_sim/fetch_coelho.py` (SVO `coelho_highres` SSAP bulk fetch, `--teff-max 10000`
+cool-subset, matched-α `select()` — drops a node lacking BOTH α, else a toggle clamp-lies
+on flip; **cp1252 gotcha: no α/em-dash in `print()`** — Windows console, twice-bitten);
+`scripts/bake_alpha_spectra.py` (**4-axis** Teff×logg×[Fe/H]×[α/Fe] cube; Coelho's grid is
+ragged in (Teff,logg) → a **log g clamp-fill**, the WD `_interp_logg` precedent, keeps
+Teff/[Fe/H]/α exact, only substitutes gravity at ragged edges; **47% of cells clamp-filled**,
+all at unphysical extreme-logg corners NOT reachable loci); `spectra.py` `alpha_spectrum_data()`
++`_load_alpha()`+`ALPHA_GRID_FILENAME` (reuses axis-generic `_Spectra` verbatim as a 4-D grid,
+**NO `BAKE_VERSION` bump** — new separate file, WD-cube precedent); `/alpha_spectrum` route;
+`test_alpha_spectra.py` (15 tests, `requires_alpha_spectra_data` marker) = **Gate 1 as
+regression** measured through the real route (α deepens Ca I 4227/Mg b/Ca II triplet at both
+[Fe/H] nodes; **Na D control does NOT deepen** = the anti-normalization-artifact gate;
+Teff-gated). MVP cube on disk = [Fe/H] {−0.5, 0.0}, Teff 3000–10000 K, all logg, both α (834
+Coelho models ≈ 8.4 GB → 13.3 MB `alpha_spectra_grid.npz`, both gitignored). **Widen [Fe/H]
+to {−1.0, +0.2} = pure data re-bake** (`fetch_coelho --feh -1.0,-0.5,0.0,0.2` + re-bake, no
+code change — CAP18/PoWR precedent). Advisor confirmed the test points are REAL Coelho nodes
+(not clamp-filled) so the physics tests measure true spectra.
+
+**Chunk 2 (frontend α toggle in the spectrum panel) — NEXT.** Two advisor carry-forward
+decisions: (1) **the α-mode-OFF baseline routing** (the one undecided point) — a cool star
+with α-mode off shows either the main CAP18 cube (engaging α then swaps CAP18→Coelho-α0, a
+visible atmosphere-code change before any α change) OR Coelho whenever the cube exists (every
+cool star's default silently drops CAP18→Coelho); decide explicitly, don't let routing code
+decide it; (2) **spot-check baseline fidelity** — the tests verify the α *differential* (clean
+since both α slabs clamp-fill identically) NOT that reachable cool MS/giant (Teff,logg) loci
+land on real nodes vs gravity-substituted corners (the 47%-fill risk); check real loci vs the
+node list before wiring. Plus: Teff-gate the control off ≥~9–10 kK (like TiO `maxTeff`),
+spectrum-only "what-if" label (comp/track don't follow α), hand off to main cube hot.
 See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
 
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the

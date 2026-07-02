@@ -197,10 +197,46 @@ at their respective fidelities; see "Cross-cutting design" below.
      cube hot.** Since α dies ≥~9–10 kK, the Coelho α-cube only needs the cool subset —
      bounds the fetch AND gives a clean regime switch: **α-cube for cool, existing main
      cube for hot**, mirroring the WD-gravity `refreshWD` switch.
-  Build shape: a separate host-baked Coelho α-cube sibling (`/alpha_spectrum` or an
-  α axis on a Coelho-sourced cool cube) keyed (Teff, logg, [Fe/H]) with a 2-node
-  [α/Fe] toggle — the WD/WR-cube precedent (`fetch_*` + `bake_*` + a `_Spectra`-style
-  runtime), no Docker/pymsg/73 GB. **Ready to chunk into a build plan on user go.**
+  Build shape: a separate host-baked Coelho α-cube sibling (`/alpha_spectrum`) keyed
+  (Teff, logg, [Fe/H], [α/Fe]) with a 2-node [α/Fe] toggle — the WD/WR-cube precedent
+  (`fetch_*` + `bake_*` + the axis-generic `_Spectra` runtime), no Docker/pymsg/73 GB.
+
+  **Chunk 1 — the data + runtime vertical (backend only) — BUILT (2026-07-02, 254 pytest).**
+  `star_sim/fetch_coelho.py` (SVO `coelho_highres` SSAP bulk fetch, cool-subset-scoped
+  `--teff-max 10000`, matched-α `select()` — a node needs BOTH α or it's dropped, since a
+  toggle would otherwise clamp-lie on flip); `scripts/bake_alpha_spectra.py` (a **4-axis**
+  `(Teff, logg, [Fe/H], [α/Fe])` cube; Coelho's grid is ragged in (Teff,logg), so a **log g
+  clamp-fill** — the WD cube's `_interp_logg` precedent — squares it, keeping Teff/[Fe/H]/α
+  exact and only substituting gravity at the ragged edges; **measured 47% of cells
+  clamp-filled** — all at unphysical extreme-logg corners, NOT the reachable loci);
+  `spectra.py` `alpha_spectrum_data()` + `_load_alpha()` (reuses the axis-generic `_Spectra`
+  verbatim — a 4-D grid, **no `BAKE_VERSION` bump**, a new separate file); `/alpha_spectrum`
+  route; `test_alpha_spectra.py` (15 tests, `requires_alpha_spectra_data` marker). The
+  data-gated tests are **Gate 1 turned into regression**, measured through the real route:
+  α deepens Ca I 4227 / Mg b / Ca II triplet at cool stars (both [Fe/H] nodes), the **Na D
+  control does NOT deepen** (the anti-normalization-artifact gate), and the effect is
+  Teff-gated (weaker at 9000 K). MVP cube on disk = [Fe/H] {−0.5, 0.0}, Teff 3000–10000 K,
+  all logg, both α (834 Coelho models ≈ 8.4 GB fetched → a 13.3 MB `alpha_spectra_grid.npz`,
+  both gitignored). **Widen [Fe/H] to {−1.0, +0.2} later = a pure data re-bake** (the CAP18/
+  PoWR precedent: `fetch_coelho --feh -1.0,-0.5,0.0,0.2` then re-bake, no code change).
+
+  **Chunk 2 — the frontend α toggle (spectrum panel) — NEXT.** Two advisor carry-forward
+  decisions to settle in the wiring (banked so it doesn't trip):
+  1. **The α-mode-OFF baseline routing (the genuinely-undecided point).** Decision #1 above
+     governs the *comparison* (Coelho-α0 ↔ Coelho-α0.4). It does NOT say what a cool star
+     shows when α-mode is *off*: (a) stay on the main CAP18 cube — then *engaging* α-mode
+     swaps CAP18→Coelho-α0, a visible atmosphere-code change *before* any α change; or (b)
+     route cool stars to Coelho whenever the cube exists — then every cool star's default
+     silently drops from the multi-source CAP18 to Coelho. Decide explicitly; don't let it
+     fall out of the routing code.
+  2. **Spot-check baseline fidelity before wiring** — the tests verify the α *differential*
+     (clean regardless, since both α slabs are clamp-filled identically), NOT that a
+     *reachable* cool MS/giant (Teff, logg) locus lands on a real Coelho node vs a
+     gravity-substituted corner. Check the real loci the marker traverses against the node
+     list first (the 47%-fill risk is only wrong-gravity fills at unphysical corners bleeding
+     toward a real locus; the interior-logg interp itself is fine — it's what RGI does).
+  Plus: Teff-gate the α control off above ~9–10 kK (honest, like the TiO `maxTeff` gate),
+  label it a spectrum-only "what-if" (decisions #2/#3 above), hand off to the main cube hot.
 - **Rotational line broadening (v sin i). ✅ DONE.** A pure **client-side convolution**
   of the baked spectrum with Gray's rotation profile (`spectrum.js` only; `rotBroaden`
   ε=0.6, per-pixel variable width Δλ_L=λ·v sin i/c, normalized so equivalent width is
