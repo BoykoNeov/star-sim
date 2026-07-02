@@ -142,11 +142,32 @@ at their respective fidelities; see "Cross-cutting design" below.
 
 - **[α/Fe] enhancement.** A genuine Galactic subpopulation: **α-rich thick-disk /
   halo** stars vs solar-scaled thin-disk. MIST evolution is **solar-scaled only** (no
-  α axis), but the **CAP18-*large*** spectral grid carries an α axis → real metal-line
-  depth changes via a re-bake (the bake/runtime are already axis-generic, so it drops
-  in like the CAP18 swap). Honest, bounded to the spectrum panel — the *track* won't
-  follow α. (To make evolution follow α we'd need α-enhanced MESA runs — a Tier-D
-  effort.)
+  α axis), so this is spectrum-only — the *track* won't follow α (evolution-follows-α
+  needs α-enhanced MESA runs, a Tier-D effort). **Gate 0 MEASURED (2026-07-02) — the
+  plan's "drops in like the CAP18 swap" was the optimistic-framing trap:** the α axis
+  lives ONLY in **CAP18-*large* (73 GB)**, and baking the *main* cube needs the
+  **Docker + from-source pymsg/MSG** env (which — unlike the host-baked WD/WR ASCII
+  cubes — was down/unverified: Docker Desktop not running, `msg_spike` container
+  survival unknown), plus α is a 4th cube axis (size multiply, likely a `BAKE_VERSION`
+  bump forcing a full main-cube re-bake). So the CAP18-large path is a **multi-session
+  infrastructure lift**, and even the cheap Gate-1 visibility measurement is blocked
+  behind it. **The cheaper path found (Gate 0 alternative research):** **Coelho 2014**
+  (arXiv 1404.3243, MNRAS 440, 1027C — "scaled-solar and α-enhanced mixtures") carries
+  a clean matched **[α/Fe] = 0.0 AND +0.4** pair across (Teff 3000–25000 K, log g
+  −0.5…5.5, [Fe/H] −2.5…+0.5), 2500–9000 Å, and is on the **SVO Theoretical Spectra
+  Server** as ASCII — i.e. the **exact host-baked SVO-ASCII precedent of the Koester
+  (6a) and TMAP (6b) WD cubes**: a bulk SSAP fetch + a custom reader + a *separate*
+  α-cube sibling, numpy/scipy only, NO Docker/pymsg/73 GB. Teff 3000–25000 K is exactly
+  the cool/solar/A range where α metal-lines matter (and washes out hot — the
+  Teff-gated honesty advisor predicted, like the He I/II `minTeff` / TiO `maxTeff`
+  gates). Castelli-Kurucz ODFNEW also has α+0.4 but only for [Fe/H]≤−0.5 (not a clean
+  full-grid pair). **Design note (before shipping):** compare Coelho-α=0 vs Coelho-α=+0.4
+  (self-consistent, same atmosphere code) — do NOT show a Coelho α spectrum beside a
+  CAP18 solar one (the atmosphere-code seam would contaminate the α comparison). **Gate
+  1 (visibility through the R≈2400 runtime) still PENDING** — fetch a minimal matched
+  Coelho slice, diff Mg b / Ca / Ti / O line depths α=0 vs +0.4, confirm the visible
+  Teff window BEFORE any full fetch/bake. This is the greenlit next action if [α/Fe] is
+  the chosen build.
 - **Rotational line broadening (v sin i). ✅ DONE.** A pure **client-side convolution**
   of the baked spectrum with Gray's rotation profile (`spectrum.js` only; `rotBroaden`
   ε=0.6, per-pixel variable width Δλ_L=λ·v sin i/c, normalized so equivalent width is

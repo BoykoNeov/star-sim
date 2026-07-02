@@ -1,6 +1,6 @@
 ---
 name: star-sim-rotation-subpop-atlas
-description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-4 ALL BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms, and Chunk 4 fetched the remaining rotating feh grids → rotating axis now spans the full -1.0..+0.5 [Fe/H] axis). Rotation arc complete. Tier-B v sin i line broadening now ALSO BUILT (client-side Gray-profile convolution driven by v_rot_kms, edge-on). User said \"nothing is out of scope.\""
+description: "Star Sim — rotation axis + subpopulation controls; gate SETTLED (rotation mass-ramped at ~1.2 Msun), Chunks 1-4 ALL BUILT (provider keying, honesty gate, frontend unified control + API + real v_rot_kms, and Chunk 4 fetched the remaining rotating feh grids → rotating axis now spans the full -1.0..+0.5 [Fe/H] axis). Rotation arc complete. Tier-B v sin i line broadening now ALSO BUILT (client-side Gray-profile convolution driven by v_rot_kms, edge-on). NEXT atlas thread = [alpha/Fe] spectral axis: Gate-0 MEASURED (2026-07-02) — CAP18-large is 73GB + Docker/pymsg (expensive); cheaper Coelho-2014-via-SVO ASCII path found (host-baked WD/WR precedent, matched [a/Fe]=0/+0.4); Gate-1 visibility measurement still pending. User said \"nothing is out of scope.\""
 metadata: 
   node_type: memory
   type: project
@@ -149,11 +149,39 @@ while EW is exactly conserved; the Sun (v_rot=0) is byte-identical. Playwright-v
 1440 px, zero console errors. Plan: `whirling-cohort-atlas.md` Tier B. See
 [[star-sim-phase5-spectra]].
 
+**[α/Fe] spectral axis — Gate 0 MEASURED (2026-07-02); Gate 1 pending.** The atlas's
+designated NEXT (Tier B, spectrum-only — MIST evol is solar-scaled so the *track* won't
+follow α). **The plan's "drops in like the CAP18 swap" was the optimistic-framing trap
+(this feature class has repeatedly tripped the "don't label a non-feature" gate — SED
+Chunk 2 was 4 dex too bright, PoWR 7a narrow-GO, v sin i only cleared the R≈2400 floor
+>120 km/s).** Advisor-gated two-gate discipline: **Gate 0** = env/data exists?
+**Measured: the α axis lives ONLY in CAP18-*large* (73 GB)**, and baking the *main* cube
+needs the **Docker + from-source pymsg/MSG** env (unlike the host-baked WD/WR ASCII cubes)
+— Docker Desktop was NOT running, `msg_spike` container survival unknown; α is a 4th cube
+axis (size multiply, likely a `BAKE_VERSION` bump → full main-cube re-bake). So CAP18-large
+= a **multi-session infra lift**, and even the cheap Gate-1 measurement is blocked behind
+it. **CHEAPER PATH FOUND (Gate-0 alternative research):** **Coelho 2014** (arXiv 1404.3243,
+MNRAS 440, 1027C) carries a clean matched **[α/Fe]=0.0 AND +0.4** across (Teff 3000–25000 K,
+log g −0.5…5.5, [Fe/H] −2.5…+0.5), 2500–9000 Å, and is on the **SVO Theoretical Spectra
+Server** as ASCII — the **exact host-baked SVO-ASCII precedent of the Koester (6a) / TMAP
+(6b) WD cubes** (bulk SSAP fetch + custom reader + a *separate* α-cube sibling, numpy/scipy,
+NO Docker/pymsg/73 GB). Teff 3000–25000 K = exactly the cool/solar/A window where α
+metal-lines matter (washes out hot = the Teff-gated honesty predicted, like He I/II
+`minTeff` / TiO `maxTeff`). Castelli-Kurucz ODFNEW also has α+0.4 but only [Fe/H]≤−0.5 (not
+a clean full-grid pair). **Design rule:** compare Coelho-α=0 vs Coelho-α=+0.4 (same
+atmosphere code) — NEVER a Coelho α spectrum beside a CAP18 solar one (atmosphere-code seam
+would contaminate the α signal). **Gate 1 (visibility through the R≈2400 runtime) STILL
+PENDING — the greenlit next action** if [α/Fe] is chosen: fetch a minimal matched Coelho
+slice, diff Mg b / Ca / Ti / O line depths α=0 vs +0.4, confirm the visible Teff window
+BEFORE any full fetch/bake. Recipe `backend/docs/msg_spectra_build_recipe.md` §5/§8 (Koester/
+TMAP host-baked precedent). See [[star-sim-phase5-spectra]], [[star-sim-wr-wd-endgame-plan]].
+
 **The atlas (tiers):** A (real, changes track) = **rotation vvcrit 0.0↔0.4** (the
 headline; 2-point so toggle/snap not continuous; payoff = MS N-enrichment, lifetime
 shift, lowered WR threshold, CHE at low Z). B (real, spectrum-only) = **[α/Fe]**
-(CAP18-large re-bake; thick-disk/halo; MIST evol is solar-scaled so track won't
-follow), **v sin i broadening** (frontend convolution, fast rotators only),
+(thick-disk/halo; MIST evol is solar-scaled so track won't follow; **cheaper path
+= Coelho-2014-via-SVO ASCII, NOT CAP18-large/Docker — see the Gate-0 block above**),
+**v sin i broadening** (frontend convolution, fast rotators only),
 microturbulence ξ. C (evocative) = gravity darkening/oblateness (von Zeipel),
 the SED activity band→line slider, magnetic Ap/Bp. D (needs a new engine, was "out
 of scope") = **binarity/mass transfer** (the biggest — ~70% of WR are binary-
@@ -173,7 +201,8 @@ vs pins activity/X-ray (age-derivable only for cool MS stars). See
 [[star-sim-nonthermal-sed-plan]] and [[star-sim-wr-wd-endgame-plan]].
 
 Suggested order if picked: instability-strip overlay ✓ → rotation toggle ✓ (after the
-mass-ramp diff) → v sin i broadening ✓ → [α/Fe] re-bake → binarity/live-solver.
+mass-ramp diff) → v sin i broadening ✓ → **[α/Fe] via Coelho-2014/SVO** (Gate 0 done,
+Gate 1 pending — NOT the CAP18-large/Docker path) → binarity/live-solver.
 
 **UX correction (2026-07-01):** the vvcrit **track toggle now HIDES** where it is a
 data-derived no-op (below the ~1.2 M☉ Kraft break, `!rotStatus.active`) instead of showing
