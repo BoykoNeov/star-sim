@@ -507,11 +507,47 @@ If a stripped 10 M☉ reads like a single 10 M☉ through the runtime, stop — 
   absorption at the subdwarf end (measure which per Teff, like the WR 7a gate). Host-baked,
   no Docker. Gated + no-model honesty edges like every other spectrum cube.
 
-### Chunk 4 — the on-ramp to path (b) (NOT this build; recorded so it's not re-proposed)
-The mass-transfer causal story with the companion drawn, the Algol mass-ratio reversal,
-both stars on the HR. Needs POSYDON (HDF5, un-reconned) or MESA-binary self-run (converges
-far worse than single-star — last resort) + a genuinely new two-star rendering model. This
-is where path (b) begins; (a) is its honest first chunk.
+### Chunk 4 — the on-ramp to a REAL binary grid (RECON DONE 2026-07-06; the BUILD is a USER decision)
+
+The companion-drawn / HR-reversal / 3D-sphere / Roche-geometry story is already BUILT
+(Chunks 1–3 above) off the Götberg **snapshot** grid (one representative state per stripped
+star). The remaining on-ramp is the one thing the snapshot can't give: **both stars
+co-evolving on the HR *through time* — a real inspiral.** That needs a real binary grid.
+
+**Recon (measured; advisor-steered discriminator) — POSYDON, not BPASS:**
+- **POSYDON** (Fragos+2023; v2 Andrews+2024) ships individual **co-evolved binary tracks**
+  — detailed MESA-binary runs, each an HDF5 with the FULL time history of BOTH stars +
+  the orbit (`history1` / `history2` / `binary_history`, columns off `dtype.names`;
+  `final_profile1/2`, `initial/final_values`). **This is the on-ramp target** (both stars
+  vs time). Zenodo Data Release 2 (DOI 10.5281/zenodo.15194708, code v2.0.0, **CC-BY**): 8
+  metallicities, one ~10 GB tarball each (multi-GB → gitignored, NEVER committed), 2 single
+  + 5 binary grids per Z. The relevant grid is **HMS-HMS** (H-MS + H-MS); the CO-* grids
+  are compact-object channels (later, if ever). Grid axes per track: **M1, q = M2/M1, P**
+  at the grid Z — a 2D-in-(q, P) fan per M1, RICHER than Götberg's 1D-in-Minit fixed-q=0.8.
+- **BPASS** (Eldridge+2017) is **population synthesis** — integrated SEDs / number counts /
+  SN rates vs age & metallicity for whole co-eval populations, **NOT** individual binary
+  tracks. It is a *different feature* (a population-spectrum sibling), a separate future
+  thread — do not conflate it with this on-ramp.
+- `star_sim/fetch_posydon.py` (BUILT this pass) = the fetch **recipe + h5py validator**
+  (host-side USER handoff, the `fetch_gotberg` precedent — the data is multi-GB & Zenodo
+  may gate, so recipe-not-headless-pull). It prints the real HDF5 schema once a slice is
+  landed, so the parser is designed against the REAL format, not a summary.
+
+**Architecture consequence (the scope the user weighs):** every sibling so far snaps to ONE
+representative state; a POSYDON track is a **TIME SERIES of a two-body system**. That
+introduces a real **time axis + a paired-state shape** the snapshot siblings lack — a
+materially bigger build than `binary.py`. It needs its own HDF5 parser (h5py) and MUST NOT
+import the POSYDON package or a provider (§3 sibling discipline). Open design questions for
+the build chunk (once a slice lands): how a two-star **time track** rides the frontend (a
+real inspiral animation on the HR? both markers moving? the existing age slider driving
+system time?); whether it's a new `posydon.py` sibling + `/binary_track` route emitting a
+list of paired states; how (M1, q, P, Z) snaps; and the smallest useful slice (ONE
+metallicity + the ONE HMS-HMS grid, still a ~10 GB fetch).
+
+**=> The concrete decision — which grid + how big a slice + build-now vs defer — is the
+USER's, taken now that recon shows the cost.** This chunk's deliverable this pass is the
+recon + the fetch handoff; the parser/provider + the two-star time render is the next
+chunk, gated on that decision (and on the data landing, a handoff I cannot run).
 
 ## Honesty tiering (the project rule, applied)
 

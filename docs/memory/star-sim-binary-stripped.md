@@ -214,8 +214,27 @@ orbital-plane cross-section at the moment of Case-B RLOF (the CAUSAL story behin
   draw since fitCanvas measures 0×0 while hidden). main.js: import + instantiate + RESPONSIVE entry +
   `applyStrippedModel` draws/clears + toggles `.companion-on` body class + `exitEndgame` clears.
 - **Files:** `data/gotberg_z014.csv`, `binary.py`, `test_binary.py` (+8), `roche.js` (new), `main.js`,
-  `index.html`, `styles.css`. **Next (path (b) Chunk 4): the on-ramp to a real binary grid (POSYDON/BPASS)
-  — a SEPARATE recon+handoff (data gated like Götberg → recon first, not speculative parser).**
+  `index.html`, `styles.css`.
+
+**PATH (b) CHUNK 4 RECON DONE 2026-07-06 (no build — the build is a USER decision, awaiting answer):**
+the on-ramp to a real binary grid = "both stars co-evolving on the HR *through time*" (the one thing the
+Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDON, NOT BPASS.**
+- **POSYDON** (Fragos+2023 / v2 Andrews+2024) = individual **co-evolved binary TRACKS** — MESA-binary
+  HDF5 with the full time history of BOTH stars + the orbit (`history1`/`history2`/`binary_history`,
+  cols off `dtype.names`; `final_profile1/2`, `initial/final_values`). **The target.** Zenodo DR2 (DOI
+  10.5281/zenodo.15194708, code v2.0.0, CC-BY): 8 metallicities, ~10 GB tarball each (gitignored,
+  never committed), 2 single + 5 binary grids per Z; the relevant one is **HMS-HMS**; axes M1, q=M2/M1,
+  P (2D-in-(q,P) per M1 — richer than Götberg's 1D-fixed-q=0.8).
+- **BPASS** = population synthesis (integrated SEDs / counts / SN rates vs age & Z) — NOT individual
+  tracks → a *different feature* (a population-spectrum sibling), a separate future thread. Don't conflate.
+- **`fetch_posydon.py` BUILT** = the fetch recipe + h5py validator (host-side USER handoff, `fetch_gotberg`
+  precedent — multi-GB/gated → recipe not headless pull; prints the real HDF5 schema once a slice lands).
+- **Architecture note (the scope the user weighs):** every sibling so far snaps to ONE state; a POSYDON
+  track is a TIME SERIES of a two-body system → a real time axis + paired-state shape = materially bigger
+  than `binary.py` (own h5py parser, no POSYDON/provider import; likely a new `posydon.py`+`/binary_track`
+  emitting paired states; open Q = how a two-star inspiral rides the frontend). **DECISION (which grid +
+  slice + build-now vs defer) is the USER's — asked, awaiting the answer; do NOT proceed on a timeout.**
+  Recon in the plan's "Chunk 4" section.
 
 **PATH (b) CHUNK 2 BUILT 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero
 console errors):** "the companion drawn in 3D" — the accretor as a REAL second sphere beside the
