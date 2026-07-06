@@ -36,10 +36,15 @@ open CC-BY):
 ARCHITECTURE CONSEQUENCE (the scope the user must weigh — surfaced, NOT decided here).
 Unlike every sibling so far (all snap to ONE representative state), a POSYDON track is a
 TIME SERIES of a two-body system. That introduces a real time axis + a paired-state shape
-the current snapshot siblings don't have — a materially bigger build than `binary.py`. It
-also needs its own HDF5 parser (h5py) and MUST NOT import the POSYDON package or a
-provider (the §3 sibling discipline). The smallest useful slice is ONE metallicity
-(solar) + the ONE HMS-HMS grid; even that is a ~10 GB fetch to extract a fraction from.
+the current snapshot siblings don't have — a materially bigger build than `binary.py`. The
+"no POSYDON dependency" rule is a **RUNTIME** rule, not an extraction one (the MESA structure
+sibling precedent): the raw grid is likely POSYDON's PACKED `PSyGrid` format (`oneline` +
+`history` tables, all tracks concatenated — the per-run `history1`/`history2` shape is the
+`PSyRunView` code API that demuxes it), so extraction may legitimately use POSYDON's own
+loader HOST-SIDE to export flat per-track files, and only the runtime `posydon.py` stays
+POSYDON-free (its own parser over those flats, never a provider — §3). This validator reveals
+which world we're in. The smallest useful slice is ONE metallicity (solar) + the ONE HMS-HMS
+grid; even that is a ~10 GB fetch to extract a fraction from.
 
 => The concrete decision (which grid + how big a slice + build-now vs defer) is the
 USER's, taken once this recon shows the cost. This module is the fetch handoff + a

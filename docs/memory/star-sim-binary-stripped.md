@@ -232,9 +232,17 @@ Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDO
 - **Architecture note (the scope the user weighs):** every sibling so far snaps to ONE state; a POSYDON
   track is a TIME SERIES of a two-body system → a real time axis + paired-state shape = materially bigger
   than `binary.py` (own h5py parser, no POSYDON/provider import; likely a new `posydon.py`+`/binary_track`
-  emitting paired states; open Q = how a two-star inspiral rides the frontend). **DECISION (which grid +
-  slice + build-now vs defer) is the USER's — asked, awaiting the answer; do NOT proceed on a timeout.**
-  Recon in the plan's "Chunk 4" section.
+  emitting paired states; open Q = how a two-star inspiral rides the frontend).
+- **DESIGN PASS DONE (user chose "draft the build design first"):** full architecture in a dedicated plan
+  `docs/plans/entwined-consort-inspiral.md` — the time-series two-body sibling `posydon.py` + `/binary_track`
+  (paired StellarStates + orbital scalars per step), Gate-0 measure-first, chunks 4a (data+parser) / 4b
+  (system-time HR inspiral + LIVE Roche panel: lobes/stream driven by real q(t),a(t),RLOF flags) / 4c
+  (CE/merger/CO channels). **Advisor catch baked in:** "no POSYDON" is a RUNTIME rule, NOT extraction —
+  the raw Zenodo grid is packed `PSyGrid` (`oneline`+`history`, all tracks concatenated; the clean
+  `history1`/`history2` shape is the `PSyRunView` code API), so extraction may use POSYDON's own loader
+  HOST-SIDE to export flat per-track files (the MESA-structure precedent); only runtime `posydon.py` stays
+  POSYDON-free. Separation = the `binary_separation` column directly (Kepler fallback). **The BUILD is not
+  started — gated on the ~10 GB data handoff (a fetch I cannot run) + the user's slice choice.**
 
 **PATH (b) CHUNK 2 BUILT 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero
 console errors):** "the companion drawn in 3D" — the accretor as a REAL second sphere beside the
