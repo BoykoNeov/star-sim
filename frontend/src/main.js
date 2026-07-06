@@ -2228,7 +2228,12 @@ function refreshStripped() {
   if (!strippedData) return;
   const s = strippedData.state;
   const mStrip = strippedData.m_strip_msun;
-  star.update(s);                                 // a plain hot blue star (existing shader)
+  // path (b) Chunk 2: with "Show companion" on, draw the accretor as a REAL second sphere
+  // beside the stripped donor (star.js lays them side by side, fit-to-frame). The companion
+  // is a modeled single-star state, so the sphere is honest; the placement is schematic (no
+  // orbit is modeled — the caption owns that). Off ⇒ no opts ⇒ the lone stripped star.
+  const cState = companionOn && strippedData.companion ? strippedData.companion.state : null;
+  star.update(s, cState ? { companion: cState } : undefined);
   classification.update(s, "stripped", { mStrip });
   scale.update(s);                                // radius-based true-size bar (honest)
   hr.update(s);                                   // the marker, blue-left of the living track
@@ -2260,10 +2265,12 @@ function refreshStripped() {
   const cpn = companionOn ? strippedData.companion : null;
   if (cpn) {
     cap +=
-      `Its companion (the accretor, shown on the HR) started at ${fmt(cpn.mass_msun)} M☉ — ` +
-      `0.8× the donor — and is now the HEAVIER star: the Algol mass-ratio reversal ` +
-      `(donor ${fmt(mStrip)} < companion ${fmt(cpn.mass_msun)} M☉). It is a ` +
-      `~${Math.round(cpn.state.Teff_K / 1000)} kK main-sequence star, still burning hydrogen.`;
+      `Its companion (the accretor, drawn beside the donor in 3D and on the HR) started at ` +
+      `${fmt(cpn.mass_msun)} M☉ — 0.8× the donor — and is now the HEAVIER star: the Algol ` +
+      `mass-ratio reversal (donor ${fmt(mStrip)} < companion ${fmt(cpn.mass_msun)} M☉). It is a ` +
+      `~${Math.round(cpn.state.Teff_K / 1000)} kK main-sequence star, still burning hydrogen. ` +
+      `Each star is a real modeled star, but their side-by-side placement is schematic — the ` +
+      `separation and orbit are not modeled.`;
   } else {
     cap += `The companion is named, not drawn — tick “Show companion” to add it.`;
   }

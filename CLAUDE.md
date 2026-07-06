@@ -322,6 +322,23 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **PATH (b) CHUNK 2 BUILT (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero errors):**
+  "the companion drawn in 3D" — the accretor as a REAL second sphere beside the stripped donor. **No
+  backend touch** (the companion state is already served by `/binary_pair`). **Honesty split (advisor):**
+  the *sphere* is Tier 1/2 honest (a real modeled single-star state → the full surface shader: Teff
+  color, relative size, granulation, limb darkening), unlike the evocative corona/wind/fireball; what's
+  NOT modeled is the geometry BETWEEN the stars (no separation/orbit) → the side-by-side placement is
+  SCHEMATIC, caption-owned (un-drawn-orbit precedent). `star.js` = a 2nd `companion` sphere (own
+  `ShaderMaterial`, per-star uniforms differ) + a `companionGlare` (7–27 kK would blaze), no 2nd corona;
+  `update(state,{companion})` lays donor LEFT / companion RIGHT via direct `mesh.position.x`
+  (camera-facing quads stay parallel under x-shift — no billboard math), relative log-size preserved
+  (companion bigger than the compact donor IS the reversal in 3D), a shared `applyCompanionScale`
+  fit-to-frame factor (`FRAME_HALF_H` precedent, re-run each frame → live-resize refit), both glares
+  TEMPERED ×0.6 (glare-merge trap), `companionMat.uTime` in `animate()` (else boil freezes); all
+  offsets+`.visible` UNCONDITIONAL → toggle-off byte-identical. `main.js` threads the companion state +
+  the schematic caption sentence. Measured: donor stays compact (R 0.16→0.88 R☉) vs the MS companion
+  (1.83→7.76 R☉) at every node → "companion bigger" reads everywhere. NO 3D text labels (scope; left=donor
+  matches the HR blue-left). Next (b) Chunk 3: Roche-lobe geometry, then a real binary grid. [[star-sim-binary-stripped]].
 - **Chunks 1 (backend) & 2 (frontend what-if mode) & 3 (stripped-star spectra) BUILT — path (a) COMPLETE.**
   **Chunk 3** (backend + frontend, 273 pytest, Playwright 1440+390 zero console errors): a FOURTH
   spectrum sibling **`/stripped_spectrum`** over the Götberg CMFGEN cube — `scripts/bake_stripped_spectra.py`

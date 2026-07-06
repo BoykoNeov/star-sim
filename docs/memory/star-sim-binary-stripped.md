@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete (backend + what-if mode + spectra), path (b) Chunk 1 built (the companion drawn — HR Algol reversal via /binary_pair, no new dataset).
+description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete (backend + what-if mode + spectra), path (b) Chunks 1–2 built (the companion drawn on the HR via /binary_pair, then as a real 3D sphere beside the donor; no new dataset).
 metadata:
   type: project
 ---
@@ -168,11 +168,44 @@ needed — the advisor's key steer): reuse the Götberg stripped DONOR (path (a)
   `hr.js` companion added to `fitBounds`+`clearEndgame`+the export.
 - **Files:** `binary.py`, `api.py`, `test_binary.py` (+6), `hr.js` (`setCompanion`/`drawCompanion`/
   `markerLabel`), `main.js` (`companionOn` + toggle + route + caption/readout), `index.html`, `styles.css`.
-- **Next (path (b) Chunk 2): the 3D companion sphere** (the accretor as a second star in the 3D view
-  — the advisor's explicit next chunk); then Roche-lobe geometry / a real binary grid (POSYDON/BPASS).
 
-**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunk 1 (HR reversal) is now BUILT** — the full
-two-star co-evolution (3D companion, Roche geometry) continues in path (b) Chunks 2+. Related:
+**PATH (b) CHUNK 2 BUILT 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero
+console errors):** "the companion drawn in 3D" — the accretor as a REAL second sphere beside the
+stripped donor. **NO backend touch** (the companion `StellarState` is already served by `/binary_pair`).
+- **The honesty split (the load-bearing call, advisor-settled):** the companion *sphere* is Tier 1/2
+  honest — a real modeled single-star state (from `PROVIDER`), so drawn with the FULL surface shader
+  (real Teff color, real relative size, granulation, limb darkening, exposure), UNLIKE the evocative
+  corona/wind/fireball. What is NOT modeled is the geometry BETWEEN the stars (no separation/orbit/system-
+  inclination in the data) → the side-by-side placement is SCHEMATIC, caption-owned (the un-drawn-orbit
+  precedent): "Each star is a real modeled star, but their side-by-side placement is schematic — the
+  separation and orbit are not modeled."
+- **`star.js`:** a 2nd `companion` sphere (own `ShaderMaterial` reusing `SURFACE_VERT/FRAG` — per-star
+  uniforms differ, can't share `surfaceMat`) + a `companionGlare` quad (the 7–27 kK accretor would blaze;
+  an un-glaring companion beside a blazing donor misreads as "less real"); NO 2nd corona (a hot star is
+  near-glowless). `update(state, opts)` gains `opts.companion`: donor LEFT / companion RIGHT via direct
+  `mesh.position.x` (camera-facing quads stay parallel under an x-shift → no billboard math), relative
+  log-size PRESERVED (the companion reading BIGGER than the compact donor IS the Algol reversal in 3D),
+  then a single shared `applyCompanionScale` fit factor shrinks both to the tighter frame axis (horizontal
+  binds on phone, the WR `FRAME_HALF_H` precedent), re-run every frame in `animate()` so a live resize
+  refits. Both glares TEMPERED ×0.6 (the glare-merge trap — two additive blooms washing the lane between
+  the stars). `companionMat.uTime` driven in `animate()` (else the boil freezes — the fireball precedent).
+  All offsets + `.visible` set UNCONDITIONALLY → toggle-off re-centers the donor + hides the companion =
+  byte-identical (advisor code-traced: unconditional scale writes + the `else` branch's `position.x=0`).
+- **`main.js`:** `refreshStripped` threads `{ companion: strippedData.companion.state }` to `star.update`
+  when `companionOn`; the caption gains the schematic-layout honesty sentence.
+- **Measured across the grid (the advisor's high-mass concern, answered by the data):** the stripped donor
+  stays COMPACT at every node (R 0.16→0.88 R☉, mass 2→18) while the MS companion is large (1.83→7.76 R☉),
+  so "companion bigger" reads everywhere; low-mass = a clean color contrast (2 M☉: donor blue-white 20 kK,
+  companion warm-yellow 7 kK — the sub-luminous donor beside the optically brighter, cooler companion).
+- **Scope call on record (advisor-accepted):** NO 3D text labels this chunk — the caption + HR labels +
+  size/color carry identity; left=donor is a convention matching the HR's blue-left.
+- **Files (frontend-only):** `star.js` (companion sphere + `companionGlare` + `applyCompanionScale` + the
+  two-body block in `update` + the `animate` uTime/refit), `main.js` (`refreshStripped` thread + caption).
+- **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new two-star render),
+  then the on-ramp to a real binary grid (POSYDON/BPASS).
+
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–2 (HR reversal + 3D companion sphere) are now
+BUILT** — the full two-star co-evolution (Roche geometry, a real binary grid) continues in path (b) Chunks 3+. Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

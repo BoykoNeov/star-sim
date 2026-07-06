@@ -1,6 +1,45 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNK 1 BUILT (the companion drawn — HR reversal).
+## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–2 BUILT (companion on the HR + drawn in 3D).
+
+**Path (b) Chunk 2 done 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright
+1440 + 390 zero console errors).** "The companion drawn in 3D" — the accretor rendered as a
+real second sphere beside the stripped donor. **No backend touch** (the companion state is
+already served by `/binary_pair` from Chunk 1).
+- **The honesty split (the load-bearing call, advisor-settled):** the companion *sphere* is
+  Tier 1/2 honest — a real modeled single-star `StellarState` (from `PROVIDER`), so it's drawn
+  with the FULL surface shader (real Teff color, real relative size, granulation, limb
+  darkening, exposure), unlike the evocative corona/wind/fireball. What is NOT modeled is the
+  geometry BETWEEN the stars (no separation/orbit/system-inclination in the data), so the
+  side-by-side placement is SCHEMATIC (the un-drawn-orbit precedent); the caption owns it
+  ("Each star is a real modeled star, but their side-by-side placement is schematic — the
+  separation and orbit are not modeled").
+- **`star.js`:** a second `companion` sphere (own `ShaderMaterial` reusing `SURFACE_VERT/FRAG`
+  — per-star uniforms differ, so it can't share `surfaceMat`) + a `companionGlare` quad (the
+  accretor runs 7–27 kK and would blaze; an un-glaring companion beside a blazing donor would
+  misread as "less real"). No second corona (a hot star is near-glowless). `update(state, opts)`
+  gains `opts.companion`: donor LEFT / companion RIGHT, offset via direct `mesh.position.x`
+  (camera-facing quads stay parallel under an x-shift → no billboard math), relative log-size
+  preserved (the companion reading BIGGER than the compact donor IS the Algol reversal in 3D),
+  then a single shared `applyCompanionScale` fit factor shrinks both to the tighter frame axis
+  (horizontal binds on phone, `FRAME_HALF_H` precedent), re-run each frame in `animate()` so a
+  live resize refits. Both glares TEMPERED ×0.6 to keep the lane between the stars from washing
+  into one blob (the glare-merge trap). `companionMat.uTime` driven in `animate()` (else the
+  boil freezes — the fireball precedent). All offsets + `.visible` set UNCONDITIONALLY, so
+  toggle-off resets the primary to the origin and hides the companion = byte-identical.
+- **`main.js`:** `refreshStripped` threads `{ companion: strippedData.companion.state }` to
+  `star.update` when `companionOn`; the caption gains the schematic-layout honesty sentence.
+- **Measured across the grid (the advisor's high-mass concern, answered by the data):** the
+  stripped donor stays COMPACT at every node (R 0.16 → 0.88 R☉, mass 2 → 18) while the MS
+  companion is large (1.83 → 7.76 R☉), so the "companion bigger" cue reads everywhere. Low-mass
+  end is a clean color contrast too (2 M☉: donor blue-white 20 kK, companion warm-yellow 7 kK).
+- **Scope call on record (advisor-accepted):** NO 3D text labels this chunk — the caption + HR
+  labels + size/color carry identity; left=donor is a convention matching the HR's blue-left.
+- **Files:** `frontend/src/star.js` (companion sphere + glare + `applyCompanionScale` + the
+  two-body block in `update` + `animate` uTime/refit), `frontend/src/main.js` (`refreshStripped`
+  thread + caption). No backend, no tests changed (frontend-only; the Playwright pass is the gate).
+- **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new
+  two-star render), then the on-ramp to a real binary grid (POSYDON/BPASS).
 
 **Path (b) Chunk 1 done 2026-07-02 (backend + frontend HR two-marker reversal, 279 pytest,
 Playwright 1440+390 zero console errors).** "The companion drawn" — the second star of the Algol
@@ -37,9 +76,9 @@ Götberg stripped DONOR (path (a)) + the single-star `PROVIDER` for the COMPANIO
   regression, the pair assembler, the route gate + snap-far + 422), `hr.js` (+`setCompanion`/
   `drawCompanion`/`markerLabel`, companion in fitBounds + clearEndgame), `main.js` (companion toggle
   + `companionOn` state + fetch route + caption/readout), `index.html` (toggle + narration), `styles.css`.
-- **Next (path (b) Chunk 2):** the **3D companion sphere** — draw the accretor as a second star in
-  the 3D view (the advisor's explicit next chunk). Then further: the mass-transfer geometry / Roche
-  lobes (needs a genuinely new two-star render), the on-ramp to a real binary grid (POSYDON/BPASS).
+- **Next (path (b) Chunk 2): DONE** (see the top of this doc) — the 3D companion sphere is built.
+  Then further: the mass-transfer geometry / Roche lobes (needs a genuinely new two-star render),
+  the on-ramp to a real binary grid (POSYDON/BPASS).
 
 ## Status (historical): CHUNKS 1, 2 & 3 BUILT. The stripped-star arc is complete (path (b) deferred).
 

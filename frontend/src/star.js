@@ -648,6 +648,39 @@ export function createStar(canvas) {
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
   scene.add(star);
 
+  // Binary companion (path (b) Chunk 2 — "the companion drawn in 3D"). The accretor of
+  // the Algol system is a REAL modeled single-star StellarState (from PROVIDER, composed
+  // in the /binary_pair route), so — unlike the corona/wind/fireball — the SPHERE itself is
+  // honest: the full surface shader, real Teff color, real relative size. What is NOT
+  // modeled is the geometry BETWEEN the two stars (no separation, orbit or system
+  // inclination in the data), so the side-by-side placement is SCHEMATIC (the un-drawn-orbit
+  // precedent); the caption owns that. It needs its OWN material (per-star uniforms differ,
+  // so it cannot share surfaceMat) but the identical shaders. Shown only in stripped-mode
+  // with "Show companion" on (opts.companion); hidden + at origin otherwise (byte-identical).
+  const companionMat = new THREE.ShaderMaterial({
+    vertexShader: SURFACE_VERT,
+    fragmentShader: SURFACE_FRAG,
+    extensions: { derivatives: true },
+    uniforms: {
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uColorPole: { value: new THREE.Color(1, 1, 1) },
+      uColorEq: { value: new THREE.Color(1, 1, 1) },
+      uGeq: { value: 1.0 },       // round — no gravity darkening on the companion (context star)
+      uTime: { value: 0 },
+      uCells: { value: 22 },
+      uContrast: { value: 0.34 },
+      uOmega: { value: 0.12 },
+      uShear: { value: 0.35 },
+      uLife: { value: 8.0 },
+      uGran: { value: 1.0 },
+      uExpo: { value: 1.0 },
+      uPeculiar: { value: 0.0 },
+    },
+  });
+  const companion = new THREE.Mesh(star.geometry, companionMat);
+  companion.visible = false;
+  scene.add(companion);
+
   // Corona (replaces the Phase-0 placeholder halo): a camera-facing additive
   // quad, masked off the star disk, drawn on top (no depth test) so the glow
   // always composites around the silhouette.
@@ -691,6 +724,29 @@ export function createStar(canvas) {
   glare.renderOrder = 2;
   glare.visible = false;
   scene.add(glare);
+
+  // Companion glare (path (b) Chunk 2): the accretor runs hot (7–27 kK) and would blaze —
+  // an un-glaring companion beside a blazing donor misreads as "less real" — so it gets its
+  // own glare quad (same GLARE_FRAG). No second corona (a hot star is near-glowless; avoids
+  // mesh sprawl). Both glares are tempered in companion mode so two additive blooms don't
+  // wash the gap between the stars into one blob (see the layout block in update()).
+  const companionGlareMat = new THREE.ShaderMaterial({
+    vertexShader: CORONA_VERT,
+    fragmentShader: GLARE_FRAG,
+    uniforms: {
+      uColor: { value: new THREE.Color(1, 1, 1) },
+      uIntensity: { value: 0 },
+      uInnerFrac: { value: 1 / 2.2 },
+    },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const companionGlare = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), companionGlareMat);
+  companionGlare.renderOrder = 2;
+  companionGlare.visible = false;
+  scene.add(companionGlare);
 
   // clamped smoothstep in JS, for the update()-side keying curves below.
   const sstep = (a, b, x) => {
@@ -820,6 +876,31 @@ export function createStar(canvas) {
     windMat.uniforms.uInnerFrac.value = windState.rad / half;
   }
 
+  // Fit + place the two-body (stripped donor + companion) system to the frame (path (b)
+  // Chunk 2). update() computes the BASE (unscaled) mesh sizes + uniforms and stores them
+  // here; this applies the single shared fit factor `s` and the ±x offsets, and is called
+  // BOTH from update() (a fresh paint) and every frame from animate() when the companion is
+  // visible — so a live resize refits instead of clipping (the applyWindScale precedent). The
+  // relative sizes are preserved (the companion reading bigger than the compact donor IS the
+  // Algol reversal in 3D); `s` shrinks both to fit the tighter frame axis (horizontal binds
+  // on phone, aspect<1), with headroom left for the additive glare blooms.
+  let companionLayout = null;
+  function applyCompanionScale() {
+    if (!companionLayout) return;
+    const L = companionLayout;
+    const aspect = camera.aspect || 1;
+    const s = Math.min(1.1,
+      0.80 * (FRAME_HALF_H * aspect) / L.halfW,   // horizontal budget (the two disks side by side)
+      0.85 * FRAME_HALF_H / L.halfV);             // vertical budget (the larger disk)
+    const xD = -(L.sep / 2) * s, xC = (L.sep / 2) * s;
+    star.scale.set(L.dsx * s, L.dsy * s, L.dsx * s);
+    star.position.x = xD;
+    corona.scale.setScalar(L.corona * s); corona.position.x = xD;
+    if (L.glare != null) { glare.scale.setScalar(L.glare * s); glare.position.x = xD; }
+    companion.scale.setScalar(L.comp * s); companion.position.x = xC;
+    if (L.cglare != null) { companionGlare.scale.setScalar(L.cglare * s); companionGlare.position.x = xC; }
+  }
+
   // update(state, opts): opts.endgame === "wd" renders the white-dwarf endgame. The
   // look is driven by the star's OWN state (a degeneracy gate from log g), not a hard
   // mode switch, so the sequence is continuous: it opens on the thermally-pulsing AGB
@@ -831,6 +912,12 @@ export function createStar(canvas) {
   function update(state, opts) {
     const eg = opts && opts.endgame;       // "wd" (cooling sphere) | "wr" (stripped core) | "sn"
     const wd = eg === "wd", wr = eg === "wr", sn = eg === "sn";
+    // path (b) Chunk 2: the binary companion (accretor) as a second sphere. A real modeled
+    // single-star StellarState, supplied ONLY in stripped-mode with "Show companion" on (never
+    // in an endgame). Present ⇒ the two-body side-by-side layout below; absent ⇒ the star sits
+    // at the origin, byte-identical to before.
+    const cmp = (!eg && opts && opts.companion) || null;
+    const twoBody = !!cmp;
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
@@ -1025,8 +1112,12 @@ export function createStar(canvas) {
     }
 
     // Apply the glare quad last (set unconditionally, like star.visible — a mode
-    // switch must never strand a stale glare on screen).
+    // switch must never strand a stale glare on screen). In two-body mode the glare is
+    // TEMPERED (×0.6) so the donor's and companion's additive blooms don't wash the lane
+    // between them into one blob (the glare-merge trap); its size/position are then owned by
+    // applyCompanionScale below (scaled by the shared fit factor + offset to the donor).
     const GLARE_EXTENT = 2.2;
+    glareInt *= twoBody ? 0.6 : 1;
     glare.visible = glareInt > 0.004;
     if (glare.visible) {
       // The star's own hue nudged toward white — bright sources flare white.
@@ -1035,6 +1126,59 @@ export function createStar(canvas) {
       glareMat.uniforms.uIntensity.value = glareInt;
       glare.scale.setScalar(glareRad * GLARE_EXTENT);
       glareMat.uniforms.uInnerFrac.value = 1 / GLARE_EXTENT;
+    }
+
+    // --- Binary companion sphere (path (b) Chunk 2) --------------------------------------
+    // When a companion is supplied, render it as a REAL second star (full surface shader:
+    // Teff color, granulation, limb darkening, exposure — all honest, it's a modeled state)
+    // and lay the two stars side by side. When absent, reset the primary to the origin and
+    // hide the companion meshes — set UNCONDITIONALLY so a toggle-off is byte-identical.
+    companion.visible = twoBody;
+    if (twoBody) {
+      const [cr, cg, cb] = teffToLinearRGB(cmp.Teff_K);
+      companionMat.uniforms.uColor.value.setRGB(cr, cg, cb);
+      companionMat.uniforms.uColorPole.value.setRGB(cr, cg, cb);
+      companionMat.uniforms.uColorEq.value.setRGB(cr, cg, cb);
+      companionMat.uniforms.uGeq.value = 1.0;                 // round context star (no gravity darkening)
+      companionMat.uniforms.uCells.value = granuleCells(cmp);
+      companionMat.uniforms.uExpo.value =
+        0.85 + 0.15 * sstep(3000, 5800, cmp.Teff_K) + 0.5 * sstep(8000, 25000, cmp.Teff_K);
+      companionMat.uniforms.uGran.value = 1.0;
+      companionMat.uniforms.uPeculiar.value = 0.0;
+
+      const cRad = displayRadius(cmp.R_rsun);
+      // The companion runs hot (7–27 kK) and would blaze — give it a glare keyed the same way
+      // as the primary (Teff × L), tempered ×0.6 like the donor's so the two don't merge.
+      const cLogL = Math.log10(Math.max(1, cmp.L_lsun));
+      const cGlareInt = 0.6 * sstep(7000, 22000, cmp.Teff_K) * (0.5 + 0.5 * sstep(0, 6, cLogL));
+      companionGlare.visible = cGlareInt > 0.004;
+      if (companionGlare.visible) {
+        companionGlareMat.uniforms.uColor.value.setRGB(
+          cr + (1 - cr) * 0.3, cg + (1 - cg) * 0.3, cb + (1 - cb) * 0.3);
+        companionGlareMat.uniforms.uIntensity.value = cGlareInt;
+        companionGlareMat.uniforms.uInnerFrac.value = 1 / GLARE_EXTENT;
+      }
+
+      // Base (unscaled) sizes for applyCompanionScale: a clear lane between the disks, the
+      // donor left / companion right, symmetric about the origin. `rad`/gd are the donor's.
+      const gap = 0.7 * Math.max(rad, cRad);
+      const sep = rad + cRad + gap;                    // centre-to-centre (radius units)
+      const maxR = Math.max(rad, cRad);
+      companionLayout = {
+        sep, halfW: sep / 2 + maxR, halfV: maxR,
+        dsx: rad * gd.kEq, dsy: rad * gd.kPol,         // donor sphere base scale (round donor ⇒ rad)
+        corona: rad * extent,                          // donor corona base scale
+        glare: glare.visible ? glareRad * GLARE_EXTENT : null,
+        comp: cRad,                                    // companion sphere base scale
+        cglare: companionGlare.visible ? cRad * GLARE_EXTENT : null,
+      };
+      applyCompanionScale();
+    } else {
+      companionLayout = null;
+      companionGlare.visible = false;
+      star.position.x = 0;
+      corona.position.x = 0;
+      glare.position.x = 0;
     }
   }
 
@@ -1053,6 +1197,11 @@ export function createStar(canvas) {
     // independent (not a per-frame increment).
     const t = clock.getElapsedTime();
     surfaceMat.uniforms.uTime.value = t;
+    // The companion sphere boils on the same clock (else its granulation would freeze) and
+    // refits to the frame each frame, so a live resize can't clip the two-body layout (the
+    // applyWindScale precedent). Cheap to set uTime unconditionally; refit only when shown.
+    companionMat.uniforms.uTime.value = t;
+    if (companion.visible) applyCompanionScale();
     // The WR wind outflow streams from the same clock (the corona has no uTime); refit it
     // to the frame each frame so a live resize can't slice the additive quad at the edge.
     if (wind.visible) {

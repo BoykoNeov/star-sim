@@ -1,6 +1,6 @@
 # Memory index
 
-- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel). Path (a) Chunks 1–3 COMPLETE (backend snap (Z,Minit) table + frontend `mode="stripped"` what-if + `/stripped_spectrum` cube). Path (b) Chunk 1 BUILT: "the companion drawn" — `/binary_pair` composes the stripped DONOR + a single-star `PROVIDER` COMPANION at M2=0.8·M_init (grid q, non-conservative baseline), HR two-marker Algol reversal (M_strip<M2, L-flip payoff), NO new dataset; binary.py stays pure (companion composed in the route). Next: 3D companion sphere.
+- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel). Path (a) Chunks 1–3 COMPLETE (snap (Z,Minit) table + `mode="stripped"` what-if + `/stripped_spectrum`). Path (b) Chunks 1–2 BUILT: /binary_pair composes stripped DONOR + PROVIDER COMPANION (M2=0.8·M_init, no new dataset) → HR Algol reversal (Chunk 1) + a real 3D companion sphere beside the donor (Chunk 2, frontend-only; sphere honest, layout schematic). Next: Roche geometry / real binary grid.
 
 - [Star Simulator init scope](star-sim-init-scope.md) — what init delivered: the §3 provider spine, stub limits (historical).
 - [Star Simulator MISTProvider](star-sim-mist-provider.md) — live provider: MIST v2.5, 2D (mass×[Fe/H]) EEP interpolation, blend-then-invert, non-rectangular domain, ZAMS→EAGB window (TPAGB hard-stopped), full 0.1–300 M☉ grid, .npz parse cache. Phase 1.
