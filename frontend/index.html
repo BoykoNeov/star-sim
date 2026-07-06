@@ -500,6 +500,21 @@
         </div>
       </div>
     </section>
+
+    <section class="panel roche-panel" data-panel-id="roche">
+      <h2>Mass transfer · Roche lobes <span class="help" tabindex="0" data-tip="The orbital-plane cross-section at the moment of Case-B mass transfer — the CAUSE of the stripped star. Each star sits in a teardrop-shaped Roche lobe (the region its gravity dominates); the two lobes meet at the inner Lagrange point L₁. The donor has swollen to fill its lobe and is streaming gas through L₁ onto its companion — this is how the companion strips the donor's envelope. The lobe shapes come only from the mass ratio q (fixed at 0.8 by this grid) and the separation from the initial orbital period via Kepler's third law; the geometry is computed, the donor's colour and the stream are schematic.">?</span></h2>
+      <p class="hint roche-intro">
+        How the star gets stripped: a close companion. The donor has swollen to
+        fill its <b>Roche lobe</b> and pours gas through the inner Lagrange point
+        <b>L₁</b> onto the companion — Case-B mass transfer, the ~70% binary
+        channel. This is an <b>earlier moment</b> than the other panels: here the
+        donor is still the <b>heavier</b> star; by the stripped state shown
+        elsewhere the mass ratio has reversed.
+        <span class="help" tabindex="0" data-tip="Why does the same 'donor' look heavier here but lighter everywhere else? At mass transfer (this panel) the donor still has its full envelope — it is the more massive star, overflowing its larger lobe. As the companion strips that envelope away, the donor is reduced to its bare helium core (the hot compact star in the other panels), now far LESS massive than the companion it fed — the Algol mass-ratio reversal. Two snapshots of the same binary, before and after.">?</span>
+      </p>
+      <canvas id="roche-canvas"></canvas>
+      <p class="lane-caption" id="roche-caption"></p>
+    </section>
   </main>
 
   <script type="module" src="./src/main.js"></script>

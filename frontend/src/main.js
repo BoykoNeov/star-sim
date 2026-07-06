@@ -10,6 +10,7 @@ import { createHR } from "./hr.js";
 import { createComp } from "./comp.js";
 import { createLane } from "./lane.js";
 import { createStructure } from "./structure.js";
+import { createRoche } from "./roche.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
 import { createClassification } from "./classify.js";
@@ -179,6 +180,13 @@ const spectrum = createSpectrum({ api: API });
 // through the WD/WR/SN endgame modes (no interior grid there).
 const structure = createStructure({ api: API });
 
+// The Roche-lobe / mass-transfer geometry panel (binary path (b) Chunk 3) — a pushed-data
+// consumer (main.js hands it the /binary_pair `roche` block + companion state; it never
+// fetches). Shown only in stripped-mode with "Show companion" on (CSS-gated on body
+// .stripped-mode.companion-on); its panel is display:none otherwise, so its canvas is fit
+// on first draw. It is the CAUSAL two-star render behind the stripped star.
+const roche = createRoche();
+
 // The broadband SED panel (spec §5) is a SIBLING like lane.js — but, unlike lane,
 // it DOES move with the star: it's the Planck blackbody across the whole EM
 // spectrum, driven by Teff alone (a blackbody ignores log g and [Fe/H]), so it
@@ -221,6 +229,7 @@ const RESPONSIVE = [
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
   { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
   { id: "structure-canvas", mod: structure, maxW: 720, h: 340 },
+  { id: "roche-canvas", mod: roche, maxW: 720, h: 320 },
 ];
 for (const r of RESPONSIVE) {
   const canvas = document.getElementById(r.id);
@@ -1746,6 +1755,8 @@ function exitEndgame() {
   snModel = null; snToken++;     // drop the SN model + invalidate any in-flight /supernova fetch
   strippedData = null; strippedToken++;   // drop the stripped model + invalidate its in-flight fetch
   companionOn = false;                     // reset the path (b) companion reveal (hr.clearEndgame drops its marker)
+  document.body.classList.remove("companion-on");   // hide the Roche panel (path (b) Chunk 3)
+  roche.clear();
   // Return to the LIVING version of the endgame progenitor we were viewing
   // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
   // the focus/blur race where a still-focused mass box re-commits a reverted-away value
@@ -2214,6 +2225,13 @@ function applyStrippedModel(data) {
   hr.setCompanion(companionOn && data.companion ? data.companion.state : null);
   comp.setStripped(s);
   spectrum.updateStripped(s);       // real stripped-star spectrum (replaces the Chunk-2 placeholder)
+  // path (b) Chunk 3: the mass-transfer / Roche-lobe panel — the CAUSAL two-star render.
+  // Shown only with the companion reveal on (it is inherently a two-star view); the body
+  // class CSS-reveals its panel, and roche.draw fits its (previously hidden) canvas.
+  const showRoche = companionOn && data.roche && data.companion;
+  document.body.classList.toggle("companion-on", !!showRoche);
+  if (showRoche) roche.draw(data.roche, data.companion.state);
+  else roche.clear();
   refreshStripped();
 }
 

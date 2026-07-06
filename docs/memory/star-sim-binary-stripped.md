@@ -169,6 +169,54 @@ needed — the advisor's key steer): reuse the Götberg stripped DONOR (path (a)
 - **Files:** `binary.py`, `api.py`, `test_binary.py` (+6), `hr.js` (`setCompanion`/`drawCompanion`/
   `markerLabel`), `main.js` (`companionOn` + toggle + route + caption/readout), `index.html`, `styles.css`.
 
+**PATH (b) CHUNK 3 BUILT 2026-07-06 (backend + frontend, 287 pytest [+8], Playwright 1440+390 zero
+console errors):** "the mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR render: the
+orbital-plane cross-section at the moment of Case-B RLOF (the CAUSAL story behind the stripped star).
+- **Option B, advisor-settled:** the RLOF *moment* (a distinct, labelled evolutionary snapshot), a 2D
+  orbital-plane figure-of-eight (NOT 3D Roche surfaces — the topology only reads in the plane),
+  separation from `P_init` via Kepler. The 3D companion sphere (Chunk 2) shows the POST-strip product;
+  this panel shows the earlier RLOF moment.
+- **The blocker the advisor flagged — cross-panel mass-ordering REVERSAL (same class as the Chunk-1
+  q-bug):** at RLOF the donor is M1, the HEAVIER star (5.45 M☉) overflowing its BIGGER lobe onto the
+  lighter companion M2=0.8·M1 (4.36); but every other panel shows the POST-strip donor as the LIGHTER
+  object (readout: stripped 1.27 < companion 4.36, ratio 3.4). The SAME "donor" is heavier here /
+  lighter elsewhere. **Owned by BOTH the panel intro AND the dynamic caption** ("here the donor is
+  still the heavier star; by the stripped state shown elsewhere the mass ratio has reversed"). Nice
+  consistency that makes it non-contradictory: the COMPANION mass is 4.36 in both views (accretor
+  ~unchanged, non-conservative baseline); only the donor's mass changes — so the reversal reads as the
+  donor sliding under the companion, not two panels disagreeing.
+- **Honest geometry, schematic donor colour:** the lobe SHAPE depends only on q (=0.8, known); the
+  separation is Kepler on the node's real (M1, M2, `P_init`). The donor at RLOF is a bloated COOL post-MS
+  giant of UN-MODELLED temperature (the Götberg table is the stripped product) → drawn with a neutral
+  WARM schematic tint, NEVER the stripped Teff (that would be a false hot-blue claim). The companion is
+  drawn at its REAL modelled radius (from `/binary_pair`) — compact, deep inside its own lobe (only the
+  donor overflows). The stream is a schematic Coriolis arc. Caption owns all three soft spots + that
+  `P_init` is the *initial* period (RLOF-onset approx).
+- **Backend:** `gotberg_z014.csv` gains a 9th `P_init` column (transcribed from the VizieR model dir
+  names `M1_<M>q0.8P<P>Z0.014`, all 23 verified against `ls`); `binary.py` `_StrippedModel.p_init` +
+  parser `len(row)!=9` fix (the advisor's code gotcha) + a PURE `roche_geometry(mass,feh)` (no PROVIDER
+  — pure orbital mechanics): dimensionless Kopal potential (donor at origin, companion at (1,0), q=M2/M1),
+  L1/L2/L3 by bisecting dΦ/dx on the 3 axis intervals, lobe outlines by radial-march-per-angle to the
+  critical equipotential. **The L1-tangent bug + fix:** along the axis toward the companion Φ is TANGENT
+  to `crit` at L1 (a maximum, not a transversal crossing), so a strict `≥crit` test misses it and the
+  march leaks across L1 into the companion's well (donor lobe reached x=1.385!) → fix: stop at the first
+  of (crit-crossing) OR (Φ turnover), which pins the cusp at L1 so the two lobes kiss. Folded into
+  `binary_pair_payload` (`payload["roche"]`, one fetch; companion sphere size comes from the route's real
+  companion state). 8 new tests in `test_binary.py` (P_init parse, snap consistency, donor-heavier-at-RLOF,
+  Kepler separation sane ≈43.7 R☉ @5.45, L-point ordering, lobes-kiss-at-L1 + donor-bigger + no-leak,
+  Eggleton fill, route carries roche + companion-fits-its-lobe).
+- **Frontend:** new `roche.js` (a pushed-data consumer — main.js hands it the `roche` block + companion
+  state; never fetches) drawing the equal-aspect (undistorted) figure-of-eight: filled donor lobe (warm
+  schematic) + faint companion lobe + companion disc at real relative radius + L1/L2/L3 ×'s + CoM + stream
+  arrow + separation scale bar + the reversal-owning caption. New `#roche-panel` in index.html
+  (`data-panel-id="roche"`), CSS-gated `display:none` → `body.stripped-mode.companion-on .roche-panel`
+  (a mode-hidden `.panel` is safe with layout.js — still enumerated, just hidden; canvas fit on first
+  draw since fitCanvas measures 0×0 while hidden). main.js: import + instantiate + RESPONSIVE entry +
+  `applyStrippedModel` draws/clears + toggles `.companion-on` body class + `exitEndgame` clears.
+- **Files:** `data/gotberg_z014.csv`, `binary.py`, `test_binary.py` (+8), `roche.js` (new), `main.js`,
+  `index.html`, `styles.css`. **Next (path (b) Chunk 4): the on-ramp to a real binary grid (POSYDON/BPASS)
+  — a SEPARATE recon+handoff (data gated like Götberg → recon first, not speculative parser).**
+
 **PATH (b) CHUNK 2 BUILT 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero
 console errors):** "the companion drawn in 3D" — the accretor as a REAL second sphere beside the
 stripped donor. **NO backend touch** (the companion `StellarState` is already served by `/binary_pair`).

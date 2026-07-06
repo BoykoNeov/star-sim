@@ -14,6 +14,15 @@
 #     max |Δ| = 0.070 dex. The check is now a durable regression: test_binary.py
 #     ::test_table_matches_seds (gated requires_gotberg_data). Do not edit a row without
 #     re-running it.
+#   - P_init (the 9th column, path (b) Chunk 3) is the INITIAL orbital period / days, read
+#     directly from the VizieR model directory names (M1_<Minit>q0.8P<Pinit>Z0.014_vinf1.5)
+#     — a deterministic function of Minit (the grid fixes the Case-B period per mass). It is
+#     transcribed here so the Roche-lobe / mass-transfer geometry (roche_geometry in
+#     binary.py) can compute the orbital separation via Kepler's third law from (Minit,
+#     0.8·Minit, P_init). CAVEAT: it is the *initial* (ZAMS) period, used as the RLOF-onset
+#     approximation — the orbit changes slightly across the donor's MS before Case-B
+#     overflow; the render's caption owns that. Verify against the dir names, do not trust a
+#     summary (a `ls data/gotberg_stripped/grid_014/` reproduces all 23).
 #
 # COLUMN NOTES (the two gotchas baked into binary.py, not this file):
 #   - Teff_kK / R_eff are the self-consistent spectroscopic Stefan-Boltzmann pair that
@@ -31,28 +40,30 @@
 # Teff_kK: effective temperature / 1000 K       logL: log10(L / L_sun)
 # logg   : log10 surface gravity, cgs           R_eff: radius / R_sun
 # X_H, X_He: surface hydrogen / helium mass fractions (rounded; renormalized in binary.py)
+# P_init : initial orbital period / days  (from the model dir names; RLOF-onset approx —
+#          the Roche-geometry separation via Kepler, path (b) Chunk 3)
 #
-# M_init,M_strip,Teff_kK,logL,logg,R_eff,X_H,X_He
-2.0,0.35,20.4,0.6,5.58,0.16,1.0,0.0
-2.21,0.38,22.5,0.8,5.54,0.17,1.0,0.0
-2.44,0.44,25.6,1.1,5.54,0.19,1.0,0.0
-2.7,0.51,28.2,1.4,5.49,0.21,0.96,0.04
-2.99,0.58,30.9,1.6,5.48,0.23,0.96,0.04
-3.3,0.66,33.6,1.9,5.45,0.25,0.96,0.04
-3.65,0.74,36.7,2.0,5.48,0.26,0.49,0.5
-4.04,0.85,39.5,2.3,5.45,0.29,0.46,0.54
-4.46,0.97,41.9,2.5,5.4,0.32,0.46,0.53
-4.93,1.11,44.6,2.7,5.37,0.36,0.42,0.57
-5.45,1.27,47.5,2.9,5.34,0.4,0.36,0.63
-6.03,1.43,50.8,3.0,5.35,0.42,0.29,0.7
-6.66,1.63,54.1,3.2,5.33,0.46,0.28,0.71
-7.37,1.88,57.5,3.4,5.31,0.5,0.25,0.73
-8.15,2.17,61.6,3.6,5.3,0.55,0.23,0.75
-9.0,2.49,65.5,3.8,5.29,0.59,0.23,0.76
-9.96,2.87,69.1,3.9,5.27,0.65,0.23,0.76
-11.01,3.32,73.7,4.1,5.27,0.7,0.22,0.77
-12.17,3.85,78.3,4.3,5.27,0.76,0.21,0.78
-13.45,4.45,83.4,4.4,5.28,0.8,0.2,0.79
-14.87,5.12,88.8,4.6,5.3,0.84,0.18,0.81
-16.44,5.88,94.6,4.7,5.33,0.87,0.16,0.83
-18.17,6.72,101.3,4.9,5.37,0.88,0.12,0.87
+# M_init,M_strip,Teff_kK,logL,logg,R_eff,X_H,X_He,P_init
+2.0,0.35,20.4,0.6,5.58,0.16,1.0,0.0,5.6
+2.21,0.38,22.5,0.8,5.54,0.17,1.0,0.0,6.0
+2.44,0.44,25.6,1.1,5.54,0.19,1.0,0.0,6.4
+2.7,0.51,28.2,1.4,5.49,0.21,0.96,0.04,6.8
+2.99,0.58,30.9,1.6,5.48,0.23,0.96,0.04,7.3
+3.3,0.66,33.6,1.9,5.45,0.25,0.96,0.04,7.7
+3.65,0.74,36.7,2.0,5.48,0.26,0.49,0.5,8.2
+4.04,0.85,39.5,2.3,5.45,0.29,0.46,0.54,8.8
+4.46,0.97,41.9,2.5,5.4,0.32,0.46,0.53,9.4
+4.93,1.11,44.6,2.7,5.37,0.36,0.42,0.57,10.0
+5.45,1.27,47.5,2.9,5.34,0.4,0.36,0.63,10.7
+6.03,1.43,50.8,3.0,5.35,0.42,0.29,0.7,11.2
+6.66,1.63,54.1,3.2,5.33,0.46,0.28,0.71,12.0
+7.37,1.88,57.5,3.4,5.31,0.5,0.25,0.73,13.0
+8.15,2.17,61.6,3.6,5.3,0.55,0.23,0.75,14.0
+9.0,2.49,65.5,3.8,5.29,0.59,0.23,0.76,15.2
+9.96,2.87,69.1,3.9,5.27,0.65,0.23,0.76,16.6
+11.01,3.32,73.7,4.1,5.27,0.7,0.22,0.77,18.3
+12.17,3.85,78.3,4.3,5.27,0.76,0.21,0.78,20.2
+13.45,4.45,83.4,4.4,5.28,0.8,0.2,0.79,22.4
+14.87,5.12,88.8,4.6,5.3,0.84,0.18,0.81,25.0
+16.44,5.88,94.6,4.7,5.33,0.87,0.16,0.83,28.0
+18.17,6.72,101.3,4.9,5.37,0.88,0.12,0.87,31.7

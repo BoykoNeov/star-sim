@@ -168,6 +168,7 @@ main {
    the JS-driven responsive resize sizes the canvas to the panel, not vice-versa. */
 .lane-body > div { min-width: 0; }
 #lane-canvas { display: block; background: #0b0f1c; border-radius: 8px; max-width: 100%; }
+#roche-canvas { display: block; background: #0b0f1c; border-radius: 8px; max-width: 100%; }
 .lane-controls { min-width: 0; }   /* let the readout values wrap, not overflow */
 /* The updating "what does this n mean physically" line under the n slider.
    Reserve the tallest caption's height so scrubbing n never resizes the panel
@@ -670,6 +671,14 @@ body.stripped-mode .companion-toggle-wrap {
 .companion-toggle-wrap input[type="checkbox"] {
   accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer;
 }
+/* The Roche-lobe / mass-transfer panel (binary path (b) Chunk 3) is a two-star view, so
+   it appears ONLY in stripped-mode with "Show companion" on (main.js toggles the
+   .companion-on body class). display:none otherwise — a normal column citizen when shown,
+   and its canvas is fit on first draw (fitCanvas would measure 0×0 while hidden). */
+.roche-panel { display: none; }
+body.stripped-mode.companion-on .roche-panel { display: block; }
+.roche-intro { margin: 0 0 10px; }
+
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,

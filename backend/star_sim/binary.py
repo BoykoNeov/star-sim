@@ -109,6 +109,8 @@ class _StrippedModel:
     r_eff: float       # radius / R_sun
     x_h: float         # surface H mass fraction (rounded)
     x_he: float        # surface He mass fraction (rounded)
+    p_init: float      # INITIAL orbital period / days (RLOF-onset approx; the Roche-geometry
+                       # separation via Kepler, path (b) Chunk 3 — see the CSV header)
 
     @property
     def feh(self) -> float:
@@ -151,12 +153,12 @@ def _parse_table(path: Path, grid_z: float) -> list[_StrippedModel]:
     with open(path, newline="") as fh:
         reader = csv.reader(row for row in fh if row.strip() and not row.lstrip().startswith("#"))
         for row in reader:
-            if len(row) != 8:
-                raise BinaryDataMissing(f"{path}: expected 8 columns, got {len(row)}: {row!r}")
-            m_init, m_strip, teff_kK, logL, logg, r_eff, x_h, x_he = (float(v) for v in row)
+            if len(row) != 9:
+                raise BinaryDataMissing(f"{path}: expected 9 columns, got {len(row)}: {row!r}")
+            m_init, m_strip, teff_kK, logL, logg, r_eff, x_h, x_he, p_init = (float(v) for v in row)
             models.append(_StrippedModel(
                 grid_z=grid_z, m_init=m_init, m_strip=m_strip, teff_kK=teff_kK,
-                logL=logL, logg=logg, r_eff=r_eff, x_h=x_h, x_he=x_he,
+                logL=logL, logg=logg, r_eff=r_eff, x_h=x_h, x_he=x_he, p_init=p_init,
             ))
     return models
 
@@ -298,6 +300,195 @@ def companion_init_mass(m_init: float) -> float:
     return COMPANION_MASS_RATIO * m_init
 
 
+# --- path (b) Chunk 3: the Roche-lobe / mass-transfer geometry ----------------
+#
+# A genuinely new two-star render: the ORBITAL-PLANE cross-section at the moment of
+# Case-B mass transfer — the two Roche lobes meeting at L1, the donor filling its lobe
+# and streaming through L1 onto the lighter companion. This is the CAUSAL story behind
+# the stripped star, and it is a DIFFERENT evolutionary snapshot than the marker: here
+# the donor is still the MORE massive star (M1 > M2, it overflows), whereas the other
+# panels show the POST-strip state where the donor is the lighter object and the mass
+# ratio has reversed (mass_ratio_final > 1). The render's caption owns that reversal (it
+# is the same convention-mismatch class as the q-bug that bit path (b) Chunk 1).
+#
+# The geometry is HONEST, not schematic: the Roche-lobe SHAPE depends only on the mass
+# ratio q (a known constant, 0.8), and the physical SCALE (the separation a) comes from
+# Kepler's third law applied to the real (M1, M2, P_init) of the snapped grid node. The
+# ONE soft spot (caption-owned) is that P_init is the *initial* period used as the
+# RLOF-onset approximation. The mass-transfer STREAM is the only illustrative element (a
+# schematic Coriolis-deflected arc from L1 toward the accretor), labelled as such.
+#
+# roche_geometry is a PURE sibling function (no PROVIDER): it needs only q and the node's
+# (M_init, P_init) — pure orbital mechanics, no stellar model. It is folded into the
+# /binary_pair payload (the companion sphere size the frontend draws comes from that
+# route's real modelled companion state), so the Roche panel appears exactly when the
+# "Show companion" reveal is on.
+
+# Roche-lobe outline resolution (points per lobe) and the marching bounds. 160 angular
+# samples give a smooth teardrop; the cusp at L1 lands on a sample by construction (the
+# axis angle θ=0/π is included).
+_ROCHE_LOBE_SAMPLES = 160
+
+# Solar-unit Kepler: a³[AU] = M_tot[M_sun] · P²[yr], and 1 AU = 215.032 R_sun. So the
+# separation follows from the node's masses + initial period with no unit soup.
+_AU_PER_RSUN = 215.032
+_DAYS_PER_YEAR = 365.25
+
+
+def _roche_potential(x: float, y: float, q: float, x_cm: float) -> float:
+    """Dimensionless Roche (Kopal) potential in the co-rotating frame, separation a=1,
+    G·M1=1. The donor (M1) sits at the origin, the companion (M2) at (1, 0); q = M2/M1
+    and x_cm = q/(1+q) is the centre of mass. More negative = deeper in a well; the value
+    at L1 is the critical potential whose contour is the touching figure-of-eight."""
+    r1 = math.hypot(x, y)
+    r2 = math.hypot(x - 1.0, y)
+    r1 = max(r1, 1e-9)
+    r2 = max(r2, 1e-9)
+    return -1.0 / r1 - q / r2 - 0.5 * (1.0 + q) * ((x - x_cm) ** 2 + y ** 2)
+
+
+def _dphi_dx_axis(x: float, q: float, x_cm: float) -> float:
+    """dΦ/dx along y=0 — its roots on the three axis intervals are the collinear Lagrange
+    points L3 (x<0), L1 (0<x<1), L2 (x>1)."""
+    return (x / abs(x) ** 3
+            + q * (x - 1.0) / abs(x - 1.0) ** 3
+            - (1.0 + q) * (x - x_cm))
+
+
+def _bisect_axis(lo: float, hi: float, q: float, x_cm: float) -> float:
+    """Bisect for a zero of dΦ/dx on (lo, hi) — the interval brackets exactly one L-point."""
+    flo = _dphi_dx_axis(lo, q, x_cm)
+    for _ in range(100):
+        mid = 0.5 * (lo + hi)
+        fmid = _dphi_dx_axis(mid, q, x_cm)
+        if flo * fmid <= 0.0:
+            hi = mid
+        else:
+            lo, flo = mid, fmid
+    return 0.5 * (lo + hi)
+
+
+def _trace_lobe(cx: float, q: float, x_cm: float, crit: float) -> list[list[float]]:
+    """The critical-equipotential outline around a star centred at (cx, 0): for each angle,
+    march radially out from the centre and stop at the lobe boundary, which is the FIRST of
+    either (a) Φ crossing up to the critical value `crit` — the ordinary case, most rays —
+    or (b) Φ turning over (ceasing to rise) below crit. Case (b) is essential on the ray
+    pointing at the companion: there Φ is TANGENT to crit at L1 (the saddle is a maximum
+    along the axis, not a transversal crossing), so a strict `≥ crit` test would miss it and
+    the march would leak across L1 into the companion's well. Detecting the turnover pins
+    the cusp at L1, so the two lobes kiss there by construction."""
+    pts: list[list[float]] = []
+    n = _ROCHE_LOBE_SAMPLES
+    for i in range(n):
+        th = 2.0 * math.pi * i / n
+        ct, st = math.cos(th), math.sin(th)
+        prev_r = 1e-4
+        prev_phi = _roche_potential(cx + prev_r * ct, prev_r * st, q, x_cm)
+        boundary = 1.5
+        r = 0.02
+        while r < 1.5:
+            phi = _roche_potential(cx + r * ct, r * st, q, x_cm)
+            if phi >= crit:                        # ordinary crossing — bisect (prev_r, r)
+                lo, hi = prev_r, r
+                for _ in range(48):
+                    rm = 0.5 * (lo + hi)
+                    if _roche_potential(cx + rm * ct, rm * st, q, x_cm) >= crit:
+                        hi = rm
+                    else:
+                        lo = rm
+                boundary = 0.5 * (lo + hi)
+                break
+            if phi < prev_phi - 1e-12:             # turned over below crit — the L1 tangent ray
+                boundary = prev_r
+                break
+            prev_r, prev_phi = r, phi
+            r *= 1.05
+        pts.append([cx + boundary * ct, boundary * st])
+    pts.append(pts[0][:])                          # close the outline
+    return pts
+
+
+def _eggleton_rl_over_a(q_donor: float) -> float:
+    """Eggleton (1983) volume-equivalent Roche-lobe radius R_L/a for a star with mass
+    ratio q_donor = M_this / M_other. Used for the donor's filled-lobe size scalar."""
+    c = q_donor ** (1.0 / 3.0)
+    return 0.49 * c * c / (0.6 * c * c + math.log(1.0 + c))
+
+
+def _stream_path(l1x: float, q: float, x_cm: float) -> list[list[float]]:
+    """A schematic mass-transfer stream from L1 toward the accretor — a Coriolis-deflected
+    arc (it leads the companion, +y in the co-rotating frame), NOT a ballistic integration.
+    The lobes and L-points are honest physics; the stream is illustrative (caption-owned)."""
+    pts: list[list[float]] = []
+    steps = 24
+    for i in range(steps + 1):
+        t = i / steps
+        x = l1x + (1.0 - l1x) * t
+        # A parabolic bulge to the leading side, fading to zero as it reaches the companion.
+        y = 0.16 * (1.0 - l1x) * math.sin(math.pi * t) * (1.0 - 0.35 * t)
+        pts.append([x, y])
+    return pts
+
+
+def roche_geometry(mass: float, feh: float = 0.0) -> dict:
+    """The mass-transfer geometry for the snapped grid node — pure orbital mechanics, no
+    provider. Snaps (Z, M_init) exactly like `stripped_star` (state↔geometry consistency),
+    reads the node's initial period, and returns the orbital-plane Roche-lobe cross-section
+    at Case-B RLOF: the two lobes, the collinear Lagrange points, the separation from
+    Kepler, and a schematic stream. All coordinates are in units of the separation a (donor
+    at the origin, companion at (1, 0)); `separation_rsun` carries the physical scale.
+
+    Mass ordering AT RLOF (the caption must own the reversal vs the other panels): the
+    DONOR is M1 = the snapped M_init, the HEAVIER star, overflowing its (bigger) lobe onto
+    the LIGHTER companion M2 = 0.8·M1. In the post-strip state shown elsewhere the donor is
+    the lighter object and the ratio has reversed."""
+    grid = _load_grid()
+    z = _snap_grid_z(grid, feh)
+    at_z = [m for m in grid if m.grid_z == z]
+    node = min(at_z, key=lambda m: abs(m.m_init - mass))
+
+    m1 = node.m_init                       # donor at RLOF (the heavier star)
+    m2 = COMPANION_MASS_RATIO * m1         # companion / accretor (lighter)
+    q = COMPANION_MASS_RATIO               # M2 / M1 = 0.8
+    x_cm = q / (1.0 + q)
+
+    # Separation from Kepler (solar units): a³[AU] = M_tot · P²[yr].
+    p_yr = node.p_init / _DAYS_PER_YEAR
+    a_au = (m1 + m2) * p_yr * p_yr
+    a_au = a_au ** (1.0 / 3.0)
+    a_rsun = a_au * _AU_PER_RSUN
+
+    # Collinear Lagrange points (roots of dΦ/dx on the three axis intervals).
+    l1x = _bisect_axis(1e-4, 1.0 - 1e-4, q, x_cm)
+    l2x = _bisect_axis(1.0 + 1e-4, 3.0, q, x_cm)
+    l3x = _bisect_axis(-3.0, -1e-4, q, x_cm)
+    crit = _roche_potential(l1x, 0.0, q, x_cm)     # the touching figure-of-eight potential
+
+    donor_lobe = _trace_lobe(0.0, q, x_cm, crit)
+    companion_lobe = _trace_lobe(1.0, q, x_cm, crit)
+
+    # The donor fills its Roche lobe at RLOF — its bloated size is the volume-equivalent
+    # Eggleton radius (q_donor = M1/M2), a scalar for the caption ("swells to ~R R☉").
+    donor_rl_a = _eggleton_rl_over_a(m1 / m2)
+
+    return {
+        "q": q,
+        "m_donor_msun": m1,
+        "m_companion_msun": m2,
+        "period_init_d": node.p_init,
+        "separation_rsun": a_rsun,
+        "separation_au": a_au,
+        "x_cm": x_cm,
+        "l1_x": l1x,
+        "l2_x": l2x,
+        "l3_x": l3x,
+        "donor_lobe": donor_lobe,
+        "companion_lobe": companion_lobe,
+        "donor_roche_radius_rsun": donor_rl_a * a_rsun,
+        "stream": _stream_path(l1x, q, x_cm),
+    }
+
+
 def binary_pair_payload(mass: float, feh: float, companion_state: StellarState,
                         elapsed_age_yr: float) -> dict:
     """The `/binary_pair` payload: the stripped DONOR (verbatim `/binary` shape) plus a
@@ -333,4 +524,9 @@ def binary_pair_payload(mass: float, feh: float, companion_state: StellarState,
         "mass_ratio_final": m2 / m_strip,           # M2 / M_strip after stripping (companion now heavier, > 1)
         "elapsed_age_yr": elapsed_age_yr,           # system age at stripping ~ donor's MS lifetime
     }
+    # path (b) Chunk 3: the mass-transfer geometry (the causal story behind the stripping),
+    # folded in so the Roche panel appears with the "Show companion" reveal. Pure orbital
+    # mechanics on the same snapped node — the companion sphere the frontend draws inside its
+    # lobe is sized from the modelled companion_state above (its real R_rsun).
+    payload["roche"] = roche_geometry(mass, feh)
     return payload

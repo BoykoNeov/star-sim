@@ -47,9 +47,11 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   saved snapshot, never imports a provider), `binary.py` (the **binary-stripped-star**
   sibling behind `/binary` — the hot He-star a companion strips, Götberg 2018; its own
   CSV parser over the *committed* `star_sim/data/gotberg_z014.csv`, snaps (Z,Minit),
-  never imports a provider — the ~70% WR channel, path (a)), `api.py` (FastAPI, the swap
-  point; also hosts `/polytrope`, `/structure`, `/spectrum` and `/binary`, the routes
-  that do NOT go through `PROVIDER`).
+  never imports a provider — the ~70% WR channel; also carries path (b): `/binary_pair`
+  composes the donor + a PROVIDER companion, and `roche_geometry()` computes the pure
+  RLOF-moment Roche-lobe geometry from the CSV's `P_init` column), `api.py` (FastAPI, the
+  swap point; also hosts `/polytrope`, `/structure`, `/spectrum`, `/binary` and
+  `/binary_pair`, the routes that do NOT go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
@@ -64,7 +66,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
   `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,structure,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
+  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
+  `roche.js` is the binary path-(b) Chunk-3 **mass-transfer / Roche-lobe** panel (a pushed-data consumer
+  drawing the RLOF-moment orbital-plane figure-of-eight from `/binary_pair`'s `roche` block; shown only in
+  `body.stripped-mode.companion-on`).
   `sn.js` is the SN endgame's cited observed-photometry dataset (SN 1987A ⁵⁶Co tail +
   SN 1999em IIP plateau, published bolometric fits — the Tier-1 overlay anchor); `hr.js`
   gains a `setSupernova()` light-curve view (L vs **linear** days → the straight ⁵⁶Co tail),
@@ -322,6 +327,19 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **PATH (b) CHUNK 3 BUILT (backend + frontend, 287 pytest [+8], Playwright 1440+390 zero errors):**
+  "the mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR render: the orbital-plane
+  figure-of-eight at the moment of Case-B RLOF (the causal story behind the stripped star). Advisor-settled
+  Option B (the RLOF *moment*, a 2D plane view, separation from a new `P_init` CSV column via Kepler; NOT
+  3D Roche surfaces). Honest geometry (lobe shape from q=0.8 alone; L1/L2/L3 by bisecting dΦ/dx; lobe
+  outlines by radial march to the critical Kopal equipotential — the **L1-tangent bug** fixed by stopping
+  at the first crit-crossing OR Φ-turnover so the lobes kiss). The RLOF donor is a bloated cool giant of
+  un-modelled Teff → **schematic warm tint, never the stripped Teff**; the companion is drawn at its real
+  modelled radius, compact inside its lobe. **The blocker (advisor): the cross-panel mass-ordering
+  REVERSAL** (donor is the HEAVIER M1 here vs the LIGHTER post-strip object everywhere else — same class as
+  the Chunk-1 q-bug) is owned by the panel intro + caption. Pure `roche_geometry()` (no PROVIDER) folded
+  into `binary_pair_payload`; new `roche.js` panel CSS-gated to `body.stripped-mode.companion-on`.
+  **Next (b) Chunk 4: the on-ramp to a real binary grid (POSYDON/BPASS) — a separate recon+handoff.**
 - **PATH (b) CHUNK 2 BUILT (frontend-only, 279 pytest UNCHANGED, Playwright 1440+390 zero errors):**
   "the companion drawn in 3D" — the accretor as a REAL second sphere beside the stripped donor. **No
   backend touch** (the companion state is already served by `/binary_pair`). **Honesty split (advisor):**
@@ -514,8 +532,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **273 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The binary-stripped-star spectrum sibling (Chunk 3) adds **7**
+- **287 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The binary path-(b) Chunk-3 Roche geometry adds **8** tests in
+  `test_binary.py` (P_init parse, snap↔geometry consistency, donor-heavier-at-RLOF,
+  Kepler separation ≈43.7 R☉, L-point ordering, lobes-kiss-at-L1 + donor-bigger + no-leak,
+  Eggleton fill, and the route carrying `roche` + the companion fitting its lobe).
+  The binary-stripped-star spectrum sibling (Chunk 3) adds **7**
   tests (`test_stripped_spectra.py`, gated `requires_stripped_spectra_data`): the flat-node
   snap honesty + state↔spectrum consistency, the absorption→emission sequence as a
   regression (He II 4686 flat at the subdwarf end → strong emission at the He-star end),

@@ -258,6 +258,108 @@ def test_pair_route_422_on_invalid_mass():
     assert c.get("/binary_pair", params={"mass": 0.0}).status_code == 422
 
 
+# --- path (b) Chunk 3: the Roche-lobe / mass-transfer geometry ----------------
+
+def test_pinit_column_parsed():
+    """The 9th CSV column (initial orbital period) parses onto the model — the Roche
+    geometry's only new input. Spot-check two nodes against the on-disk dir names."""
+    solar = {m.m_init: m for m in b.available_models() if abs(m.grid_z - 0.014) < 1e-9}
+    assert solar[5.45].p_init == pytest.approx(10.7)     # M1_5.45q0.8P10.7Z0.014
+    assert solar[18.17].p_init == pytest.approx(31.7)    # M1_18.17q0.8P31.7Z0.014
+
+
+def test_roche_snaps_and_reports_node():
+    """`roche_geometry` snaps (Z, M_init) like `stripped_star` (state↔geometry
+    consistency) and its donor mass IS the snapped node."""
+    g = b.roche_geometry(5.4, 0.0)                        # snaps to 5.45
+    assert g["m_donor_msun"] == pytest.approx(5.45)
+    assert g["m_companion_msun"] == pytest.approx(0.8 * 5.45)
+    assert g["period_init_d"] == pytest.approx(10.7)
+
+
+def test_roche_donor_is_heavier_at_rlof():
+    """The caption-owned reversal fact: AT RLOF the donor (M1) is the HEAVIER star
+    overflowing onto the lighter companion — the OPPOSITE ordering to the post-strip
+    state the other panels show (where the donor is the lighter object)."""
+    for mass in [2.0, 9.0, 18.17]:
+        g = b.roche_geometry(mass, 0.0)
+        assert g["m_donor_msun"] > g["m_companion_msun"]
+        assert g["q"] == pytest.approx(0.8)              # M2/M1 < 1
+
+
+def test_roche_separation_from_kepler_is_sane():
+    """Separation from Kepler's third law on the node's (M1, M2, P_init). The 5.45 M☉
+    node (P=10.7 d, M_tot≈9.8) → a≈43–44 R☉ (an intermediate-mass Case-B system), and a
+    longer period gives a wider orbit."""
+    g = b.roche_geometry(5.45, 0.0)
+    assert g["separation_rsun"] == pytest.approx(43.7, abs=1.5)
+    assert g["separation_au"] == pytest.approx(g["separation_rsun"] / 215.032, rel=1e-9)
+    # monotone: the 18.17 node (P=31.7 d) is a much wider system than the 2.0 node (P=5.6 d)
+    assert (b.roche_geometry(18.17, 0.0)["separation_rsun"]
+            > b.roche_geometry(2.0, 0.0)["separation_rsun"])
+
+
+def test_roche_lagrange_points_ordered():
+    """The three collinear Lagrange points are on their expected intervals: L3 behind the
+    donor (x<0), L1 between the stars (0<x<1), L2 behind the companion (x>1)."""
+    g = b.roche_geometry(9.0, 0.0)
+    assert g["l3_x"] < 0.0 < g["l1_x"] < 1.0 < g["l2_x"]
+    # for q<1 (donor heavier) L1 sits on the companion's side of the centre of mass
+    assert g["l1_x"] > g["x_cm"]
+
+
+def test_roche_lobes_kiss_at_l1_and_donor_lobe_is_bigger():
+    """The two critical-equipotential lobes touch at L1 (the donor's rightmost point and
+    the companion's leftmost point both land on L1), and the donor's lobe (heavier star)
+    is the larger of the two — the figure-of-eight that IS the mass-transfer geometry."""
+    g = b.roche_geometry(9.0, 0.0)
+    l1 = g["l1_x"]
+    dl, cl = g["donor_lobe"], g["companion_lobe"]
+    # closed outlines
+    assert dl[0] == dl[-1] and cl[0] == cl[-1]
+    d_right = max(p[0] for p in dl)
+    c_left = min(p[0] for p in cl)
+    assert d_right == pytest.approx(l1, abs=0.01)         # donor cusp at L1
+    assert c_left == pytest.approx(l1, abs=0.01)          # companion cusp at L1
+    # donor lobe spans farther from its centre (heavier → bigger lobe)
+    d_extent = max(p[0] for p in dl) - min(p[0] for p in dl)
+    c_extent = max(p[0] for p in cl) - min(p[0] for p in cl)
+    assert d_extent > c_extent
+    # every lobe point is on the donor's side or straddling — none leaks deep into the
+    # companion's well (the L1-tangent bug this construction guards against)
+    assert all(p[0] <= l1 + 0.01 for p in dl)
+    assert all(p[0] >= l1 - 0.01 for p in cl)
+
+
+def test_roche_donor_fills_its_eggleton_lobe():
+    """The donor's reported radius at RLOF is its volume-equivalent (Eggleton) Roche-lobe
+    radius — it FILLS its lobe by construction — and it scales with the separation."""
+    g = b.roche_geometry(5.45, 0.0)
+    # Eggleton R_L/a for q_donor = M1/M2 = 1.25 is ≈0.40; ×a≈43.7 → ≈17 R☉
+    assert g["donor_roche_radius_rsun"] == pytest.approx(17.4, abs=1.5)
+    frac = g["donor_roche_radius_rsun"] / g["separation_rsun"]
+    assert 0.3 < frac < 0.5                                # a sane Roche-lobe filling factor
+
+
+@requires_mist_data
+def test_pair_route_carries_roche_and_companion_fits_its_lobe():
+    """Through the real route: `/binary_pair` now carries the `roche` geometry block, and
+    the modelled companion is COMPACT enough to sit well inside its Roche lobe at RLOF (it
+    is a main-sequence star, not yet filling its lobe — only the donor overflows)."""
+    c = TestClient(app)
+    r = c.get("/binary_pair", params={"mass": 5.45, "feh": 0.0})
+    assert r.status_code == 200
+    d = r.json()
+    g = d["roche"]
+    assert set(g) >= {"q", "m_donor_msun", "m_companion_msun", "separation_rsun",
+                      "l1_x", "l2_x", "l3_x", "donor_lobe", "companion_lobe", "stream"}
+    # the companion's own Eggleton lobe radius (q_c = M2/M1 = 0.8) ≈ 0.36·a; its real
+    # modelled radius must be well under that (it is an unbloated MS star)
+    a = g["separation_rsun"]
+    comp_r = d["companion"]["state"]["R_rsun"]
+    assert comp_r < 0.36 * a                               # comfortably inside its lobe
+
+
 # --- the SED-consistency regression (why we trust the transcribed table) ------
 
 _KPC_CM = 3.0856775814913673e21

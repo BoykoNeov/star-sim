@@ -1,6 +1,46 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–2 BUILT (companion on the HR + drawn in 3D).
+## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–3 BUILT (companion on the HR + drawn in 3D + the Roche-lobe / mass-transfer geometry). NEXT = path (b) Chunk 4 = the on-ramp to a real binary grid (POSYDON/BPASS), a separate recon+handoff.
+
+**Path (b) Chunk 3 done 2026-07-06 (backend + frontend, 287 pytest [+8], Playwright 1440 + 390
+zero console errors).** "The mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR
+render: the orbital-plane cross-section at the moment of Case-B RLOF, the CAUSAL story behind the
+stripped star.
+- **Option B, advisor-settled:** the RLOF *moment* (a distinct, labelled snapshot — earlier than the
+  post-strip state the other panels show), a 2D orbital-plane figure-of-eight (NOT 3D Roche surfaces:
+  the topology only reads in the plane; "render" does not mean 3D), separation from `P_init` via Kepler.
+- **The blocker (advisor) — cross-panel mass-ordering reversal, same class as the Chunk-1 q-bug:** at
+  RLOF the donor is M1, the HEAVIER star overflowing its bigger lobe onto the lighter companion
+  M2=0.8·M1; every other panel shows the POST-strip donor as the LIGHTER object (mass_ratio_final>1).
+  Owned by BOTH the panel intro and the dynamic caption. Non-contradictory because the COMPANION mass
+  (4.36 M☉) is identical in both views — only the donor's mass changes (5.45→1.27), so the reversal
+  reads as the donor sliding under the companion.
+- **Honest geometry, schematic donor colour:** lobe SHAPE from q alone (=0.8), separation from Kepler on
+  the node's real (M1, M2, `P_init`). The RLOF donor is a bloated COOL post-MS giant of un-modelled Teff
+  (the table is the stripped product) → neutral warm schematic tint, never the stripped Teff. Companion
+  drawn at its REAL modelled radius (compact, deep inside its lobe — only the donor overflows). The
+  stream is a schematic Coriolis arc. `P_init` = the *initial* period, an RLOF-onset approximation
+  (caption-owned).
+- **Backend:** a 9th `P_init` CSV column (from the VizieR model dir names, all 23 verified); `binary.py`
+  `_StrippedModel.p_init` + the `len(row)!=9` parser fix + a PURE `roche_geometry(mass,feh)` (dimensionless
+  Kopal potential; L1/L2/L3 by bisecting dΦ/dx; lobe outlines by radial march to the critical
+  equipotential). **The L1-tangent bug + fix:** Φ is tangent to `crit` at L1 along the axis-to-companion
+  ray, so a strict `≥crit` test misses it and the march leaks into the companion's well — fixed by
+  stopping at the first of (crit-crossing) OR (Φ turnover), pinning the cusp so the lobes kiss. Folded
+  into `binary_pair_payload` (`payload["roche"]`). +8 tests.
+- **Frontend:** new `roche.js` (pushed-data consumer, never fetches) draws the equal-aspect figure-of-eight
+  (donor lobe filled, companion lobe faint, companion disc at real relative radius, L-points, CoM, stream
+  arrow, separation scale bar, the reversal-owning caption). New `#roche-panel` (`data-panel-id="roche"`),
+  CSS-gated to `body.stripped-mode.companion-on` (a mode-hidden `.panel` is safe with layout.js; canvas
+  fit on first draw). main.js: import + instantiate + RESPONSIVE + `applyStrippedModel` draw/clear + the
+  `.companion-on` body class + `exitEndgame` cleanup.
+- **Files:** `data/gotberg_z014.csv`, `binary.py`, `test_binary.py` (+8), `frontend/src/roche.js` (new),
+  `main.js`, `index.html`, `styles.css`.
+- **Next (path (b) Chunk 4):** the on-ramp to a real binary grid (POSYDON HDF5 / BPASS) — a SEPARATE
+  recon+handoff (the data will be gated like Götberg, so recon access + a fetch recipe FIRST, not
+  speculative parser code). See "Chunk 4" below.
+
+## Status (historical): PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–2 BUILT (companion on the HR + drawn in 3D).
 
 **Path (b) Chunk 2 done 2026-07-06 (frontend-only, 279 pytest UNCHANGED, Playwright
 1440 + 390 zero console errors).** "The companion drawn in 3D" — the accretor rendered as a
