@@ -1,6 +1,6 @@
 ---
 name: star-sim-hosted-data-assets
-description: Pre-baked data hosted via GitHub Releases (POSYDON — now 2 metallicity buckets, MIST, Koester+TMAP, PoWR, Coelho, Gotberg) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user.
+description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user.
 metadata:
   type: project
   originSessionId: 614a40b0-c4a6-4698-a4c9-e486917bf270
@@ -142,6 +142,50 @@ far) while +0.5 still correctly flags far (0.5 dex from the nearest bucket).
 **Lesson for the next bucket:** any test iterating `_available_grids()` by index
 rather than by content is an artifact of a one-bucket world — this bit us once,
 watch for the same pattern before adding a third.
+
+**The remaining 6 metallicities landed in one pass (2026-07-08), and the lesson
+above bit a SECOND time.** With validation proven on `0.1Zsun`, the user approved
+doing the rest in one go ("run the rest now"): `0.01Zsun`, `0.2Zsun`, `0.45Zsun`,
+`1e-3Zsun`, `1e-4Zsun`, `2Zsun` — all 6 raw tarballs were already on disk (~83 GB
+total downloaded earlier). Each followed the exact same recipe as `0.1Zsun`
+(discover the internal `POSYDON_data/HMS-HMS/<Z-label>.h5` path via `tar -tzf`,
+`tar -x --strip-components=2` to pull just that one file, `bake_posydon.py
+--z-label <label> --feh <log10(Z/0.0142)>`), pipelined two-at-a-time (bake one
+bucket while extracting the next) since extraction is disk/decompress-bound and
+baking is CPU-bound. Yield was consistent with the first two buckets — roughly
+138-164 MB and 32k-36k tracks per bucket (0.01Zsun 150.6 MB/34675, 0.2Zsun 137.8
+MB/33871, 0.45Zsun 138.7 MB/33532, 1e-3Zsun 163.8 MB/35265, 1e-4Zsun 158.9
+MB/36121, 2Zsun 151.4 MB/31972) — no metallicity-dependent surprise in bake
+behavior. One gotcha: the `1e-3Zsun`/`1e-4Zsun` tarballs were noticeably larger
+(~12.3-12.4 GB vs ~10 GB for the others) and their listings/extractions took
+longer — not a bug, just a bigger archive (more grid types packed in).
+
+A SECOND latent test bug of the exact same shape as the first batch's five was
+found by re-running pytest after all 8 buckets existed:
+`test_feh_snaps_to_nearest_available_bucket` had been rewritten for the 2-bucket
+world (asserting `-0.8` snaps to the `-1.0` bucket) — but with `0.2Zsun` now at
+`feh=-0.69897`, `-0.8` is genuinely nearer to *that* bucket (0.101 dex) than to
+`-1.0` (0.301 dex), so the hardcoded assertion failed correctly (the snap logic
+was right; the test's premise was stale again). Fixed by rewriting the test to
+derive its expectations from the live `_available_grids()` feh set — every real
+bucket value round-trips onto itself, a point nudged just past the theoretical
+midpoint snaps to whichever bucket `min(available, key=...)` actually names, and
+a point far past the metal-rich edge is flagged far — so the test now describes
+the *invariant* the snap function must satisfy at any bucket count, not a
+snapshot of one particular set of buckets. This is the second confirmation of
+the same anti-pattern; a third bucket-count change should assume any test
+mentioning a specific feh value or bucket count needs re-deriving, not just
+re-running.
+
+**The POSYDON metallicity axis is now COMPLETE**: all 8 buckets from POSYDON DR2
+are baked and hosted on `posydon-baked-v1` — `1e-4Zsun`, `1e-3Zsun`, `0.01Zsun`,
+`0.1Zsun`, `0.2Zsun`, `0.45Zsun`, `1Zsun` (solar), `2Zsun`, spanning [Fe/H]
+roughly −4.0 to +0.30. Zero runtime code changes were needed anywhere in this
+batch — every bucket is a pure data drop-in via `BAKED_DIR.glob("*.npz")`, exactly
+as designed. `fetch_posydon_baked.py`'s `_ASSETS` now lists all 8 filename→sha256
+pairs; a full `fetch_posydon_baked` run against the live release confirmed every
+hash verifies (all reported "skip" against the already-baked local files, i.e.
+the uploaded bytes match byte-for-byte). 311/311 pytest passing.
 
 See [[star-sim-binary-stripped]] for the POSYDON co-evolving-binary feature that
 data backs, [[star-sim-mist-provider]] for the provider MIST hosting touches,

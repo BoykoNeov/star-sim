@@ -41,6 +41,12 @@ _ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE
 _ASSETS: dict[str, str] = {
     "1Zsun.npz": "5c3c929d2ce93031bab805dbf6fc8a70cccc257bb24a6a7b347fb65576ea785a",
     "0.1Zsun.npz": "bc56dc2a4e9ad60c601da4313300194af8e5796748fcb1137f9e6750fc5aaa85",
+    "0.01Zsun.npz": "e2aa9e38fb2ff284fb7b5d5c4da03f2cac18ff8124232a1a4bd26b01f61faa98",
+    "0.2Zsun.npz": "ec1a94e2a64dd51b38ee20e3534a03ade170960aafacc2a3a5de2c7f03b619d7",
+    "0.45Zsun.npz": "bf327acdfb2f3e35fa4dd63df8fb0845f8565a77643e0f38b8b483ad039d9209",
+    "1e-3Zsun.npz": "d32af3bd2ab2354dcec2a994fdde842da8a58cb8f3e1d5448dc6b1c056667565",
+    "1e-4Zsun.npz": "6ee3a1b1b8241d33656dc9ffda9ace1f3526e100dc8250264ca273d67eb21f3e",
+    "2Zsun.npz": "bc1b4af81764204db41cef94d96c9ef16cb369f1cd0e6050249e87576d81b701",
 }
 
 

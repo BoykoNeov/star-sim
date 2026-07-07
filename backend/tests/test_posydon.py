@@ -79,19 +79,36 @@ def test_snap_far_flags_out_of_range():
 
 
 def test_feh_snaps_to_nearest_available_bucket():
-    """Two buckets are baked (solar 0.0, sub-solar -1.0) — a request snaps to whichever
-    is nearer in [Fe/H], and is flagged far only when it's actually far from BOTH
-    (`_FEH_FAR_DEX = 0.25`)."""
-    # -0.8 is 0.2 dex from the -1.0 bucket, 0.8 dex from solar -> snaps to -1.0, not far
-    t = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=-0.8)
-    assert t.feh == pytest.approx(-1.0, abs=1e-9)
-    assert t.feh_snapped_far is False
-    t0 = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=0.0)
-    assert t0.feh == pytest.approx(0.0, abs=1e-9)
-    assert t0.feh_snapped_far is False
-    # +0.5 is 0.5 dex from the nearest bucket (solar) -> far from every bucket we have
-    t_far = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=0.5)
-    assert t_far.feh == pytest.approx(0.0, abs=1e-9)
+    """A request snaps to whichever baked bucket is nearest in [Fe/H], and is flagged
+    far only when it's actually far from the nearest one (`_FEH_FAR_DEX = 0.25`).
+    Derives its expectations from the real bucket set rather than hardcoding which
+    ones exist — the bucket count already grew once (2 -> 8) and broke a hardcoded
+    version of this test (it assumed -0.8 snapped to the -1.0 bucket, which stopped
+    being nearest once -0.69897 landed alongside it — see `_available_grids()[0]`
+    lesson in docs/memory/star-sim-hosted-data-assets.md)."""
+    available = sorted(g.feh for g in pd._available_grids())
+    assert len(available) >= 2  # otherwise "nearest of several" isn't being tested
+
+    def nearest(feh: float) -> float:
+        return min(available, key=lambda f: abs(f - feh))
+
+    # every real bucket value round-trips onto itself, not flagged far
+    for feh in available:
+        t = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=feh)
+        assert t.feh == pytest.approx(feh, abs=1e-9)
+        assert t.feh_snapped_far is False
+
+    # a request nudged just inside the far threshold of its nearest bucket snaps there
+    close_target = available[len(available) // 2]
+    t_close = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=close_target + 0.1)
+    assert t_close.feh == pytest.approx(nearest(close_target + 0.1), abs=1e-9)
+    assert t_close.feh_snapped_far is False
+
+    # a request far beyond every bucket (past the metal-rich end) snaps to the nearest
+    # one anyway, but is flagged far
+    far_probe = available[-1] + 1.0
+    t_far = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=far_probe)
+    assert t_far.feh == pytest.approx(available[-1], abs=1e-9)
     assert t_far.feh_snapped_far is True
 
 
