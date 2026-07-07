@@ -218,7 +218,7 @@ orbital-plane cross-section at the moment of Case-B RLOF (the CAUSAL story behin
 - **Files:** `data/gotberg_z014.csv`, `binary.py`, `test_binary.py` (+8), `roche.js` (new), `main.js`,
   `index.html`, `styles.css`.
 
-**PATH (b) CHUNK 4a BUILT 2026-07-07 (backend vertical, solar-first, 302 pytest [+15]):** the
+**PATH (b) CHUNK 4a BUILT 2026-07-07 (backend vertical, solar-first, 306 pytest [+19]):** the
 POSYDON on-ramp, built. User landed ALL 8 metallicity tarballs + auxiliary (~84 GB) under
 `data/Posydon/` (not just one, as the design doc assumed) — the other 7 sit ready for later
 chunks; only solar is extracted (`data/posydon/1Zsun/1e+00_Zsun.h5`, 4.79 GB) + baked so far.
@@ -274,7 +274,7 @@ chunks; only solar is extracted (`data/posydon/1Zsun/1e+00_Zsun.h5`, 4.79 GB) + 
 - **`requires_posydon_data`** marker (conftest.py) + **15 tests** in `test_posydon.py`: snap
   honesty, both-states-valid at every step, mass_init constant vs current-mass routing scalar,
   the Gate-0 regression (crossing/widening/RLOF-fires/outcome) through the route, merger-track
-  no-crash, route shape + 422s. 302 pytest total (was 287).
+  no-crash, route shape + 422s. 306 pytest total (was 287).
 - **h5py** is a HOST-ONLY dependency (the bake script + `fetch_posydon.py`'s validator) — not
   added to `pyproject.toml`'s `dependencies` or `dev` extras, matching the existing precedent
   that `pymsg`/astropy (the spectra bakes) aren't declared there either; `pip install h5py` into

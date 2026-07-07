@@ -327,7 +327,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
-- **PATH (b) CHUNK 4a BUILT (backend vertical, solar-first, 302 pytest [+15]):** the
+- **PATH (b) CHUNK 4a BUILT (backend vertical, solar-first, 306 pytest [+19]):** the
   on-ramp to a real binary grid — POSYDON HMS-HMS, the first TIME-SERIES, TWO-BODY
   sibling. The user landed all 8 metallicity tarballs (~84 GB, `data/Posydon/`); only
   solar is extracted + baked so far. Recon correction: the raw grid HDF5 is already
@@ -551,16 +551,21 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **302 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **306 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
-  **15** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
-  request lands on a true (M1,q,P) grid node, never interpolated), both stars' valid
-  `StellarState`s at every step, `mass_init_msun` constant vs the current-mass routing
-  scalar, the Gate-0 regression (mass-ordering crossing, orbit widening, a real
-  detached→RLOF1→detached sequence, the "stripped + companion" outcome) through the
-  real runtime, merger-track graceful degradation, and the `/binary_track` +
-  `/binary_track_meta` routes (snap-always + 422 on structurally invalid input). The
-  binary path-(b) Chunk-3 Roche geometry adds **8** tests in
+  **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
+  request lands on a true (M1,q,P) grid node, never interpolated, verified via an
+  exact-node round-trip over a 300-track sample), no duplicate grid nodes and no
+  non-finite values across the WHOLE baked grid (an advisor-flagged check — the multi-
+  rerun grid could in principle serve a superseded track, or a CE/disruption row could
+  emit NaN into the JSON payload; both measured clean), decimation preserving the RLOF
+  episode on capped tracks (`BAKE_VERSION` 2 force-keeps RLOF/contact rows on top of the
+  uniform stride), both stars' valid `StellarState`s at every step, `mass_init_msun`
+  constant vs the current-mass routing scalar, the Gate-0 regression (mass-ordering
+  crossing, orbit widening, a real detached→RLOF1→detached sequence, the "stripped +
+  companion" outcome) through the real runtime, merger-track graceful degradation, and
+  the `/binary_track` + `/binary_track_meta` routes (snap-always + 422 on structurally
+  invalid input). The binary path-(b) Chunk-3 Roche geometry adds **8** tests in
   `test_binary.py` (P_init parse, snap↔geometry consistency, donor-heavier-at-RLOF,
   Kepler separation ≈43.7 R☉, L-point ordering, lobes-kiss-at-L1 + donor-bigger + no-leak,
   Eggleton fill, and the route carrying `roche` + the companion fitting its lobe).

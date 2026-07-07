@@ -56,7 +56,7 @@ from .state import StellarState
 
 # Must match scripts/bake_posydon.py's BAKE_VERSION — a stale npz (baked by an older
 # version of the trim/filter logic) is rejected rather than silently misread.
-BAKE_VERSION = 1
+BAKE_VERSION = 2
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 BAKED_DIR = _REPO_ROOT / "data" / "posydon" / "baked"

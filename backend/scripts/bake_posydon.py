@@ -46,7 +46,9 @@ import numpy as np
 # Bump alongside any change to the column set / filter / decimation logic below, so a
 # stale npz baked by an older version of this script is rejected by the runtime (the
 # MIST _parsed_tracks.npz CACHE_VERSION precedent).
-BAKE_VERSION = 1
+# v2: _decimate force-keeps RLOF/contact rows (a uniform stride could otherwise straddle
+# a short RLOF episode entirely on a >300-row track — measured 1/251 capped tracks).
+BAKE_VERSION = 2
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 POSYDON_DATA_DIR = _REPO_ROOT / "data" / "posydon"
@@ -78,13 +80,22 @@ _BINARY_COLS = [
 _MAX_ROWS_PER_TRACK = 300
 
 
-def _decimate(n: int, cap: int) -> np.ndarray:
+def _decimate(n: int, cap: int, must_keep: np.ndarray | None = None) -> np.ndarray:
     """Row indices to keep for a track of `n` rows, capped at ~`cap` (always keeps row 0
-    and row n-1). Identity (all rows) when n <= cap."""
+    and row n-1) via a uniform stride. Identity (all rows) when n <= cap.
+
+    `must_keep` (row indices where RLOF/contact is firing) is unioned in on top of the
+    stride — a uniform decimation of a >300-row track can otherwise straddle a short
+    RLOF episode entirely (measured: 1/251 capped tracks on the solar grid), leaving
+    `outcome="stripped + companion"` with no surviving row where the transfer actually
+    shows. This can push the kept count slightly over `cap`; that's fine — the cap is a
+    size guard, not a hard contract."""
     if n <= cap:
         return np.arange(n)
-    idx = np.unique(np.linspace(0, n - 1, cap).round().astype(np.int64))
-    return idx
+    idx = np.linspace(0, n - 1, cap).round().astype(np.int64)
+    if must_keep is not None and must_keep.size:
+        idx = np.concatenate([idx, must_keep])
+    return np.unique(idx)
 
 
 def bake(h5_path: Path, out_path: Path, *, feh: float) -> None:
@@ -156,7 +167,9 @@ def bake(h5_path: Path, out_path: Path, *, feh: float) -> None:
             n_dropped_mismatch += 1
             continue
 
-        keep = _decimate(n, _MAX_ROWS_PER_TRACK)
+        rlof_rows = np.where((bh_rec["rl_relative_overflow_1"] > 0)
+                              | (bh_rec["rl_relative_overflow_2"] > 0))[0]
+        keep = _decimate(n, _MAX_ROWS_PER_TRACK, must_keep=rlof_rows)
 
         for c in _BINARY_COLS:
             row_cols[c].append(bh_rec[c][keep])

@@ -1,6 +1,6 @@
 # Plan: The co-evolved binary — both stars on the HR through time (POSYDON)
 
-## Status: Chunk 4a BUILT (backend vertical, solar-first, 302 pytest). Chunk 4b (frontend) next.
+## Status: Chunk 4a BUILT (backend vertical, solar-first, 306 pytest). Chunk 4b (frontend) next.
 
 **Chunk 4a, as built (2026-07-07) — corrections to this doc's original guesses, measured
 against the real data:**

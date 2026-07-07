@@ -21,6 +21,7 @@ committed) — see conftest.py.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -85,6 +86,73 @@ def test_feh_snaps_to_nearest_available_bucket():
     assert t.feh_snapped_far is True
     t0 = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=0.0)
     assert t0.feh_snapped_far is False
+
+
+# --- bake integrity (advisor-flagged; cheap to check across the WHOLE grid) ----
+
+def test_no_duplicate_grid_nodes():
+    """Several rerun campaigns feed this grid (`rerun_reverse_MT_grid...`,
+    `rerun_LBV_wind...`) — if two runs shared (M1,q,P), `argmin` would silently pick
+    whichever sits first in array order rather than a deliberate choice. Measured: none
+    do on the solar grid, but this pins it as a regression rather than an assumption."""
+    grid = pd._available_grids()[0]
+    keys = list(zip(grid.m1_init.round(6), grid.q_init.round(6), grid.p_init_d.round(6)))
+    assert len(set(keys)) == len(keys)
+
+
+def test_no_nonfinite_values_in_baked_rows():
+    """A row with finite mass but a non-finite log_L/log_Teff/log_R (plausible at a
+    CE/disruption row) would slip past the bake's mass-only truncation guard and surface
+    as NaN in the JSON payload. Measured: none on the solar grid — this pins it."""
+    grid = pd._available_grids()[0]
+    for col, arr in grid.rows.items():
+        assert np.isfinite(arr).all(), f"non-finite values in row column {col!r}"
+
+
+def test_exact_node_round_trips_across_a_sample():
+    """A much stronger snap check than perturbing one demo node: every one of a large
+    random sample of REAL grid nodes must snap back to itself exactly (distance 0) — if
+    the log-M1/log-P/linear-q metric were imbalanced, or two nodes were near-duplicates,
+    some would snap to a neighbor instead."""
+    grid = pd._available_grids()[0]
+    rng = np.random.default_rng(0)
+    n = grid.m1_init.size
+    sample = rng.choice(n, size=min(300, n), replace=False)
+    for i in sample:
+        idx = pd._snap_track_index(grid, float(grid.m1_init[i]), float(grid.q_init[i]),
+                                    float(grid.p_init_d[i]))
+        assert idx == i
+
+
+def test_decimation_preserves_the_rlof_episode():
+    """`_decimate` force-keeps RLOF/contact rows on top of its uniform stride — a track
+    long enough to be capped could otherwise straddle a short RLOF episode entirely,
+    leaving `outcome="stripped + companion"` with no surviving row where the transfer
+    actually shows. Scoped to tracks that (a) actually ended up stripped and (b) hit the
+    decimation cap (>=300 rows) — the population where straddling could happen at all.
+
+    NOT asserted at 0: one measured case (M1=5.34, q=0.95, P=5179 d — a WIDE, ~14-year
+    orbit) is genuinely stripped via slow WIND mass loss with no row EVER crossing
+    rl_relative_overflow>0 in the raw (pre-decimation) data — `_decimate`'s must_keep
+    has nothing to force-keep there, so it isn't a decimation bug. The bound (<=2) pins
+    the count so a REAL regression (the fix silently breaking) still trips this."""
+    grid = pd._available_grids()[0]
+    rl1 = grid.rows["rl_relative_overflow_1"]
+    rl2 = grid.rows["rl_relative_overflow_2"]
+    stripped = np.array([
+        "stripped_He" in s1 or "stripped_He" in s2 or "accreted" in s2
+        for s1, s2 in zip(grid.s1_state, grid.s2_state)
+    ])
+    capped = grid.row_count >= 300
+    target = np.where(stripped & capped)[0]
+    assert len(target) > 50          # a real, non-trivial population to check
+    lost = 0
+    for i in target:
+        start, cnt = int(grid.row_start[i]), int(grid.row_count[i])
+        seg1, seg2 = rl1[start:start + cnt], rl2[start:start + cnt]
+        if not (np.any(seg1 > 0) or np.any(seg2 > 0)):
+            lost += 1
+    assert lost <= 2, f"{lost}/{len(target)} stripped+capped tracks lost their RLOF episode"
 
 
 # --- StellarState validity at every step ----------------------------------------
