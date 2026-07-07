@@ -136,9 +136,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = Path(os.environ.get("STAR_SIM_DATA_DIR", _REPO_ROOT / "data"))
 
 _FETCH_HINT = (
-    "MIST grids not found under {data_dir}. Fetch them once with:\n"
-    "    python -m star_sim.fetch_mist\n"
-    "(downloads the current MIST EEP tarball and extracts it; see spec §6).\n"
+    "MIST grids not found under {data_dir} (or a pre-baked cache there is stale for "
+    "the code's current CACHE_VERSION and has no raw source to reparse from). Fetch "
+    "them once with:\n"
+    "    python -m star_sim.fetch_mist_baked   # fast: pre-baked caches, no raw fetch\n"
+    "    python -m star_sim.fetch_mist         # or: discover + fetch raw MIST grids\n"
+    "(the latter downloads the current MIST EEP tarball and extracts it; see spec §6).\n"
     "Add a second [Fe/H] for the metallicity axis, e.g. --feh m050 / --feh p050."
 )
 
@@ -434,9 +437,22 @@ def _vvcrit_from_path(path: str) -> float | None:
 
 
 def _find_eep_dirs(data_dir: Path) -> list[Path]:
-    """Every directory holding `*.track.eep` files, one per metallicity grid."""
+    """Every usable grid directory: raw `*.track.eep` files, OR a pre-baked
+    `_parsed_tracks.npz` with no raw source at all (a standalone bundle fetched via
+    `fetch_mist_baked.py` — see its docstring). One entry per metallicity/rotation
+    grid either way.
+
+    The two are interchangeable downstream: `_grid_fingerprint` already degrades to
+    a stable version-only hash when a dir has zero `.track.eep` files, so a
+    source-less cache (baked with that same fingerprint) validates and loads exactly
+    like a fresh reparse would — no separate code path needed for reading it. A
+    directory with raw files present is unaffected (its fingerprint still includes
+    real per-file stats, so cache invalidation on a re-fetch/upgrade works as before).
+    """
     hits = glob.glob(str(data_dir / "**" / "*.track.eep"), recursive=True)
     dirs = {Path(h).parent for h in hits}
+    baked_hits = glob.glob(str(data_dir / "**" / CACHE_FILENAME), recursive=True)
+    dirs |= {Path(h).parent for h in baked_hits}
     return sorted(dirs)
 
 

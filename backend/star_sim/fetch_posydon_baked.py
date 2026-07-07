@@ -27,17 +27,13 @@ Run once after checkout, instead of the `fetch_posydon.py` recipe:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
-import urllib.request
-from pathlib import Path
 
+from ._baked_release import fetch_one
 from .posydon import BAKED_DIR  # single source of truth for where baked grids live
 
 RELEASE_TAG = "posydon-baked-v1"
 _ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
-
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; pre-baked POSYDON grid fetch)"
 
 # filename -> sha256, checked against `docs/plans/lantern-grid-waystation.md`'s release
 # notes at publish time. Add an entry here (and re-upload the asset to the same
@@ -47,35 +43,9 @@ _ASSETS: dict[str, str] = {
 }
 
 
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def _fetch_one(filename: str, expected_sha256: str) -> str:
-    """Download one release asset (skip if already present with a matching hash).
-    Returns a one-word status for the progress summary."""
-    dest = BAKED_DIR / filename
-    if dest.exists() and _sha256(dest) == expected_sha256:
-        return "skip"
     url = f"{_ASSET_BASE}/{filename}"
-    req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-    tmp = dest.with_suffix(".npz.tmp")
-    with urllib.request.urlopen(req, timeout=300) as resp, open(tmp, "wb") as out:
-        while chunk := resp.read(1 << 20):
-            out.write(chunk)
-    got = _sha256(tmp)
-    if got != expected_sha256:
-        tmp.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"{filename}: sha256 mismatch after download (got {got}, expected "
-            f"{expected_sha256}) — corrupted or truncated transfer, try again"
-        )
-    tmp.replace(dest)
-    return "ok"
+    return fetch_one(url, BAKED_DIR / filename, expected_sha256)
 
 
 def main(argv: list[str] | None = None) -> int:

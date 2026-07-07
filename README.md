@@ -81,25 +81,40 @@ The `fetch_mist` step *discovers* the current MIST download location rather than
 hard-coding it (spec §6 — the host and version have already drifted). Without
 the grids, `/state` answers `503` pointing back at that command and `/health`
 still reports liveness; swap `PROVIDER` to `StubProvider()` in `api.py` for a
-fully data-free run.
+fully data-free run. Prefer a faster download over discovery? Run
+`python -m star_sim.fetch_mist_baked` instead — see below.
 
 ### Optional: additional datasets
 
 The MIST fetch above is all the core app needs. Several extra panels use their
 own datasets, fetched separately (each panel degrades to an honest "no data"
-placeholder if you skip it — nothing crashes):
+placeholder if you skip it — nothing crashes). Most have a **pre-baked fast
+path** — a plain HTTPS download of a small, sha256-verified derived artifact
+from this repo's [GitHub Releases](https://github.com/BoykoNeov/star-sim/releases),
+instead of the raw multi-GB source grids each feature is built from:
 
 ```bash
-python -m star_sim.fetch_posydon_baked   # co-evolving binary tracks (/binary_track) — one fast download
+python -m star_sim.fetch_mist_baked      # the full MIST [Fe/H]×rotation axis (~450 MB) — an alternative to fetch_mist
+python -m star_sim.fetch_posydon_baked   # co-evolving binary tracks (/binary_track)
+python -m star_sim.fetch_koester_baked   # white-dwarf spectra (/wd_spectrum) — Koester DA + TMAP
+python -m star_sim.fetch_powr_baked      # Wolf-Rayet wind-emission spectra (/wr_spectrum)
+python -m star_sim.fetch_coelho_baked    # [alpha/Fe] spectrum what-if (#alpha-toggle)
+python -m star_sim.fetch_gotberg_baked   # binary-stripped-star spectra (/stripped_spectrum)
 ```
 
-`fetch_posydon_baked` pulls a small pre-baked `.npz` (~140 MB) from this repo's
-[GitHub Releases](https://github.com/BoykoNeov/star-sim/releases) instead of the
-84 GB of raw POSYDON grid tarballs the feature is built from — a derived
-artifact redistributed under POSYDON's CC-BY license (see the module's
-docstring for the citation). The other data-backed panels (WD/WR/α spectra,
-MESA validation) don't have a pre-baked shortcut yet; see the `fetch_*.py`
-modules under `backend/star_sim/` for their individual recipes.
+Each is a **derived artifact** — a compact, resampled/re-serialized cube or cache
+built from that source's public data, not a verbatim copy — hosted under this
+project's own redistribution call (only POSYDON carries an explicit CC-BY grant;
+the others don't have one, see `docs/memory/star-sim-hosted-data-assets.md` and
+each module's docstring for the citation to use). MIST's is the one worth
+knowing about even if you don't need speed: MIST's raw EEP tracks carry ~80
+text columns of which this app reads ~40, so the baked cache is ~27x smaller
+than mirroring the raw grid (43-47 MB per [Fe/H]×rotation bucket vs ~1.2 GB) —
+see `backend/scripts/bake_mist_standalone.py`'s docstring for how. MESA
+validation doesn't have a pre-baked shortcut (it's a self-run Docker recipe, see
+`backend/docs/mesa_solar_recipe.md`); the other `fetch_*.py` modules under
+`backend/star_sim/` document the from-source recipe if you'd rather not depend
+on this repo's releases.
 
 ## Test
 

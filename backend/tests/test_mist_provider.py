@@ -23,10 +23,13 @@ from star_sim.providers.mist import (
     DATA_DIR,
     _TRACK_COLS,
     _cache_path,
+    _feh_from_path,
     _find_eep_dirs,
     _grid_fingerprint,
     _parse_all_tracks,
     _read_cache,
+    _vvcrit_from_path,
+    _write_cache,
 )
 from star_sim.state import StellarState
 
@@ -426,6 +429,50 @@ def test_cache_fingerprint_rejects_stale_source(provider):
     good = _grid_fingerprint(eep_dir)
     assert _read_cache(_cache_path(eep_dir), good) is not None      # matches -> hit
     assert _read_cache(_cache_path(eep_dir), good + "x") is None     # mismatch -> miss
+
+
+def test_cache_only_grid_directory_loads_and_matches_raw(provider, tmp_path):
+    """A distributable "baked-only" grid (no `.track.eep` files at all — what
+    `fetch_mist_baked.py` downloads) must be discovered and load *identically* to
+    the raw-files path.
+
+    `_grid_fingerprint` already degrades to a stable version-only hash when a dir
+    has zero eep files (`_find_eep_dirs`'s docstring), so a cache baked with that
+    same fingerprint validates on a machine with no raw source. This is exactly the
+    bake recipe `fetch_mist_baked.py`'s companion tooling uses. Round-trips both a
+    living state (`state_at`) and all three endgame branches (WD/WR/SN) against the
+    normal (raw-files-present) provider — bit-identical, since it's the same source
+    tracks, just relocated with no raw files alongside.
+    """
+    real_dir = next(
+        d for d in _find_eep_dirs(DATA_DIR)
+        if _feh_from_path(d) == 0.0 and _vvcrit_from_path(d) == 0.0
+    )
+    baked_only_dir = tmp_path / "feh_p000_afe_p0_vvcrit0.0" / "eeps"
+    baked_only_dir.mkdir(parents=True)
+
+    tracks, feh, vvcrit = _parse_all_tracks(real_dir)
+    fingerprint = _grid_fingerprint(baked_only_dir)  # empty dir -> version-only hash
+    _write_cache(_cache_path(baked_only_dir), tracks, feh, vvcrit, fingerprint)
+
+    baked_provider = MISTProvider(data_dir=tmp_path)
+    baked_provider._ensure_loaded()
+    assert len(_find_eep_dirs(tmp_path)) == 1
+
+    for mass in (1.0, 20.0, 60.0):  # WD, SN, WR (see test_endgame.py)
+        want = provider.state_at(mass, 0.0, SUN_AGE_YR)
+        got = baked_provider.state_at(mass, 0.0, SUN_AGE_YR)
+        assert got.L_lsun == want.L_lsun
+        assert got.Teff_K == want.Teff_K
+        assert got.R_rsun == want.R_rsun
+        assert got.phase == want.phase
+
+        want_eg = provider.endgame(mass, 0.0)
+        got_eg = baked_provider.endgame(mass, 0.0)
+        assert got_eg.type == want_eg.type
+        assert got_eg.mass_init_msun == want_eg.mass_init_msun
+        assert got_eg.final_mass_msun == want_eg.final_mass_msun
+        assert len(got_eg.states) == len(want_eg.states)
 
 
 def test_transition_mass_interpolation_reduced_not_eliminated():
