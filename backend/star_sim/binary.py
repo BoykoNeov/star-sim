@@ -368,7 +368,8 @@ def _bisect_axis(lo: float, hi: float, q: float, x_cm: float) -> float:
     return 0.5 * (lo + hi)
 
 
-def _trace_lobe(cx: float, q: float, x_cm: float, crit: float) -> list[list[float]]:
+def _trace_lobe(cx: float, q: float, x_cm: float, crit: float,
+                 n: int = _ROCHE_LOBE_SAMPLES) -> list[list[float]]:
     """The critical-equipotential outline around a star centred at (cx, 0): for each angle,
     march radially out from the centre and stop at the lobe boundary, which is the FIRST of
     either (a) Φ crossing up to the critical value `crit` — the ordinary case, most rays —
@@ -376,9 +377,12 @@ def _trace_lobe(cx: float, q: float, x_cm: float, crit: float) -> list[list[floa
     pointing at the companion: there Φ is TANGENT to crit at L1 (the saddle is a maximum
     along the axis, not a transversal crossing), so a strict `≥ crit` test would miss it and
     the march would leak across L1 into the companion's well. Detecting the turnover pins
-    the cusp at L1, so the two lobes kiss there by construction."""
+    the cusp at L1, so the two lobes kiss there by construction.
+
+    `n` trades outline resolution for speed: the CSV single-node path (`roche_geometry`)
+    uses the full `_ROCHE_LOBE_SAMPLES` (one call per request); the POSYDON per-step path
+    (`track_roche_geometry`) decimates it (up to ~300 calls per track fetch — see there)."""
     pts: list[list[float]] = []
-    n = _ROCHE_LOBE_SAMPLES
     for i in range(n):
         th = 2.0 * math.pi * i / n
         ct, st = math.cos(th), math.sin(th)
@@ -430,6 +434,49 @@ def _stream_path(l1x: float, q: float, x_cm: float) -> list[list[float]]:
     return pts
 
 
+def _roche_geometry_from_params(q: float, m1: float, m2: float, separation_rsun: float,
+                                 n_samples: int = _ROCHE_LOBE_SAMPLES) -> dict:
+    """The pure orbital-mechanics engine behind `roche_geometry`: given ONLY the mass
+    ratio q = M2/M1, the two masses (for the caption/scalars — they don't affect the
+    dimensionless shape) and the physical separation, return the orbital-plane Roche-lobe
+    cross-section (donor at the origin, companion at (1, 0), units of separation a).
+
+    Factored out so a SECOND caller can drive it from a real co-evolving binary's
+    per-step q(t)/a(t) (`track_roche_geometry`, path (b) Chunk 4b) instead of this
+    module's single CSV-node snapshot (`roche_geometry`, Chunk 3) — the shape math is
+    identical, only where q/a come from differs. `n_samples` trades lobe-outline
+    resolution for speed (see `_trace_lobe`)."""
+    x_cm = q / (1.0 + q)
+
+    # Collinear Lagrange points (roots of dΦ/dx on the three axis intervals).
+    l1x = _bisect_axis(1e-4, 1.0 - 1e-4, q, x_cm)
+    l2x = _bisect_axis(1.0 + 1e-4, 3.0, q, x_cm)
+    l3x = _bisect_axis(-3.0, -1e-4, q, x_cm)
+    crit = _roche_potential(l1x, 0.0, q, x_cm)     # the touching figure-of-eight potential
+
+    donor_lobe = _trace_lobe(0.0, q, x_cm, crit, n_samples)
+    companion_lobe = _trace_lobe(1.0, q, x_cm, crit, n_samples)
+
+    # The donor fills its Roche lobe at RLOF — its bloated size is the volume-equivalent
+    # Eggleton radius (q_donor = M1/M2), a scalar for the caption ("swells to ~R R☉").
+    donor_rl_a = _eggleton_rl_over_a(m1 / m2) if m2 > 0 else 0.0
+
+    return {
+        "q": q,
+        "m_donor_msun": m1,
+        "m_companion_msun": m2,
+        "separation_rsun": separation_rsun,
+        "x_cm": x_cm,
+        "l1_x": l1x,
+        "l2_x": l2x,
+        "l3_x": l3x,
+        "donor_lobe": donor_lobe,
+        "companion_lobe": companion_lobe,
+        "donor_roche_radius_rsun": donor_rl_a * separation_rsun,
+        "stream": _stream_path(l1x, q, x_cm),
+    }
+
+
 def roche_geometry(mass: float, feh: float = 0.0) -> dict:
     """The mass-transfer geometry for the snapped grid node — pure orbital mechanics, no
     provider. Snaps (Z, M_init) exactly like `stripped_star` (state↔geometry consistency),
@@ -450,7 +497,6 @@ def roche_geometry(mass: float, feh: float = 0.0) -> dict:
     m1 = node.m_init                       # donor at RLOF (the heavier star)
     m2 = COMPANION_MASS_RATIO * m1         # companion / accretor (lighter)
     q = COMPANION_MASS_RATIO               # M2 / M1 = 0.8
-    x_cm = q / (1.0 + q)
 
     # Separation from Kepler (solar units): a³[AU] = M_tot · P²[yr].
     p_yr = node.p_init / _DAYS_PER_YEAR
@@ -458,35 +504,45 @@ def roche_geometry(mass: float, feh: float = 0.0) -> dict:
     a_au = a_au ** (1.0 / 3.0)
     a_rsun = a_au * _AU_PER_RSUN
 
-    # Collinear Lagrange points (roots of dΦ/dx on the three axis intervals).
-    l1x = _bisect_axis(1e-4, 1.0 - 1e-4, q, x_cm)
-    l2x = _bisect_axis(1.0 + 1e-4, 3.0, q, x_cm)
-    l3x = _bisect_axis(-3.0, -1e-4, q, x_cm)
-    crit = _roche_potential(l1x, 0.0, q, x_cm)     # the touching figure-of-eight potential
+    geo = _roche_geometry_from_params(q, m1, m2, a_rsun)
+    geo["period_init_d"] = node.p_init
+    geo["separation_au"] = a_au
+    return geo
 
-    donor_lobe = _trace_lobe(0.0, q, x_cm, crit)
-    companion_lobe = _trace_lobe(1.0, q, x_cm, crit)
 
-    # The donor fills its Roche lobe at RLOF — its bloated size is the volume-equivalent
-    # Eggleton radius (q_donor = M1/M2), a scalar for the caption ("swells to ~R R☉").
-    donor_rl_a = _eggleton_rl_over_a(m1 / m2)
+# Angular resolution for the POSYDON per-step geometry (path (b) Chunk 4b): this runs
+# once PER STEP in a track fetch (up to ~300 calls), not once per request like the CSV
+# snapshot above, so it trades outline smoothness for a sub-second track fetch. Measured
+# (2026-07-07): ~2ms/step at 40 samples vs ~14ms/step at the full 160 — the movie doesn't
+# need hero-shot lobe smoothness, the single Chunk-3 snapshot does.
+_TRACK_ROCHE_SAMPLES = 40
 
-    return {
-        "q": q,
-        "m_donor_msun": m1,
-        "m_companion_msun": m2,
-        "period_init_d": node.p_init,
-        "separation_rsun": a_rsun,
-        "separation_au": a_au,
-        "x_cm": x_cm,
-        "l1_x": l1x,
-        "l2_x": l2x,
-        "l3_x": l3x,
-        "donor_lobe": donor_lobe,
-        "companion_lobe": companion_lobe,
-        "donor_roche_radius_rsun": donor_rl_a * a_rsun,
-        "stream": _stream_path(l1x, q, x_cm),
-    }
+
+def track_roche_geometry(steps: list, n_samples: int = _TRACK_ROCHE_SAMPLES) -> list[dict | None]:
+    """Per-step Roche-lobe geometry for a POSYDON co-evolving binary track (path (b)
+    Chunk 4b) — the Chunk-3 panel's payoff paid off twice: instead of one CSV-node
+    snapshot at a fixed q=0.8, each step gets its OWN geometry from the track's REAL
+    q(t) = m2_current/m1_current and separation(t), so the lobes visibly reshape as the
+    orbit widens and (during RLOF) the donor's lobe tightens around it. Donor (star_1)
+    always sits at the origin and companion (star_2) at (1, 0) — fixed by IDENTITY, not
+    by which one currently masses more, so the reversal reads as the lobes swapping
+    size, never as a relabeling (the Chunk-1/Chunk-3 convention-mismatch class of bug).
+
+    Takes `posydon.BinaryStep` instances (duck-typed here, so this module stays free to
+    import from — `posydon.py` is the one that imports `track_roche_geometry` FROM here,
+    mirroring the `structure.py` → `lane_emden.solve_lane_emden` precedent of one pure
+    sibling calling another) via their `m1_current_msun`/`m2_current_msun`/
+    `separation_rsun` fields. Returns `None` for any step whose masses/separation can't
+    form a geometry (defensive; `binary_track` already truncates before a merger row
+    could go non-finite, so this should not fire in practice on the current bake)."""
+    out: list[dict | None] = []
+    for s in steps:
+        m1, m2, a = s.m1_current_msun, s.m2_current_msun, s.separation_rsun
+        if not (m1 and m2 and m1 > 0 and m2 > 0 and a and a > 0):
+            out.append(None)
+            continue
+        out.append(_roche_geometry_from_params(m2 / m1, m1, m2, a, n_samples))
+    return out
 
 
 def binary_pair_payload(mass: float, feh: float, companion_state: StellarState,

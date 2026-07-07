@@ -671,22 +671,72 @@ body.stripped-mode .companion-toggle-wrap {
 .companion-toggle-wrap input[type="checkbox"] {
   accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer;
 }
+/* The co-evolving binary view (Chunk 4b) always has a companion — there is no "show
+   companion" choice inside a POSYDON track, so the static-snapshot-only toggle steps aside. */
+body.binary-view .companion-toggle-wrap { display: none; }
 /* The Roche-lobe / mass-transfer panel (binary path (b) Chunk 3) is a two-star view, so
    it appears ONLY in stripped-mode with "Show companion" on (main.js toggles the
    .companion-on body class). display:none otherwise — a normal column citizen when shown,
-   and its canvas is fit on first draw (fitCanvas would measure 0×0 while hidden). */
+   and its canvas is fit on first draw (fitCanvas would measure 0×0 while hidden).
+   The co-evolving binary view (Chunk 4b, .binary-view) always shows it too — a companion
+   is inherent to a POSYDON track, there is no "hide it" toggle in that view. */
 .roche-panel { display: none; }
 body.stripped-mode.companion-on .roche-panel { display: block; }
+body.binary-view .roche-panel { display: block; }
 .roche-intro { margin: 0 0 10px; }
+
+/* path (b) Chunk 4b: comp/spectrum/sed/structure all show the Götberg STRIPPED-snapshot
+   star (frozen — none of them are wired to the per-step scrub) while the HR/3D/Roche
+   panels animate beside them. Unlike Chunk 2's stripped-mode (fully static, so a frozen
+   panel matched a frozen everything-else), here the mismatch would be visible AND
+   misleading — e.g. comp showing the snapshot's He-rich surface next to an HR donor
+   marker that starts as a H-rich main-sequence star. Hide rather than mislead; CSS
+   auto-reverts on exit (no extra JS), mirroring the roche-panel mode-hidden precedent. */
+body.binary-view .comp-panel, body.binary-view .spectrum-panel,
+body.binary-view .sed-panel, body.binary-view .structure-panel { display: none; }
+
+/* path (b) Chunk 4b: the "Co-evolve the system" demo-system picker — a deeper reveal
+   inside stripped-mode (never a new top-level mode), so it lives right under the
+   endgame-bar's top row. Hidden outside stripped-mode; while a demo is live
+   (.binary-view) the three picker buttons give way to a single "back to snapshot" one. */
+.binary-demo-row { display: none; }
+body.stripped-mode .binary-demo-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.binary-demo-label { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+.binary-demo-btn, .binary-demo-back {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--accent); background: transparent;
+  border: 1px solid var(--accent); border-radius: 6px;
+  padding: 3px 9px; white-space: nowrap;
+}
+.binary-demo-btn:hover, .binary-demo-back:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.binary-demo-btn:focus-visible, .binary-demo-back:focus-visible {
+  outline: 2px solid var(--ink); outline-offset: 2px;
+}
+.binary-demo-btn.active {
+  color: var(--bg); background: var(--accent);   /* filled — this is the live demo */
+}
+/* While a demo is co-evolving, the three pickers step aside for the single "back" button —
+   a clean "you are inside a movie now, here's the one way out" affordance. */
+body.binary-view .binary-demo-btn, body.binary-view .binary-demo-label { display: none; }
+body.binary-view .binary-demo-back { display: inline-block; }
 
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,
-.endgame-narrate-stripped { display: none; }
+.endgame-narrate-stripped, .endgame-narrate-binary { display: none; }
 body.wd-mode .endgame-narrate-wd { display: block; }
 body.wr-mode .endgame-narrate-wr { display: block; }
 body.sn-mode .endgame-narrate-sn { display: block; }
 body.stripped-mode .endgame-narrate-stripped { display: block; }
+/* path (b) Chunk 4b: while a demo is co-evolving, its own narration replaces the
+   snapshot's (which claims "the age slider is disabled" — no longer true in this view). */
+body.stripped-mode.binary-view .endgame-narrate-stripped { display: none; }
+body.binary-view .endgame-narrate-binary { display: block; }
 
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
@@ -695,7 +745,7 @@ body.stripped-mode .endgame-narrate-stripped { display: block; }
 
 /* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling
    time / WR stripping sequence). */
-.age-wd, .age-wr, .age-sn, .age-stripped { display: none; color: var(--accent); }
+.age-wd, .age-wr, .age-sn, .age-stripped, .age-binary { display: none; color: var(--accent); }
 
 /* In an endgame: the age input becomes a scrubber (no number entry), the endgame
    caption shows, and the SED's rotation control is hidden (neither a degenerate WD
@@ -710,6 +760,12 @@ body.wd-mode .endgame-age-caption,
 body.wr-mode .endgame-age-caption,
 body.sn-mode .endgame-age-caption,
 body.stripped-mode .endgame-age-caption { display: block; }
+/* The co-evolving binary sub-view (Chunk 4b) re-enables the age slider as a system-time
+   scrubber, swapping the "one representative state" tag for a "system time" one. More
+   specific than the plain .stripped-mode rule above so it wins the tie (both classes are
+   on <body> at once while a demo is live). */
+body.stripped-mode.binary-view .age-stripped { display: none; }
+body.binary-view .age-binary { display: inline; }
 body.wd-mode #sed-rot, body.wr-mode #sed-rot, body.sn-mode #sed-rot,
 body.stripped-mode #sed-rot { display: none; }
 /* WR draws NO coronal X-ray band or rotation→activity line (a wind, not a dynamo), so

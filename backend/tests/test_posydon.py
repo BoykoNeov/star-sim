@@ -228,6 +228,27 @@ def test_gate0_outcome_is_stripped_plus_companion():
     assert last1.Y_surf > 0.5
 
 
+def test_gate0_roche_lobes_reshape_through_the_episode():
+    """Path (b) Chunk 4b's payoff: the per-step Roche geometry (`binary.track_roche_geometry`)
+    over the REAL Gate-0 track — the lobes visibly tighten/reshape as q(t)/a(t) evolve, and
+    the donor's lobe (bigger pre-reversal) ends up SMALLER than the companion's (post-
+    reversal), through the real runtime — not a synthetic step like test_binary.py's."""
+    from star_sim.binary import track_roche_geometry
+    t = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, 0.0)
+    geo = track_roche_geometry(t.steps)
+    assert all(g is not None for g in geo)   # no degenerate step on this real track
+
+    def extent(lobe):
+        return max(p[0] for p in lobe) - min(p[0] for p in lobe)
+
+    d0, c0 = extent(geo[0]["donor_lobe"]), extent(geo[0]["companion_lobe"])
+    d1, c1 = extent(geo[-1]["donor_lobe"]), extent(geo[-1]["companion_lobe"])
+    assert d0 > c0            # starts: donor (heavier) has the bigger lobe
+    assert c1 > d1            # ends: companion (now heavier) has the bigger lobe
+    # the physical scale genuinely changes (not just a q-only reshape at fixed size)
+    assert geo[-1]["separation_rsun"] > geo[0]["separation_rsun"]
+
+
 # --- merger tracks degrade gracefully (no crash on a short/odd track) ----------
 
 def test_merger_outcome_tracks_do_not_crash():
@@ -274,6 +295,11 @@ def test_track_route_payload_shape():
                            "m2_current_msun"}
     assert set(step0["star_1"]) >= {"Teff_K", "L_lsun", "R_rsun", "logg", "X_surf", "Y_surf", "Z_surf"}
     assert any(s["mt_state"] == "RLOF1" for s in d["steps"])
+    # path (b) Chunk 4b: every step also carries its own Roche-lobe geometry (None only on
+    # a degenerate step, not observed on this real track — the Gate-0 test covers the shape)
+    assert all(s["roche"] is not None for s in d["steps"])
+    assert set(step0["roche"]) >= {"q", "m_donor_msun", "m_companion_msun", "separation_rsun",
+                                    "l1_x", "l2_x", "l3_x", "donor_lobe", "companion_lobe", "stream"}
 
 
 def test_track_route_snaps_far_in_band_not_422():

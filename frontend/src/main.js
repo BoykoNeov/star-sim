@@ -66,6 +66,11 @@ const els = {
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
+  // path (b) Chunk 4b: the co-evolving POSYDON binary demo picker — a deeper reveal inside
+  // stripped-mode (binary-view). Curated demo systems, not free q/P sliders (the de-risking
+  // choice the plan settled on).
+  binaryDemoRow: document.getElementById("binary-demo-row"),
+  binaryDemoBack: document.getElementById("binary-demo-back"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -451,6 +456,28 @@ let companionOn = false;
 // ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
 // snapped-far note rather than reverting; the toggle just doesn't OFFER entry outside them.
 const STRIP_MASS_MIN = 2.0, STRIP_MASS_MAX = 18.2;
+
+// --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
+// stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
+// showcase is a sub-view of "wd", not its own top-level mode).
+//
+// Three curated demo systems (docs/plans/entwined-consort-inspiral.md's de-risking choice
+// — free q/P sliders are a later feature): the SAME donor (M1=8.83 M☉, q=0.6) at three real
+// POSYDON grid periods, so the outcome contrast is purely "how close did they start" —
+// merger (too close), stripped + companion (the Gate-0 system — a real Algol reversal),
+// or detached (too wide to ever interact).
+const BINARY_DEMOS = [
+  { key: "merger", m1: 8.83, q: 0.6, p: 0.1 },
+  { key: "stripped", m1: 8.83, q: 0.6, p: 3.73 },
+  { key: "wide", m1: 8.83, q: 0.6, p: 5179 },
+];
+let binaryView = false;         // true = a demo is co-evolving (still mode === "stripped")
+let binaryTrackData = null;     // the full /binary_track payload (steps[] + snap/outcome meta)
+let binaryStar1 = null;         // data.steps[].star_1, pulled out once for hr.setBinaryTrack
+let binaryStar2 = null;         // data.steps[].star_2 (may contain a trailing null — a merger)
+let binaryFraction = 0;         // 0..1 slider position, index-linear over steps (the WR idiom)
+let binaryDemoKey = null;       // which BINARY_DEMOS entry is live (button highlight + caption)
+let binaryToken = 0;            // latest-wins guard for /binary_track fetches
 
 // The ⁵⁶Ni-mass control (Tier-3). Bounds are the observed range the backend clamps to; the
 // slider is LOG in M_Ni (it spans 0.001–0.3, ~2.5 decades). Canonical default 0.06.
@@ -1756,6 +1783,15 @@ function exitEndgame() {
   strippedData = null; strippedToken++;   // drop the stripped model + invalidate its in-flight fetch
   companionOn = false;                     // reset the path (b) companion reveal (hr.clearEndgame drops its marker)
   document.body.classList.remove("companion-on");   // hide the Roche panel (path (b) Chunk 3)
+  // path (b) Chunk 4b: drop the co-evolving binary sub-view too (hr.clearEndgame already
+  // called hr.clearBinaryTrack() above; this resets main.js's own copy of the state).
+  binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
+  binaryDemoKey = null; binaryToken++;
+  document.body.classList.remove("binary-view");
+  els.mass.disabled = false; els.feh.disabled = false;    // in case binaryView had disabled them
+  if (els.massNum) els.massNum.disabled = false;
+  if (els.fehNum) els.fehNum.disabled = false;
+  updateBinaryDemoButtons();
   roche.clear();
   // Return to the LIVING version of the endgame progenitor we were viewing
   // (lastEgMass/Feh) — not whatever transient value massValue holds. This is robust to
@@ -2373,6 +2409,10 @@ async function enterStripped() {
   document.body.classList.add("stripped-mode");
   companionOn = false;      // path (a) by default — the companion is revealed by the toggle
   if (els.companionToggle) els.companionToggle.checked = false;
+  binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
+  binaryDemoKey = null; binaryToken++;   // path (b) Chunk 4b — always land on the snapshot first
+  document.body.classList.remove("binary-view");
+  updateBinaryDemoButtons();
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -2407,8 +2447,129 @@ async function tryStrippedResnap() {
   applyStrippedModel(data);
 }
 
+// --- path (b) Chunk 4b: the co-evolving POSYDON binary ------------------------
+
+// slider fraction (0..1) -> step index (plain index-linear — every real POSYDON row gets
+// equal travel, mirroring the WR sub-track idiom: no piecewise compression, no snapping,
+// since the whole point of scrubbing this movie is that every in-between frame is real).
+function binaryIndexFromFraction(frac) {
+  if (!binaryStar1 || !binaryStar1.length) return 0;
+  return Math.max(0, Math.min(binaryStar1.length - 1, Math.round(clamp01(frac) * (binaryStar1.length - 1))));
+}
+
+// Landmark ticks: the endpoints, plus the first step flagged as actively transferring (if
+// any — the merger/wide demos may have none), mirroring the WR scrub's wc/last idiom.
+function rebuildBinaryTicks() {
+  if (!binaryTrackData) return;
+  const steps = binaryTrackData.steps;
+  const n = steps.length;
+  const marks = [{ pos01: 0, label: "start" }, { pos01: 1, label: "end" }];
+  const mtStart = steps.findIndex((s) => s.mt_state !== "detached");
+  if (mtStart > 0 && mtStart < n - 1) marks.push({ pos01: mtStart / (n - 1), label: "mass transfer begins" });
+  buildTickStrip(els.ageMarks, marks);
+  els.ageTicks.innerHTML = "";
+}
+
+function updateBinaryDemoButtons() {
+  document.querySelectorAll(".binary-demo-btn").forEach((btn) => {
+    btn.classList.toggle("active", binaryView && btn.dataset.demo === binaryDemoKey);
+  });
+}
+
+// Enter the co-evolving movie for one curated demo system (mode stays "stripped" — this is
+// a sub-view, like the WD thermal-pulse showcase). Fetches /binary_track once; the age
+// slider then becomes a free system-time scrubber over the pre-fetched steps (no per-frame
+// fetch, the same "scrub is free" idiom as the living track / WD / WR scrubs).
+async function enterBinaryView(demoKey) {
+  if (mode !== "stripped") return;
+  const demo = BINARY_DEMOS.find((d) => d.key === demoKey);
+  if (!demo) return;
+  const tok = ++binaryToken;
+  binaryDemoKey = demoKey;
+  updateBinaryDemoButtons();
+  els.age.disabled = true;   // re-enabled once the track lands; disabled meanwhile (fetching)
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the co-evolved binary track…";
+  let data;
+  try { data = await fetchJSON(`/binary_track?m1=${demo.m1}&q=${demo.q}&p=${demo.p}&feh=0`); }
+  catch {
+    if (tok === binaryToken && mode === "stripped")
+      els.endgameAgeCaption.textContent = "Could not fetch the co-evolved binary track.";
+    return;
+  }
+  if (tok !== binaryToken || mode !== "stripped") return;
+  binaryTrackData = data;
+  binaryStar1 = data.steps.map((s) => s.star_1);
+  binaryStar2 = data.steps.map((s) => s.star_2);
+  binaryView = true;
+  document.body.classList.add("binary-view");
+  els.age.disabled = false;
+  // POSYDON's (M1, q, P) grid is independent of the MIST mass/[Fe/H] axes this demo isn't
+  // keyed on — disable rather than silently ignore a drag (tryResnap() also guards this).
+  els.mass.disabled = true; els.feh.disabled = true;
+  if (els.massNum) els.massNum.disabled = true;
+  if (els.fehNum) els.fehNum.disabled = true;
+  updateBinaryDemoButtons();
+  hr.setBinaryTrack(binaryStar1, binaryStar2);
+  rebuildBinaryTicks();
+  binaryFraction = 0;
+  els.age.value = binaryFraction;
+  refreshBinary();
+}
+
+// Leave the movie, back to the plain stripped snapshot (still mode === "stripped" — the
+// donor + its one representative state, exactly as it was before "Co-evolve" was clicked).
+function exitBinaryView() {
+  binaryView = false;
+  binaryTrackData = null; binaryStar1 = null; binaryStar2 = null; binaryDemoKey = null;
+  document.body.classList.remove("binary-view");
+  hr.clearBinaryTrack();
+  roche.clear();
+  els.age.disabled = true;
+  els.mass.disabled = false; els.feh.disabled = false;
+  if (els.massNum) els.massNum.disabled = false;
+  if (els.fehNum) els.fehNum.disabled = false;
+  updateBinaryDemoButtons();
+  if (strippedData) { hr.setEndgame([strippedData.state], "stripped"); refreshStripped(); }
+}
+
+// Paint step `i` (picked from binaryFraction — no fetch, mirrors refreshWR). Both stars'
+// real modelled states drive the HR markers, the 3D pair (star.js's existing companion
+// layout, Chunk 2), and the Roche panel (now LIVE off this step's own q(t)/a(t) geometry,
+// the Chunk-3 panel's payoff paying off twice) — donor/companion stay fixed left/right by
+// IDENTITY throughout, the reversal is the crossing, never a relabel.
+function refreshBinary() {
+  if (!binaryView || !binaryTrackData) return;
+  const i = binaryIndexFromFraction(binaryFraction);
+  const step = binaryTrackData.steps[i];
+  const s1 = binaryStar1[i];
+  const s2 = binaryStar2[i];   // may be null after a merger (not observed on the current bake)
+
+  hr.updateBinaryIndex(i);
+  star.update(s1, s2 ? { companion: s2 } : undefined);
+  if (step.roche) roche.drawLive(step.roche, s1, s2, step.mt_state);
+  else roche.clear();
+
+  if (els.endgameAgeCaption) {
+    const yrs = step.age_yr >= 1e6 ? `${(step.age_yr / 1e6).toFixed(2)} Myr`
+      : step.age_yr < 1 ? "<1 yr" : `${Math.round(step.age_yr)} yr`;
+    const sepAU = (step.separation_rsun / 215.032).toFixed(2);
+    els.endgameAgeCaption.textContent =
+      `System age ${yrs} · period ${step.period_d.toFixed(2)} d · separation ${step.separation_rsun.toFixed(0)} R☉ ` +
+      `(${sepAU} AU) · M₁ ${step.m1_current_msun.toFixed(2)} M☉, M₂ ${step.m2_current_msun.toFixed(2)} M☉ · ${step.mt_state}` +
+      (i === binaryStar1.length - 1 ? ` · outcome: ${binaryTrackData.outcome}` : "") +
+      (s2 ? "" : " · the companion is lost past this point (a merger row)");
+  }
+}
+
 // Dispatch a mass/[Fe/H] re-snap to the active endgame / what-if mode.
 function tryResnap() {
+  // path (b) Chunk 4b: the co-evolving binary is keyed on POSYDON's own (M1, q, P) grid,
+  // independent of the MIST progenitor mass/[Fe/H] — the mass/feh CONTROLS are disabled
+  // while it's active (enterBinaryView/exitBinaryView), so this should be unreachable via
+  // the UI; guarded here too so a stray resnap can't desync the HR/roche/3D from a stale
+  // binary track (mode stays "stripped" throughout, so it would otherwise fall through
+  // to tryStrippedResnap below and repaint the WRONG (single-donor) model over it).
+  if (mode === "stripped" && binaryView) return;
   if (mode === "wd") return tryWDResnap();
   if (mode === "wr") return tryWRResnap();
   if (mode === "sn") return trySNResnap();
@@ -2705,6 +2866,13 @@ async function init() {
       refreshSN();
       return;
     }
+    if (mode === "stripped" && binaryView) {
+      // path (b) Chunk 4b: the co-evolving binary's system-time scrubber — plain
+      // index-linear over the pre-fetched steps (see binaryIndexFromFraction).
+      binaryFraction = clamp01(Number(els.age.value));
+      refreshBinary();
+      return;
+    }
     // NOT debounced, on purpose. The marker is now PICKED from the already-fetched
     // track (no fetch at all, Chunk E), so age-scrub frames are essentially free — and
     // age intermediates are *wanted*: scrubbing age is the "watch the star evolve"
@@ -2793,6 +2961,17 @@ async function init() {
     if (mode !== "stripped") return;
     companionOn = els.companionToggle.checked;
     tryStrippedResnap();   // re-fetch the current (mass, [Fe/H]) via the now-correct route + re-apply
+  });
+
+  // path (b) Chunk 4b: the "Co-evolve the system" demo picker. Delegated (the three
+  // buttons share the .binary-demo-btn class + a data-demo key); the picker row itself is
+  // CSS-hidden once a demo is live, so this only fires from a fresh stripped-mode entry.
+  if (els.binaryDemoRow) els.binaryDemoRow.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".binary-demo-btn");
+    if (btn && mode === "stripped") enterBinaryView(btn.dataset.demo);
+  });
+  if (els.binaryDemoBack) els.binaryDemoBack.addEventListener("click", () => {
+    if (mode === "stripped" && binaryView) exitBinaryView();
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

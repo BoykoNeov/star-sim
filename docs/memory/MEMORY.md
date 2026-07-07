@@ -1,6 +1,6 @@
 # Memory index
 
-- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel). Path (a) Chunks 1–3 COMPLETE. Path (b) Chunks 1–3 BUILT off the Götberg snapshot (HR reversal, 3D companion, Roche geometry). Chunk 4a BUILT: posydon.py + /binary_track, the first time-series two-body sibling (POSYDON HMS-HMS grid baked to a flat .npz, snap-only, Gate 0 closed — the Algol reversal live). Next: Chunk 4b, the frontend two-star time render.
+- [Star Simulator binary-stripped stars](star-sim-binary-stripped.md) — binary.py + /binary sibling (Götberg 2018 hot He-star, ~70% WR channel). Path (a) Chunks 1–3 COMPLETE. Path (b) Chunks 1–4b ALL BUILT: Götberg-snapshot HR reversal/3D companion/Roche geometry, plus the POSYDON two-body time-series (posydon.py + /binary_track) with a real frontend co-evolving movie — both HR markers cross live, Roche panel goes live off per-step geometry. Next (optional): Chunk 4c.
 - [Star Simulator init scope](star-sim-init-scope.md) — what init delivered: the §3 provider spine, stub limits (historical).
 - [Star Simulator MISTProvider](star-sim-mist-provider.md) — live provider: MIST v2.5, 2D (mass×[Fe/H]) EEP interpolation, blend-then-invert, non-rectangular domain, ZAMS→EAGB window (TPAGB hard-stopped), full 0.1–300 M☉ grid, .npz parse cache. Phase 1.
 - [Star Simulator composition panel](star-sim-composition-panel.md) — §5.4 panel + `/track` endpoint: EEP-axis stacked areas, track returns list[StellarState], shared `_state_from_row`.

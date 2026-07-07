@@ -1,6 +1,80 @@
 # Plan: The co-evolved binary — both stars on the HR through time (POSYDON)
 
-## Status: Chunk 4a BUILT (backend vertical, solar-first, 306 pytest). Chunk 4b (frontend) next.
+## Status: Chunks 4a & 4b BUILT — the two-star TIME render is live. 310 pytest.
+
+**Chunk 4b, as built (2026-07-07) — a deeper reveal INSIDE stripped-mode (mode stays
+`"stripped"` throughout, mirroring the WD thermal-pulse showcase's sub-view pattern), not a
+new top-level mode:**
+- **Entry:** three CURATED demo systems (the plan's de-risking choice, not free q/P
+  sliders yet) — SAME donor (M1=8.83, q=0.6), only the initial period differs, so the
+  outcome contrast is purely "how close did they start": P=0.1 d → merger, P=3.73 d → the
+  Gate-0 stripped+companion system, P=5179 d → detached. A "Co-evolve the system through
+  time" button row in the endgame bar (visible whenever stripped-mode is active) fetches
+  `/binary_track` once and enters `binaryView` (a JS flag, `body.binary-view` CSS class);
+  a "← Back to the snapshot" button returns to the plain single-state donor view without
+  leaving stripped-mode. The mass/[Fe/H] sliders are DISABLED while a demo is live (POSYDON's
+  grid is independent of the MIST progenitor axes this demo isn't keyed on) — the main
+  "← Back to the living star" button still fully exits, same as every other endgame.
+- **The age slider becomes a system-time scrubber**, plain index-linear over the pre-fetched
+  steps (the WR sub-track idiom — no fetch per frame, every row gets equal travel).
+- **HR (`hr.js` `setBinaryTrack`/`updateBinaryIndex`/`clearBinaryTrack`):** a genuinely new
+  drawing mode (`binaryMode`, checked before `endgameMode`) — BOTH stars' full tracks drawn
+  Teff-colored with an independent past/future split at the scrubbed index (star_2's array
+  may run shorter after a merger — truncated at the first null, never filtered, so index
+  alignment with star_1 holds), both live markers labeled by FIXED IDENTITY ("donor"/
+  "companion", never by which currently masses more — the reversal is the markers crossing,
+  not a relabel). Axes auto-fit the WHOLE movie (both full tracks), unlike `setEndgame`'s
+  marker-relative fit.
+- **The Roche panel goes LIVE (`roche.js` new `drawLive`, alongside the untouched Chunk-3
+  `drawPanel`):** per-step geometry from the track's REAL q(t)=m2_current/m1_current and
+  separation(t) — a backend addition, `binary.track_roche_geometry` (see below), was
+  needed for this (the plan's advisor-flagged "genuine architectural fork," not deferred).
+  Two real upgrades over the static snapshot: (1) BOTH stars have a real modelled Teff/R at
+  every step (no "unknown donor temperature" gap), so both draw as real Teff-colored discs
+  always; (2) whichever star `mt_state` flags as CURRENTLY overflowing (RLOF1→donor,
+  RLOF2→companion, contact→both) gets its lobe filled (translucent, its own color) + the
+  stream — the other stays an unfilled outline. Measured gotcha kept honest in the caption:
+  the real photospheric radius does NOT itself cross the lobe outline during RLOF (Roche
+  overflow is a local excess at L1, not a whole-photosphere inflation past the mean lobe
+  radius) — the fill is a labeled schematic "transferring now" cue, not a naive
+  radius-vs-lobe comparison.
+- **3D:** free — `star.update(s1, {companion: s2})` is the EXACT Chunk-2 companion call,
+  now driven every scrub frame instead of once; both spheres evolve with zero star.js changes.
+- **Advisor catch (a false-data leak, fixed before commit):** comp/spectrum/sed/structure
+  are NOT wired to the per-step scrub (they'd stay frozen at whatever the Götberg stripped
+  SNAPSHOT painted on stripped-mode entry) — unlike Chunk 2's fully-static stripped-mode,
+  here the HR/3D/Roche panels visibly animate right beside them, so a frozen panel (e.g.
+  comp showing the snapshot's He-rich surface next to an HR donor marker that starts
+  H-rich) would read as stale AND misleading. Fixed by hiding all four via CSS
+  (`body.binary-view .comp-panel, .spectrum-panel, .sed-panel, .structure-panel {
+  display:none }`) — auto-reverts on exit, no JS needed, mirrors the roche-panel
+  mode-hidden precedent. Verified round-trip: hidden on entry, reappear with the
+  snapshot's real content on "Back to the snapshot."
+- **Backend addition (`binary.py`):** the Chunk-3 `roche_geometry` engine was refactored
+  into a pure `_roche_geometry_from_params(q, m1, m2, separation_rsun, n_samples)` (donor at
+  origin, companion at (1,0), generalizes past the fixed q=0.8 CSV case — verified sane
+  across q∈[0.1,9]) plus a new `track_roche_geometry(steps)` that calls it per POSYDON step
+  at a DECIMATED angular resolution (40 vs the CSV path's 160 samples — measured ~2ms/step
+  vs ~14ms/step, keeping a 271-step track fetch under ~1s). `posydon.py` imports
+  `track_roche_geometry` from `binary.py` (a sibling calling a sibling, mirroring
+  `structure.py`'s import of `lane_emden.solve_lane_emden` — no PROVIDER involved, so this
+  doesn't violate §3) and folds a `roche` block into every `/binary_track` step. No
+  `BAKE_VERSION`/`CACHE_VERSION` bump — computed at request time from already-baked columns.
+  **4 new tests** in `test_binary.py` (duck-typed synthetic steps: matches the single-node
+  engine at the same params, donor/companion lobe sizes swap across a synthetic reversal,
+  `None` on a degenerate step) + **2 new tests** in `test_posydon.py` (the Gate-0 track's
+  real lobes reshape + swap dominance through the real runtime; the `/binary_track` route
+  carries a non-null `roche` block on every step). **310 pytest total.**
+- Playwright-verified at 1440×1000 and 390×844 (phone width): the full flow (enter →
+  scrub → markers cross in the Case-B demo → Roche lobes reshape/fill through a real
+  detached→RLOF1→detached sequence → back to snapshot → re-enter a different demo → full
+  exit) — zero console errors, no layout breakage, demo row stacks cleanly at phone width.
+- **Chunk 4c (optional follow-ons, unbuilt)** unchanged from below: richer outcomes
+  (common envelope / merger physics / compact-object channels), more metallicities, a
+  population overlay. Free q/P sliders (vs. the three curated demos) are also a natural
+  next increment if the curated set proves too narrow.
+
+## Original design status (superseded by the above; kept for the Chunk 4b architecture)
 
 **Chunk 4a, as built (2026-07-07) — corrections to this doc's original guesses, measured
 against the real data:**

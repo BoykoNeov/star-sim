@@ -327,25 +327,48 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
-- **PATH (b) CHUNK 4a BUILT (backend vertical, solar-first, 306 pytest [+19]):** the
-  on-ramp to a real binary grid — POSYDON HMS-HMS, the first TIME-SERIES, TWO-BODY
-  sibling. The user landed all 8 metallicity tarballs (~84 GB, `data/Posydon/`); only
-  solar is extracted + baked so far. Recon correction: the raw grid HDF5 is already
-  per-run (`grid/run<i>/{binary_history,history1,history2}`), not POSYDON's packed
-  `PSyGrid` — so `scripts/bake_posydon.py` reads it directly with plain h5py (host-side,
-  filters `not_converged`/misaligned runs, verifies the run↔`initial_values` index
-  identity, decimates >300-row tracks) into a flat CSR `.npz` (33,121 tracks/1.48M
-  rows/142 MB); the runtime `star_sim/posydon.py` sibling is h5py/POSYDON-free, snaps
-  (M1,q,P,[Fe/H]) in normalized log-M1/log-P/linear-q space to the nearest track (never
-  interpolates, §6). **Gate 0 CLOSED** through the real runtime (demo system M1=8.83/
-  q=0.6/P=3.73 d): the mass ordering crosses live (donor 8.83→1.07 M☉, companion
-  5.30→5.94 M☉), the period widens 3.73→6.94 d, `mt_state` fires a real
+- **PATH (b) CHUNKS 4a & 4b BUILT — the two-star TIME render is live (310 pytest [+4]):**
+  the on-ramp to a real binary grid — POSYDON HMS-HMS, the first TIME-SERIES, TWO-BODY
+  sibling. **Chunk 4a** (backend, solar-first): the user landed all 8 metallicity tarballs
+  (~84 GB, `data/Posydon/`); only solar is extracted + baked so far. Recon correction: the
+  raw grid HDF5 is already per-run (`grid/run<i>/{binary_history,history1,history2}`), not
+  POSYDON's packed `PSyGrid` — so `scripts/bake_posydon.py` reads it directly with plain
+  h5py (host-side, filters `not_converged`/misaligned runs, verifies the
+  run↔`initial_values` index identity, decimates >300-row tracks) into a flat CSR `.npz`
+  (33,121 tracks/1.48M rows/142 MB); the runtime `star_sim/posydon.py` sibling is
+  h5py/POSYDON-free, snaps (M1,q,P,[Fe/H]) in normalized log-M1/log-P/linear-q space to the
+  nearest track (never interpolates, §6). **Gate 0 CLOSED** through the real runtime (demo
+  system M1=8.83/q=0.6/P=3.73 d): the mass ordering crosses live (donor 8.83→1.07 M☉,
+  companion 5.30→5.94 M☉), the period widens 3.73→6.94 d, `mt_state` fires a real
   detached→RLOF1→detached sequence. Two honest gaps vs the original plan guess: no
   eccentricity column (HMS-HMS circularizes; `ecc` is a labeled 0.0) and C/N/O-only
   composition (not MIST's 16-metal breakdown). `/binary_track` + `/binary_track_meta`
-  bypass `PROVIDER`, snap-always. **Next = Chunk 4b** (the two-star time render,
-  frontend — a system-time scrubber, both HR markers moving/crossing live, the Roche
-  panel gone LIVE off real q(t)/a(t)). Plan `docs/plans/entwined-consort-inspiral.md`.
+  bypass `PROVIDER`, snap-always. **Chunk 4b** (frontend, a deeper reveal INSIDE
+  stripped-mode — mode stays `"stripped"` throughout, the WD-thermal-pulse sub-view
+  pattern): three curated demo systems (same donor M1=8.83/q=0.6, only P differs — merger /
+  the Gate-0 stripped+companion / detached), a "Co-evolve the system" button row that
+  fetches `/binary_track` once and repurposes the age slider as a free index-linear
+  system-time scrubber (mass/[Fe/H] disabled meanwhile — POSYDON's grid is independent of
+  the MIST axes). `hr.js` gained a genuinely new drawing mode (`setBinaryTrack`/
+  `updateBinaryIndex` — BOTH stars' full tracks, Teff-colored, independent past/future
+  splits, markers fixed-labeled "donor"/"companion" by IDENTITY so the reversal is the
+  crossing, never a relabel). The Roche panel (Chunk 3) goes LIVE (`roche.js drawLive`,
+  the untouched static `drawPanel` stays for the snapshot): a **backend addition** was
+  needed here — `binary.py`'s Roche engine was factored into a pure
+  `_roche_geometry_from_params(q, m1, m2, a, n_samples)` + a new `track_roche_geometry`
+  that `posydon.py` imports (sibling-calls-sibling, mirroring `structure.py` →
+  `lane_emden.solve_lane_emden`; no `BAKE_VERSION` bump, computed at request time) at a
+  decimated 40-sample resolution (~2ms/step vs the CSV path's 160-sample ~14ms, keeping a
+  271-step track fetch under ~1s). Two real upgrades over the static snapshot: both stars
+  get a REAL Teff/R every step (drawn as real discs always), and whichever star `mt_state`
+  flags as overflowing gets its lobe filled + the stream (measured/labeled: the real
+  photospheric radius does NOT itself cross the lobe outline during RLOF — a local L1
+  excess, not whole-photosphere inflation). 3D is free (`star.update(s1,{companion:s2})`,
+  the exact Chunk-2 call, now driven every scrub frame). Playwright-verified 1440+390,
+  zero console errors, the Case-B markers visibly cross and the Roche lobes visibly
+  reshape/fill through a real detached→RLOF1→detached sequence. **Next = Chunk 4c**
+  (optional: richer outcomes, more metallicities, free q/P sliders, a population overlay —
+  none built). Plan `docs/plans/entwined-consort-inspiral.md`.
 - **PATH (b) CHUNK 3 BUILT (backend + frontend, 287 pytest [+8], Playwright 1440+390 zero errors):**
   "the mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR render: the orbital-plane
   figure-of-eight at the moment of Case-B RLOF (the causal story behind the stripped star). Advisor-settled
@@ -551,7 +574,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **306 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **310 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an
@@ -568,7 +591,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   invalid input). The binary path-(b) Chunk-3 Roche geometry adds **8** tests in
   `test_binary.py` (P_init parse, snap↔geometry consistency, donor-heavier-at-RLOF,
   Kepler separation ≈43.7 R☉, L-point ordering, lobes-kiss-at-L1 + donor-bigger + no-leak,
-  Eggleton fill, and the route carrying `roche` + the companion fitting its lobe).
+  Eggleton fill, and the route carrying `roche` + the companion fitting its lobe); Chunk 4b's
+  `track_roche_geometry` adds **4 more** there (duck-typed synthetic steps: matches the
+  single-node engine at the same params, donor/companion lobe sizes swap across a synthetic
+  reversal, `None` on a degenerate step) plus **2** in `test_posydon.py` (the Gate-0 track's
+  real lobes reshape + swap dominance; the `/binary_track` route carries a non-null `roche`
+  block on every step).
   The binary-stripped-star spectrum sibling (Chunk 3) adds **7**
   tests (`test_stripped_spectra.py`, gated `requires_stripped_spectra_data`): the flat-node
   snap honesty + state↔spectrum consistency, the absorption→emission sequence as a

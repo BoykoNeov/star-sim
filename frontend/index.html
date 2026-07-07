@@ -133,6 +133,20 @@
           <button id="pulse-toggle" class="pulse-toggle" type="button" hidden>🔍 Thermal pulses</button>
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
+        <!-- path (b) Chunk 4b: the co-evolving POSYDON binary — a deeper reveal INSIDE
+             stripped-mode (not a new top-level mode), curated demo systems (not free q/P
+             sliders yet — the plan's de-risking choice). Same donor (M1=8.83, q=0.6), only
+             the initial ORBITAL PERIOD differs across the three, so the outcome contrast is
+             purely "how close were they" — merger, stripped + companion (the Gate-0 system),
+             or too wide to ever interact. -->
+        <div class="binary-demo-row" id="binary-demo-row">
+          <span class="binary-demo-label">Co-evolve the system through time:</span>
+          <button type="button" class="binary-demo-btn" id="binary-demo-merger" data-demo="merger">Tight orbit → merger</button>
+          <button type="button" class="binary-demo-btn" id="binary-demo-stripped" data-demo="stripped">Case-B orbit → stripped + companion</button>
+          <button type="button" class="binary-demo-btn" id="binary-demo-wide" data-demo="wide">Wide orbit → detached</button>
+          <button type="button" class="binary-demo-back" id="binary-demo-back" hidden>← Back to the snapshot</button>
+          <span class="help" tabindex="0" data-tip="Pick one of three real POSYDON binary-evolution tracks (Fragos+2023) — the SAME donor and mass ratio, only the initial orbital period differs, so the different outcomes come purely from how close the two stars started. The age slider becomes a system-time scrubber: watch both stars' real modelled state move on the HR diagram (they can CROSS — the Algol mass-ratio reversal, live), the Roche-lobe panel go live off the real changing orbit, and the 3D pair evolve together. Unlike the snapshot above (one representative stripped state), this is a genuine time series — a real MESA-binary run, not a single fixed q=0.8 moment.">?</span>
+        </div>
         <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
           The star has shed its outer layers as a <b>planetary nebula</b> — a step this
           simulator doesn't model — leaving the hot, bare core. You're now scrubbing that
@@ -181,7 +195,19 @@
           star's real <b>CMFGEN</b> spectrum. Tick <b>Show companion</b> to draw the un-stripped
           companion (the accretor) as a second star on the HR diagram — the <b>Algol mass-ratio
           reversal</b>: the donor, once the heavier star, is now the lighter one. Mass and [Fe/H]
-          stay live (they re-snap to a different stripped star).
+          stay live (they re-snap to a different stripped star). This snapshot is ONE
+          representative moment of a real two-star system — pick a demo below to
+          <b>co-evolve the system through time</b> instead: a real POSYDON MESA-binary run
+          where both stars move on the HR diagram and the Roche-lobe panel goes live.
+        </p>
+        <p class="endgame-narrate endgame-narrate-binary" id="endgame-narrate-binary">
+          A real <b>POSYDON</b> MESA-binary track (Fragos&nbsp;2023) — both stars' full
+          history, not one snapshot. Scrub <b>system time</b>: watch the two HR markers move
+          and, in the Case-B system, <b>cross</b> — the Algol mass-ratio reversal, live, not a
+          caption. The Roche-lobe panel below recomputes the lobes at every step from the
+          REAL orbit; the lobe that's currently overflowing (the stream lights up) swaps sides
+          as the ratio reverses. Mass and [Fe/H] are fixed for this demo (POSYDON's own grid,
+          not the MIST progenitor grid) — untick back to the snapshot to change them.
         </p>
       </div>
 
@@ -302,6 +328,7 @@
         <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
         <span class="age-sn">· time since explosion (supernova)</span>
         <span class="age-stripped">· one representative state (stripped star)</span>
+        <span class="age-binary">· system time (co-evolving binary)</span>
         <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">

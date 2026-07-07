@@ -193,6 +193,19 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
                            //   drawn as a SECOND marker so the Algol mass-ratio reversal is
                            //   visible (the donor blue-left + hotter, the companion cooler).
                            //   Only set in stripped-mode when "Show companion" is on.
+
+  // --- path (b) Chunk 4b: the co-evolving POSYDON binary — BOTH markers move -----------
+  // Unlike `companion` above (one static marker beside the living donor), this is a real
+  // TIME SERIES: both stars trace their OWN track as system time scrubs, each with a
+  // past/future split at the scrubbed step (the living-track idiom, doubled). `binaryIdx`
+  // indexes star_1's array; star_2's array may be shorter after a merger truncation, so
+  // its own index is clamped separately in drawBinary(). donor (star_1) / companion
+  // (star_2) are fixed IDENTITIES — the reversal is the markers crossing, never a label
+  // swap (the Chunk-1/Chunk-3 convention-mismatch class of bug).
+  let binaryMode = false;
+  let binaryStar1 = null;  // array of StellarState (star_1, the donor) across steps
+  let binaryStar2 = null;  // array of StellarState (star_2, the companion) — may be shorter
+  let binaryIdx = -1;
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -787,9 +800,83 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     markerLabel(cx, cy, "companion", 13);
   }
 
+  // One star's trail for the binary-track view: Teff-coloured, past/future split at
+  // `splitIdx` — the same segment-by-segment idiom as `drawTrack`/`drawEndgameTrack`,
+  // parameterized so both star_1 and star_2 reuse it instead of forking the logic twice.
+  function drawBinaryTrail(list, splitIdx) {
+    if (!list || list.length < 2) return;
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i];
+      const past = i <= splitIdx;
+      ctx.lineWidth = past ? 2 : 1.2;
+      ctx.globalAlpha = past ? 0.95 : 0.32;
+      ctx.beginPath();
+      ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
+      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
+      ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // The co-evolving binary view (path (b) Chunk 4b): both stars' full tracks (faint
+  // future, bold past) + both live markers, fixed-labeled by identity. `binaryStar2`
+  // (and hence its own index) may run shorter than `binaryStar1` after a merger
+  // truncation — clamp rather than assume the two arrays stay the same length.
+  function drawBinary() {
+    drawAxes();
+    drawIsoRadius();
+    const idx2 = binaryStar2 ? Math.min(binaryIdx, binaryStar2.length - 1) : -1;
+    drawBinaryTrail(binaryStar1, binaryIdx);
+    if (binaryStar2) drawBinaryTrail(binaryStar2, idx2);
+    if (binaryStar1 && binaryIdx >= 0 && binaryIdx < binaryStar1.length) {
+      const s1 = binaryStar1[binaryIdx];
+      const x = xOf(Math.log10(s1.Teff_K)), y = yOf(Math.log10(s1.L_lsun));
+      drawMarker(x, y, s1.Teff_K);
+      markerLabel(x, y, "donor", -12);
+    }
+    if (binaryStar2 && idx2 >= 0) {
+      const s2 = binaryStar2[idx2];
+      const x = xOf(Math.log10(s2.Teff_K)), y = yOf(Math.log10(s2.L_lsun));
+      drawMarker(x, y, s2.Teff_K);
+      markerLabel(x, y, "companion", 13);
+    }
+  }
+
+  // Enter the co-evolving binary view: both stars' full state arrays (star_1/star_2 across
+  // every step of a `/binary_track` payload). Auto-fits BOTH tracks in full — unlike
+  // setEndgame's marker-relative fit, the whole movie must stay in frame since the marker
+  // will visit every point on both curves as the scrub plays.
+  function setBinaryTrack(star1States, star2States) {
+    binaryMode = true;
+    binaryStar1 = star1States && star1States.length ? star1States : null;
+    // star_2 can go null after a merger (never observed on the current bake, but the
+    // type allows it) — truncate the companion's trail at the first null step rather
+    // than filtering nulls out, which would shift later indices out of alignment with
+    // star_1's array (index i must mean "the same step" in both arrays).
+    const nullAt = star2States ? star2States.findIndex((s) => !s) : 0;
+    binaryStar2 = star2States && (nullAt === -1 ? star2States : star2States.slice(0, nullAt));
+    if (!binaryStar2 || !binaryStar2.length) binaryStar2 = null;
+    const b = fitBounds(binaryStar1, binaryStar2);
+    bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
+    gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
+    gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
+    draw();
+  }
+  // Move both markers to step `i` (a pure pick, like the WD/WR endgame scrubs — no fetch).
+  function updateBinaryIndex(i) {
+    binaryIdx = i;
+    draw();
+  }
+  function clearBinaryTrack() {
+    binaryMode = false;
+    binaryStar1 = null; binaryStar2 = null; binaryIdx = -1;
+  }
+
   function draw() {
     if (pulseMode) { drawThermalPulses(); return; }
     if (snMode) { drawSupernova(); return; }
+    if (binaryMode) { drawBinary(); return; }
     drawAxes();
     drawIsoRadius();                  // constant-R graph paper, under everything
     if (endgameMode) {
@@ -907,6 +994,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     companion = null;                                    // drop the binary companion marker
     snMode = false; snModel = null; snObserved = null;   // also leave the SN light-curve view
     pulseMode = false; pulseStates = null;               // ...and the thermal-pulse showcase
+    clearBinaryTrack();                                   // ...and the co-evolving binary view
     applyLivingBounds();   // restore the living frame (re-fit, in case a massive star is selected)
     draw();
   }
@@ -919,5 +1007,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack };
 }

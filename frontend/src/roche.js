@@ -24,7 +24,7 @@
 // state); it never fetches. Shown only in stripped-mode with "Show companion" on.
 
 import { fitCanvas } from "./canvas.js";
-import { teffToCSS } from "./color.js";
+import { teffToCSS, teffToRGB } from "./color.js";
 
 const PAD = 46;   // room for the L-point / star labels around the figure
 
@@ -47,8 +47,21 @@ export function createRoche() {
   let ctx, W, H;
   ({ ctx, W, H } = fitCanvas(canvas, 380, 300));
 
-  let geo = null;        // last /binary_pair `roche` block
+  let geo = null;        // last /binary_pair `roche` block (or a /binary_track step's)
   let companion = null;  // last companion StellarState (for size + colour)
+
+  // path (b) Chunk 4b — the LIVE per-step view (a co-evolving POSYDON track, drawLive()),
+  // as opposed to the STATIC Chunk-3 snapshot above (drawPanel(), one fixed q=0.8 RLOF
+  // moment). Unlike the snapshot, here BOTH stars have real modelled Teff/R at every step
+  // (no "unknown giant temperature" gap — see drawLive's docstring), so both are drawn as
+  // real discs, Teff-coloured, at every step; a lobe additionally FILLS (translucent, in
+  // that star's own colour) + the stream draws only while `mtState` flags it as actively
+  // overflowing — donor at cx=0 / companion at cx=1 by FIXED IDENTITY throughout, never by
+  // which currently masses more (the reversal is the fill/size swapping sides, not a label
+  // swap — the Chunk-1/Chunk-3 convention-mismatch class of bug).
+  let liveMode = false;
+  let donorState = null;
+  let mtState = "detached";
 
   // World-space (units of separation a) → canvas, EQUAL aspect on both axes (this is a
   // physical geometry — it must not be stretched). The frame spans L3 (behind the donor)
@@ -79,15 +92,65 @@ export function createRoche() {
     });
   }
 
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    if (!geo) return;
-    const T = transform();
-
-    // Orbital axis (the line of centres) + centre of mass — faint reference.
+  // The orbital axis (line of centres) — shared by both the static and live views.
+  function drawAxisLine(T) {
     ctx.strokeStyle = AXIS_COL; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
     ctx.beginPath(); ctx.moveTo(T.X(geo.l3_x - 0.05), T.Y(0)); ctx.lineTo(T.X(geo.l2_x + 0.05), T.Y(0)); ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  // The mass-transfer stream (schematic Coriolis-deflected arc) with an arrowhead at its
+  // companion-ward end — shared by both views (the live view only calls it while a star is
+  // actually flagged as overflowing).
+  function drawStream(T, pts, col) {
+    if (!pts || pts.length < 2) return;
+    ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.globalAlpha = 0.9;
+    poly(pts, T); ctx.stroke();
+    ctx.globalAlpha = 1;
+    const a = pts[pts.length - 2], b = pts[pts.length - 1];
+    const ang = Math.atan2(T.Y(b[1]) - T.Y(a[1]), T.X(b[0]) - T.X(a[0]));
+    const hx = T.X(b[0]), hy = T.Y(b[1]);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx - 8 * Math.cos(ang - 0.4), hy - 8 * Math.sin(ang - 0.4));
+    ctx.lineTo(hx - 8 * Math.cos(ang + 0.4), hy - 8 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  // A filled disc for a real modelled star at world x = cx (0 = donor, 1 = companion),
+  // sized by its REAL R_rsun/separation (floored so it stays visible on a tiny orbit).
+  function drawStarDisc(cx, state, T) {
+    const rWorld = (state.R_rsun || 0) / geo.separation_rsun;
+    const rPx = Math.max(3.5, T.s * rWorld);
+    ctx.fillStyle = teffToCSS(state.Teff_K);
+    ctx.beginPath(); ctx.arc(T.X(cx), T.Y(0), rPx, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.stroke();
+  }
+
+  function drawLPointsAndCM(T) {
+    ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center";
+    for (const [lx, lab] of [[geo.l1_x, "L₁"], [geo.l2_x, "L₂"], [geo.l3_x, "L₃"]]) {
+      const px = T.X(lx), py = T.Y(0);
+      ctx.strokeStyle = LPT_COL; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(px - 3, py - 3); ctx.lineTo(px + 3, py + 3);
+      ctx.moveTo(px - 3, py + 3); ctx.lineTo(px + 3, py - 3); ctx.stroke();
+      ctx.fillStyle = LPT_COL; ctx.fillText(lab, px, py - 7);
+    }
+    const cmx = T.X(geo.x_cm);
+    ctx.strokeStyle = "#8a93a6"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cmx, T.Y(0), 3.5, 0, 2 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cmx, T.Y(0) - 3.5); ctx.lineTo(cmx, T.Y(0) + 3.5); ctx.stroke();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    if (!geo) return;
+    if (liveMode) { drawLiveFrame(); return; }
+    const T = transform();
+
+    drawAxisLine(T);
 
     // Companion Roche lobe (faint — it is NOT filled; the companion sits well inside it).
     poly(geo.companion_lobe, T);
@@ -99,49 +162,14 @@ export function createRoche() {
     ctx.fillStyle = DONOR_FILL; ctx.fill();
     ctx.strokeStyle = DONOR_STROKE; ctx.lineWidth = 2; ctx.stroke();
 
-    // The mass-transfer stream L1 → companion (schematic). A glowing warm curve with an
-    // arrowhead, drawn over the lobes.
-    if (geo.stream && geo.stream.length > 1) {
-      ctx.strokeStyle = STREAM_COL; ctx.lineWidth = 2.4; ctx.globalAlpha = 0.9;
-      poly(geo.stream, T); ctx.stroke();
-      ctx.globalAlpha = 1;
-      // arrowhead at the companion end
-      const a = geo.stream[geo.stream.length - 2], b = geo.stream[geo.stream.length - 1];
-      const ang = Math.atan2(T.Y(b[1]) - T.Y(a[1]), T.X(b[0]) - T.X(a[0]));
-      const hx = T.X(b[0]), hy = T.Y(b[1]);
-      ctx.fillStyle = STREAM_COL;
-      ctx.beginPath();
-      ctx.moveTo(hx, hy);
-      ctx.lineTo(hx - 8 * Math.cos(ang - 0.4), hy - 8 * Math.sin(ang - 0.4));
-      ctx.lineTo(hx - 8 * Math.cos(ang + 0.4), hy - 8 * Math.sin(ang + 0.4));
-      ctx.closePath(); ctx.fill();
-    }
+    // The mass-transfer stream L1 → companion (schematic), drawn over the lobes.
+    drawStream(T, geo.stream, STREAM_COL);
 
     // The companion star: a filled disc at its REAL modelled radius (compact — deep inside
-    // its lobe). Floor the pixel radius so it stays visible on a tiny orbit.
-    if (companion) {
-      const rWorld = (companion.R_rsun || 0) / geo.separation_rsun;
-      const rPx = Math.max(3.5, T.s * rWorld);
-      ctx.fillStyle = teffToCSS(companion.Teff_K);
-      ctx.beginPath(); ctx.arc(T.X(1), T.Y(0), rPx, 0, 2 * Math.PI); ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.stroke();
-    }
+    // its lobe).
+    if (companion) drawStarDisc(1, companion, T);
 
-    // Lagrange points (small × + labels).
-    ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center";
-    for (const [lx, lab] of [[geo.l1_x, "L₁"], [geo.l2_x, "L₂"], [geo.l3_x, "L₃"]]) {
-      const px = T.X(lx), py = T.Y(0);
-      ctx.strokeStyle = LPT_COL; ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(px - 3, py - 3); ctx.lineTo(px + 3, py + 3);
-      ctx.moveTo(px - 3, py + 3); ctx.lineTo(px + 3, py - 3); ctx.stroke();
-      ctx.fillStyle = LPT_COL; ctx.fillText(lab, px, py - 7);
-    }
-    // Centre of mass.
-    const cmx = T.X(geo.x_cm);
-    ctx.strokeStyle = "#8a93a6"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cmx, T.Y(0), 3.5, 0, 2 * Math.PI); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cmx, T.Y(0) - 3.5); ctx.lineTo(cmx, T.Y(0) + 3.5); ctx.stroke();
+    drawLPointsAndCM(T);
 
     // Star labels.
     ctx.fillStyle = "#c9d2e4"; ctx.font = "11px system-ui, sans-serif";
@@ -153,6 +181,63 @@ export function createRoche() {
     drawScaleBar(T);
 
     if (caption) caption.textContent = captionText();
+  }
+
+  // The LIVE per-step view (path (b) Chunk 4b): a co-evolving POSYDON track's REAL q(t)/
+  // a(t) at the scrubbed step, instead of the static view's one fixed q=0.8 RLOF moment.
+  // Two honest upgrades this unlocks: (1) BOTH stars have a real modelled Teff/R at every
+  // step (no "unknown giant temperature" gap), so both are drawn as real discs in their
+  // true colour, always — not one schematic tint + one real disc; (2) the lobes RESHAPE
+  // as q/a evolve, and whichever star is CURRENTLY flagged (`mtState`) as overflowing gets
+  // its lobe filled (translucent, in its own colour) + the stream — the other stays an
+  // unfilled outline. Note the real photospheric radius does NOT itself cross the lobe
+  // outline during RLOF (Roche overflow is a local excess at L1, not a whole-photosphere
+  // inflation past the mean lobe radius — measured on the real grid) — the fill is the
+  // schematic "transferring right now" cue, same discipline as the static stream.
+  function drawLiveFrame() {
+    const T = transform();
+    drawAxisLine(T);
+
+    const donorFilling = mtState === "RLOF1" || mtState === "contact";
+    const companionFilling = mtState === "RLOF2" || mtState === "contact";
+    const donorCol = donorState ? teffToCSS(donorState.Teff_K) : DONOR_STROKE;
+    const compCol = companion ? teffToCSS(companion.Teff_K) : COMP_LOBE_STROKE;
+    const rgbaFromTeff = (teffK, alpha) => {
+      const [r, g, b] = teffToRGB(teffK).map((v) => Math.round(v * 255));
+      return `rgba(${r},${g},${b},${alpha})`;
+    };
+
+    poly(geo.companion_lobe, T);
+    ctx.fillStyle = companionFilling && companion
+      ? rgbaFromTeff(companion.Teff_K, 0.26) : "rgba(255,255,255,0.025)";
+    ctx.fill();
+    ctx.strokeStyle = compCol; ctx.lineWidth = companionFilling ? 2 : 1.1; ctx.stroke();
+
+    poly(geo.donor_lobe, T);
+    ctx.fillStyle = donorFilling && donorState
+      ? rgbaFromTeff(donorState.Teff_K, 0.26) : "rgba(255,255,255,0.025)";
+    ctx.fill();
+    ctx.strokeStyle = donorCol; ctx.lineWidth = donorFilling ? 2 : 1.1; ctx.stroke();
+
+    // The stream direction the backend serves is L1 → companion (the RLOF1 sense — the
+    // demo tracks never exercise RLOF2, the rarer reverse case); only draw it while the
+    // donor is the one actively overflowing, so it never implies the wrong direction.
+    if (donorFilling) drawStream(T, geo.stream, STREAM_COL);
+
+    // Real stellar discs — both stars, every step, at their true Teff/R.
+    if (donorState) drawStarDisc(0, donorState, T);
+    if (companion) drawStarDisc(1, companion, T);
+
+    drawLPointsAndCM(T);
+
+    ctx.fillStyle = "#c9d2e4"; ctx.font = "11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("donor", T.X(0), T.Y(0) + 4 + labelDrop(T, geo.donor_lobe));
+    ctx.fillText("companion", T.X(1), T.Y(0) - 6 - labelDrop(T, geo.companion_lobe));
+
+    drawScaleBar(T);
+
+    if (caption) caption.textContent = captionTextLive();
   }
 
   // Push a label just past the lobe's vertical extent so it doesn't sit on the star.
@@ -195,7 +280,30 @@ export function createRoche() {
     );
   }
 
+  const MT_LABEL = {
+    detached: "detached — neither star fills its Roche lobe right now",
+    RLOF1: "Roche-lobe overflow: the donor is actively transferring mass onto the companion",
+    RLOF2: "reverse overflow: the companion is actively transferring mass onto the donor",
+    contact: "contact — both stars overflow their lobes at once",
+  };
+
+  function captionTextLive() {
+    const a = geo.separation_rsun;
+    const label = MT_LABEL[mtState] || mtState;
+    return (
+      `${label}. Separation a ≈ ${a.toFixed(0)} R☉. Both stars are drawn at their REAL ` +
+      `modelled Teff and radius, every step — unlike the fixed RLOF snapshot above, this ` +
+      `movie has a real temperature for the donor too. Donor and companion stay at the ` +
+      `SAME positions throughout (donor left, companion right) — it is the lobe SIZES and ` +
+      `fills that swap as the mass ratio reverses, never the labels. The lobe fill + stream ` +
+      `are the schematic "transferring now" cue: Roche overflow is a local excess at L₁, so ` +
+      `the real photospheric disc stays inside the outline even while a lobe is filled.`
+    );
+  }
+
   function drawPanel(rocheBlock, companionState) {
+    liveMode = false;
+    donorState = null; mtState = "detached";
     geo = rocheBlock || null;
     companion = companionState || null;
     // fitCanvas may have measured 0×0 while the panel was hidden; re-fit now it is visible.
@@ -203,8 +311,21 @@ export function createRoche() {
     draw();
   }
 
+  // path (b) Chunk 4b: one step of a co-evolving POSYDON track — `rocheBlock` is that
+  // step's own geometry (`binary.track_roche_geometry`, real q(t)/a(t), NOT the static
+  // fixed-q=0.8 snapshot). `donor`/`companionState` are that step's real StellarStates.
+  function drawLive(rocheBlock, donor, companionState, mtStateNow) {
+    liveMode = true;
+    geo = rocheBlock || null;
+    donorState = donor || null;
+    companion = companionState || null;
+    mtState = mtStateNow || "detached";
+    ({ ctx, W, H } = fitCanvas(canvas, canvas.clientWidth || 380, canvas.clientHeight || 300));
+    draw();
+  }
+
   function clear() {
-    geo = null; companion = null;
+    geo = null; companion = null; donorState = null; liveMode = false; mtState = "detached";
     ctx.clearRect(0, 0, W, H);
     if (caption) caption.textContent = "";
   }
@@ -216,5 +337,5 @@ export function createRoche() {
     draw();
   }
 
-  return { draw: drawPanel, resize, clear };
+  return { draw: drawPanel, drawLive, resize, clear };
 }

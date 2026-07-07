@@ -341,6 +341,65 @@ def test_roche_donor_fills_its_eggleton_lobe():
     assert 0.3 < frac < 0.5                                # a sane Roche-lobe filling factor
 
 
+# --- track_roche_geometry (path (b) Chunk 4b): the per-step engine a co-evolving ------
+# binary track drives with its REAL q(t)/a(t), instead of roche_geometry's one fixed
+# q=0.8 CSV node. A lightweight stand-in for `posydon.BinaryStep` — the function is duck-
+# typed on three attributes, so a real POSYDON bake isn't needed to test the geometry math.
+
+class _FakeStep:
+    def __init__(self, m1, m2, a):
+        self.m1_current_msun = m1
+        self.m2_current_msun = m2
+        self.separation_rsun = a
+
+
+def test_track_roche_geometry_matches_single_node_engine():
+    """At the SAME (q, m1, m2, a) as a real `roche_geometry` node, the per-step engine
+    (lower angular resolution) lands on essentially the same L-points and lobe sizes —
+    one geometry engine underneath both callers, not two divergent implementations."""
+    node = b.roche_geometry(5.45, 0.0)     # q=0.8, the CSV path's full resolution
+    step = _FakeStep(node["m_donor_msun"], node["m_companion_msun"], node["separation_rsun"])
+    g = b.track_roche_geometry([step])[0]
+    assert g["l1_x"] == pytest.approx(node["l1_x"], abs=1e-3)
+    assert g["l2_x"] == pytest.approx(node["l2_x"], abs=1e-3)
+    assert g["l3_x"] == pytest.approx(node["l3_x"], abs=1e-3)
+    d_extent = max(p[0] for p in g["donor_lobe"]) - min(p[0] for p in g["donor_lobe"])
+    node_d_extent = max(p[0] for p in node["donor_lobe"]) - min(p[0] for p in node["donor_lobe"])
+    assert d_extent == pytest.approx(node_d_extent, abs=0.02)
+
+
+def test_track_roche_geometry_donor_lobe_swaps_size_across_the_reversal():
+    """The Algol reversal, seen in the lobes: donor at cx=0 / companion at cx=1 is fixed
+    by IDENTITY (star_1/star_2), never by which currently masses more — so as q=m2/m1
+    crosses 1, the lobe that's LARGER swaps from the donor to the companion, at the SAME
+    fixed positions. This is the live payoff `roche_geometry`'s one fixed q=0.8 never shows."""
+    pre = b.track_roche_geometry([_FakeStep(8.83, 5.30, 24.4)])[0]     # q≈0.6, donor heavier
+    post = b.track_roche_geometry([_FakeStep(1.07, 5.94, 29.3)])[0]    # q≈5.55, companion heavier (the demo track's endpoint)
+
+    def extent(lobe):
+        return max(p[0] for p in lobe) - min(p[0] for p in lobe)
+
+    assert extent(pre["donor_lobe"]) > extent(pre["companion_lobe"])
+    assert extent(post["companion_lobe"]) > extent(post["donor_lobe"])
+    # the outlines stay centred on the same fixed positions throughout (0 and 1) —
+    # no point strays deep into the far star's well on either side of the reversal
+    for g in (pre, post):
+        l1 = g["l1_x"]
+        assert all(p[0] <= l1 + 0.02 for p in g["donor_lobe"])
+        assert all(p[0] >= l1 - 0.02 for p in g["companion_lobe"])
+
+
+def test_track_roche_geometry_none_on_degenerate_step():
+    """A step whose masses/separation can't form a geometry (defensive — shouldn't occur
+    on the real bake, `binary_track` already truncates first) returns `None`, not a crash."""
+    bad = [_FakeStep(0.0, 5.0, 10.0), _FakeStep(5.0, 5.0, 0.0), _FakeStep(5.0, -1.0, 10.0)]
+    assert b.track_roche_geometry(bad) == [None, None, None]
+    # a mix of good and bad steps preserves the good one's geometry at its own index
+    mixed = b.track_roche_geometry([_FakeStep(0.0, 5.0, 10.0), _FakeStep(8.83, 5.3, 24.4)])
+    assert mixed[0] is None
+    assert mixed[1] is not None and mixed[1]["m_donor_msun"] == pytest.approx(8.83)
+
+
 @requires_mist_data
 def test_pair_route_carries_roche_and_companion_fits_its_lobe():
     """Through the real route: `/binary_pair` now carries the `roche` geometry block, and

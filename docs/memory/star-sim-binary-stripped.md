@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–3 built (HR reversal, 3D companion, Roche geometry off the Götberg snapshot); Chunk 4a BUILT — the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track), Gate 0 closed. Chunk 4b (frontend two-star time render) next."
+description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–3 built off the Götberg snapshot; Chunks 4a & 4b BUILT — the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track) with a real frontend two-star TIME render (both HR markers cross, Roche panel goes live off per-step geometry). Path (b) arc's core payoff is now live end-to-end; only Chunk 4c (optional richer outcomes / free q,P sliders) remains."
 metadata: 
   node_type: memory
   type: project
@@ -286,6 +286,86 @@ chunks; only solar is extracted (`data/posydon/1Zsun/1e+00_Zsun.h5`, 4.79 GB) + 
   `docs/plans/entwined-consort-inspiral.md` (§"Chunked build", Chunk 4b onward — architecture
   unchanged by the 4a build, now unblocked).
 
+**PATH (b) CHUNK 4b BUILT 2026-07-07 (frontend, backend addition too — 310 pytest [+4],
+Playwright 1440+390 zero console errors):** the two-star TIME render — the payoff Chunk 4a
+unlocked, now visible end-to-end.
+- **Entry — a deeper reveal INSIDE stripped-mode, not a new top-level mode** (mode stays
+  `"stripped"` throughout, mirroring the WD thermal-pulse showcase precedent): a "Co-evolve
+  the system through time" button row in the endgame bar offers **three curated demo
+  systems** (the plan's de-risk choice over free q/P sliders) — the SAME donor
+  (M1=8.83, q=0.6), only the initial period differs: P=0.1 d → merger, P=3.73 d → the
+  Gate-0 stripped+companion system, P=5179 d → detached (never interacts). Fetches
+  `/binary_track` once; "← Back to the snapshot" returns to the plain single-state donor
+  view without leaving stripped-mode. Mass/[Fe/H] sliders DISABLE while a demo is live
+  (POSYDON's grid is a separate axis from the MIST progenitor grid this demo isn't keyed
+  on) — guarded in `tryResnap()` too so a stray resnap can't desync the display.
+- **The age slider becomes a system-time scrubber** — plain index-linear over the
+  pre-fetched steps (the WR sub-track idiom: no fetch per frame, no snapping, every row
+  gets equal travel — the whole point is every in-between frame is real).
+- **`hr.js` gains a genuinely new drawing mode** (`setBinaryTrack`/`updateBinaryIndex`/
+  `clearBinaryTrack`, checked before `endgameMode`): BOTH stars' full tracks drawn
+  Teff-colored with an INDEPENDENT past/future split at the scrubbed index each (star_2's
+  array may run shorter after a merger — truncated at the first null, never `.filter()`ed,
+  so index alignment with star_1 is preserved for every index before it). Markers labeled
+  by FIXED IDENTITY ("donor"/"companion"), never by which currently masses more — the
+  Algol reversal is the two markers crossing, never a relabel (the Chunk-1/Chunk-3
+  convention-mismatch bug class, avoided by construction here). Axes auto-fit the WHOLE
+  movie (both full tracks), unlike `setEndgame`'s marker-relative fit.
+- **The Roche panel (Chunk 3) goes LIVE** — `roche.js` gained `drawLive` alongside the
+  untouched static `drawPanel`. This needed a **backend addition** (advisor-flagged as the
+  one genuine architectural fork, not deferrable — "Roche panel goes live" is IN the
+  chunk's own definition): `binary.py`'s Roche engine refactored into a pure
+  `_roche_geometry_from_params(q, m1, m2, separation_rsun, n_samples)` (donor at origin,
+  companion at (1,0) — verified sane across q∈[0.1,9], well past the CSV path's fixed
+  q=0.8) + a new `track_roche_geometry(steps)` that `posydon.py` **imports from
+  `binary.py`** (a sibling calling a sibling — mirrors `structure.py`'s import of
+  `lane_emden.solve_lane_emden`, so it does NOT violate the "no PROVIDER" rule; posydon.py
+  stays h5py/POSYDON-free) and folds a `roche` block into every `/binary_track` step's
+  JSON. **Decimated angular resolution** (40 vs the CSV path's 160 samples — measured
+  ~2ms/step vs ~14ms/step; a naive full-res per-step computation would have cost ~3.8s on
+  the 271-step Gate-0 track, an unacceptable request latency) keeps a full-track fetch
+  under ~1s. No `BAKE_VERSION`/`CACHE_VERSION` bump (computed at request time from
+  already-baked columns, the OSTAR-splice precedent).
+- **Two real upgrades over the static Chunk-3 snapshot, both honesty-motivated:** (1) BOTH
+  stars have a REAL modelled Teff/R at every POSYDON step (no "unknown donor giant
+  temperature" gap the static panel has to schematic-tint around) — both draw as real
+  Teff-colored discs, always. (2) whichever star `mt_state` flags as CURRENTLY overflowing
+  (RLOF1→donor, RLOF2→companion, contact→both) gets its lobe filled (translucent, its own
+  color) + the stream; the other stays an unfilled outline. **Measured gotcha, caption-
+  owned:** the real photospheric radius does NOT itself cross the lobe outline during RLOF
+  (measured on the Gate-0 track: R/a during RLOF1 ≈0.75–0.84× the lobe's own extent toward
+  L1) — Roche overflow is a LOCAL excess at L1, not whole-photosphere inflation past the
+  mean lobe radius, so the fill is an explicitly labeled schematic "transferring now" cue,
+  not a naive radius-vs-lobe visual claim.
+- **3D is free** — `star.update(s1, {companion: s2})` is the EXACT Chunk-2 companion call
+  (`opts.companion`, `!eg` gate), now driven every scrub frame instead of once; zero
+  `star.js` changes needed.
+- **Advisor catch, fixed pre-commit:** comp/spectrum/sed/structure are NOT wired to the
+  per-step scrub — they'd stay frozen at the Götberg stripped SNAPSHOT while HR/3D/Roche
+  visibly animate beside them (unlike Chunk 2's fully-static mode, where a frozen panel
+  matched a frozen everything-else). Fixed by CSS-hiding all four during `.binary-view`
+  (auto-reverts on exit, the roche-panel mode-hidden precedent) rather than showing stale,
+  misleading data.
+- **Tests:** `track_roche_geometry` (duck-typed on 3 attributes, so no real POSYDON bake
+  needed to test the geometry math) gets 4 new tests in `test_binary.py` (matches the
+  single-node CSV engine at the same params; donor/companion lobe extents swap across a
+  synthetic pre/post-reversal pair; `None` on a degenerate step, mixed-list index
+  preserved) + 2 in `test_posydon.py` gated `requires_posydon_data` (the Gate-0 track's
+  REAL lobes reshape + swap dominance through the real runtime; the `/binary_track` route
+  carries a non-null `roche` block with the expected keys on every step).
+- **Files:** `binary.py` (`_roche_geometry_from_params`, `track_roche_geometry`),
+  `posydon.py` (imports + folds `roche` into the payload), `hr.js` (`setBinaryTrack` et
+  al.), `roche.js` (`drawLive` + shared helpers factored out of the static path),
+  `main.js` (`BINARY_DEMOS`, `enter/exitBinaryView`, `refreshBinary`, the age-slider
+  dispatch branch, `tryResnap` guard), `index.html` (demo row + binary narration +
+  `.age-binary`), `styles.css` (`.binary-demo-row`, `.age-binary`,
+  `body.binary-view` rules).
+- **Next = Chunk 4c (optional, unbuilt):** richer mass-transfer outcomes (common envelope,
+  compact-object channels), more metallicities, free q/P sliders instead of the three
+  curated demos, a population overlay (BPASS, out of this arc). None of these block the
+  path (b) arc from reading as complete — the core "both stars co-evolving through time"
+  payoff is now real end-to-end.
+
 **PATH (b) CHUNK 4 RECON DONE 2026-07-06 (superseded by Chunk 4a BUILT above):**
 the on-ramp to a real binary grid = "both stars co-evolving on the HR *through time*" (the one thing the
 Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDON, NOT BPASS.**
@@ -349,10 +429,12 @@ stripped donor. **NO backend touch** (the companion `StellarState` is already se
 - **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new two-star render),
   then the on-ramp to a real binary grid (POSYDON/BPASS).
 
-**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–3 (HR reversal, 3D companion sphere, Roche
-geometry) are BUILT off the Götberg snapshot, and Chunk 4a (the POSYDON co-evolved-binary backend, Gate
-0 closed) is now BUILT too** — only Chunk 4b (the frontend two-star time render) remains before the
-full two-star co-evolution movie is real end-to-end. Related:
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–4b are ALL BUILT** — the Götberg-snapshot
+chunks (HR reversal, 3D companion sphere, Roche geometry) plus the POSYDON co-evolved-binary arc
+(Chunk 4a's backend + Chunk 4b's frontend two-star TIME render, the Roche panel gone live). The core
+"both stars co-evolving through time, the Algol reversal as a movie" payoff is real end-to-end.
+Only Chunk 4c (optional: richer outcomes, more metallicities, free q/P sliders) remains, and it
+doesn't block calling the arc complete. Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

@@ -10,8 +10,11 @@ mass-ratio reversal (`binary.py`'s `binary_pair_payload`) a *movie* instead of a
 both stars move on the HR diagram and the donor visibly crosses below the companion.
 
 Like `binary.py` / `supernova.py` / `structure.py`, this is a **sibling to the
-StellarState spine (§3), not a provider**: it imports only `state.StellarState` (which
-it emits, one per star per step) and never touches `StellarStateProvider` — a two-star,
+StellarState spine (§3), not a provider**: besides `state.StellarState` it imports only
+`binary.track_roche_geometry` (Chunk 4b — the per-step Roche-lobe geometry that makes
+the Chunk-3 panel go LIVE off this track's real q(t)/a(t), a sibling-calling-sibling pure
+function, no PROVIDER involved, mirroring `structure.py`'s import of
+`lane_emden.solve_lane_emden`) and never touches `StellarStateProvider` — a two-star,
 orbit-carrying result cannot pass through the single-star interface. `/binary_track`
 bypasses `PROVIDER` exactly like `/binary`.
 
@@ -52,6 +55,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .binary import track_roche_geometry
 from .state import StellarState
 
 # Must match scripts/bake_posydon.py's BAKE_VERSION — a stale npz (baked by an older
@@ -385,11 +389,13 @@ def binary_track_meta(feh: float = 0.0) -> dict:
 
 def binary_track_payload(m1: float, q: float, p: float, feh: float = 0.0) -> dict:
     """JSON-friendly `/binary_track` payload: each step's two StellarStates (exact §3
-    dict shape, `star_2` possibly null after a merger) + the orbital/routing scalars,
-    plus the track-level snap/outcome metadata."""
+    dict shape, `star_2` possibly null after a merger) + the orbital/routing scalars +
+    per-step Roche-lobe geometry (`roche`, `None` on the rare step it can't be formed —
+    see `track_roche_geometry`), plus the track-level snap/outcome metadata."""
     from dataclasses import asdict
 
     track = binary_track(m1, q, p, feh)
+    roche = track_roche_geometry(track.steps)
     return {
         "steps": [
             {
@@ -403,8 +409,9 @@ def binary_track_payload(m1: float, q: float, p: float, feh: float = 0.0) -> dic
                 "mdot_msun_yr": s.mdot_msun_yr,
                 "m1_current_msun": s.m1_current_msun,
                 "m2_current_msun": s.m2_current_msun,
+                "roche": g,
             }
-            for s in track.steps
+            for s, g in zip(track.steps, roche)
         ],
         "m1_init_msun": track.m1_init_msun,
         "q_init": track.q_init,
