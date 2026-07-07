@@ -41,6 +41,7 @@ from .binary import (
 )
 from .structure import StructureDataMissing, interior_structure
 from .supernova import Progenitor, supernova_model
+from .posydon import PosydonDataMissing, binary_track_meta, binary_track_payload
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -427,6 +428,51 @@ def binary_pair(
     except ProviderDataMissing as exc:
         raise _provider_unavailable(exc) from exc
     return binary_pair_payload(mass, feh, companion, tau)
+
+
+@app.get("/binary_track_meta")
+def binary_track_meta_route(
+    feh: float = Query(0.0, description="initial [Fe/H] (snaps to the nearest baked grid)"),
+) -> dict:
+    """[Fe/H] -> the baked POSYDON HMS-HMS grid bounds (M1/q/P ranges + track count) at
+    the nearest available metallicity — for UI gating, mirroring the `/endgame?meta=1`
+    fast path (don't ship a whole time-series track just to size a slider)."""
+    try:
+        return binary_track_meta(feh)
+    except PosydonDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/binary_track")
+def binary_track_route(
+    m1: float = Query(..., gt=0.0, description="donor (star 1) initial mass / M_sun"),
+    q: float = Query(..., gt=0.0, le=1.0, description="mass ratio M2/M1 at t=0"),
+    p: float = Query(..., gt=0.0, description="initial orbital period / days"),
+    feh: float = Query(0.0, description="initial [Fe/H]"),
+) -> dict:
+    """(M1, q, P, [Fe/H]) -> a co-evolved POSYDON HMS-HMS binary track: both stars'
+    full time history (paired `StellarState`s) + the real orbit — path (b) Chunk 4a
+    (docs/plans/entwined-consort-inspiral.md), the on-ramp to the two-star HR *movie*
+    that `/binary_pair`'s single snapshot can't give (the Algol reversal as it happens,
+    not a caption).
+
+    Unlike `/binary` and `/binary_pair`, this does **not** go through `PROVIDER` for a
+    different reason than usual: it's not just that a two-star result can't fit the
+    single-star interface (§3) — it's a genuine TIME SERIES, the first of its kind among
+    the siblings. Each step is two `StellarState`s (`star_2` is `null` after a merger)
+    plus orbital scalars (period, separation, eccentricity — always 0.0 on this
+    tidally-circularized grid — and a data-derived `mt_state` that flags RLOF/contact
+    episodes as they fire).
+
+    Snap-always (the `/binary` precedent): (M1, q, P) snaps to the nearest real POSYDON
+    track in normalized (log M1, log P, linear q) space — never interpolated (§6, no
+    row-for-row correspondence between tracks to blend) — and the true snapped node is
+    reported alongside in-band `*_snapped_far` honesty flags. 422 is reserved for
+    structurally invalid input (the Query bounds); a missing baked grid -> 503."""
+    try:
+        return binary_track_payload(m1, q, p, feh)
+    except PosydonDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/spectrum")

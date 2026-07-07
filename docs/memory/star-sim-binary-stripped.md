@@ -1,8 +1,10 @@
 ---
 name: star-sim-binary-stripped
-description: Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete (backend + what-if mode + spectra), path (b) Chunks 1–2 built (the companion drawn on the HR via /binary_pair, then as a real 3D sphere beside the donor; no new dataset).
-metadata:
+description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–3 built (HR reversal, 3D companion, Roche geometry off the Götberg snapshot); Chunk 4a BUILT — the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track), Gate 0 closed. Chunk 4b (frontend two-star time render) next."
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: a40a18b8-efa2-4928-bdcf-1d34c29ef543
 ---
 
 The **binary-stripped-star** feature — the hot, He-rich core a close companion exposes
@@ -216,7 +218,75 @@ orbital-plane cross-section at the moment of Case-B RLOF (the CAUSAL story behin
 - **Files:** `data/gotberg_z014.csv`, `binary.py`, `test_binary.py` (+8), `roche.js` (new), `main.js`,
   `index.html`, `styles.css`.
 
-**PATH (b) CHUNK 4 RECON DONE 2026-07-06 (no build — the build is a USER decision, awaiting answer):**
+**PATH (b) CHUNK 4a BUILT 2026-07-07 (backend vertical, solar-first, 302 pytest [+15]):** the
+POSYDON on-ramp, built. User landed ALL 8 metallicity tarballs + auxiliary (~84 GB) under
+`data/Posydon/` (not just one, as the design doc assumed) — the other 7 sit ready for later
+chunks; only solar is extracted (`data/posydon/1Zsun/1e+00_Zsun.h5`, 4.79 GB) + baked so far.
+- **Recon correction (measured, overturns the design doc's assumption):** the raw grid HDF5 is
+  already organized PER RUN (`grid/run<i>/{binary_history,history1,history2}`, `grid/
+  initial_values`/`final_values` for the axes + final classification) — NOT POSYDON's packed
+  `PSyGrid` format. So the host-side POSYDON-loader demux step the design doc planned for was
+  UNNECESSARY: `scripts/bake_posydon.py` reads the raw file directly with plain h5py (bulk
+  per-group reads, not per-column — 39712 runs in ~85s), no POSYDON install needed anywhere.
+- **The bake:** filters `interpolation_class=="not_converged"` (762/39712) + runs missing/
+  misaligned `binary_history`/`history1`/`history2` (5466 + 363) + verifies the run{i}↔
+  `initial_values[i]` index identity per run (an advisor catch — don't assume the correspondence).
+  Decimates tracks >300 rows (uniform stride, keeps first/last). Trims ~54 raw columns to the
+  ~15 a `StellarState` needs. Writes a flat CSR-style `.npz` (`track_row_start/count` index into
+  shared flat row arrays — no ragged/pickled arrays): **33,121 tracks, 1.48M rows, 142 MB** from
+  the 4.79 GB source. `BAKE_VERSION` discipline (must match `posydon.py`'s, like MIST's
+  `_parsed_tracks.npz`).
+- **Two real schema gaps vs the design doc's guess (pinned against the ACTUAL columns, not
+  assumed — boron-b8 discipline):** NO eccentricity column (HMS-HMS binaries are tidally
+  circularized in this grid — `BinaryStep.ecc` is a documented 0.0, not fabricated); composition
+  is **C/N/O only** (`surface_c12/n14/o16`, `center_c12/n14/o16`) — a 3-key partial
+  `metals_surf`/`metals_core` dict, never MIST's 16-metal breakdown. Also: no per-row phase label
+  (POSYDON's `S1_state`/`S2_state` are FINAL-row-only) — `posydon.py` derives a coarse per-row
+  phase from the burning-fraction columns that ARE per-row (center H1/He4 + surface H1), a
+  different (honestly labeled) vocabulary than MIST's EEP-window phases.
+- **`star_sim/posydon.py`** — the runtime sibling, ZERO h5py/POSYDON imports (numpy + stdlib
+  only): `binary_track(m1, q, p, feh)` snaps to the nearest track in **normalized log-M1 /
+  log-P / linear-q space** (advisor-settled metric — raw axes span x73/x1/x5e4, log-normalizing
+  keeps no single axis from dominating), never interpolates (§6 — no row-for-row correspondence
+  between tracks). Per-step: two `StellarState`s (current mass rides as a `BinaryStep` routing
+  scalar, mirroring `m_strip_msun`; `mass_init_msun` on the state is the STAR's own constant
+  initial mass) + orbital scalars (`period_d`, `separation_rsun` straight off `binary_separation`,
+  `ecc=0.0`, data-derived `mt_state` from `rl_relative_overflow_1/2` signs: detached/RLOF1/RLOF2/
+  contact). Track-level `outcome` from the FINAL-row `S1_state`/`S2_state`/`interpolation_class`:
+  "merger" (a state=="None") / "stripped + companion" / "stable mass transfer" / "unstable mass
+  transfer" / "detached (no interaction)". A defensive truncate-on-non-finite-mass guard exists
+  for `star_2` going `None` mid-track (the endgame terminal-row precedent) but is NOT observed to
+  fire on this grid — mergers here just show up as short tracks that stop early, not a null-star
+  row; `star_2: StellarState | None` stays forward-compatible, not a claim this grid uses it.
+- **Gate 0 CLOSED through the real runtime** (measured off the raw grid FIRST via a direct h5py
+  probe, then reproduced bit-for-bit through `posydon.py` — `test_posydon.py`'s demo system,
+  POSYDON's own `run86`: M1=8.83, q=0.6, P=3.73 d, 271 rows): the mass ordering crosses at
+  step 16/271 (donor 8.83→1.07 M☉, companion 5.30→5.94 M☉ — the Algol reversal happening LIVE,
+  not just true at the endpoints); the period widens 3.73→6.94 d as separation grows 24.4→29.3
+  R☉; `mt_state` fires a genuine detached→RLOF1→detached sequence; `outcome="stripped +
+  companion"`; the donor ends hot (Teff>400 kK by the last rows — a stripped-core terminal
+  contraction, flagged for the Chunk-4b frontend to decide clip-vs-honor, the endgame-terminal-
+  row precedent) and He-rich (Y_surf>0.5).
+- **`/binary_track` + `/binary_track_meta`** — bypass `PROVIDER` (a time-series two-body result
+  can't fit the single-star interface, AND it's the first genuine TIME SERIES among the
+  siblings). Snap-always (the `/binary` precedent): 422 only on structurally invalid input
+  (m1≤0, q outside (0,1], p≤0), `*_snapped_far` honesty flags in-band, 503 if unbaked.
+- **`requires_posydon_data`** marker (conftest.py) + **15 tests** in `test_posydon.py`: snap
+  honesty, both-states-valid at every step, mass_init constant vs current-mass routing scalar,
+  the Gate-0 regression (crossing/widening/RLOF-fires/outcome) through the route, merger-track
+  no-crash, route shape + 422s. 302 pytest total (was 287).
+- **h5py** is a HOST-ONLY dependency (the bake script + `fetch_posydon.py`'s validator) — not
+  added to `pyproject.toml`'s `dependencies` or `dev` extras, matching the existing precedent
+  that `pymsg`/astropy (the spectra bakes) aren't declared there either; `pip install h5py` into
+  the venv when baking, documented in the module docstrings.
+- **Next = Chunk 4b** (the two-star TIME render, frontend): a system-time scrubber (age slider
+  repurposed like the WD/WR/SN scrubs), both HR markers tracing live + crossing, the Roche panel
+  (already built off the Götberg snapshot, Chunk 3) going LIVE off the track's real q(t)/a(t)/
+  `mt_state`, curated demo systems before free q/P sliders. Plan
+  `docs/plans/entwined-consort-inspiral.md` (§"Chunked build", Chunk 4b onward — architecture
+  unchanged by the 4a build, now unblocked).
+
+**PATH (b) CHUNK 4 RECON DONE 2026-07-06 (superseded by Chunk 4a BUILT above):**
 the on-ramp to a real binary grid = "both stars co-evolving on the HR *through time*" (the one thing the
 Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDON, NOT BPASS.**
 - **POSYDON** (Fragos+2023 / v2 Andrews+2024) = individual **co-evolved binary TRACKS** — MESA-binary
@@ -279,8 +349,10 @@ stripped donor. **NO backend touch** (the companion `StellarState` is already se
 - **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new two-star render),
   then the on-ramp to a real binary grid (POSYDON/BPASS).
 
-**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–2 (HR reversal + 3D companion sphere) are now
-BUILT** — the full two-star co-evolution (Roche geometry, a real binary grid) continues in path (b) Chunks 3+. Related:
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–3 (HR reversal, 3D companion sphere, Roche
+geometry) are BUILT off the Götberg snapshot, and Chunk 4a (the POSYDON co-evolved-binary backend, Gate
+0 closed) is now BUILT too** — only Chunk 4b (the frontend two-star time render) remains before the
+full two-star co-evolution movie is real end-to-end. Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

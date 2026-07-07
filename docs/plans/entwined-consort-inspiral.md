@@ -1,6 +1,39 @@
 # Plan: The co-evolved binary — both stars on the HR through time (POSYDON)
 
-## Status: DESIGN ONLY (no build, no data). The recon is done (POSYDON, not BPASS); this is the architecture for the build, drafted so it executes fast once a data slice lands.
+## Status: Chunk 4a BUILT (backend vertical, solar-first, 302 pytest). Chunk 4b (frontend) next.
+
+**Chunk 4a, as built (2026-07-07) — corrections to this doc's original guesses, measured
+against the real data:**
+- The user landed ALL 8 metallicity tarballs + auxiliary (~84 GB) under `data/Posydon/`
+  (not just one, as this doc assumed) — so the other 7 are available on disk for later
+  chunks without another download, even though only solar is extracted + baked so far.
+- **The raw grid HDF5 is already per-run** (`grid/run<i>/{binary_history,history1,
+  history2}`), NOT POSYDON's packed `PSyGrid` format §"the architectural shift" worried
+  about — so `scripts/bake_posydon.py` reads it directly with plain h5py, no host-side
+  POSYDON-loader demux step was needed at all.
+- **No eccentricity column** (HMS-HMS is tidally circularized) and **composition is C/N/O
+  only** (not the full MIST 16-metal breakdown) — both real gaps vs this doc's schema
+  guess, now baked in as documented honesty gaps (`BinaryStep.ecc` is a labeled 0.0;
+  `metals_surf`/`metals_core` are 3-key partial dicts).
+- **Gate 0 is CLOSED**, measured through the real runtime (`test_posydon.py`, the demo
+  system M1=8.83/q=0.6/P=3.73 d, POSYDON's own `run86`): the mass ordering crosses at
+  step 16/271 (donor 8.83→1.07 M☉, companion 5.30→5.94 M☉ — the Algol reversal live),
+  the period widens 3.73→6.94 d as the separation grows 24.4→29.3 R☉, and `mt_state`
+  fires a real detached→RLOF1→detached sequence, `outcome="stripped + companion"`.
+- Built: `scripts/bake_posydon.py` (host-side h5py bake: filters `not_converged` +
+  missing/misaligned-history runs, verifies the run↔`initial_values` index identity,
+  decimates tracks >300 rows, writes a flat CSR-style `.npz` — 33,121 tracks / 1.48M rows
+  / 142 MB from the 4.79 GB solar HMS-HMS grid); `star_sim/posydon.py` (the runtime
+  sibling — zero h5py/POSYDON imports, snaps (M1,q,P,[Fe/H]) in normalized log-M1/log-P/
+  linear-q space to the nearest track, builds `BinaryStep`/`BinaryTrack`); `/binary_track`
+  + `/binary_track_meta` routes (bypass `PROVIDER`, snap-always, 422 only on structurally
+  invalid input, 503 if unbaked); `requires_posydon_data` + 15 tests in `test_posydon.py`.
+- **Next = Chunk 4b** (the two-star time render, frontend) — unchanged from the design
+  below, now unblocked.
+
+## Original design status (superseded by the above; kept for the Chunk 4b architecture)
+
+DESIGN ONLY (no build, no data) at the time this was written. The recon is done (POSYDON, not BPASS); this is the architecture for the build, drafted so it executes fast once a data slice lands.
 
 This is **path (b) Chunk 4** of the binary-stripped-star arc (`stripped-consort-unveiling.md`).
 Chunks 1–3 built the companion on the HR, the 3D companion sphere, and the Roche / mass-

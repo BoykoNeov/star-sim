@@ -372,3 +372,22 @@ requires_gotberg_data = pytest.mark.skipif(
     reason="Götberg stripped-star SEDs not present — host-fetch the VizieR tarball "
     "into data/gotberg_stripped/ (see docs/plans/stripped-consort-unveiling.md)",
 )
+
+
+def posydon_data_available() -> bool:
+    """True if at least one baked POSYDON grid npz is present.
+
+    Baked on the host from an extracted POSYDON HMS-HMS grid (never committed —
+    multi-GB Zenodo source, like MIST/MESA): `python -m star_sim.fetch_posydon`'s
+    recipe, then `python scripts/bake_posydon.py --z-label <label> --feh <feh>`
+    (docs/plans/entwined-consort-inspiral.md, Chunk 4a)."""
+    from star_sim.posydon import BAKED_DIR
+
+    return BAKED_DIR.is_dir() and any(BAKED_DIR.glob("*.npz"))
+
+
+requires_posydon_data = pytest.mark.skipif(
+    not posydon_data_available(),
+    reason="no baked POSYDON grid — run fetch_posydon.py's recipe then "
+    "scripts/bake_posydon.py (see docs/plans/entwined-consort-inspiral.md)",
+)
