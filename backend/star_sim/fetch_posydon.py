@@ -1,6 +1,12 @@
 """Recon + fetch recipe for the POSYDON co-evolved binary grids — the on-ramp to a
 REAL binary grid (path (b) Chunk 4). RECIPE + VALIDATOR ONLY, not a provider yet.
 
+**Just want the feature working?** Run `python -m star_sim.fetch_posydon_baked`
+instead — it downloads a small pre-baked `.npz` from this repo's GitHub Releases
+(a CC-BY-compliant derived artifact) rather than the ~10 GB-per-metallicity raw
+tarball this module's recipe walks through. The recipe below is for baking a
+*new* metallicity that isn't published as a release asset yet.
+
 WHY THIS IS THE TARGET (measured recon, 2026-07-06 — advisor-steered discriminator).
 The next step of path (b) is "both stars co-evolving on the HR *through time*" — a real
 inspiral, not the single snapshot the Götberg grid gives. Two candidate datasets, and

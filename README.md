@@ -83,6 +83,24 @@ the grids, `/state` answers `503` pointing back at that command and `/health`
 still reports liveness; swap `PROVIDER` to `StubProvider()` in `api.py` for a
 fully data-free run.
 
+### Optional: additional datasets
+
+The MIST fetch above is all the core app needs. Several extra panels use their
+own datasets, fetched separately (each panel degrades to an honest "no data"
+placeholder if you skip it — nothing crashes):
+
+```bash
+python -m star_sim.fetch_posydon_baked   # co-evolving binary tracks (/binary_track) — one fast download
+```
+
+`fetch_posydon_baked` pulls a small pre-baked `.npz` (~140 MB) from this repo's
+[GitHub Releases](https://github.com/BoykoNeov/star-sim/releases) instead of the
+84 GB of raw POSYDON grid tarballs the feature is built from — a derived
+artifact redistributed under POSYDON's CC-BY license (see the module's
+docstring for the citation). The other data-backed panels (WD/WR/α spectra,
+MESA validation) don't have a pre-baked shortcut yet; see the `fetch_*.py`
+modules under `backend/star_sim/` for their individual recipes.
+
 ## Test
 
 ```bash
