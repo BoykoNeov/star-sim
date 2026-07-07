@@ -40,6 +40,7 @@ _ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE
 # release) whenever another metallicity gets baked and published.
 _ASSETS: dict[str, str] = {
     "1Zsun.npz": "5c3c929d2ce93031bab805dbf6fc8a70cccc257bb24a6a7b347fb65576ea785a",
+    "0.1Zsun.npz": "bc56dc2a4e9ad60c601da4313300194af8e5796748fcb1137f9e6750fc5aaa85",
 }
 
 

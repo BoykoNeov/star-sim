@@ -79,49 +79,59 @@ def test_snap_far_flags_out_of_range():
 
 
 def test_feh_snaps_to_nearest_available_bucket():
-    """Only the solar bucket is baked (Chunk 4a is solar-first) — any [Fe/H] snaps to it
-    and is flagged far unless it's actually close."""
+    """Two buckets are baked (solar 0.0, sub-solar -1.0) — a request snaps to whichever
+    is nearer in [Fe/H], and is flagged far only when it's actually far from BOTH
+    (`_FEH_FAR_DEX = 0.25`)."""
+    # -0.8 is 0.2 dex from the -1.0 bucket, 0.8 dex from solar -> snaps to -1.0, not far
     t = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=-0.8)
-    assert t.feh == pytest.approx(0.0, abs=1e-9)
-    assert t.feh_snapped_far is True
+    assert t.feh == pytest.approx(-1.0, abs=1e-9)
+    assert t.feh_snapped_far is False
     t0 = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=0.0)
+    assert t0.feh == pytest.approx(0.0, abs=1e-9)
     assert t0.feh_snapped_far is False
+    # +0.5 is 0.5 dex from the nearest bucket (solar) -> far from every bucket we have
+    t_far = pd.binary_track(_DEMO_M1, _DEMO_Q, _DEMO_P, feh=0.5)
+    assert t_far.feh == pytest.approx(0.0, abs=1e-9)
+    assert t_far.feh_snapped_far is True
 
 
 # --- bake integrity (advisor-flagged; cheap to check across the WHOLE grid) ----
 
 def test_no_duplicate_grid_nodes():
-    """Several rerun campaigns feed this grid (`rerun_reverse_MT_grid...`,
+    """Several rerun campaigns feed these grids (`rerun_reverse_MT_grid...`,
     `rerun_LBV_wind...`) — if two runs shared (M1,q,P), `argmin` would silently pick
     whichever sits first in array order rather than a deliberate choice. Measured: none
-    do on the solar grid, but this pins it as a regression rather than an assumption."""
-    grid = pd._available_grids()[0]
-    keys = list(zip(grid.m1_init.round(6), grid.q_init.round(6), grid.p_init_d.round(6)))
-    assert len(set(keys)) == len(keys)
+    do on any baked bucket, but this pins it as a regression rather than an assumption.
+    Checked across EVERY baked grid, not just one — a second bucket landing shouldn't
+    silently stop covering the first."""
+    for grid in pd._available_grids():
+        keys = list(zip(grid.m1_init.round(6), grid.q_init.round(6), grid.p_init_d.round(6)))
+        assert len(set(keys)) == len(keys), f"duplicate node in feh={grid.feh} bucket"
 
 
 def test_no_nonfinite_values_in_baked_rows():
     """A row with finite mass but a non-finite log_L/log_Teff/log_R (plausible at a
     CE/disruption row) would slip past the bake's mass-only truncation guard and surface
-    as NaN in the JSON payload. Measured: none on the solar grid — this pins it."""
-    grid = pd._available_grids()[0]
-    for col, arr in grid.rows.items():
-        assert np.isfinite(arr).all(), f"non-finite values in row column {col!r}"
+    as NaN in the JSON payload. Measured: none on any baked bucket — this pins it,
+    across every bucket present."""
+    for grid in pd._available_grids():
+        for col, arr in grid.rows.items():
+            assert np.isfinite(arr).all(), f"non-finite values in feh={grid.feh} column {col!r}"
 
 
 def test_exact_node_round_trips_across_a_sample():
     """A much stronger snap check than perturbing one demo node: every one of a large
     random sample of REAL grid nodes must snap back to itself exactly (distance 0) — if
     the log-M1/log-P/linear-q metric were imbalanced, or two nodes were near-duplicates,
-    some would snap to a neighbor instead."""
-    grid = pd._available_grids()[0]
+    some would snap to a neighbor instead. Checked on every baked bucket."""
     rng = np.random.default_rng(0)
-    n = grid.m1_init.size
-    sample = rng.choice(n, size=min(300, n), replace=False)
-    for i in sample:
-        idx = pd._snap_track_index(grid, float(grid.m1_init[i]), float(grid.q_init[i]),
-                                    float(grid.p_init_d[i]))
-        assert idx == i
+    for grid in pd._available_grids():
+        n = grid.m1_init.size
+        sample = rng.choice(n, size=min(300, n), replace=False)
+        for i in sample:
+            idx = pd._snap_track_index(grid, float(grid.m1_init[i]), float(grid.q_init[i]),
+                                        float(grid.p_init_d[i]))
+            assert idx == i, f"feh={grid.feh} node {i} did not round-trip"
 
 
 def test_decimation_preserves_the_rlof_episode():
@@ -134,25 +144,32 @@ def test_decimation_preserves_the_rlof_episode():
     NOT asserted at 0: one measured case (M1=5.34, q=0.95, P=5179 d — a WIDE, ~14-year
     orbit) is genuinely stripped via slow WIND mass loss with no row EVER crossing
     rl_relative_overflow>0 in the raw (pre-decimation) data — `_decimate`'s must_keep
-    has nothing to force-keep there, so it isn't a decimation bug. The bound (<=2) pins
-    the count so a REAL regression (the fix silently breaking) still trips this."""
-    grid = pd._available_grids()[0]
-    rl1 = grid.rows["rl_relative_overflow_1"]
-    rl2 = grid.rows["rl_relative_overflow_2"]
-    stripped = np.array([
-        "stripped_He" in s1 or "stripped_He" in s2 or "accreted" in s2
-        for s1, s2 in zip(grid.s1_state, grid.s2_state)
-    ])
-    capped = grid.row_count >= 300
-    target = np.where(stripped & capped)[0]
-    assert len(target) > 50          # a real, non-trivial population to check
-    lost = 0
-    for i in target:
-        start, cnt = int(grid.row_start[i]), int(grid.row_count[i])
-        seg1, seg2 = rl1[start:start + cnt], rl2[start:start + cnt]
-        if not (np.any(seg1 > 0) or np.any(seg2 > 0)):
-            lost += 1
-    assert lost <= 2, f"{lost}/{len(target)} stripped+capped tracks lost their RLOF episode"
+    has nothing to force-keep there, so it isn't a decimation bug. The per-bucket bound
+    (<=2) pins the count so a REAL regression (the fix silently breaking) still trips
+    this. Checked on every baked bucket; the population-size floor (>50) is asserted on
+    the TOTAL across buckets, not per-bucket — the sub-solar (-1.0) bucket alone only has
+    ~26 stripped+capped tracks (measured), smaller than solar's ~200 but still real."""
+    grids = pd._available_grids()
+    total_target = 0
+    for grid in grids:
+        rl1 = grid.rows["rl_relative_overflow_1"]
+        rl2 = grid.rows["rl_relative_overflow_2"]
+        stripped = np.array([
+            "stripped_He" in s1 or "stripped_He" in s2 or "accreted" in s2
+            for s1, s2 in zip(grid.s1_state, grid.s2_state)
+        ])
+        capped = grid.row_count >= 300
+        target = np.where(stripped & capped)[0]
+        total_target += len(target)
+        lost = 0
+        for i in target:
+            start, cnt = int(grid.row_start[i]), int(grid.row_count[i])
+            seg1, seg2 = rl1[start:start + cnt], rl2[start:start + cnt]
+            if not (np.any(seg1 > 0) or np.any(seg2 > 0)):
+                lost += 1
+        assert lost <= 2, (f"feh={grid.feh}: {lost}/{len(target)} stripped+capped tracks "
+                            f"lost their RLOF episode")
+    assert total_target > 50          # a real, non-trivial population to check overall
 
 
 # --- StellarState validity at every step ----------------------------------------
@@ -252,19 +269,21 @@ def test_gate0_roche_lobes_reshape_through_the_episode():
 # --- merger tracks degrade gracefully (no crash on a short/odd track) ----------
 
 def test_merger_outcome_tracks_do_not_crash():
-    grid = pd._available_grids()[0]
-    import numpy as np
-    merger_idx = np.where(grid.s1_state == "None")[0]
-    assert merger_idx.size > 0
-    for i in merger_idx[:20]:
-        t = pd.binary_track(float(grid.m1_init[i]), float(grid.q_init[i]),
-                             float(grid.p_init_d[i]), 0.0)
-        assert t.outcome == "merger"
-        assert len(t.steps) >= 1
-        for s in t.steps:
-            assert s.star_1 is not None    # star_2 may in principle be None (a merger row
-            if s.star_2 is not None:       # explicitly losing a star); not observed on this
-                assert isinstance(s.star_2, StellarState)  # grid, but handled either way
+    """Checked on every baked bucket, each queried at its OWN [Fe/H] — feeding one
+    bucket's node coordinates into a request pinned to a different bucket would snap to
+    whatever's nearest there instead, silently testing the wrong track."""
+    for grid in pd._available_grids():
+        merger_idx = np.where(grid.s1_state == "None")[0]
+        assert merger_idx.size > 0, f"no merger tracks found in feh={grid.feh} bucket"
+        for i in merger_idx[:20]:
+            t = pd.binary_track(float(grid.m1_init[i]), float(grid.q_init[i]),
+                                 float(grid.p_init_d[i]), grid.feh)
+            assert t.outcome == "merger"
+            assert len(t.steps) >= 1
+            for s in t.steps:
+                assert s.star_1 is not None    # star_2 may in principle be None (a merger
+                if s.star_2 is not None:       # row explicitly losing a star); not observed
+                    assert isinstance(s.star_2, StellarState)  # on this grid, but handled
 
 
 # --- /binary_track + /binary_track_meta route smoke ----------------------------

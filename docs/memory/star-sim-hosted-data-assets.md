@@ -1,6 +1,6 @@
 ---
 name: star-sim-hosted-data-assets
-description: Pre-baked data hosted via GitHub Releases (POSYDON, MIST, Koester+TMAP, PoWR, Coelho, Gotberg) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user.
+description: Pre-baked data hosted via GitHub Releases (POSYDON — now 2 metallicity buckets, MIST, Koester+TMAP, PoWR, Coelho, Gotberg) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user.
 metadata:
   type: project
   originSessionId: 614a40b0-c4a6-4698-a4c9-e486917bf270
@@ -100,6 +100,48 @@ the matching `fetch_*_baked.py`. If it's a genuinely new dataset: check whether 
 `spectra.py`/provider-style loader has a raw-source fingerprint dependency like
 MIST (needs the same source-less-fingerprint trick) or is self-contained like the
 spectra cubes (ship as-is).
+
+**POSYDON grew a second metallicity bucket (2026-07-07), and it needed real test
+fixes, not just a bake.** The user asked directly whether POSYDON could be
+size-optimized like MIST was; the answer was no (it's already ~33x reduced —
+column-trim + row-decimation + float32 + gzip, done at bake time from the start,
+not retrofitted) — so the actual next lever was breadth: only the solar bucket was
+baked+hosted despite 8 metallicity tarballs (~83 GB) sitting on disk. The user chose
+to validate with ONE more bucket before committing to all 7. Picked `0.1Zsun`
+([Fe/H]=−1.0, the smallest raw tarball) — extracted just the `HMS-HMS` grid h5 (the
+tarball holds 6 grid types × 2 file formats each; only `POSYDON_data/HMS-HMS/<Z>.h5`
+is used, `tar -x` with an explicit path + `--strip-components` pulls just that one
+file without touching the rest), baked it (33,865 tracks / 1.46M rows / 140.3 MB —
+near-identical yield to solar's 33,121/1.48M/142 MB), uploaded it as a second asset
+on the SAME `posydon-baked-v1` tag (no new tag needed — `posydon.py`'s `BAKED_DIR`
+just globs `*.npz`, so a second file is a pure drop-in, zero runtime code change).
+
+**Adding the second bucket exposed 6 latent test bugs in `test_posydon.py`**, all
+of the same shape: every "check bake integrity across the WHOLE grid" test (no
+duplicate nodes, no non-finite values, exact-node round-trip, RLOF-episode
+survival under decimation, merger-track smoke) read `pd._available_grids()[0]` —
+correct when exactly one bucket existed, but `BAKED_DIR.glob("*.npz")` sorts
+alphabetically, so `[0]` silently became the NEW `0.1Zsun.npz` (it sorts before
+`1Zsun.npz`) instead of solar the moment a second file landed — tests kept passing
+but stopped covering the bucket they were written for. Fixed by looping over
+`pd._available_grids()` in every one of those tests instead of indexing `[0]`
+(checking every bucket, not swapping which one silently). One test
+(`test_merger_outcome_tracks_do_not_crash`) had a second latent bug: it fed a
+grid's own node coordinates into `binary_track(..., feh=0.0)` hardcoded — fine
+when grid IS the solar one, silently wrong (snaps to the nearest node in whatever
+bucket you asked for, not the one you sampled from) once grid could be a
+different bucket; fixed to pass `grid.feh`, not a hardcoded value. The RLOF-episode
+test's population-size floor (`>50`) was solar-specific (measured 202 there vs
+only 26 in the sub-solar bucket — a real, smaller-but-real population, not a bug);
+fixed to assert the floor on the TOTAL across buckets, not per-bucket, while
+keeping the per-bucket `lost<=2` regression tight. `test_feh_snaps_to_nearest_
+available_bucket` was rewritten outright — its old premise ("only solar is baked,
+everything snaps there") is now false; it asserts −0.8 correctly snaps to the new
+−1.0 bucket (nearer, 0.2 dex vs 0.8 dex — inside `_FEH_FAR_DEX=0.25`, not flagged
+far) while +0.5 still correctly flags far (0.5 dex from the nearest bucket).
+**Lesson for the next bucket:** any test iterating `_available_grids()` by index
+rather than by content is an artifact of a one-bucket world — this bit us once,
+watch for the same pattern before adding a third.
 
 See [[star-sim-binary-stripped]] for the POSYDON co-evolving-binary feature that
 data backs, [[star-sim-mist-provider]] for the provider MIST hosting touches,

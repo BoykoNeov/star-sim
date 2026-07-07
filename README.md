@@ -95,7 +95,7 @@ instead of the raw multi-GB source grids each feature is built from:
 
 ```bash
 python -m star_sim.fetch_mist_baked      # the full MIST [Fe/H]×rotation axis (~450 MB) — an alternative to fetch_mist
-python -m star_sim.fetch_posydon_baked   # co-evolving binary tracks (/binary_track)
+python -m star_sim.fetch_posydon_baked   # co-evolving binary tracks (/binary_track) — solar + [Fe/H]=-1.0
 python -m star_sim.fetch_koester_baked   # white-dwarf spectra (/wd_spectrum) — Koester DA + TMAP
 python -m star_sim.fetch_powr_baked      # Wolf-Rayet wind-emission spectra (/wr_spectrum)
 python -m star_sim.fetch_coelho_baked    # [alpha/Fe] spectrum what-if (#alpha-toggle)
