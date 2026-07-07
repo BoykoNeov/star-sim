@@ -720,10 +720,21 @@ body.stripped-mode .binary-demo-row {
 .binary-demo-btn.active {
   color: var(--bg); background: var(--accent);   /* filled — this is the live demo */
 }
-/* While a demo is co-evolving, the three pickers step aside for the single "back" button —
+/* While a demo is co-evolving, the four pickers step aside for the single "back" button —
    a clean "you are inside a movie now, here's the one way out" affordance. */
 body.binary-view .binary-demo-btn, body.binary-view .binary-demo-label { display: none; }
 body.binary-view .binary-demo-back { display: inline-block; }
+
+/* path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit" — shown/hidden via
+   main.js toggling .hidden directly (the sn-control precedent, not a body class), so no
+   display rule is needed here beyond layout. */
+.binary-custom-controls { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.binary-custom-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.binary-custom-row label {
+  font-size: 12.5px; color: var(--muted); flex: 0 0 122px; white-space: nowrap;
+}
+.binary-custom-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.binary-custom-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }

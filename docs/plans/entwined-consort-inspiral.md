@@ -1,6 +1,29 @@
 # Plan: The co-evolved binary — both stars on the HR through time (POSYDON)
 
-## Status: Chunks 4a & 4b BUILT — the two-star TIME render is live. 310 pytest.
+## Status: Chunks 4a, 4b & 4c BUILT — the two-star TIME render is live, with free q/P sliders. 310 pytest.
+
+**Chunk 4c, as built (2026-07-07) — free M1/q/P sliders, frontend-only, no backend change:**
+`/binary_track` was already fully general (snap-always over the WHOLE POSYDON grid, §6) —
+Chunk 4b's three curated demos were a UI de-risking choice, never a backend limit. So this
+chunk needed no `posydon.py`/`api.py` change at all: a fourth **"Custom orbit…"** button
+beside the three curated demos reveals three sliders (M1, q, P) that drive the exact same
+`enterBinaryView` fetch, now branched on `demoKey === "custom"`. Grid bounds come from
+`/binary_track_meta` (fetched once, lazily, memoized) — measured span M1 3.92–286.4 M☉
+(≈1.9 dex), P 0.1–5179.5 d (≈4.7 dex), q 0.05–0.99. M1/P use log-scale 0..1 position sliders
+(the ⁵⁶Ni-slider idiom); q binds its physical value directly (linear, <1 dex span). A new
+`updateBinaryCustomNote()` always reports the TRUE snapped node + outcome + any
+`*_snapped_far` flags — never the raw dragged numbers, the same snap-honesty discipline
+every other control in this project follows. **One real bug caught by the first Playwright
+pass:** the sliders panel was revealed before the initial fetch resolved, so a drag during
+that window landed while `binaryView` was still `false` and got silently dropped by
+`refetchBinaryCustom`'s own guard; fixed by moving the reveal to after `binaryView = true`
+(the same point the demo/Back buttons already become interactive). Verified via a
+poll-based Playwright script at 1440×1000 + 390×844 (zero console errors): entering shows
+the Case-B default, dragging P to the floor re-snaps to the real merger node, dragging M1 to
+the ceiling re-snaps far off-grid with an honest note, the scrubber and Back/re-entry all
+work. Path (b) is now built end-to-end (Chunks 1–4c); what's left is the explicitly unscoped
+tail — richer CE/compact-object outcomes, the 7 downloaded-but-unbaked metallicities, and a
+population overlay (BPASS). Memory: `star-sim-binary-stripped.md` §"PATH (b) CHUNK 4c".
 
 **Chunk 4b, as built (2026-07-07) — a deeper reveal INSIDE stripped-mode (mode stays
 `"stripped"` throughout, mirroring the WD thermal-pulse showcase's sub-view pattern), not a
@@ -69,10 +92,9 @@ new top-level mode:**
   scrub → markers cross in the Case-B demo → Roche lobes reshape/fill through a real
   detached→RLOF1→detached sequence → back to snapshot → re-enter a different demo → full
   exit) — zero console errors, no layout breakage, demo row stacks cleanly at phone width.
-- **Chunk 4c (optional follow-ons, unbuilt)** unchanged from below: richer outcomes
-  (common envelope / merger physics / compact-object channels), more metallicities, a
-  population overlay. Free q/P sliders (vs. the three curated demos) are also a natural
-  next increment if the curated set proves too narrow.
+- **Chunk 4c BUILT (2026-07-07):** free q/P/M1 sliders, described above. The rest of the
+  original follow-on list stays unbuilt/unscoped: richer outcomes (common envelope /
+  merger physics / compact-object channels), more metallicities, a population overlay.
 
 ## Original design status (superseded by the above; kept for the Chunk 4b architecture)
 
@@ -266,11 +288,20 @@ interaction is the whole feature. (Physics says it's dramatic; this is the disci
   reveal inside stripped-mode ("Co-evolve the system" — the snapshot → the movie) rather than
   a whole new top-level mode, so it composes with the existing companion machinery.
 
-### Chunk 4c — OPTIONAL follow-ons (recorded so they're not re-proposed as "the build")
+### Chunk 4c — free q/P/M1 sliders: BUILT (2026-07-07, frontend-only, no backend change)
+`/binary_track` needed no change — it already snapped ANY (m1,q,p,feh) to the nearest real
+track. A fourth "Custom orbit…" demo button + three sliders (log M1, linear q, log P) reuse
+`enterBinaryView`/`refetchBinaryCustom`; grid bounds from `/binary_track_meta`; the note line
+always states the true snapped node. See the plan's top-of-file "Status" section for the
+build write-up and the caught reveal-before-fetch timing bug.
+
+### Chunk 4c(ii) — the remaining OPTIONAL follow-ons (recorded so they're not re-proposed as
+"the build" — still unbuilt/unscoped)
 - Richer mass-transfer outcomes: common envelope, merger, second RLOF, the compact-object
   channels (the CO-HMS / CO-HeMS grids) → a binary that ends as an X-ray binary / a GW
   progenitor (ties to the SN/remnant arc).
-- More metallicities (drop-in per-Z tarballs, the multi-Z-by-snapping precedent).
+- More metallicities (drop-in per-Z tarballs, the multi-Z-by-snapping precedent — 7 of the
+  8 landed tarballs are still unextracted/unbaked).
 - A population overlay (this is where BPASS would legitimately enter, as a SEPARATE sibling).
 
 ## Open questions (settle as they come up — several need the real data)

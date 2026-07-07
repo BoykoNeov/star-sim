@@ -134,18 +134,48 @@
           <button id="endgame-back" class="endgame-back" type="button">← Back to the living star</button>
         </div>
         <!-- path (b) Chunk 4b: the co-evolving POSYDON binary — a deeper reveal INSIDE
-             stripped-mode (not a new top-level mode), curated demo systems (not free q/P
-             sliders yet — the plan's de-risking choice). Same donor (M1=8.83, q=0.6), only
-             the initial ORBITAL PERIOD differs across the three, so the outcome contrast is
-             purely "how close were they" — merger, stripped + companion (the Gate-0 system),
-             or too wide to ever interact. -->
+             stripped-mode (not a new top-level mode). Three curated demos (same donor
+             M1=8.83, q=0.6, only the initial ORBITAL PERIOD differs, so the outcome
+             contrast is purely "how close were they") PLUS (Chunk 4c) a fourth "Custom
+             orbit" picker that reveals free M1/q/P sliders below — /binary_track was
+             always general (snap-always over the whole POSYDON grid), Chunk 4b just
+             hadn't exposed that beyond the three de-risking demos yet. -->
         <div class="binary-demo-row" id="binary-demo-row">
           <span class="binary-demo-label">Co-evolve the system through time:</span>
           <button type="button" class="binary-demo-btn" id="binary-demo-merger" data-demo="merger">Tight orbit → merger</button>
           <button type="button" class="binary-demo-btn" id="binary-demo-stripped" data-demo="stripped">Case-B orbit → stripped + companion</button>
           <button type="button" class="binary-demo-btn" id="binary-demo-wide" data-demo="wide">Wide orbit → detached</button>
+          <button type="button" class="binary-demo-btn" id="binary-demo-custom" data-demo="custom">Custom orbit…</button>
           <button type="button" class="binary-demo-back" id="binary-demo-back" hidden>← Back to the snapshot</button>
-          <span class="help" tabindex="0" data-tip="Pick one of three real POSYDON binary-evolution tracks (Fragos+2023) — the SAME donor and mass ratio, only the initial orbital period differs, so the different outcomes come purely from how close the two stars started. The age slider becomes a system-time scrubber: watch both stars' real modelled state move on the HR diagram (they can CROSS — the Algol mass-ratio reversal, live), the Roche-lobe panel go live off the real changing orbit, and the 3D pair evolve together. Unlike the snapshot above (one representative stripped state), this is a genuine time series — a real MESA-binary run, not a single fixed q=0.8 moment.">?</span>
+          <span class="help" tabindex="0" data-tip="Pick one of three real POSYDON binary-evolution tracks (Fragos+2023) — the SAME donor and mass ratio, only the initial orbital period differs, so the different outcomes come purely from how close the two stars started. Or pick 'Custom orbit' to drag your OWN initial M₁/mass-ratio/period — it snaps to the nearest real track on the grid, same as the three curated demos, just not pre-picked for you. The age slider becomes a system-time scrubber: watch both stars' real modelled state move on the HR diagram (they can CROSS — the Algol mass-ratio reversal, live), the Roche-lobe panel go live off the real changing orbit, and the 3D pair evolve together. Unlike the snapshot above (one representative stripped state), this is a genuine time series — a real MESA-binary run, not a single fixed q=0.8 moment.">?</span>
+        </div>
+        <!-- path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit" — hidden
+             until that demo is picked (main.js toggles .hidden directly, the sn-control
+             precedent). Position-based log sliders for M1/P (the grid spans ~1.9/4.7
+             dex), a direct linear range for q (spans <1 dex, q∈[0.05,0.99] on this
+             grid). Dragging re-fetches /binary_track (debounced) and re-snaps to the
+             nearest real track — the note line always states the TRUE snapped node,
+             never the raw dragged numbers. -->
+        <div class="binary-custom-controls" id="binary-custom-controls" hidden>
+          <div class="binary-custom-row">
+            <label for="binary-custom-m1">M₁ (donor)
+              <input id="binary-custom-m1-num" class="val-input" type="number" /> M<sub>☉</sub>
+            </label>
+            <input id="binary-custom-m1" type="range" />
+          </div>
+          <div class="binary-custom-row">
+            <label for="binary-custom-q">q = M₂/M₁
+              <input id="binary-custom-q-num" class="val-input" type="number" />
+            </label>
+            <input id="binary-custom-q" type="range" />
+          </div>
+          <div class="binary-custom-row">
+            <label for="binary-custom-p">P<sub>init</sub>
+              <input id="binary-custom-p-num" class="val-input" type="number" /> d
+            </label>
+            <input id="binary-custom-p" type="range" />
+          </div>
+          <p class="note binary-custom-note" id="binary-custom-note"></p>
         </div>
         <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
           The star has shed its outer layers as a <b>planetary nebula</b> — a step this

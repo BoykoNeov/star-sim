@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–3 built off the Götberg snapshot; Chunks 4a & 4b BUILT — the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track) with a real frontend two-star TIME render (both HR markers cross, Roche panel goes live off per-step geometry). Path (b) arc's core payoff is now live end-to-end; only Chunk 4c (optional richer outcomes / free q,P sliders) remains."
+description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–4b built the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track) with a two-star TIME render (both HR markers cross, Roche panel live off per-step geometry). Chunk 4c (frontend-only, no backend change — /binary_track was always general) BUILT: free M1/q/P sliders behind a fourth 'Custom orbit' picker, log-scale for M1/P + linear for q, snap-honesty note always states the TRUE nearest POSYDON node. Path (b) arc is now fully complete (all of 1–4c built); only richer-outcomes/more-Z/population-overlay follow-ons remain, unscoped."
 metadata: 
   node_type: memory
   type: project
@@ -366,6 +366,69 @@ unlocked, now visible end-to-end.
   path (b) arc from reading as complete — the core "both stars co-evolving through time"
   payoff is now real end-to-end.
 
+**PATH (b) CHUNK 4c BUILT 2026-07-07 (frontend-only, NO backend change, 310 pytest
+UNCHANGED, Playwright 1440+390 zero console errors):** free M1/q/P sliders — the "free
+q/P sliders" half of the optional follow-on list above (richer CE/CO-channel outcomes and
+more metallicities are still unbuilt/unscoped).
+- **Why no backend touch:** `/binary_track` was already fully general (snap-always over the
+  WHOLE POSYDON grid, §6) — Chunk 4b's three curated demos were a UI de-risking choice, not
+  a backend limitation. Confirmed by reading `posydon.py`/`api.py` before writing any code:
+  `binary_track(m1, q, p, feh)` already accepts arbitrary floats and snaps to the nearest
+  real track; `/binary_track_meta` already reports the grid bounds. So this chunk is a pure
+  frontend addition: a fourth "Custom orbit…" button beside the three curated demos, revealing
+  three sliders (M1, q, P) that drive the SAME `enterBinaryView`/`refetchBinaryCustom` path.
+- **Slider math:** M1 and P span wide dynamic ranges (measured via `/binary_track_meta`:
+  M1 3.92–286.4 M☉ ≈1.9 dex, P 0.1–5179.5 d ≈4.7 dex) — log-scale 0..1 position sliders, the
+  ⁵⁶Ni-slider (`mniFromPos`/`posFromMni`) idiom, reused verbatim in shape
+  (`customM1FromPos`/`posFromCustomM1`, `customPFromPos`/`posFromCustomP`). q spans <1 dex
+  (0.05–0.99) and is a plain ratio, so its `<input type=range>` binds the physical value
+  directly (min/max/value = the real q, no position indirection needed) — simpler where a
+  simpler mapping is honest, not log-scaling by reflex.
+- **Grid bounds fetched once, lazily:** `ensureBinaryMeta()` fetches `/binary_track_meta?feh=0`
+  on first use (memoized promise, mirrors the pattern of fetching-once-then-caching elsewhere)
+  and clamps the starting `customM1/Q/P` (seeded from the Case-B demo's node, 8.83/0.6/3.73)
+  into the real bounds before configuring the sliders — never hardcodes the grid span.
+- **Honesty line, not the raw drag:** `updateBinaryCustomNote()` always states the TRUE
+  snapped node the backend actually returned (`m1_init_msun`/`q_init`/`p_init_d`/`outcome`),
+  never the dragged number, plus an off-grid note built from the `*_snapped_far` flags
+  `/binary_track` already computes — the same "report the true node" discipline as every
+  other snap-to-grid control in this project (WD/WR mass re-snap, the stripped-star toggle).
+- **A real timing bug caught by the FIRST Playwright pass, fixed before commit:** the initial
+  draft revealed the custom-sliders panel (`els.binaryCustomControls.hidden = false`)
+  immediately on click, BEFORE the `/binary_track` fetch resolved. A drag during that
+  "Fetching…" window landed while `binaryView` was still `false`, and `refetchBinaryCustom`'s
+  own `!binaryView` guard silently dropped it — the slider's `customM1/Q/P` state updated, but
+  no fetch fired, so the panel looked live but wasn't (confirmed via a Playwright script:
+  the note stayed empty/stale for ~1.5–2.5s on the FIRST-ever custom entry, since that request
+  also cold-loads the 142 MB baked `.npz` into the module-level cache). **Fixed by moving the
+  panel reveal to AFTER `binaryView = true`** (the same point the demo buttons/Back button
+  already become interactive via the `body.binary-view` CSS class) — nothing in this view is
+  clickable until the fetch actually lands, now including the sliders.
+- **Verified via a Playwright script** (poll-based waits on the note text actually changing,
+  not fixed timeouts — the cold-load timing above would have flaked a fixed-timeout test too):
+  entering "Custom orbit" shows the Case-B default (M₁=8.83, q=0.6, P=3.73 → stripped +
+  companion); dragging P to the log-scale floor re-snaps to the REAL merger node (P=0.1 →
+  outcome "merger"); dragging M1 to the ceiling re-snaps far off-grid (M₁=202, q=0.45 →
+  "merger", flagged "snapped far off-grid on M₁, q" — an honest report, not a silent clamp);
+  the age/system-time scrubber stays live throughout; "← Back to the snapshot" hides the
+  panel; re-entering "Custom orbit" preserves the last-dragged values. Zero console errors at
+  1440×1000 and 390×844. A full-page screenshot confirmed the panel lays out cleanly under the
+  three curated-demo buttons and the Roche/HR/3D panels keep animating correctly beside it.
+- **Files (frontend-only):** `index.html` (`#binary-demo-custom` button + the
+  `#binary-custom-controls` sliders block), `styles.css` (`.binary-custom-controls`/
+  `.binary-custom-row` layout), `main.js` (`binaryMeta`/`ensureBinaryMeta`, the
+  `customM1/Q/P` state + log-scale mapping helpers, `configureBinaryCustomSliders`,
+  `updateBinaryCustomNote`, `_applyBinaryTrackData` factored out of `enterBinaryView`,
+  `refetchBinaryCustom`, the debounced slider listeners, `enterBinaryView`'s `"custom"`
+  branch, the panel-hidden resets in `exitBinaryView` + the two other binary-state-reset
+  sites).
+- **Path (b) is now fully built end to end (Chunks 1–4c).** What remains is explicitly the
+  UNSCOPED tail of the optional list: richer mass-transfer outcomes (common envelope, the
+  CO-HMS/CO-HeMS compact-object grids — ties to the SN/remnant arc), the other 7 downloaded-
+  but-unbaked metallicity tarballs, and a population overlay (BPASS, a separate sibling). None
+  of these were attempted this pass — each needs its own recon/gate before a build, the same
+  discipline every prior chunk followed.
+
 **PATH (b) CHUNK 4 RECON DONE 2026-07-06 (superseded by Chunk 4a BUILT above):**
 the on-ramp to a real binary grid = "both stars co-evolving on the HR *through time*" (the one thing the
 Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDON, NOT BPASS.**
@@ -429,12 +492,15 @@ stripped donor. **NO backend touch** (the companion `StellarState` is already se
 - **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new two-star render),
   then the on-ramp to a real binary grid (POSYDON/BPASS).
 
-**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–4b are ALL BUILT** — the Götberg-snapshot
-chunks (HR reversal, 3D companion sphere, Roche geometry) plus the POSYDON co-evolved-binary arc
-(Chunk 4a's backend + Chunk 4b's frontend two-star TIME render, the Roche panel gone live). The core
-"both stars co-evolving through time, the Algol reversal as a movie" payoff is real end-to-end.
-Only Chunk 4c (optional: richer outcomes, more metallicities, free q/P sliders) remains, and it
-doesn't block calling the arc complete. Related:
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–4c are ALL BUILT** — the Götberg-snapshot
+chunks (HR reversal, 3D companion sphere, Roche geometry), the POSYDON co-evolved-binary arc
+(Chunk 4a's backend + Chunk 4b's frontend two-star TIME render, the Roche panel gone live), and
+Chunk 4c's free M1/q/P sliders (a fourth "Custom orbit" picker beside the three curated demos,
+no backend change — `/binary_track` was always general). The core "both stars co-evolving through
+time, the Algol reversal as a movie" payoff is real end-to-end, and now explorable at ANY real grid
+node, not just the three curated ones. What remains is explicitly unscoped: richer mass-transfer
+outcomes (CE/compact-object channels), the other 7 downloaded-but-unbaked metallicities, a
+population overlay (BPASS). Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

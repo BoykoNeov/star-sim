@@ -67,10 +67,18 @@ const els = {
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
   // path (b) Chunk 4b: the co-evolving POSYDON binary demo picker — a deeper reveal inside
-  // stripped-mode (binary-view). Curated demo systems, not free q/P sliders (the de-risking
-  // choice the plan settled on).
+  // stripped-mode (binary-view). Curated demo systems, PLUS (Chunk 4c) free M1/q/P sliders
+  // behind a fourth "Custom orbit" picker.
   binaryDemoRow: document.getElementById("binary-demo-row"),
   binaryDemoBack: document.getElementById("binary-demo-back"),
+  binaryCustomControls: document.getElementById("binary-custom-controls"),
+  binaryCustomM1: document.getElementById("binary-custom-m1"),
+  binaryCustomM1Num: document.getElementById("binary-custom-m1-num"),
+  binaryCustomQ: document.getElementById("binary-custom-q"),
+  binaryCustomQNum: document.getElementById("binary-custom-q-num"),
+  binaryCustomP: document.getElementById("binary-custom-p"),
+  binaryCustomPNum: document.getElementById("binary-custom-p-num"),
+  binaryCustomNote: document.getElementById("binary-custom-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -461,11 +469,13 @@ const STRIP_MASS_MIN = 2.0, STRIP_MASS_MAX = 18.2;
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
 // showcase is a sub-view of "wd", not its own top-level mode).
 //
-// Three curated demo systems (docs/plans/entwined-consort-inspiral.md's de-risking choice
-// — free q/P sliders are a later feature): the SAME donor (M1=8.83 M☉, q=0.6) at three real
-// POSYDON grid periods, so the outcome contrast is purely "how close did they start" —
-// merger (too close), stripped + companion (the Gate-0 system — a real Algol reversal),
-// or detached (too wide to ever interact).
+// Three curated demo systems (docs/plans/entwined-consort-inspiral.md's de-risking choice):
+// the SAME donor (M1=8.83 M☉, q=0.6) at three real POSYDON grid periods, so the outcome
+// contrast is purely "how close did they start" — merger (too close), stripped + companion
+// (the Gate-0 system — a real Algol reversal), or detached (too wide to ever interact).
+// Chunk 4c adds a fourth entry, "custom" — NOT in this array (its (m1,q,p) come from the
+// customM1/customQ/customP sliders below, not a fixed triple) but handled by the same
+// enterBinaryView/refreshBinary machinery throughout.
 const BINARY_DEMOS = [
   { key: "merger", m1: 8.83, q: 0.6, p: 0.1 },
   { key: "stripped", m1: 8.83, q: 0.6, p: 3.73 },
@@ -476,8 +486,95 @@ let binaryTrackData = null;     // the full /binary_track payload (steps[] + sna
 let binaryStar1 = null;         // data.steps[].star_1, pulled out once for hr.setBinaryTrack
 let binaryStar2 = null;         // data.steps[].star_2 (may contain a trailing null — a merger)
 let binaryFraction = 0;         // 0..1 slider position, index-linear over steps (the WR idiom)
-let binaryDemoKey = null;       // which BINARY_DEMOS entry is live (button highlight + caption)
+let binaryDemoKey = null;       // which BINARY_DEMOS entry (or "custom") is live
 let binaryToken = 0;            // latest-wins guard for /binary_track fetches
+
+// path (b) Chunk 4c: free M1/q/P sliders behind the "Custom orbit" demo. /binary_track was
+// always general (snap-always over the WHOLE POSYDON grid, §6) — the three curated demos
+// were a de-risking UI choice, not a backend limit, so this needed no backend change.
+// `binaryMeta` (the grid bounds — /binary_track_meta) is fetched once, lazily, on first use
+// and cached; the log-scale M1/P slider math and the linear q slider both read its bounds,
+// so nothing here is hardcoded against the actual grid span (3.9–286 M☉, 0.1–5179 d, q
+// 0.05–0.99 — measured, not assumed).
+let binaryMeta = null;
+let binaryMetaPromise = null;
+const BINARY_CUSTOM_DEFAULT = { m1: 8.83, q: 0.6, p: 3.73 };   // starts from the Case-B node
+let customM1 = BINARY_CUSTOM_DEFAULT.m1;
+let customQ = BINARY_CUSTOM_DEFAULT.q;
+let customP = BINARY_CUSTOM_DEFAULT.p;
+
+function ensureBinaryMeta() {
+  if (binaryMeta) return Promise.resolve(binaryMeta);
+  if (!binaryMetaPromise) {
+    binaryMetaPromise = fetchJSON("/binary_track_meta?feh=0")
+      .then((meta) => {
+        binaryMeta = meta;
+        customM1 = Math.min(Math.max(customM1, meta.m1_min), meta.m1_max);
+        customQ = Math.min(Math.max(customQ, meta.q_min), meta.q_max);
+        customP = Math.min(Math.max(customP, meta.p_min), meta.p_max);
+        configureBinaryCustomSliders();
+        return meta;
+      })
+      .catch(() => { binaryMetaPromise = null; return null; });
+  }
+  return binaryMetaPromise;
+}
+
+// M1 and P span a wide dynamic range (~1.9 / ~4.7 dex) — log-scale position sliders, the
+// mni-slider idiom. q spans <1 dex and is a plain ratio, so its range input binds the
+// physical value directly (no position indirection needed).
+const customM1FromPos = (pos) => {
+  const lo = Math.log10(binaryMeta.m1_min), hi = Math.log10(binaryMeta.m1_max);
+  return 10 ** (lo + clamp01(pos) * (hi - lo));
+};
+const posFromCustomM1 = (m) => {
+  const lo = Math.log10(binaryMeta.m1_min), hi = Math.log10(binaryMeta.m1_max);
+  return clamp01((Math.log10(m) - lo) / (hi - lo));
+};
+const customPFromPos = (pos) => {
+  const lo = Math.log10(binaryMeta.p_min), hi = Math.log10(binaryMeta.p_max);
+  return 10 ** (lo + clamp01(pos) * (hi - lo));
+};
+const posFromCustomP = (p) => {
+  const lo = Math.log10(binaryMeta.p_min), hi = Math.log10(binaryMeta.p_max);
+  return clamp01((Math.log10(p) - lo) / (hi - lo));
+};
+
+function configureBinaryCustomSliders() {
+  if (!binaryMeta || !els.binaryCustomM1) return;
+  els.binaryCustomM1.min = 0; els.binaryCustomM1.max = 1; els.binaryCustomM1.step = 0.001;
+  els.binaryCustomM1.value = String(posFromCustomM1(customM1));
+  els.binaryCustomM1Num.min = String(binaryMeta.m1_min); els.binaryCustomM1Num.max = String(binaryMeta.m1_max);
+  setNum(els.binaryCustomM1Num, fmt(customM1));
+
+  els.binaryCustomQ.min = String(binaryMeta.q_min); els.binaryCustomQ.max = String(binaryMeta.q_max);
+  els.binaryCustomQ.step = 0.01;
+  els.binaryCustomQ.value = String(customQ);
+  els.binaryCustomQNum.min = String(binaryMeta.q_min); els.binaryCustomQNum.max = String(binaryMeta.q_max);
+  setNum(els.binaryCustomQNum, fmt(customQ));
+
+  els.binaryCustomP.min = 0; els.binaryCustomP.max = 1; els.binaryCustomP.step = 0.001;
+  els.binaryCustomP.value = String(posFromCustomP(customP));
+  els.binaryCustomPNum.min = String(binaryMeta.p_min); els.binaryCustomPNum.max = String(binaryMeta.p_max);
+  setNum(els.binaryCustomPNum, fmt(customP));
+}
+
+// The honesty line under the sliders: the dragged (M1,q,P) is NEVER what's shown — the
+// panel always states the TRUE snapped grid node the backend actually returned (the §6
+// snap-always discipline), plus an off-grid note when the drag lands far from any real
+// track (the *_snapped_far flags /binary_track already computes).
+function updateBinaryCustomNote() {
+  if (!els.binaryCustomNote || !binaryTrackData) return;
+  const t = binaryTrackData;
+  const far = [];
+  if (t.m1_snapped_far) far.push("M₁");
+  if (t.q_snapped_far) far.push("q");
+  if (t.p_snapped_far) far.push("P");
+  const farNote = far.length ? ` — snapped far off-grid on ${far.join(", ")}` : "";
+  els.binaryCustomNote.textContent =
+    `Nearest real POSYDON track: M₁=${fmt(t.m1_init_msun)} M☉, q=${fmt(t.q_init)}, ` +
+    `P=${fmt(t.p_init_d)} d — outcome: ${t.outcome}${farNote}.`;
+}
 
 // The ⁵⁶Ni-mass control (Tier-3). Bounds are the observed range the backend clamps to; the
 // slider is LOG in M_Ni (it spans 0.001–0.3, ~2.5 decades). Canonical default 0.06.
@@ -1788,6 +1885,7 @@ function exitEndgame() {
   binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
   binaryDemoKey = null; binaryToken++;
   document.body.classList.remove("binary-view");
+  if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   els.mass.disabled = false; els.feh.disabled = false;    // in case binaryView had disabled them
   if (els.massNum) els.massNum.disabled = false;
   if (els.fehNum) els.fehNum.disabled = false;
@@ -2412,6 +2510,7 @@ async function enterStripped() {
   binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
   binaryDemoKey = null; binaryToken++;   // path (b) Chunk 4b — always land on the snapshot first
   document.body.classList.remove("binary-view");
+  if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   updateBinaryDemoButtons();
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
@@ -2476,32 +2575,56 @@ function updateBinaryDemoButtons() {
   });
 }
 
-// Enter the co-evolving movie for one curated demo system (mode stays "stripped" — this is
-// a sub-view, like the WD thermal-pulse showcase). Fetches /binary_track once; the age
-// slider then becomes a free system-time scrubber over the pre-fetched steps (no per-frame
-// fetch, the same "scrub is free" idiom as the living track / WD / WR scrubs).
+// Pull a fresh /binary_track payload into the shared draw state (HR + ticks + the
+// snapped-node note) — shared by a fresh entry (enterBinaryView) and a live re-fetch while
+// scrubbing a custom orbit (refetchBinaryCustom); the caller owns binaryFraction/refreshBinary.
+function _applyBinaryTrackData(data) {
+  binaryTrackData = data;
+  binaryStar1 = data.steps.map((s) => s.star_1);
+  binaryStar2 = data.steps.map((s) => s.star_2);
+  hr.setBinaryTrack(binaryStar1, binaryStar2);
+  rebuildBinaryTicks();
+  updateBinaryCustomNote();
+}
+
+// Enter the co-evolving movie for a curated demo system OR the free "custom" orbit (mode
+// stays "stripped" — this is a sub-view, like the WD thermal-pulse showcase). Fetches
+// /binary_track once; the age slider then becomes a free system-time scrubber over the
+// pre-fetched steps (no per-frame fetch, the same "scrub is free" idiom as the living
+// track / WD / WR scrubs).
 async function enterBinaryView(demoKey) {
   if (mode !== "stripped") return;
-  const demo = BINARY_DEMOS.find((d) => d.key === demoKey);
-  if (!demo) return;
+  let m1, q, p;
+  if (demoKey === "custom") {
+    await ensureBinaryMeta();
+    if (!binaryMeta) return;   // meta fetch failed — bail quietly, the /binary_track_meta 503 case
+    m1 = customM1; q = customQ; p = customP;
+  } else {
+    const demo = BINARY_DEMOS.find((d) => d.key === demoKey);
+    if (!demo) return;
+    ({ m1, q, p } = demo);
+  }
   const tok = ++binaryToken;
   binaryDemoKey = demoKey;
   updateBinaryDemoButtons();
   els.age.disabled = true;   // re-enabled once the track lands; disabled meanwhile (fetching)
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the co-evolved binary track…";
   let data;
-  try { data = await fetchJSON(`/binary_track?m1=${demo.m1}&q=${demo.q}&p=${demo.p}&feh=0`); }
+  try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=0`); }
   catch {
     if (tok === binaryToken && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the co-evolved binary track.";
     return;
   }
   if (tok !== binaryToken || mode !== "stripped") return;
-  binaryTrackData = data;
-  binaryStar1 = data.steps.map((s) => s.star_1);
-  binaryStar2 = data.steps.map((s) => s.star_2);
+  _applyBinaryTrackData(data);
   binaryView = true;
   document.body.classList.add("binary-view");
+  // Reveal the custom sliders only once binaryView is actually true (not before the fetch
+  // above resolves) — a drag while it's still "fetching…" would hit refetchBinaryCustom's
+  // `!binaryView` guard and get silently dropped, since nothing else in this view becomes
+  // interactive (the demo buttons, the Back button) until this same point either.
+  if (els.binaryCustomControls) els.binaryCustomControls.hidden = demoKey !== "custom";
   els.age.disabled = false;
   // POSYDON's (M1, q, P) grid is independent of the MIST mass/[Fe/H] axes this demo isn't
   // keyed on — disable rather than silently ignore a drag (tryResnap() also guards this).
@@ -2509,8 +2632,6 @@ async function enterBinaryView(demoKey) {
   if (els.massNum) els.massNum.disabled = true;
   if (els.fehNum) els.fehNum.disabled = true;
   updateBinaryDemoButtons();
-  hr.setBinaryTrack(binaryStar1, binaryStar2);
-  rebuildBinaryTicks();
   binaryFraction = 0;
   els.age.value = binaryFraction;
   refreshBinary();
@@ -2522,6 +2643,7 @@ function exitBinaryView() {
   binaryView = false;
   binaryTrackData = null; binaryStar1 = null; binaryStar2 = null; binaryDemoKey = null;
   document.body.classList.remove("binary-view");
+  if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   hr.clearBinaryTrack();
   roche.clear();
   els.age.disabled = true;
@@ -2530,6 +2652,22 @@ function exitBinaryView() {
   if (els.fehNum) els.fehNum.disabled = false;
   updateBinaryDemoButtons();
   if (strippedData) { hr.setEndgame([strippedData.state], "stripped"); refreshStripped(); }
+}
+
+// Re-fetch the track when a custom M1/q/P slider moves (debounced, latest-wins — the
+// refetchSNMni idiom). Unlike a fresh enterBinaryView, this PRESERVES the current scrub
+// position (binaryFraction is a 0..1 fraction, re-indexed against whatever length the new
+// track happens to have) rather than resetting to the start — a slider drag is "show me
+// this other system," not "restart the movie."
+async function refetchBinaryCustom() {
+  if (mode !== "stripped" || !binaryView || binaryDemoKey !== "custom") return;
+  const tok = ++binaryToken;
+  let data;
+  try { data = await fetchJSON(`/binary_track?m1=${customM1}&q=${customQ}&p=${customP}&feh=0`); }
+  catch { return; }
+  if (tok !== binaryToken || mode !== "stripped" || !binaryView || binaryDemoKey !== "custom") return;
+  _applyBinaryTrackData(data);
+  refreshBinary();
 }
 
 // Paint step `i` (picked from binaryFraction — no fetch, mirrors refreshWR). Both stars'
@@ -2963,15 +3101,72 @@ async function init() {
     tryStrippedResnap();   // re-fetch the current (mass, [Fe/H]) via the now-correct route + re-apply
   });
 
-  // path (b) Chunk 4b: the "Co-evolve the system" demo picker. Delegated (the three
-  // buttons share the .binary-demo-btn class + a data-demo key); the picker row itself is
-  // CSS-hidden once a demo is live, so this only fires from a fresh stripped-mode entry.
+  // path (b) Chunk 4b/4c: the "Co-evolve the system" demo picker. Delegated (all four
+  // buttons — three curated + "custom" — share the .binary-demo-btn class + a data-demo
+  // key); the picker row itself is CSS-hidden once a demo is live, so this only fires from
+  // a fresh stripped-mode entry. enterBinaryView already branches on demoKey === "custom".
   if (els.binaryDemoRow) els.binaryDemoRow.addEventListener("click", (ev) => {
     const btn = ev.target.closest(".binary-demo-btn");
     if (btn && mode === "stripped") enterBinaryView(btn.dataset.demo);
   });
   if (els.binaryDemoBack) els.binaryDemoBack.addEventListener("click", () => {
     if (mode === "stripped" && binaryView) exitBinaryView();
+  });
+
+  // path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches
+  // /binary_track (debounced + latest-wins, the ⁵⁶Ni-slider idiom) and re-snaps to the
+  // nearest real POSYDON track — updateBinaryCustomNote (inside _applyBinaryTrackData)
+  // always states the TRUE snapped node, never the raw dragged number.
+  const debouncedBinaryCustom = debounce(refetchBinaryCustom, SLIDER_FETCH_DELAY_MS);
+  if (els.binaryCustomM1) {
+    els.binaryCustomM1.addEventListener("input", () => {
+      customM1 = customM1FromPos(Number(els.binaryCustomM1.value));
+      setNum(els.binaryCustomM1Num, fmt(customM1));
+      debouncedBinaryCustom();
+    });
+    els.binaryCustomM1.addEventListener("change", () => debouncedBinaryCustom.flush());
+  }
+  if (els.binaryCustomM1Num) els.binaryCustomM1Num.addEventListener("change", () => {
+    if (!binaryMeta || els.binaryCustomM1Num.value.trim() === "") return;
+    const m = Number(els.binaryCustomM1Num.value);
+    if (!isFinite(m)) return;
+    customM1 = Math.min(Math.max(m, binaryMeta.m1_min), binaryMeta.m1_max);
+    els.binaryCustomM1.value = String(posFromCustomM1(customM1));
+    refetchBinaryCustom();
+  });
+
+  if (els.binaryCustomQ) {
+    els.binaryCustomQ.addEventListener("input", () => {
+      customQ = Number(els.binaryCustomQ.value);
+      setNum(els.binaryCustomQNum, fmt(customQ));
+      debouncedBinaryCustom();
+    });
+    els.binaryCustomQ.addEventListener("change", () => debouncedBinaryCustom.flush());
+  }
+  if (els.binaryCustomQNum) els.binaryCustomQNum.addEventListener("change", () => {
+    if (!binaryMeta || els.binaryCustomQNum.value.trim() === "") return;
+    const q = Number(els.binaryCustomQNum.value);
+    if (!isFinite(q)) return;
+    customQ = Math.min(Math.max(q, binaryMeta.q_min), binaryMeta.q_max);
+    els.binaryCustomQ.value = String(customQ);
+    refetchBinaryCustom();
+  });
+
+  if (els.binaryCustomP) {
+    els.binaryCustomP.addEventListener("input", () => {
+      customP = customPFromPos(Number(els.binaryCustomP.value));
+      setNum(els.binaryCustomPNum, fmt(customP));
+      debouncedBinaryCustom();
+    });
+    els.binaryCustomP.addEventListener("change", () => debouncedBinaryCustom.flush());
+  }
+  if (els.binaryCustomPNum) els.binaryCustomPNum.addEventListener("change", () => {
+    if (!binaryMeta || els.binaryCustomPNum.value.trim() === "") return;
+    const p = Number(els.binaryCustomPNum.value);
+    if (!isFinite(p)) return;
+    customP = Math.min(Math.max(p, binaryMeta.p_min), binaryMeta.p_max);
+    els.binaryCustomP.value = String(posFromCustomP(customP));
+    refetchBinaryCustom();
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

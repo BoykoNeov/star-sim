@@ -327,6 +327,26 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **PATH (b) CHUNK 4c BUILT (frontend-only, NO backend change, 310 pytest unchanged, Playwright
+  1440+390 zero errors):** free M1/q/P sliders — `/binary_track` was already fully general
+  (snap-always over the WHOLE POSYDON grid, §6); Chunk 4b's three curated demos were a UI
+  de-risking choice, not a backend limit, so this needed no `posydon.py`/`api.py` touch. A
+  fourth **"Custom orbit…"** demo button reveals three sliders (M1, q, P) driving the exact
+  same `enterBinaryView` fetch path. Log-scale 0..1 position sliders for M1/P (measured span
+  via `/binary_track_meta`: 3.92–286.4 M☉ ≈1.9 dex, 0.1–5179.5 d ≈4.7 dex — the ⁵⁶Ni-slider
+  idiom), a direct linear binding for q (0.05–0.99, <1 dex). A note line always states the
+  TRUE snapped node + outcome + any `*_snapped_far` flags, never the raw dragged numbers.
+  **One real bug the first Playwright pass caught:** the sliders panel was revealed before
+  the initial `/binary_track` fetch resolved, so a drag during that window landed while
+  `binaryView` was still `false` and got silently dropped by `refetchBinaryCustom`'s own
+  guard; fixed by moving the reveal to after `binaryView = true` (the same point the demo/
+  Back buttons already gate their own interactivity on). Verified via a poll-based
+  Playwright script: entering shows the Case-B default, dragging P to the log floor re-snaps
+  to the real merger node, dragging M1 to the ceiling re-snaps far off-grid with an honest
+  note, the scrubber/Back/re-entry all work. **Path (b) is now built end-to-end (Chunks
+  1–4c)** — what remains is the explicitly unscoped tail: richer CE/compact-object outcomes,
+  the 7 downloaded-but-unbaked metallicities, a population overlay (BPASS). Plan
+  `docs/plans/entwined-consort-inspiral.md`; memory `star-sim-binary-stripped.md`.
 - **PATH (b) CHUNKS 4a & 4b BUILT — the two-star TIME render is live (310 pytest [+4]):**
   the on-ramp to a real binary grid — POSYDON HMS-HMS, the first TIME-SERIES, TWO-BODY
   sibling. **Chunk 4a** (backend, solar-first): the user landed all 8 metallicity tarballs
@@ -366,9 +386,9 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   excess, not whole-photosphere inflation). 3D is free (`star.update(s1,{companion:s2})`,
   the exact Chunk-2 call, now driven every scrub frame). Playwright-verified 1440+390,
   zero console errors, the Case-B markers visibly cross and the Roche lobes visibly
-  reshape/fill through a real detached→RLOF1→detached sequence. **Next = Chunk 4c**
-  (optional: richer outcomes, more metallicities, free q/P sliders, a population overlay —
-  none built). Plan `docs/plans/entwined-consort-inspiral.md`.
+  reshape/fill through a real detached→RLOF1→detached sequence. **Chunk 4c (free q/P
+  sliders) is now built too — see the bullet above.** Plan
+  `docs/plans/entwined-consort-inspiral.md`.
 - **PATH (b) CHUNK 3 BUILT (backend + frontend, 287 pytest [+8], Playwright 1440+390 zero errors):**
   "the mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR render: the orbital-plane
   figure-of-eight at the moment of Case-B RLOF (the causal story behind the stripped star). Advisor-settled
