@@ -53,20 +53,31 @@ more direct than the donor-side `lg_mtransfer_rate`, which is pre-`xfer_fraction
 with `ACCRETION_EFFICIENCY` a round literature number (~0.1, the GM/Rc^2 order of
 magnitude for a NS/BH), NOT fit to this grid or a measured X-ray spectrum.
 
-**Scoped to STABLE RLOF-phase accretion only** — the cue is `None` whenever `mt_state ==
-"detached"` OR the track's POSYDON `interpolation_class == "unstable_MT"` (see the `active`
-gate in `co_binary_track`). Characterized across the WHOLE 8-bucket baked grid (every
-stable-transfer active row): <=3.46x the CO's own Eddington luminosity (median ~2.3-2.6x),
-a real bounded mildly-super-Eddington/ULX-like regime, no cap needed. **That bound holds
-BECAUSE of the two-part gate, not as an intrinsic property of the formula:**
+**Scoped to STABLE RLOF-phase accretion onto a NEUTRON STAR / BLACK HOLE only** — the cue
+is `None` whenever `mt_state == "detached"`, OR the track's POSYDON `interpolation_class ==
+"unstable_MT"`, OR the companion is a `co_type == "WD"` (see the `active` gate in
+`co_binary_track`). Characterized across the WHOLE 8-bucket baked grid (every stable-transfer
+NS/BH active row): <=3.46x the CO's own Eddington luminosity (median ~2.3-2.6x), a real
+bounded mildly-super-Eddington/ULX-like regime, no cap needed. **That bound (and the cue's
+physical validity) holds BECAUSE of the three-part gate, not as an intrinsic property of the
+formula:**
   * over DETACHED rows, `lg_mstar_dot_2` reaches values that would push this formula to
     ~10^14 Lsun (a non-transferring-row artifact);
   * over `unstable_MT` tracks (CE/merger — dynamically unstable, not a clean X-ray binary),
     a handful of runaway `lg_mstar_dot_2` spikes push it to ~10^5x Eddington / ~10^13x the
     star's own L (a Chunk-1c finding — solar happened to carry none, but the metal-poor
-    grids do; measured across all 8 buckets, all three outliers were `unstable_MT`).
-The cue models a STABLE X-ray-binary accretion luminosity, which an unstable-MT episode is
-physically not — so gating it off there is honest, not a magic-number cap. Wind-fed
+    grids do; measured across all 8 buckets, all three outliers were `unstable_MT`);
+  * over `WD`-companion tracks, `ACCRETION_EFFICIENCY = 0.1` is simply the WRONG regime — it
+    is a NS/BH-depth-potential-well efficiency (GM/Rc^2); a white dwarf's surface potential is
+    ~2-3 dex shallower (eta ~ 1e-3..1e-4), so eta=0.1 overstates a WD accretor's accretion
+    luminosity by 100-1000x (measured Chunk-1c follow-up: 94 WD-companion tracks would surface
+    a cue up to ~55,000 Lsun on the placeholder-frozen 1.0-Msun WD channel). The WD channel is
+    already a documented placeholder (every WD node is exactly 1.00 Msun, see the recon note
+    above), so the honest move is to defer the cue entirely rather than paint a 3-dex-wrong
+    number — consistent with the honesty tiering elsewhere in the sim (don't fabricate; defer).
+The cue models a STABLE X-ray-binary accretion luminosity onto a NS/BH, which neither an
+unstable-MT episode nor a WD accretor physically is — so gating it off there is honest, not a
+magic-number cap. Wind-fed
 accretion (e.g. Cyg X-1's own configuration, the plan's motivating example) is likewise
 NOT captured this pass — a detached CO orbiting a normal star shows no accretion cue here,
 even though a real wind-fed X-ray binary would. Broadening the `active` gate (wind
@@ -285,6 +296,12 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0) -> C
     # for these tracks (see the `active` mask below). This is why the module docstring's
     # tight bound is stated for stable transfer only.
     is_unstable_mt = interp_class == "unstable_MT"
+    # The accretion cue's `ACCRETION_EFFICIENCY = 0.1` is a NS/BH efficiency (deep potential
+    # well). A white dwarf's surface potential is ~2-3 dex shallower, so eta=0.1 overstates a
+    # WD accretor's luminosity by 100-1000x; the WD channel is a placeholder anyway (frozen
+    # 1.0 Msun, see the module docstring's recon note). Gate the cue off for WD companions —
+    # deferring beats painting a 3-dex-wrong number (Chunk-1c follow-up).
+    is_wd = co_type == "WD"
 
     start = int(grid.row_start[idx])
     count = int(grid.row_count[idx])
@@ -317,11 +334,16 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0) -> C
         #     Eddington / ~10^13x the star's own L (Chunk-1c finding, measured across all 8
         #     buckets — solar happened to have none, the metal-poor grids do). The cue models
         #     a STABLE X-ray-binary accretion luminosity, which an unstable-MT episode is not.
-        # WITH both conditions the cue is bounded to <=3.46x the CO's own Eddington luminosity
-        # grid-wide (the mildly-super-Eddington ULX regime). Widening this gate (e.g. to add
-        # wind-fed accretion) re-opens an unbounded tail — re-derive the bound, don't just
-        # relax the `-30 < lg2 < 10` magnitude filter.
-        active = mt_state != "detached" and not is_unstable_mt and -30.0 < lg_mdot2 < 10.0
+        #   * `not is_wd`: the cue's eta=0.1 is a NS/BH efficiency, ~2-3 dex too deep for a
+        #     white dwarf's shallow potential well (and the WD channel is a placeholder), so a
+        #     WD-companion cue would be 100-1000x too bright — defer it (Chunk-1c follow-up).
+        # WITH all three conditions the cue is bounded to <=3.46x the CO's own Eddington
+        # luminosity grid-wide (the mildly-super-Eddington ULX regime) AND is only ever painted
+        # for the NS/BH regime it's physically valid in. Widening this gate (e.g. to add
+        # wind-fed accretion, or a WD-appropriate eta) re-opens an unbounded/wrong-regime tail —
+        # re-derive the bound, don't just relax the `-30 < lg2 < 10` magnitude filter.
+        active = (mt_state != "detached" and not is_unstable_mt and not is_wd
+                  and -30.0 < lg_mdot2 < 10.0)
         mdot = 10.0 ** lg_mdot2 if active else None
         acc_lum = _accretion_luminosity(mdot) if mdot is not None else None
 

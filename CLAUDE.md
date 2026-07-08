@@ -356,7 +356,17 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   — ALL on POSYDON `unstable_MT` (CE/merger) tracks (the served caption would've shown ~10^13× the
   star's own L, newly reachable via the picker/sliders). Gated the η·Ṁ·c² cue OFF `unstable_MT` (the
   `active` mask now needs `not is_unstable_mt`) → bounded **≤3.46× Eddington grid-wide**, the stable
-  X-ray-binary payoff preserved. **Not built:** `CO-HeMS`/`CO-HeMS_RLO` (double-compact-object
+  X-ray-binary payoff preserved. **Chunk-1c advisor follow-up (backend-only, +2 tests):** the
+  accretion cue was ALSO leaking on **WD-companion** tracks — the frontend caption paints
+  `accretion_lum_lsun` unconditionally when non-null, and 94 WD tracks surfaced a cue up to ~55,000 L☉
+  computed with `ACCRETION_EFFICIENCY=0.1` (a NS/BH deep-potential-well η, ~2–3 dex too deep for a WD's
+  shallow well → ~100–1000× too bright; the WD channel is a documented placeholder anyway, frozen
+  1.0 M☉). Gated the cue OFF WD too (`active` now also needs `not is_wd`), so the cue is only ever
+  painted in the NS/BH-stable regime it's physically valid in. The advisor's other flag — the grid-wide
+  bound test RECOMPUTED over raw columns rather than reading the served cue (so test-gate and
+  production-gate could diverge) — is closed by a new `test_served_accretion_cue_is_bounded_and_only_in_regime`
+  that asserts the bound on `co_binary_track`'s OWN served `accretion_lum_lsun`, plus a WD-None served
+  regression. **Not built:** `CO-HeMS`/`CO-HeMS_RLO` (double-compact-object
   channel — a separate extraction). [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
@@ -650,9 +660,9 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **333 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **335 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
-  gated `requires_posydon_co_data`) adds **23** — Chunk 1a's 18 (snap/parse honesty, whole-grid
+  gated `requires_posydon_co_data`) has **24** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
   the Gate-1 CO-mass-growth/RLOF-then-detach regression, route shape + 422/503) plus Chunk 1b's
   **2** (the `/co_binary_track` payload carries a non-null per-step `roche` block; the Gate-1
@@ -661,9 +671,14 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `available_feh` reflects the real baked bucket set; the metallicity axis is real — the same
   (M_star, M_co, P) request snaps to a different real track / outcome across [Fe/H] buckets; and
   the served-level regression that the η·Ṁ·c² accretion cue is `None` on POSYDON `unstable_MT`
-  tracks — the gate that keeps the metal-poor 505,221×-Eddington artifact off the caption). The
-  Chunk-1a Eddington-bound test was updated to mirror the now two-part gate (not-detached AND
-  not-unstable_MT, ceiling tightened 10→5×). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
+  tracks — the gate that keeps the metal-poor 505,221×-Eddington artifact off the caption) plus the
+  **Chunk-1c advisor follow-up's 2** (`test_accretion_cue_is_none_on_wd_companion_tracks`: the cue is
+  `None` on WD-companion tracks too — η=0.1 is a NS/BH efficiency, ~2–3 dex too deep for a WD;
+  `test_served_accretion_cue_is_bounded_and_only_in_regime`: the ≤5× bound asserted on the SERVED
+  `accretion_lum_lsun` from a sampled cue-bearing population, not recomputed over raw columns — so the
+  test-gate and production-gate can't silently diverge). The Chunk-1a Eddington-bound test was updated
+  to mirror the now THREE-part gate (not-detached AND not-unstable_MT AND not-WD, ceiling tightened
+  10→5×). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an
   exact-node round-trip over a 300-track sample), no duplicate grid nodes and no

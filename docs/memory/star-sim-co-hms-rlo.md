@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) & 1c (full 8-bucket [Fe/H] axis + free M_star/M_co/P custom sliders) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode. Chunk 1c also fixed a metal-poor-grid accretion-cue artifact by gating the η·Ṁ·c² cue off POSYDON unstable_MT (CE/merger) tracks.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) & 1c (full 8-bucket [Fe/H] axis + free M_star/M_co/P custom sliders) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode. The accretion-luminosity cue (η·Ṁ·c²) is now gated THREE ways (not-detached AND not-unstable_MT AND not-WD): Chunk 1c gated off unstable_MT (CE/merger) tracks after a metal-poor-grid 505,221× artifact; the advisor follow-up gated off WD-companion tracks (η=0.1 is a NS/BH efficiency, ~2–3 dex too deep for a WD) + added a served-level bound test.
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -213,6 +213,41 @@ baked grid, §6, and `available_feh` was already served) — exactly like HMS-HM
   unbounded tail and must re-derive the bound.
 - **Not built:** Phases 2 (initial-He) and 3 (α-enhanced evolution) of the parent plan. `CO-HeMS`/
   `CO-HeMS_RLO` (the double-compact-object channel) also remain deferred — a separate grid extraction.
+
+**Chunk 1c advisor follow-up BUILT 2026-07-08 (backend-only, 335 pytest [+2], no frontend change).**
+Re-ran the advisor after the overload; it confirmed the unstable_MT gate call was correct
+(prefer-gate-over-cap using POSYDON's own `interpolation_class` is principled, not a magic number)
+and raised two checks the self-verification hadn't reached:
+- **Check 2 (the one that needed the commit) — the WD accretor.** The SAME artifact class the
+  unstable_MT gate fixed was ALSO leaking through the **`co_type == "WD"`** channel: `ACCRETION_EFFICIENCY
+  = 0.1` is a NS/BH *deep-potential-well* efficiency (GM/Rc²); a white dwarf's surface potential is
+  ~2–3 dex shallower (η ~ 1e-3…1e-4), so η=0.1 overstates a WD accretor's accretion luminosity by
+  100–1000×. Measured: **94 WD-companion tracks surfaced a non-None cue up to ~55,000 L☉** through the
+  real runtime — and the frontend caption (`refreshCoBinary`, main.js ~3094) paints `accretion_lum_lsun`
+  UNCONDITIONALLY whenever non-null (the WD caveat only annotated the *mass* note, not this cue). The WD
+  channel is a documented placeholder anyway (every WD node frozen at exactly 1.0 M☉), so the honest fix
+  is to **defer the cue entirely** rather than paint a 3-dex-wrong number. Gated it: `co_binary_track`'s
+  `active` mask now also needs `not is_wd` (`co_type != "WD"`), making the gate **three-part** (not-detached
+  AND not-unstable_MT AND not-WD). Backend-only — the served field goes `None`, so the frontend caption
+  omits it naturally (no main.js change). +1 served-level regression `test_accretion_cue_is_none_on_wd_companion_tracks`.
+- **Check 1 (tighten, didn't block) — the bound test recomputed instead of reading the served cue.**
+  `test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid` computed Eddington from the raw
+  `lg_mstar_dot_2` columns and re-applied its OWN parallel gate mask — so the test-gate and the production
+  gate could silently diverge (a string-compare mismatch / off-by-one / WD-vs-NS branch bug would pass both).
+  Closed with a NEW `test_served_accretion_cue_is_bounded_and_only_in_regime` that asserts the ≤5× bound on
+  `co_binary_track`'s OWN served `accretion_lum_lsun` (sampled over the cue-BEARING population — stable NS/BH
+  tracks — seeded per bucket, so the bound branch is genuinely exercised on served output; every non-None
+  served cue must be ≤5× Edd AND belong to an NS/BH-stable track the gate should admit). The exhaustive
+  grid-wide bound test was ALSO updated to mirror the now-three-part gate (its parallel mask now excludes WD
+  too) + its docstring bumped to "ALL THREE conditions", so it stays a faithful mirror. Measured after the
+  fix: 0 WD tracks serve a cue; the grid-wide served bound is exactly **3.46× Eddington** (unchanged — the
+  WD tracks were bounded in ratio anyway at ~1.68×, but wrong-regime by 2–3 dex in absolute L, which the
+  ratio alone hid).
+- **Lesson (third on this cue, after float32 and solar-only-unstable_MT):** a bounded Eddington *ratio* does
+  NOT imply a valid cue — a WD's ratio looked tame (1.68×) only because its mass is the placeholder-frozen
+  1.0 M☉; the absolute luminosity was still 2–3 dex too bright because η was the wrong regime. Check the
+  *regime* (which η, which accretor type), not just the ratio. And: assert bounds on the SERVED value, not a
+  reimplementation of the gate, or the two drift.
 
 **Prior "Not built" note (superseded by Chunk 1c above):** Chunk 1c was more metallicities + custom
 sliders; both now built.

@@ -157,21 +157,27 @@ def test_accretion_cue_nonnegative_and_only_during_transfer():
 
 def test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid():
     """Characterized 2026-07-08 (Chunk 1a solar) then RE-characterized across the WHOLE
-    8-bucket grid (Chunk 1c): with the STABLE-transfer gate `co_binary_track` uses (active
-    RLOF AND the track is not POSYDON `unstable_MT`), the schematic accretion-luminosity cue
-    lands at <=3.46x the CO's own Eddington luminosity (median ~2.3-2.6x) — the mildly-super-
-    Eddington ULX regime, not an unbounded number.
+    8-bucket grid (Chunk 1c): with the STABLE-NS/BH-transfer gate `co_binary_track` uses
+    (active RLOF AND the track is not POSYDON `unstable_MT` AND the companion is not a WD), the
+    schematic accretion-luminosity cue lands at <=3.46x the CO's own Eddington luminosity
+    (median ~2.3-2.6x) — the mildly-super-Eddington ULX regime, not an unbounded number.
 
-    THE GATE IS THE BOUND — this test mirrors BOTH conditions of the production `active`
-    mask, because each excludes a real artifact tail measured on the full grid:
+    THE GATE IS THE BOUND — this test mirrors ALL THREE conditions of the production `active`
+    mask, because each excludes a real artifact / wrong-regime tail measured on the full grid:
       * DETACHED rows carry `lg_mstar_dot_2` values pushing the formula to ~10^14 Lsun;
       * `unstable_MT` tracks (CE/merger) carry runaway `lg_mstar_dot_2` spikes pushing it to
         ~10^5x Eddington (all three grid-wide outliers were `unstable_MT` — solar had none,
-        the metal-poor grids do). If `co_binary_track`'s gate is ever widened (wind-fed
-        accretion; re-admitting unstable MT), THIS TEST WON'T CATCH a reintroduced unbounded
-        tail unless its own mask is widened to match — re-derive the bound, don't just relax
-        the filter here in lockstep. (Raw float32 columns overflow under a naive vectorized
-        pass — `co_binary_track` casts each value to float64 per row; this test mirrors that.)
+        the metal-poor grids do);
+      * `WD`-companion tracks would surface a cue up to ~55,000 Lsun computed with eta=0.1 (a
+        NS/BH efficiency, ~2-3 dex too deep for a WD's shallow potential well — wrong regime;
+        the WD channel is a placeholder anyway).
+    This is the GRID-WIDE bound over the raw columns; the served gate is verified SEPARATELY
+    (test_served_accretion_cue_is_bounded_and_only_in_regime) so the two can't silently
+    diverge. If `co_binary_track`'s gate is ever widened (wind-fed accretion; re-admitting
+    unstable MT / WD; a WD-appropriate eta), THIS TEST WON'T CATCH a reintroduced tail unless
+    its own mask is widened to match — re-derive the bound, don't just relax the filter here
+    in lockstep. (Raw float32 columns overflow under a naive vectorized pass — `co_binary_track`
+    casts each value to float64 per row; this test mirrors that.)
     """
     lsun_erg_s = 3.828e33
     edd_const = 1.26e38   # erg/s per Msun of accretor (standard Eddington-limit coefficient)
@@ -179,13 +185,14 @@ def test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid():
         rl1 = grid.rows["rl_relative_overflow_1"]
         lg2 = grid.rows["lg_mstar_dot_2"]
         m_co = grid.rows["star_2_mass"]
-        # Per-row mask of "belongs to an unstable_MT track" (the class is per-track).
-        unstable = np.zeros(rl1.size, dtype=bool)
+        # Per-row mask of "belongs to an unstable_MT OR WD-companion track" (both are per-track
+        # classifications) — mirrors the two per-track conditions of the production gate.
+        excluded = np.zeros(rl1.size, dtype=bool)
         for i in range(grid.m_star_init.size):
-            if str(grid.interpolation_class[i]) == "unstable_MT":
+            if str(grid.interpolation_class[i]) == "unstable_MT" or str(grid.co_type[i]) == "WD":
                 s = int(grid.row_start[i])
-                unstable[s:s + int(grid.row_count[i])] = True
-        active = np.where((rl1 > 0) & (lg2 > -30) & (lg2 < 10) & ~unstable)[0]
+                excluded[s:s + int(grid.row_count[i])] = True
+        active = np.where((rl1 > 0) & (lg2 > -30) & (lg2 < 10) & ~excluded)[0]
         assert active.size > 100, f"feh={grid.feh}: too few active rows to characterize"
         max_ratio = 0.0
         for r in active:
@@ -221,6 +228,69 @@ def test_accretion_cue_is_none_on_unstable_mt_tracks():
         )
         return   # one unstable_MT track through the real runtime is enough
     pytest.skip("no unstable_MT track in any baked bucket to exercise the gate")
+
+
+def test_accretion_cue_is_none_on_wd_companion_tracks():
+    """The Chunk-1c-follow-up served-level regression (advisor Check 2): `co_binary_track`
+    must NOT surface the accretion cue on a `co_type == "WD"` track. The cue's
+    `ACCRETION_EFFICIENCY = 0.1` is a NS/BH deep-potential-well efficiency; a white dwarf's
+    surface potential is ~2-3 dex shallower, so eta=0.1 overstates a WD accretor's luminosity
+    by 100-1000x (measured: 94 WD-companion tracks would otherwise surface a cue up to
+    ~55,000 Lsun on the placeholder-frozen 1.0-Msun WD channel — a caption the frontend paints
+    unconditionally when non-None). Locks the WD arm of the gate at the SERVED level."""
+    checked = 0
+    for grid in pc._available_grids():
+        wd_idx = np.where(grid.co_type == "WD")[0]
+        for i in wd_idx[:15]:
+            t = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                    float(grid.p_init_d[i]), feh=grid.feh)
+            assert all(s.accretion_lum_lsun is None for s in t.steps), (
+                f"feh={grid.feh}: a WD-companion track surfaced an accretion cue "
+                f"(should be gated off — eta=0.1 is a NS/BH efficiency, wrong regime for a WD)"
+            )
+            checked += 1
+    if checked == 0:
+        pytest.skip("no WD-companion track in any baked bucket to exercise the gate")
+
+
+def test_served_accretion_cue_is_bounded_and_only_in_regime():
+    """Advisor Check 1: assert the bound on the SERVED cue (`co_binary_track`'s own
+    `accretion_lum_lsun`), NOT a reimplementation of the gate over raw columns. The exhaustive
+    grid-wide bound lives in `..._within_a_few_eddington_across_the_grid` (fast, over raw
+    arrays); THIS test closes the divergence gap the advisor flagged — it proves the REAL
+    None-gate produces bounded values and is only ever painted in the NS/BH-stable regime, so
+    a string-comparison / off-by-one / WD-vs-NS branch bug in the production gate fails loudly.
+
+    Samples the cue-BEARING population (stable NS/BH tracks — the only ones that can now
+    surface a cue) seeded per bucket, so the bound branch is genuinely exercised on served
+    output; every non-None served cue must be <=5x Eddington AND belong to a track the gate
+    should admit (NS/BH, not unstable_MT, not WD)."""
+    lsun_erg_s = 3.828e33
+    edd_const = 1.26e38
+    rng = np.random.default_rng(1)
+    total_cues = 0
+    for grid in pc._available_grids():
+        cueable = [i for i in range(grid.m_star_init.size)
+                   if str(grid.co_type[i]) in ("NS", "BH")
+                   and str(grid.interpolation_class[i]) != "unstable_MT"]
+        assert cueable, f"feh={grid.feh}: no cue-bearing (stable NS/BH) tracks to sample"
+        sample = rng.choice(cueable, size=min(40, len(cueable)), replace=False)
+        for i in sample:
+            t = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                    float(grid.p_init_d[i]), feh=grid.feh)
+            # the gate must have admitted only NS/BH + stable tracks
+            assert t.co_type in ("NS", "BH")
+            for s in t.steps:
+                if s.accretion_lum_lsun is None:
+                    continue
+                total_cues += 1
+                l_edd_lsun = edd_const * s.co_mass_msun / lsun_erg_s
+                ratio = s.accretion_lum_lsun / l_edd_lsun
+                assert ratio < 5.0, (
+                    f"feh={grid.feh}: a SERVED accretion cue reached {ratio:.1f}x Eddington "
+                    f"— the production gate diverged from the characterized bound"
+                )
+    assert total_cues > 50, "sample surfaced too few served cues to be a meaningful bound check"
 
 
 def test_gate1_co_mass_grows_via_accretion():
