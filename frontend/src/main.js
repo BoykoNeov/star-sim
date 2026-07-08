@@ -79,6 +79,8 @@ const els = {
   binaryCustomP: document.getElementById("binary-custom-p"),
   binaryCustomPNum: document.getElementById("binary-custom-p-num"),
   binaryCustomNote: document.getElementById("binary-custom-note"),
+  binaryFeh: document.getElementById("binary-feh"),
+  binaryFehNote: document.getElementById("binary-feh-note"),
   // Stellar-endgame gateway + white-dwarf mode (smoldering-cinder-gateway.md).
   gateway: document.getElementById("gateway"),
   gatewayWd: document.getElementById("gateway-wd"),
@@ -498,26 +500,52 @@ let binaryToken = 0;            // latest-wins guard for /binary_track fetches
 // 0.05–0.99 — measured, not assumed).
 let binaryMeta = null;
 let binaryMetaPromise = null;
+let binaryMetaPromiseFeh = null;   // which feh binaryMetaPromise was started for (dedupes
+                                    // concurrent calls without returning a stale in-flight
+                                    // promise for a since-changed feh selection)
+let binaryMetaFeh = null;      // which customFeh the cached binaryMeta reflects — a change
+                                // in customFeh invalidates it (the m1/q/p bounds are PER-bucket:
+                                // the 8 POSYDON metallicities are separate grids, not one).
 const BINARY_CUSTOM_DEFAULT = { m1: 8.83, q: 0.6, p: 3.73 };   // starts from the Case-B node
 let customM1 = BINARY_CUSTOM_DEFAULT.m1;
 let customQ = BINARY_CUSTOM_DEFAULT.q;
 let customP = BINARY_CUSTOM_DEFAULT.p;
+let customFeh = 0.0;           // the selected POSYDON metallicity bucket (solar by default),
+                                // applies to EVERY demo (curated or custom) — orthogonal to
+                                // which (M1,q,P) is picked, mirroring the MIST mass/[Fe/H] split.
 
 function ensureBinaryMeta() {
-  if (binaryMeta) return Promise.resolve(binaryMeta);
-  if (!binaryMetaPromise) {
-    binaryMetaPromise = fetchJSON("/binary_track_meta?feh=0")
-      .then((meta) => {
-        binaryMeta = meta;
-        customM1 = Math.min(Math.max(customM1, meta.m1_min), meta.m1_max);
-        customQ = Math.min(Math.max(customQ, meta.q_min), meta.q_max);
-        customP = Math.min(Math.max(customP, meta.p_min), meta.p_max);
-        configureBinaryCustomSliders();
-        return meta;
-      })
-      .catch(() => { binaryMetaPromise = null; return null; });
-  }
+  if (binaryMeta && binaryMetaFeh === customFeh) return Promise.resolve(binaryMeta);
+  if (binaryMetaPromise && binaryMetaPromiseFeh === customFeh) return binaryMetaPromise;
+  const fehAtCall = customFeh;   // snapshot — customFeh may change again before this resolves
+  binaryMetaPromiseFeh = fehAtCall;
+  binaryMetaPromise = fetchJSON(`/binary_track_meta?feh=${fehAtCall}`)
+    .then((meta) => {
+      binaryMeta = meta;
+      binaryMetaFeh = fehAtCall;
+      customM1 = Math.min(Math.max(customM1, meta.m1_min), meta.m1_max);
+      customQ = Math.min(Math.max(customQ, meta.q_min), meta.q_max);
+      customP = Math.min(Math.max(customP, meta.p_min), meta.p_max);
+      populateBinaryFehOptions(meta.available_feh);
+      configureBinaryCustomSliders();
+      return meta;
+    })
+    .catch(() => { binaryMetaPromise = null; binaryMetaPromiseFeh = null; return null; });
   return binaryMetaPromise;
+}
+
+// Build the [Fe/H] <select> options from the real baked bucket list (8 POSYDON
+// metallicities, roughly −4.0…+0.3) — never hardcoded, so a future bucket just
+// appears. Cheap to rebuild every meta fetch; skip if the list hasn't changed
+// (keeps the user's own selection from being clobbered mid-interaction).
+function populateBinaryFehOptions(list) {
+  if (!els.binaryFeh || !list || !list.length) return;
+  const current = [...els.binaryFeh.options].map((o) => Number(o.value));
+  const same = current.length === list.length && current.every((v, i) => v === list[i]);
+  if (!same) {
+    els.binaryFeh.innerHTML = list.map((f) => `<option value="${f}">${f.toFixed(2)}</option>`).join("");
+  }
+  els.binaryFeh.value = String(customFeh);
 }
 
 // M1 and P span a wide dynamic range (~1.9 / ~4.7 dex) — log-scale position sliders, the
@@ -570,10 +598,24 @@ function updateBinaryCustomNote() {
   if (t.m1_snapped_far) far.push("M₁");
   if (t.q_snapped_far) far.push("q");
   if (t.p_snapped_far) far.push("P");
+  if (t.feh_snapped_far) far.push("[Fe/H]");
   const farNote = far.length ? ` — snapped far off-grid on ${far.join(", ")}` : "";
   els.binaryCustomNote.textContent =
     `Nearest real POSYDON track: M₁=${fmt(t.m1_init_msun)} M☉, q=${fmt(t.q_init)}, ` +
     `P=${fmt(t.p_init_d)} d — outcome: ${t.outcome}${farNote}.`;
+}
+
+// The [Fe/H] counterpart of updateBinaryCustomNote — shown for EVERY demo (curated or
+// custom), unlike the M1/q/P note above (which is only visible inside the "Custom orbit"
+// controls): metallicity applies to whichever system is showing, so its snap honesty
+// belongs outside that hidden block.
+function updateBinaryFehNote() {
+  if (!els.binaryFehNote) return;
+  if (!binaryTrackData) { els.binaryFehNote.textContent = ""; return; }
+  const t = binaryTrackData;
+  els.binaryFehNote.textContent = t.feh_snapped_far
+    ? `Nearest available POSYDON metallicity: [Fe/H]=${fmt(t.feh, 2)} (snapped far off-grid).`
+    : `POSYDON metallicity bucket: [Fe/H]=${fmt(t.feh, 2)}.`;
 }
 
 // The ⁵⁶Ni-mass control (Tier-3). Bounds are the observed range the backend clamps to; the
@@ -2511,7 +2553,10 @@ async function enterStripped() {
   binaryDemoKey = null; binaryToken++;   // path (b) Chunk 4b — always land on the snapshot first
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
+  if (els.binaryFehNote) els.binaryFehNote.textContent = "";
   updateBinaryDemoButtons();
+  ensureBinaryMeta();   // pre-warm the [Fe/H] bucket list (populates the select) + the
+                         // current bucket's M1/q/P bounds, so "Co-evolve" is instant on click
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -2577,7 +2622,8 @@ function updateBinaryDemoButtons() {
 
 // Pull a fresh /binary_track payload into the shared draw state (HR + ticks + the
 // snapped-node note) — shared by a fresh entry (enterBinaryView) and a live re-fetch while
-// scrubbing a custom orbit (refetchBinaryCustom); the caller owns binaryFraction/refreshBinary.
+// scrubbing a custom orbit or switching [Fe/H] (refetchBinaryTrack); the caller owns
+// binaryFraction/refreshBinary.
 function _applyBinaryTrackData(data) {
   binaryTrackData = data;
   binaryStar1 = data.steps.map((s) => s.star_1);
@@ -2585,6 +2631,16 @@ function _applyBinaryTrackData(data) {
   hr.setBinaryTrack(binaryStar1, binaryStar2);
   rebuildBinaryTicks();
   updateBinaryCustomNote();
+  updateBinaryFehNote();
+}
+
+// Resolve the (m1,q,p) triple for a demo key — the curated table for the three fixed
+// demos, or the free sliders for "custom". [Fe/H] is NOT part of this: it's the
+// orthogonal `customFeh` selector, applied by the caller (mirrors the MIST mass/[Fe/H] split).
+function _binaryParamsFor(demoKey) {
+  if (demoKey === "custom") return { m1: customM1, q: customQ, p: customP };
+  const demo = BINARY_DEMOS.find((d) => d.key === demoKey);
+  return demo ? { m1: demo.m1, q: demo.q, p: demo.p } : null;
 }
 
 // Enter the co-evolving movie for a curated demo system OR the free "custom" orbit (mode
@@ -2594,23 +2650,20 @@ function _applyBinaryTrackData(data) {
 // track / WD / WR scrubs).
 async function enterBinaryView(demoKey) {
   if (mode !== "stripped") return;
-  let m1, q, p;
   if (demoKey === "custom") {
     await ensureBinaryMeta();
     if (!binaryMeta) return;   // meta fetch failed — bail quietly, the /binary_track_meta 503 case
-    m1 = customM1; q = customQ; p = customP;
-  } else {
-    const demo = BINARY_DEMOS.find((d) => d.key === demoKey);
-    if (!demo) return;
-    ({ m1, q, p } = demo);
   }
+  const params = _binaryParamsFor(demoKey);
+  if (!params) return;
+  const { m1, q, p } = params;
   const tok = ++binaryToken;
   binaryDemoKey = demoKey;
   updateBinaryDemoButtons();
   els.age.disabled = true;   // re-enabled once the track lands; disabled meanwhile (fetching)
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the co-evolved binary track…";
   let data;
-  try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=0`); }
+  try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=${customFeh}`); }
   catch {
     if (tok === binaryToken && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the co-evolved binary track.";
@@ -2621,7 +2674,7 @@ async function enterBinaryView(demoKey) {
   binaryView = true;
   document.body.classList.add("binary-view");
   // Reveal the custom sliders only once binaryView is actually true (not before the fetch
-  // above resolves) — a drag while it's still "fetching…" would hit refetchBinaryCustom's
+  // above resolves) — a drag while it's still "fetching…" would hit refetchBinaryTrack's
   // `!binaryView` guard and get silently dropped, since nothing else in this view becomes
   // interactive (the demo buttons, the Back button) until this same point either.
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = demoKey !== "custom";
@@ -2644,6 +2697,7 @@ function exitBinaryView() {
   binaryTrackData = null; binaryStar1 = null; binaryStar2 = null; binaryDemoKey = null;
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
+  if (els.binaryFehNote) els.binaryFehNote.textContent = "";
   hr.clearBinaryTrack();
   roche.clear();
   els.age.disabled = true;
@@ -2654,18 +2708,25 @@ function exitBinaryView() {
   if (strippedData) { hr.setEndgame([strippedData.state], "stripped"); refreshStripped(); }
 }
 
-// Re-fetch the track when a custom M1/q/P slider moves (debounced, latest-wins — the
-// refetchSNMni idiom). Unlike a fresh enterBinaryView, this PRESERVES the current scrub
-// position (binaryFraction is a 0..1 fraction, re-indexed against whatever length the new
-// track happens to have) rather than resetting to the start — a slider drag is "show me
-// this other system," not "restart the movie."
-async function refetchBinaryCustom() {
-  if (mode !== "stripped" || !binaryView || binaryDemoKey !== "custom") return;
+// Re-fetch the CURRENTLY active demo/custom track (debounced, latest-wins — the
+// refetchSNMni idiom) — shared by a custom M1/q/P slider drag AND a [Fe/H] bucket change
+// (the two are orthogonal: [Fe/H] applies to whichever system is showing, curated or
+// custom, unlike M1/q/P which only ever apply to "custom"). Unlike a fresh
+// enterBinaryView, this PRESERVES the current scrub position (binaryFraction is a 0..1
+// fraction, re-indexed against whatever length the new track happens to have) rather
+// than resetting to the start — a slider/selector change is "show me this other
+// system," not "restart the movie."
+async function refetchBinaryTrack() {
+  if (mode !== "stripped" || !binaryView || !binaryDemoKey) return;
+  const demoKey = binaryDemoKey;
+  const params = _binaryParamsFor(demoKey);
+  if (!params) return;
+  const { m1, q, p } = params;
   const tok = ++binaryToken;
   let data;
-  try { data = await fetchJSON(`/binary_track?m1=${customM1}&q=${customQ}&p=${customP}&feh=0`); }
+  try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=${customFeh}`); }
   catch { return; }
-  if (tok !== binaryToken || mode !== "stripped" || !binaryView || binaryDemoKey !== "custom") return;
+  if (tok !== binaryToken || mode !== "stripped" || !binaryView || binaryDemoKey !== demoKey) return;
   _applyBinaryTrackData(data);
   refreshBinary();
 }
@@ -3117,7 +3178,7 @@ async function init() {
   // /binary_track (debounced + latest-wins, the ⁵⁶Ni-slider idiom) and re-snaps to the
   // nearest real POSYDON track — updateBinaryCustomNote (inside _applyBinaryTrackData)
   // always states the TRUE snapped node, never the raw dragged number.
-  const debouncedBinaryCustom = debounce(refetchBinaryCustom, SLIDER_FETCH_DELAY_MS);
+  const debouncedBinaryCustom = debounce(refetchBinaryTrack, SLIDER_FETCH_DELAY_MS);
   if (els.binaryCustomM1) {
     els.binaryCustomM1.addEventListener("input", () => {
       customM1 = customM1FromPos(Number(els.binaryCustomM1.value));
@@ -3132,7 +3193,7 @@ async function init() {
     if (!isFinite(m)) return;
     customM1 = Math.min(Math.max(m, binaryMeta.m1_min), binaryMeta.m1_max);
     els.binaryCustomM1.value = String(posFromCustomM1(customM1));
-    refetchBinaryCustom();
+    refetchBinaryTrack();
   });
 
   if (els.binaryCustomQ) {
@@ -3149,7 +3210,7 @@ async function init() {
     if (!isFinite(q)) return;
     customQ = Math.min(Math.max(q, binaryMeta.q_min), binaryMeta.q_max);
     els.binaryCustomQ.value = String(customQ);
-    refetchBinaryCustom();
+    refetchBinaryTrack();
   });
 
   if (els.binaryCustomP) {
@@ -3166,7 +3227,25 @@ async function init() {
     if (!isFinite(p)) return;
     customP = Math.min(Math.max(p, binaryMeta.p_min), binaryMeta.p_max);
     els.binaryCustomP.value = String(posFromCustomP(customP));
-    refetchBinaryCustom();
+    refetchBinaryTrack();
+  });
+
+  // The [Fe/H] metallicity-bucket picker — applies to WHICHEVER demo is showing (curated
+  // or custom), unlike M1/q/P which only ever drive "custom". Switching buckets means the
+  // M1/q/P grid bounds can shift too (each POSYDON metallicity is its own baked grid), so
+  // this invalidates the cached binaryMeta and re-fetches it (refreshing the custom
+  // sliders' bounds/clamps) alongside re-fetching whichever track is live.
+  if (els.binaryFeh) els.binaryFeh.addEventListener("change", async () => {
+    const f = Number(els.binaryFeh.value);
+    if (!isFinite(f)) return;
+    customFeh = f;
+    binaryMeta = null; binaryMetaPromise = null; binaryMetaPromiseFeh = null; binaryMetaFeh = null;
+    // Await the bounds refresh first: it clamps customM1/Q/P to the new bucket's grid and
+    // repositions the sliders, so a subsequent refetch (below) matches what's now shown on
+    // the sliders instead of fetching the OLD bucket's dragged values a moment before they
+    // silently get re-clamped out from under it.
+    await ensureBinaryMeta();
+    refetchBinaryTrack();     // re-snap whichever demo/custom system is currently showing
   });
 
   // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the

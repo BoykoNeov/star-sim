@@ -721,9 +721,20 @@ body.stripped-mode .binary-demo-row {
   color: var(--bg); background: var(--accent);   /* filled — this is the live demo */
 }
 /* While a demo is co-evolving, the four pickers step aside for the single "back" button —
-   a clean "you are inside a movie now, here's the one way out" affordance. */
+   a clean "you are inside a movie now, here's the one way out" affordance. The [Fe/H]
+   picker is DELIBERATELY excluded from this hide rule: unlike the demo buttons (which
+   pick a NEW system) it can keep driving a live re-fetch of whichever system is already
+   showing, so a user can compare metallicities without leaving the movie. */
 body.binary-view .binary-demo-btn, body.binary-view .binary-demo-label { display: none; }
 body.binary-view .binary-demo-back { display: inline-block; }
+.binary-feh-label {
+  font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px;
+}
+.binary-feh-label select {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px;
+}
+.binary-feh-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 
 /* path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit" — shown/hidden via
    main.js toggling .hidden directly (the sn-control precedent, not a body class), so no

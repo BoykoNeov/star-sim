@@ -142,13 +142,17 @@
              hadn't exposed that beyond the three de-risking demos yet. -->
         <div class="binary-demo-row" id="binary-demo-row">
           <span class="binary-demo-label">Co-evolve the system through time:</span>
+          <label class="binary-feh-label" for="binary-feh">[Fe/H]
+            <select id="binary-feh"></select>
+          </label>
           <button type="button" class="binary-demo-btn" id="binary-demo-merger" data-demo="merger">Tight orbit → merger</button>
           <button type="button" class="binary-demo-btn" id="binary-demo-stripped" data-demo="stripped">Case-B orbit → stripped + companion</button>
           <button type="button" class="binary-demo-btn" id="binary-demo-wide" data-demo="wide">Wide orbit → detached</button>
           <button type="button" class="binary-demo-btn" id="binary-demo-custom" data-demo="custom">Custom orbit…</button>
           <button type="button" class="binary-demo-back" id="binary-demo-back" hidden>← Back to the snapshot</button>
-          <span class="help" tabindex="0" data-tip="Pick one of three real POSYDON binary-evolution tracks (Fragos+2023) — the SAME donor and mass ratio, only the initial orbital period differs, so the different outcomes come purely from how close the two stars started. Or pick 'Custom orbit' to drag your OWN initial M₁/mass-ratio/period — it snaps to the nearest real track on the grid, same as the three curated demos, just not pre-picked for you. The age slider becomes a system-time scrubber: watch both stars' real modelled state move on the HR diagram (they can CROSS — the Algol mass-ratio reversal, live), the Roche-lobe panel go live off the real changing orbit, and the 3D pair evolve together. Unlike the snapshot above (one representative stripped state), this is a genuine time series — a real MESA-binary run, not a single fixed q=0.8 moment.">?</span>
+          <span class="help" tabindex="0" data-tip="Pick one of three real POSYDON binary-evolution tracks (Fragos+2023) — the SAME donor and mass ratio, only the initial orbital period differs, so the different outcomes come purely from how close the two stars started. Or pick 'Custom orbit' to drag your OWN initial M₁/mass-ratio/period — it snaps to the nearest real track on the grid, same as the three curated demos, just not pre-picked for you. The [Fe/H] picker switches to a different POSYDON metallicity bucket (real grids spanning roughly −4.0 to +0.3) — every demo re-snaps to the nearest track AT that metallicity, so the same period can produce a different outcome at a different [Fe/H]. The age slider becomes a system-time scrubber: watch both stars' real modelled state move on the HR diagram (they can CROSS — the Algol mass-ratio reversal, live), the Roche-lobe panel go live off the real changing orbit, and the 3D pair evolve together. Unlike the snapshot above (one representative stripped state), this is a genuine time series — a real MESA-binary run, not a single fixed q=0.8 moment.">?</span>
         </div>
+        <p class="note binary-feh-note" id="binary-feh-note"></p>
         <!-- path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit" — hidden
              until that demo is picked (main.js toggles .hidden directly, the sn-control
              precedent). Position-based log sliders for M1/P (the grid spans ~1.9/4.7

@@ -1,6 +1,6 @@
 ---
 name: star-sim-binary-stripped
-description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–4b built the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track) with a two-star TIME render (both HR markers cross, Roche panel live off per-step geometry). Chunk 4c (frontend-only, no backend change — /binary_track was always general) BUILT: free M1/q/P sliders behind a fourth 'Custom orbit' picker, log-scale for M1/P + linear for q, snap-honesty note always states the TRUE nearest POSYDON node. Path (b) arc is now fully complete (all of 1–4c built); only richer-outcomes/more-Z/population-overlay follow-ons remain, unscoped."
+description: "Binary-stripped-star sibling (binary.py + /binary) — Götberg 2018 hot He-star, the ~70% WR channel; path (a) Chunks 1–3 complete. Path (b) Chunks 1–4b built the POSYDON co-evolved-binary time-series sibling (posydon.py + /binary_track) with a two-star TIME render (both HR markers cross, Roche panel live off per-step geometry). Chunk 4c (frontend-only, no backend change — /binary_track was always general) BUILT: free M1/q/P sliders behind a fourth 'Custom orbit' picker, log-scale for M1/P + linear for q, snap-honesty note always states the TRUE nearest POSYDON node. Chunk 4d (frontend-only, no backend change) BUILT: a [Fe/H] metallicity-bucket picker wiring the frontend up to the full 8-bucket POSYDON axis [[star-sim-hosted-data-assets]] finished hosting — applies to whichever demo (curated or custom) is showing. Path (b) arc is now fully complete (all of 1–4d built); only richer-outcomes/population-overlay follow-ons remain, unscoped."
 metadata: 
   node_type: memory
   type: project
@@ -429,6 +429,56 @@ more metallicities are still unbuilt/unscoped).
   of these were attempted this pass — each needs its own recon/gate before a build, the same
   discipline every prior chunk followed.
 
+**PATH (b) CHUNK 4d BUILT 2026-07-08 (frontend-only, NO backend change, Playwright 1440+390
+zero console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
+[[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
+([Fe/H] ≈ −4.0…+0.30, up from just solar).
+- **Why no backend touch:** `/binary_track`/`/binary_track_meta` already took a `feh` param
+  and `binary_track_meta` already served `available_feh` (the sorted bucket list) — `main.js`
+  just had it hardcoded to `feh=0` at both fetch call sites (`enterBinaryView` and the old
+  `refetchBinaryCustom`). Confirmed by reading `posydon.py`/`api.py` before writing any code.
+- **A `<select id="binary-feh">`** in `binary-demo-row`, populated from the real
+  `available_feh` list (never hardcoded — a future bucket just appears). Deliberately
+  **NOT** gated by `body.binary-view .binary-demo-btn { display:none }` like the curated/
+  custom demo buttons — `.binary-feh-label` is excluded from that hide rule, so it stays
+  visible and usable WHILE a co-evolving movie is showing, letting a user compare
+  metallicities without leaving the view.
+- **Orthogonal axis, mirroring the MIST mass/[Fe/H] split:** a new `_binaryParamsFor(demoKey)`
+  helper resolves ONLY (m1,q,p) — curated table lookup or the custom sliders — and [Fe/H] is
+  applied separately by the caller via `customFeh`. `refetchBinaryCustom` was renamed/
+  generalized to **`refetchBinaryTrack`**: it now re-fetches whichever `binaryDemoKey` is
+  currently active (curated OR custom), not just "custom" — so the [Fe/H] select can drive a
+  live re-fetch of a curated demo too, which the old custom-only function couldn't do.
+- **Bounds are per-bucket, so ordering matters:** each POSYDON metallicity is its own baked
+  grid with its own M1/q/P extent (measured: they turned out similar in this case, but not
+  guaranteed). The `[Fe/H]` `change` handler AWAITS `ensureBinaryMeta()` (which re-fetches
+  `/binary_track_meta` for the new bucket, clamps `customM1/Q/P` into its bounds, and
+  repositions the custom sliders) BEFORE calling `refetchBinaryTrack()` — avoiding a moment
+  where the just-fetched track reflects the OLD bucket's dragged values while the slider has
+  already silently jumped to a new clamped position.
+- **A new always-visible `binary-feh-note`** (unlike the M1/q/P `binary-custom-note`, which
+  stays inside the "Custom orbit"-only hidden block) states the TRUE snapped `[Fe/H]` bucket
+  the backend returned, plus a snapped-far flag — visible for every demo, curated or custom,
+  since metallicity now applies universally. `updateBinaryCustomNote` also gained
+  `feh_snapped_far` in its far-flag list for the custom-orbit case.
+- **Verified end-to-end via a Playwright script against a live `uvicorn` dev server** (not
+  just unit/syntax-checked): `/binary_track_meta?feh=0` confirmed all 8 real buckets
+  (`[-4.0, -3.0, -2.0, -1.0, -0.69897, -0.34679, 0.0, 0.30103]`); the select populates with
+  exactly these; entering the curated "Case-B" demo at solar then switching to [Fe/H]=−1.0
+  fires BOTH `/binary_track_meta?feh=-1` and `/binary_track?...&feh=-1` and the note updates;
+  on "Custom orbit" with M1 dragged to 280 (snaps to the grid ceiling ~286 M☉, outcome
+  "stripped + companion" at solar) switching to the most metal-poor bucket ([Fe/H]=−4.0) at
+  the SAME (M1,q,P) genuinely changes the outcome to **"stable mass transfer"** — real
+  physics from the metallicity axis, not a cosmetic label swap. Zero console errors at
+  1440×1000 and 390×844; screenshots confirmed the `[Fe/H]` select + note lay out cleanly on
+  both widths, wrapping under the demo-back button on phone width without overlap.
+- **Files (frontend-only):** `index.html` (`#binary-feh` select + `#binary-feh-note`),
+  `styles.css` (`.binary-feh-label`/`.binary-feh-note`, the `.binary-demo-btn`-hide-rule
+  exclusion), `main.js` (`customFeh`/`binaryMetaFeh`/`binaryMetaPromiseFeh` state,
+  `populateBinaryFehOptions`, `_binaryParamsFor`, `refetchBinaryTrack` (renamed/generalized
+  from `refetchBinaryCustom`), `updateBinaryFehNote`, the select's `change` listener, the
+  `ensureBinaryMeta()` prewarm call added to `enterStripped`).
+
 **PATH (b) CHUNK 4 RECON DONE 2026-07-06 (superseded by Chunk 4a BUILT above):**
 the on-ramp to a real binary grid = "both stars co-evolving on the HR *through time*" (the one thing the
 Götberg snapshot can't give). **Advisor-steered discriminator, measured: POSYDON, NOT BPASS.**
@@ -492,15 +542,16 @@ stripped donor. **NO backend touch** (the companion `StellarState` is already se
 - **Next (path (b) Chunk 3+):** the mass-transfer geometry / Roche lobes (a genuinely new two-star render),
   then the on-ramp to a real binary grid (POSYDON/BPASS).
 
-**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–4c are ALL BUILT** — the Götberg-snapshot
+**Path (a) is COMPLETE** (Chunks 1–3); **path (b) Chunks 1–4d are ALL BUILT** — the Götberg-snapshot
 chunks (HR reversal, 3D companion sphere, Roche geometry), the POSYDON co-evolved-binary arc
-(Chunk 4a's backend + Chunk 4b's frontend two-star TIME render, the Roche panel gone live), and
+(Chunk 4a's backend + Chunk 4b's frontend two-star TIME render, the Roche panel gone live),
 Chunk 4c's free M1/q/P sliders (a fourth "Custom orbit" picker beside the three curated demos,
-no backend change — `/binary_track` was always general). The core "both stars co-evolving through
+no backend change — `/binary_track` was always general), and Chunk 4d's [Fe/H] metallicity-bucket
+picker (frontend-only, wiring the UI up to the full 8-bucket POSYDON axis the backend had already
+baked+hosted — [[star-sim-hosted-data-assets]]). The core "both stars co-evolving through
 time, the Algol reversal as a movie" payoff is real end-to-end, and now explorable at ANY real grid
-node, not just the three curated ones. What remains is explicitly unscoped: richer mass-transfer
-outcomes (CE/compact-object channels), the other 7 downloaded-but-unbaked metallicities, a
-population overlay (BPASS). Related:
+node AND any real metallicity bucket, not just solar. What remains is explicitly unscoped: richer
+mass-transfer outcomes (CE/compact-object channels), a population overlay (BPASS). Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).

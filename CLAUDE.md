@@ -327,6 +327,31 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
+  console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
+  [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
+  ([Fe/H] ≈ −4.0…+0.30); `/binary_track`/`/binary_track_meta` already took a `feh` param
+  (`binary_track_meta`'s `available_feh` field was already served) but `main.js` had it
+  hardcoded to `feh=0` in both fetch call sites. A `<select id="binary-feh">` in
+  `binary-demo-row`, populated from the real `available_feh` list (never hardcoded), applies
+  to WHICHEVER system is showing — curated demo or "Custom orbit" — unlike M1/q/P which only
+  ever drive "custom" (mirrors the MIST mass/[Fe/H] split: orthogonal axes). Deliberately kept
+  visible during an active co-evolving movie (`.binary-feh-label` excluded from the
+  `body.binary-view .binary-demo-btn` hide rule) so a user can compare metallicities without
+  leaving it. A new `customFeh` state var + `refetchBinaryTrack` (renamed/generalized from
+  `refetchBinaryCustom` — resolves (m1,q,p) for ANY active `binaryDemoKey`, not just
+  "custom") + a `binary-feh-note` (always-visible snap-honesty line, the M1/q/P
+  `binary-custom-note`'s counterpart but NOT hidden inside the custom-only controls). Switching
+  buckets re-fetches `binary_track_meta` first (clamping customM1/Q/P + repositioning the
+  custom sliders to the new bucket's bounds — each POSYDON metallicity is its OWN grid, so
+  bounds differ) before re-fetching the track, avoiding a stale slider-vs-fetched mismatch.
+  **Verified through the real app (Playwright):** the select lists all 8 real buckets; entering
+  the Case-B demo at solar then switching to [Fe/H]=−1.0 re-fetches both routes and the note
+  updates; on "Custom orbit" with M1 dragged to 280 (snaps to the grid ceiling 286 M☉,
+  "stripped + companion" at solar) switching to the most metal-poor bucket ([Fe/H]=−4.0) at the
+  SAME (M1,q,P) genuinely changes the outcome to "stable mass transfer" — real physics, not a
+  cosmetic label swap. Zero console errors at 1440/390 px. Plan
+  `docs/plans/entwined-consort-inspiral.md`; memory `star-sim-binary-stripped.md`.
 - **PATH (b) CHUNK 4c BUILT (frontend-only, NO backend change, 310 pytest unchanged, Playwright
   1440+390 zero errors):** free M1/q/P sliders — `/binary_track` was already fully general
   (snap-always over the WHOLE POSYDON grid, §6); Chunk 4b's three curated demos were a UI
@@ -344,8 +369,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   Playwright script: entering shows the Case-B default, dragging P to the log floor re-snaps
   to the real merger node, dragging M1 to the ceiling re-snaps far off-grid with an honest
   note, the scrubber/Back/re-entry all work. **Path (b) is now built end-to-end (Chunks
-  1–4c)** — what remains is the explicitly unscoped tail: richer CE/compact-object outcomes,
-  the 7 downloaded-but-unbaked metallicities, a population overlay (BPASS). Plan
+  1–4c, +4d above for the metallicity axis)** — what remains is the explicitly unscoped tail:
+  richer CE/compact-object outcomes, a population overlay (BPASS). Plan
   `docs/plans/entwined-consort-inspiral.md`; memory `star-sim-binary-stripped.md`.
 - **PATH (b) CHUNKS 4a & 4b BUILT — the two-star TIME render is live (310 pytest [+4]):**
   the on-ramp to a real binary grid — POSYDON HMS-HMS, the first TIME-SERIES, TWO-BODY
