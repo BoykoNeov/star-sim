@@ -483,29 +483,38 @@ def binary_track_route(
 @app.get("/co_binary_track_meta")
 def co_binary_track_meta_route(
     feh: float = Query(0.0, description="initial [Fe/H] (snaps to the nearest baked grid)"),
+    kind: str = Query("co-hms-rlo", description="CO grid: co-hms-rlo (H-rich secondary, "
+                       "default) | co-hems | co-hems-rlo (He-star double-compact channel)"),
 ) -> dict:
-    """[Fe/H] -> the baked POSYDON CO-HMS_RLO grid bounds (M_star/M_co/P ranges + track
+    """([Fe/H], kind) -> the baked POSYDON CO grid bounds (M_star/M_co/P ranges + track
     count) at the nearest available metallicity — mirrors `/binary_track_meta`."""
     try:
-        return co_binary_track_meta(feh)
+        return co_binary_track_meta(feh, kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except PosydonCoDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/co_binary_track")
 def co_binary_track_route(
-    m_star: float = Query(..., gt=0.0, description="normal star's initial mass / M_sun"),
+    m_star: float = Query(..., gt=0.0, description="surviving star's initial mass / M_sun"),
     m_co: float = Query(..., gt=0.0, description="compact object's initial mass / M_sun"),
     p: float = Query(..., gt=0.0, description="initial orbital period / days"),
     feh: float = Query(0.0, description="initial [Fe/H]"),
+    kind: str = Query("co-hms-rlo", description="CO grid: co-hms-rlo (H-rich secondary, "
+                       "default) | co-hems | co-hems-rlo (He-star double-compact channel)"),
 ) -> dict:
-    """(M_star, M_co_init, P, [Fe/H]) -> a POSYDON CO-HMS_RLO track: a compact object
-    (NS/BH/WD, left by an earlier primary's collapse) orbiting a still hydrogen-rich
-    secondary — path (b) Phase 1 Chunk 1a (docs/plans/tempered-lineage-inspiral.md), the
-    stage AFTER `/binary_track`'s two-normal-star episode.
+    """(M_star, M_co_init, P, [Fe/H], kind) -> a POSYDON CO-binary track: a compact object
+    (NS/BH/WD, left by an earlier primary's collapse) orbiting a secondary — path (b) Phase 1
+    (docs/plans/tempered-lineage-inspiral.md), the stage AFTER `/binary_track`'s two-normal-
+    star episode. `kind` selects the grid: "co-hms-rlo" (Chunk 1a, an H-rich secondary — the
+    X-ray-binary accretion payoff) or "co-hems"/"co-hems-rlo" (Chunk 2a, a bare-He-star
+    secondary — the double-compact-object channel, whose payload also carries a `dco`
+    endpoint classification).
 
-    Unlike `/binary_track`, each step carries only ONE real `StellarState` (the normal
-    star — `history2`, the compact-object side, is absent on this grid unconditionally,
+    Unlike `/binary_track`, each step carries only ONE real `StellarState` (the surviving
+    star — `history2`, the compact-object side, is absent on these grids unconditionally,
     per the schema recon in `posydon_co.py`'s docstring) plus the compact object's own
     mass/type/accretion-rate as routing scalars, and a schematic `accretion_lum_lsun` cue
     (a standard L=eta*Mdot*c^2 formula on the grid's real accretion rate — NOT a measured
@@ -513,9 +522,12 @@ def co_binary_track_route(
 
     Snap-always, same discipline as `/binary_track`: (M_star, M_co, P) snaps to the
     nearest real track in (log M_star, log M_co, log P) space — never interpolated (§6).
-    422 is reserved for structurally invalid input; a missing baked grid -> 503."""
+    422 is reserved for structurally invalid input (incl. an unknown `kind`); a missing
+    baked grid -> 503."""
     try:
-        return co_binary_track_payload(m_star, m_co, p, feh)
+        return co_binary_track_payload(m_star, m_co, p, feh, kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except PosydonCoDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

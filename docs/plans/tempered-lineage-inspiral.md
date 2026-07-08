@@ -1,9 +1,13 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: Phase 1 Chunks 1a/1b/1c ALL BUILT (2026-07-08) — see below. Phases
-2 and 3 not yet built. Sequential order (also the efficient order):
-**Phase 1** binary CE/compact-object tail → **Phase 2** initial-helium (Y) axis →
-**Phase 3** α-enhanced evolution axis (reuses Phase 2's plumbing).
+## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunk 2a (CO-HeMS/CO-HeMS_RLO backend) ALL BUILT (2026-07-08) — see below.
+Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** — see
+"Chunk 2a" under "Phase 1 (cont.)". Chunk 2b (frontend render) and 2c (full 8-bucket [Fe/H]
+axis + re-derive the Eddington bound across all He buckets) are next. Phases 2 and 3 not yet
+built. Sequential order (also the efficient order): **Phase 1** binary CE/compact-object tail
+(Chunk 1 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend → 2c [Fe/H] axis)
+→ **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis (reuses
+Phase 2's plumbing).
 
 ## Scope and non-goals
 
@@ -166,8 +170,8 @@ axis itself** (`co_binary_track` was already snap-always over the whole grid, §
   `active` mask now needs `not is_unstable_mt`) → bounded ≤3.46× Eddington grid-wide, the
   stable X-ray-binary payoff preserved. Detail: memory `star-sim-co-hms-rlo.md`.
 
-**Not built:** `CO-HeMS`/`CO-HeMS_RLO` (the double-compact-object channel) — a separate grid
-extraction, deferred.
+**Chunk 2 — `CO-HeMS` / `CO-HeMS_RLO` (the double-compact-object channel) — PLANNED, recon
+done 2026-07-08, not yet built.** See "Phase 1 (cont.)" below for the full chunked plan.
 
 ### Measure-first gate (Gate 1, mirrors Chunk 4a's Gate 0)
 
@@ -175,6 +179,171 @@ Before any control ships: verify through the real runtime that a CO-HMS_RLO/CO-H
 shows something a plain HMS-HMS track cannot — a distinguishable X-ray-binary accretion
 phase (different physical mechanism from RLOF onto a normal star), and/or a real orbital
 discontinuity at the SN transition if the chained path is built.
+
+## Phase 1 (cont.) — CO-HeMS / CO-HeMS_RLO (the double-compact-object channel)
+
+The last link in POSYDON's massive-binary relay:
+`HMS-HMS → CO-HMS_RLO → **CO-HeMS / CO-HeMS_RLO** → double compact object (GW merger)`.
+Where CO-HMS_RLO is "compact object + still-H-rich star," this is the stage after the
+*second* star has also been stripped to a bare **He star** orbiting the compact object — the
+direct progenitor configuration for a BH-BH / NS-BH / NS-NS binary, i.e. a
+gravitational-wave-merger source (LIGO/Virgo). This is the payoff that makes the channel
+worth building beyond "another accretion grid": it closes the story on the LIGO source.
+
+### Schema recon — DONE 2026-07-08 (measured, not assumed; the project discipline)
+
+Both grids extracted from the already-on-disk solar tarball
+(`data/Posydon/CO-HeMS_1Zsun_recon/`, `CO-HeMS_RLO_1Zsun_recon/`) and measured directly:
+
+- **It is a confirmed drop-in twin of CO-HMS_RLO.** `history2` is absent in every sampled
+  run (S1 = the real star, S2 = the point-mass CO) — the *same* single-real-star schema, so
+  this is a `posydon_co.py`-family sibling, **not** a `posydon.py` two-`StellarState` branch.
+  `history1` carries **every** `_HISTORY_COLS` column and `binary_history` carries **every**
+  `_CO_BINARY_COLS` column → `bake_co()` and `state_from_row()` drop in unchanged.
+- **The surviving star is a He star** (`S1_state ∈ {stripped_He_Central_C_depletion,
+  stripped_He_Central_He_depleted, stripped_He_Core_He_burning, stripped_He_non_burning}`).
+  Measured surface at mid-track: **H1 = 0.0000, He4 = 0.986**, Teff ≈ 56 kK, R ≈ 0.26 R☉ —
+  a hot compact WR-like He star. The composition measure-first gate is therefore essentially
+  **pre-passed**: reuse the existing Götberg stripped-star He-surface comp view
+  (`comp.setStripped`), don't build a new one.
+- **The two grids are complementary, both worth baking:**
+  - `CO-HeMS` — **14256 runs, `no_MT`-dominated (8937)**: the *detached* post-mass-transfer
+    inspiral phase. The accretion cue honestly stays `None` here (RLOF-scoped). This grid is
+    the home of the **DCO / GW-progenitor payoff**.
+  - `CO-HeMS_RLO` — **5319 runs, `stable_MT`(2570)+`initial_MT`(2100)-dominated, no `no_MT`**:
+    the RLOF episode. Accretion-onto-CO cue fires (measured: CO mass grows, e.g. +0.44 M☉
+    with 35 RLOF rows on a stable_MT run) — the exact CO-HMS_RLO payoff with a **He** donor.
+  - S2 (CO type) is BH-dominated on both (CO-HeMS: BH 9630 / NS 1865 / WD 371; CO-HeMS_RLO:
+    BH 2278 / NS 523 / WD 102) — this is predominantly the **BH-companion** channel.
+  - Snap axes match CO-HMS_RLO — `(M_star_He, M_co, P)`: M_star 0.50–191.9 M☉,
+    M_co 1.00–307.5 M☉, P 0.020–1147 d.
+- **WD-placeholder caveat recurs** — both grids carry WD companions. Verify the frozen
+  1.0-M☉ placeholder pattern at bake time; the existing three-part cue gate (`not detached
+  AND not unstable_MT AND not WD`) carries over unchanged and handles it.
+
+### The honesty-tier decision (advisor-settled 2026-07-08 — the load-bearing call)
+
+The tempting "GW merger time" cue is **NOT** the same honesty tier as the accretion cue, and
+the difference is the *input*:
+
+- **Accretion cue** = a formula (η·Ṁc²) on a **real served rate** (`lg_mstar_dot_2`). Input
+  measured → Tier-1/2. Carries over to CO-HeMS_RLO unchanged.
+- **Peters (1964) merger time** = a formula on the **post-second-SN orbit**, which this grid
+  **does not contain**. Recon confirmed: `final_values` orbital columns (`period_days`,
+  `binary_separation`) are the *pre-collapse* orbit — the track ends at the He star's
+  C/He-depletion, before it collapses. The DCO orbit forms only *after* S1's core collapse,
+  and depends on the **natal kick** — a modeling layer this grid does not serve. So a merger
+  time would be *two prescriptions deep* (a kick model feeding a Peters integral), not one.
+
+**Therefore, the payoff tiers for Chunk 2:**
+- **Tier-1/2 (real, ships in core scope):**
+  1. The He-star `StellarState` history (Teff/L/R + He-rich composition from real tracks).
+  2. The accretion-onto-CO cue on **CO-HeMS_RLO** (η·Ṁc² on the served `lg_mstar_dot_2`,
+     the existing three-part NS/BH-stable gate) — a He-donor X-ray binary.
+  3. **DCO-progenitor classification** — the novel, honest GW payoff. POSYDON serves its own
+     SN-model prediction of what the He star becomes (`S1_SN_MODEL_v2_XX`: remnant `mass`,
+     `SN_type`, `CO_type`, `spin`, `f_fb`). Combining S1's predicted remnant with the *known*
+     S2 (the existing CO) classifies the endpoint: **BH+BH / NS+BH / NS+NS** — or **WD → no
+     DCO** (run25's S1 SN model actually predicts a 0.74-M☉ WD, so the classifier must be
+     honest that not every CO-HeMS system makes a merger). This reuses the already-built
+     SN/remnant sibling's remnant vocabulary and needs **no kick model**. Caption-owned
+     choice: POSYDON ships **24 SN-model prescriptions** (`_v2_01`…`_v2_24`, e.g. Fryer
+     rapid/delayed) — pin one documented default, label it, exactly like every other
+     prescription in this project.
+- **Evocative / captioned stretch (optional, explicitly two-prescriptions-deep — recommend
+  DEFER out of core scope):** a "would it merge within a Hubble time?" flag. Only if built,
+  it must be captioned as depending on an un-served natal kick + a Peters estimate, at the
+  corona/wind honesty tier — never presented as measured POSYDON output.
+
+### Architecture (follows from the payoff, per the advisor: decide payoff, architecture falls out)
+
+Because the machinery is a confirmed drop-in and the only CO-HeMS-specific logic is (a) the
+He-comp view reuse and (b) the DCO-classification readout, the leanest path is
+**parameterize, don't fork**:
+
+- **Bake:** `bake_posydon.py` gains `--grid-type co-hems` and `--grid-type co-hems-rlo`,
+  reusing `bake_co()` verbatim (same column trim, RLOF-keep decimation, index-identity check,
+  float32/gzip). New output dirs `data/posydon/baked_co_he/` and `baked_co_he_rlo/` (or a
+  single dir with a grid-type tag — settle at chunk time). Additionally record the
+  `S1_SN_MODEL_v2_<default>_{mass,SN_type,CO_type,spin,f_fb}` scalars per track (the DCO
+  classifier's inputs — the `Mcur`/`endgame()`-scalar precedent: cached, read off the snapped
+  track, never blended). **`BAKE_VERSION_CO` can be shared** — the output shape is identical
+  (a few extra per-track scalar arrays don't change the row schema; bump only if that proves
+  false).
+- **Runtime:** the smallest change is a **grid-type parameter on `posydon_co.py`** (a `kind`
+  arg selecting the baked dir + the outcome vocabulary) rather than a near-duplicate module —
+  `co_binary_track`, `_snap_*`, the accretion-cue gate, and the Roche-geometry fold-in are all
+  reused. A thin `dco_classification(s1_sn_model, s2_co_type)` helper is the only genuinely new
+  logic. If this bloats `posydon_co.py` uncomfortably, split into a small `posydon_co_he.py`
+  that imports the shared helpers — but start parameterized.
+- **Routes:** `/co_binary_track` + `/co_binary_track_meta` gain a grid-type/`kind` query param
+  (default the existing CO-HMS_RLO, so the live surface is behavior-compatible — additive
+  keys only), mirroring the
+  `vvcrit`-param-defaults-to-old-behavior precedent.
+
+### Chunked build
+
+**Chunk 2a — bake + backend sibling (solar-first, RLOF-first) — BUILT 2026-07-08** (backend-
+only, no frontend, +38 tests in `test_posydon_co_he.py`). Renamed the recon dirs to canonical
+`CO-HeMS_1Zsun` / `CO-HeMS_RLO_1Zsun`; extended `bake_posydon.py` (`--grid-type co-hems`/
+`co-hems-rlo`, both through the existing `bake_co()` + a new per-track SN-model scalar block —
+`SN_MODEL_DEFAULT = S1_SN_MODEL_v2_01`, the DCO classifier's inputs). Baked CO-HeMS_RLO solar
+FIRST (4997 tracks, the drop-in proof — accretion cue fires unchanged), then CO-HeMS (11100).
+Parameterized `posydon_co.py` with a `kind` arg (`VALID_KINDS = co-hms-rlo | co-hems |
+co-hems-rlo`, default behavior-compatible — additive `kind`/`dco` payload keys only): per-kind
+baked dirs, an optional SN-scalar load (NO
+`BAKE_VERSION_CO` bump — the 8 CO-HMS_RLO npzs weren't re-baked), the `dco_classification`
+helper + a `DcoClassification` on `CoBinaryTrack` (He kinds only), and the `kind` route param
+(422 on an unknown kind).
+- **Gate 2a CLOSED through the real runtime:** CO-HeMS_RLO shows a He-donor (Case BB/BC)
+  accretion episode (demo 1.42 M☉ He star + 10.2 M☉ BH: 31 active rows, CO grows +0.72 M☉);
+  CO-HeMS classifies a real DCO endpoint (demo 16.6 M☉ → BH(5.90) + BH(5.99) = "BH + BH merger
+  progenitor"), and honestly reports "no DCO" when POSYDON predicts a WD remnant.
+- **Eddington bound RE-DERIVED (the task's explicit requirement — NOT assumed to inherit
+  3.46×):** measured across BOTH He solar grids under the same three-part `active` gate → max
+  **3.47×** Eddington (the same physical ULX ceiling as CO-HMS_RLO — POSYDON caps stable
+  transfer). SOLAR-SCOPED in the docstring + test: the metal-poor He buckets carry the same
+  `unstable_MT` artifact class CO-HMS_RLO's did (Chunk 1c: solar clean, metal-poor 505,221×), so
+  2c must re-derive across all 8 — do not re-ship the 1a→1c mistake.
+- **The DCO classifier** keys off the remnant TYPE (BH/NS/WD/None), not `sn_type` — so a
+  low-Z PISN (massless → CO_type None) falls through to the honest unresolved branch for free
+  at 2c. Prescription labeled BY INDEX (`v2_01`, of 24; caption-owned), the boron-b8 discipline.
+  S2's DCO mass is the FINAL-row (post-accretion) mass, not `m_co_init`.
+- **Index-identity tolerance loosened for the He bake (`_CO_INDEX_IDENTITY_RTOL = 5e-2`, an
+  advisor-flagged pre-2c diagnostic):** the strict 1e-3 check dropped ~20% of CO-HeMS runs
+  (2798, ALL index-identity, 0 length-mismatch) — measured as BENIGN He-star WIND drift (the
+  point-mass CO's `star_2_mass` matches exactly; only the bare He star's `star_1_mass` drifts
+  ≤0.24% and the orbit widens ≤1.1% between the grid point and the first saved row), concentrated
+  in `no_MT` (the DCO home). 5e-2 admits it while staying far below the ≥40% inter-node spacing.
+  CO-HeMS re-bake 11100 → 13898 tracks; CO-HeMS_RLO unaffected (0 drops either way).
+- Tests (`requires_posydon_co_he_data`, both He grids baked): 4 UNGATED pure classifier unit
+  tests (BH+BH/NS+BH/NS+NS labels, WD/None → no DCO, nan-mass); parametrized-over-kind snap/parse
+  honesty, whole-grid no-NaN/no-dupe, per-step StellarState + He-stripped-surface validity; the
+  RLO accretion regression; the DCO POSITIVE-presence regression (assert `dco is not None` +
+  label, advisor trap #1); the re-derived Eddington bound (raw + served-level); the `kind` axis +
+  the one-letter co-hms-rlo/co-hems-rlo hazard guard; route shape + 422 (incl. unknown kind).
+
+**Chunk 2b — frontend render.** Extend the `.co-binary-view` machinery (settle sub-selector
+vs a parallel `.co-he-binary-view` at chunk time — low stakes, the CO-HMS_RLO consult
+precedent). One real Teff-colored He star (HR + 3D via the stripped-star shader path) + the
+schematic CO glyph (reuse `CO_MARKER_FRAG`/`coMarker`); comp panel = the reused He-surface
+`comp.setStripped` view; the accretion cue in the age caption on CO-HeMS_RLO; a **DCO-endpoint
+readout/caption** ("this system ends as a BH+BH merger progenitor" / "…a WD — no merger").
+Roche panel goes live on the RLOF grid exactly as CO-HMS_RLO. Playwright-verify 1440+390.
+
+**Chunk 2c — the full [Fe/H] axis.** Extract + bake the 7 non-solar buckets for both grids
+(zero new downloads — the 8 tarballs are on disk), giving the full 8-bucket axis, coextensive
+with CO-HMS_RLO. Mirrors Chunk 1c exactly: a `#co-he-binary-feh` picker from the real
+`available_feh`, per-bucket meta refetch, snapped-far honesty. **Re-run the accretion-cue
+Eddington-bound characterization across all 8 He buckets** (this is the exact step that caught
+the 505,221× `unstable_MT` artifact in Chunk 1c — do not skip it for the He grids).
+
+### What's needed from you
+
+Nothing but review — **zero new downloads** (the tarballs and even the solar CO-HeMS grids are
+already on disk) and no compute. The one decision to confirm before Chunk 2a codes: **is the
+DCO-classification readout the intended core payoff, and is the Peters merger-time flag
+deferred** (recommended) or wanted as an explicitly-captioned evocative stretch?
 
 ## Phase 2 — Initial-helium (Y) axis, self-run MESA
 

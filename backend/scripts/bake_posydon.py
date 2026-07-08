@@ -63,6 +63,33 @@ whichever sorts first):
         -xzvf data/posydon/POSYDON_data_v2_grids_<Zlabel>.tar.gz '*/CO-HMS_RLO/*.h5'
     python scripts/bake_posydon.py --grid-type co-hms-rlo --z-label 1Zsun --feh 0.0
         # -> data/posydon/baked_co/1Zsun_co_hms_rlo.npz
+
+--- CO-HeMS / CO-HeMS_RLO (path (b) Phase 1 Chunk 2a) ---
+
+The double-compact-object channel: the SAME single-real-star schema as CO-HMS_RLO
+(`history2` absent in every sampled run; every `_HISTORY_COLS`/`_CO_BINARY_COLS` column
+present — schema recon 2026-07-08), except the surviving star (S1) is a bare **He star**
+(hot, compact, WR-like: measured mid-track Teff~56 kK, R~0.26 R_sun, X_surf~0, He4~0.986)
+orbiting the compact object — the direct progenitor of a BH-BH / NS-BH / NS-NS (GW-merger)
+binary. `bake_co()` drops in verbatim; the only addition (shared by all three CO grids) is
+recording the pinned default SN-model scalars (`SN_MODEL_DEFAULT`) per track — POSYDON's own
+prediction of what S1 becomes at collapse, the DCO classifier's input (see `posydon_co.py`).
+
+  * `CO-HeMS` — `no_MT`-dominated (the detached inspiral phase; the accretion cue is honestly
+    None on most tracks). The home of the DCO / GW-progenitor classification payoff.
+  * `CO-HeMS_RLO` — `stable_MT`+`initial_MT`-dominated (no `no_MT`): the He-donor accretion
+    episode — the CO-HMS_RLO accretion payoff with a He (Case BB/BC) donor.
+
+Extract (same tarball, different internal path — separate dir per grid, never the HMS-HMS
+dir) then bake CO-HeMS_RLO first (proves the drop-in), then CO-HeMS:
+
+    mkdir -p data/posydon/CO-HeMS_RLO_<Zlabel>
+    tar -C data/posydon/CO-HeMS_RLO_<Zlabel> --wildcards --strip-components=2 \\
+        -xzvf data/posydon/POSYDON_data_v2_grids_<Zlabel>.tar.gz '*/CO-HeMS_RLO/*.h5'
+    python scripts/bake_posydon.py --grid-type co-hems-rlo --z-label 1Zsun --feh 0.0
+        # -> data/posydon/baked_co_hems_rlo/1Zsun_co_hems_rlo.npz
+    python scripts/bake_posydon.py --grid-type co-hems     --z-label 1Zsun --feh 0.0
+        # -> data/posydon/baked_co_hems/1Zsun_co_hems.npz
 """
 
 from __future__ import annotations
@@ -85,12 +112,35 @@ BAKE_VERSION = 2
 # Bump alongside any change to the CO bake's column set / filter / decimation logic —
 # the sibling of BAKE_VERSION above, kept separate since the two bakes' output shapes
 # are genuinely different (one star + a compact-object scalar block, not two stars).
+#
+# Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO) added per-track SN-model scalar arrays
+# (track_sn_*, the DCO classifier's inputs). These are ADDITIVE and read OPTIONALLY by the
+# runtime (`posydon_co.py`'s `_load_baked` guards on `"track_sn_co_type" in npz.files`), so
+# the pre-existing CO-HMS_RLO npzs (baked without them) still load unchanged — NO version
+# bump was needed, and the 8 CO-HMS_RLO buckets were NOT re-baked (their extracted h5s were
+# deleted after Chunk 1c). Bump only if the ROW schema or a filter/decimation rule changes.
 BAKE_VERSION_CO = 1
+
+# The core-collapse prescription whose predicted S1 remnant feeds the DCO classifier
+# (CO-HeMS / CO-HeMS_RLO). POSYDON ships 24 tabulated SN prescriptions (`S1_SN_MODEL_v2_01`
+# ..`_v2_24`); this pins ONE documented default. It is labeled honestly BY INDEX ("model
+# v2_01, one of 24") rather than by a physical mechanism name (Fryer rapid/delayed/etc.),
+# because the index->mechanism mapping is not verifiable from the grid file alone — the
+# boron-b8 discipline (don't assert what the data doesn't state). The choice is caption-owned,
+# exactly like every other prescription in this project.
+SN_MODEL_DEFAULT = "S1_SN_MODEL_v2_01"
+# The per-run SN-model scalars recorded per track (the DCO classifier reads these off the
+# snapped track — the Mcur / endgame()-scalar precedent: cached, never blended). Two string
+# columns (CO_type/SN_type) + three float columns (remnant mass / fallback fraction / spin).
+_SN_MODEL_STR_FIELDS = ("CO_type", "SN_type")
+_SN_MODEL_FLOAT_FIELDS = ("mass", "f_fb", "spin")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 POSYDON_DATA_DIR = _REPO_ROOT / "data" / "posydon"
 OUT_DIR = POSYDON_DATA_DIR / "baked"
 OUT_DIR_CO = POSYDON_DATA_DIR / "baked_co"
+OUT_DIR_CO_HEMS = POSYDON_DATA_DIR / "baked_co_hems"
+OUT_DIR_CO_HEMS_RLO = POSYDON_DATA_DIR / "baked_co_hems_rlo"
 
 # POSYDON's own solar reference metallicity (Zbase in the grid file paths, e.g.
 # "Zbase_0.0142_m1_..."), matching the sim's [Fe/H] = log10(Z / Z_sun) convention.
@@ -125,6 +175,18 @@ _CO_BINARY_COLS = [
     "lg_mtransfer_rate", "lg_mstar_dot_2",
     "rl_relative_overflow_1", "rl_relative_overflow_2",
 ]
+
+# Relative tolerance for the CO bake's index-identity sanity check (run{i}'s first
+# binary_history row vs initial_values[i]). The check exists to catch a GROSS run<->
+# initial_values MISINDEXING (a swap to a different grid node), NOT sub-percent physical
+# drift. `bake()`'s HMS-HMS check uses 1e-3 because its first row is essentially the ZAMS
+# grid point; but a bare HE STAR (CO-HeMS / CO-HeMS_RLO) loses a little WIND mass between
+# the grid point and the first saved row, so `star_1_mass` drifts ~0.2% and the orbit
+# widens ~0.5-1.1% (measured on the solar CO-HeMS grid — star_2_mass, the point-mass CO,
+# still matches EXACTLY). At 1e-3 that benign drift dropped ~20% of good `no_MT` tracks
+# (the DCO-payoff home). 5e-2 admits the wind drift while staying far below the grid's
+# inter-node spacing (>=40% in M1, factors in P) — a genuine misindex is still caught.
+_CO_INDEX_IDENTITY_RTOL = 5e-2
 
 
 def _decimate(n: int, cap: int, must_keep: np.ndarray | None = None) -> np.ndarray:
@@ -303,6 +365,21 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
     iv_m2 = iv["star_2_mass"][:]
     iv_p = iv["period_days"][:]
 
+    # SN-model scalars (the DCO classifier's inputs — CO-HeMS / CO-HeMS_RLO, Chunk 2a).
+    # POSYDON's own prediction of what the surviving He star (S1) becomes at core collapse,
+    # under the pinned default prescription. Present on every CO grid's final_values, but
+    # guarded so a grid that somehow lacks them just skips the DCO columns (the runtime then
+    # serves dco=None). The DCO story is only physically meaningful for the He grids anyway;
+    # recording it uniformly keeps bake_co() single-path.
+    have_sn = f"{SN_MODEL_DEFAULT}_CO_type" in fv.dtype.names
+    sn_str: dict[str, np.ndarray] = {}
+    sn_flt: dict[str, np.ndarray] = {}
+    if have_sn:
+        for fld in _SN_MODEL_STR_FIELDS:
+            sn_str[fld] = fv[f"{SN_MODEL_DEFAULT}_{fld}"][:].astype(str)
+        for fld in _SN_MODEL_FLOAT_FIELDS:
+            sn_flt[fld] = fv[f"{SN_MODEL_DEFAULT}_{fld}"][:]
+
     track_m1: list[float] = []
     track_m2: list[float] = []
     track_p: list[float] = []
@@ -312,6 +389,8 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
     track_s1: list[str] = []
     track_co_type: list[str] = []
     track_mth: list[str] = []
+    track_sn_str: dict[str, list[str]] = {fld: [] for fld in _SN_MODEL_STR_FIELDS}
+    track_sn_flt: dict[str, list[float]] = {fld: [] for fld in _SN_MODEL_FLOAT_FIELDS}
 
     row_cols: dict[str, list[float]] = {c: [] for c in _CO_BINARY_COLS}
     for c in _HISTORY_COLS:
@@ -338,9 +417,14 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
             n_dropped_mismatch += 1
             continue
 
-        if (abs(bh_rec["star_1_mass"][0] - iv_m1[i]) > 1e-3 * max(1.0, iv_m1[i])
+        # Index-identity: catch a run<->initial_values misindex, NOT benign He-star wind
+        # drift — see `_CO_INDEX_IDENTITY_RTOL`. Note star_2 (the point-mass CO) is checked
+        # at the strict 1e-3 (it doesn't drift; a mismatch there WOULD be a real misindex),
+        # while star_1 / period get the looser wind-aware tolerance.
+        rtol = _CO_INDEX_IDENTITY_RTOL
+        if (abs(bh_rec["star_1_mass"][0] - iv_m1[i]) > rtol * max(1.0, iv_m1[i])
                 or abs(bh_rec["star_2_mass"][0] - iv_m2[i]) > 1e-3 * max(1.0, iv_m2[i])
-                or abs(bh_rec["period_days"][0] - iv_p[i]) > 1e-3 * max(1.0, iv_p[i])):
+                or abs(bh_rec["period_days"][0] - iv_p[i]) > rtol * max(1.0, iv_p[i])):
             n_dropped_mismatch += 1
             continue
 
@@ -364,6 +448,11 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
         track_s1.append(s1_all[i])
         track_co_type.append(s2_all[i])
         track_mth.append(mth_all[i])
+        if have_sn:
+            for fld in _SN_MODEL_STR_FIELDS:
+                track_sn_str[fld].append(sn_str[fld][i])
+            for fld in _SN_MODEL_FLOAT_FIELDS:
+                track_sn_flt[fld].append(float(sn_flt[fld][i]))
         row_offset += m
         n_kept += 1
 
@@ -393,6 +482,12 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
         "track_co_type": np.asarray(track_co_type),
         "track_mt_history": np.asarray(track_mth),
     }
+    if have_sn:
+        data["sn_model_default"] = np.array(SN_MODEL_DEFAULT)
+        for fld in _SN_MODEL_STR_FIELDS:
+            data[f"track_sn_{fld}"] = np.asarray(track_sn_str[fld])
+        for fld in _SN_MODEL_FLOAT_FIELDS:
+            data[f"track_sn_{fld}"] = np.asarray(track_sn_flt[fld], dtype=np.float64)
     for c, vals in row_cols.items():
         data[f"row_{c}"] = np.concatenate(vals).astype(np.float32)
 
@@ -411,24 +506,42 @@ def bake_co(h5_path: Path, out_path: Path, *, feh: float) -> None:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--grid-type", choices=("hms-hms", "co-hms-rlo"), default="hms-hms",
+    p.add_argument("--grid-type",
+                    choices=("hms-hms", "co-hms-rlo", "co-hems", "co-hems-rlo"),
+                    default="hms-hms",
                     help="which POSYDON grid to bake (default hms-hms, the two-normal-"
-                         "star grid; co-hms-rlo is the compact-object + normal-star grid, "
-                         "Phase 1 Chunk 1a)")
+                         "star grid; co-hms-rlo is the compact-object + H-rich-star grid, "
+                         "Phase 1 Chunk 1a; co-hems / co-hems-rlo are the compact-object + "
+                         "bare-He-star double-compact-object channel, Phase 1 Chunk 2a — all "
+                         "three CO grids share bake_co()'s one-real-star + CO-scalar shape)")
     p.add_argument("--z-label", required=True,
                     help="the extracted grid subdir (e.g. 1Zsun) — hms-hms expects "
-                         "data/posydon/<z-label>/*.h5 (fetch_posydon.py's layout); "
-                         "co-hms-rlo expects data/posydon/CO-HMS_RLO_<z-label>/*.h5 "
-                         "(this module's docstring recipe)")
+                         "data/posydon/<z-label>/*.h5 (fetch_posydon.py's layout); the CO "
+                         "grids expect data/posydon/<GRID>_<z-label>/*.h5 where GRID is "
+                         "CO-HMS_RLO / CO-HeMS / CO-HeMS_RLO (this module's docstring recipe)")
     p.add_argument("--feh", type=float, required=True,
                     help="[Fe/H] of this grid (e.g. 0.0 for the 1Zsun solar bucket)")
     p.add_argument("--out", default=None,
-                    help="output .npz path (default data/posydon/baked/<z-label>.npz, or "
-                         "data/posydon/baked_co/<z-label>_co_hms_rlo.npz for co-hms-rlo)")
+                    help="output .npz path (default data/posydon/baked/<z-label>.npz for "
+                         "hms-hms, or data/posydon/baked_co[_hems][_rlo]/<z-label>_<tag>.npz "
+                         "for a CO grid)")
     a = p.parse_args(argv)
 
-    is_co = a.grid_type == "co-hms-rlo"
-    src_dir = (POSYDON_DATA_DIR / f"CO-HMS_RLO_{a.z_label}") if is_co else (POSYDON_DATA_DIR / a.z_label)
+    # (source-subdir prefix, output dir, filename tag) per CO grid type. The three CO grids
+    # all bake through bake_co() — the only per-type difference is where they read from and
+    # write to (each grid type gets its OWN baked dir, so posydon_co.py's per-kind glob never
+    # mixes them — the "a CO npz in the HMS-HMS dir gets silently misread" lesson).
+    co_specs = {
+        "co-hms-rlo": ("CO-HMS_RLO", OUT_DIR_CO, "co_hms_rlo"),
+        "co-hems": ("CO-HeMS", OUT_DIR_CO_HEMS, "co_hems"),
+        "co-hems-rlo": ("CO-HeMS_RLO", OUT_DIR_CO_HEMS_RLO, "co_hems_rlo"),
+    }
+    is_co = a.grid_type in co_specs
+    if is_co:
+        src_prefix, out_dir, tag = co_specs[a.grid_type]
+        src_dir = POSYDON_DATA_DIR / f"{src_prefix}_{a.z_label}"
+    else:
+        src_dir = POSYDON_DATA_DIR / a.z_label
     h5_files = sorted(src_dir.glob("*.h5")) if src_dir.is_dir() else []
     if not h5_files:
         raise SystemExit(
@@ -436,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
             f"first (see this module's docstring recipe)"
         )
     if is_co:
-        out_path = Path(a.out) if a.out else (OUT_DIR_CO / f"{a.z_label}_co_hms_rlo.npz")
+        out_path = Path(a.out) if a.out else (out_dir / f"{a.z_label}_{tag}.npz")
         bake_co(h5_files[0], out_path, feh=a.feh)
     else:
         out_path = Path(a.out) if a.out else (OUT_DIR / f"{a.z_label}.npz")

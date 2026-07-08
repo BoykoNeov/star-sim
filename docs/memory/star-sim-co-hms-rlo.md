@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) & 1c (full 8-bucket [Fe/H] axis + free M_star/M_co/P custom sliders) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode. The accretion-luminosity cue (η·Ṁ·c²) is now gated THREE ways (not-detached AND not-unstable_MT AND not-WD): Chunk 1c gated off unstable_MT (CE/merger) tracks after a metal-poor-grid 505,221× artifact; the advisor follow-up gated off WD-companion tracks (η=0.1 is a NS/BH efficiency, ~2–3 dex too deep for a WD) + added a served-level bound test.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunk 2a (CO-HeMS/CO-HeMS_RLO backend, the double-compact-object channel) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still-H-rich star (CO-HMS_RLO) or a bare He star (CO-HeMS/CO-HeMS_RLO, the GW-merger progenitor). posydon_co.py is now parameterized by a `kind` arg (VALID_KINDS) over per-kind baked dirs; Chunk 2a added the DCO classifier (dco_classification: predicted S1 remnant + known S2 → BH+BH/NS+BH/NS+NS or honest no-DCO). The accretion-luminosity cue (η·Ṁ·c²) is gated THREE ways (not-detached AND not-unstable_MT AND not-WD); the Eddington bound was RE-DERIVED on the He grids (3.47×, solar-scoped, not assumed to inherit CO-HMS_RLO's 3.46×). Optional SN-scalar load = no BAKE_VERSION_CO bump. The CO-HeMS index-identity check was loosened (5e-2) — the strict 1e-3 was dropping ~20% of good He-star tracks to benign wind drift. 373 pytest.
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -248,6 +248,71 @@ and raised two checks the self-verification hadn't reached:
   1.0 M☉; the absolute luminosity was still 2–3 dex too bright because η was the wrong regime. Check the
   *regime* (which η, which accretor type), not just the ratio. And: assert bounds on the SERVED value, not a
   reimplementation of the gate, or the two drift.
+
+**Chunk 2a BUILT 2026-07-08 (CO-HeMS / CO-HeMS_RLO backend, solar, +38 tests → 373 pytest; no
+frontend).** The double-compact-object channel — the He-star twins of CO-HMS_RLO. The stage AFTER
+CO-HMS_RLO: the surviving secondary has ALSO been stripped to a bare He star orbiting the compact
+object — the direct progenitor of a BH-BH / NS-BH / NS-NS gravitational-wave-merger binary
+(LIGO/Virgo source).
+- **Schema recon (measured against both real extracted solar HDF5s) confirmed a clean drop-in
+  twin of CO-HMS_RLO:** `history2` absent in every sampled run; every `_HISTORY_COLS`/`_CO_BINARY_COLS`
+  column present → `bake_co()` + `state_from_row()` drop in unchanged. S1 is a bare He star
+  (`stripped_He_*` states; measured surface X_surf≈0, He4≈0.986 for less-evolved, or C/O-dominated
+  WC/WO-like for evolved massive ones — the defining trait is H-DEPLETION, not He-dominance, which the
+  test asserts). CO-HeMS = 14256 runs `no_MT`-dominated (the detached inspiral — DCO payoff home);
+  CO-HeMS_RLO = 5319 runs `stable_MT`+`initial_MT` (the He-donor Case-BB/BC accretion payoff). Both
+  BH-companion-dominated.
+- **Parameterize-don't-fork (advisor-confirmed):** `posydon_co.py` gained a `kind` arg
+  (`VALID_KINDS = co-hms-rlo | co-hems | co-hems-rlo`, `DEFAULT_KIND="co-hms-rlo"` so the live surface
+  is behavior-compatible — the default payload only GAINS additive `kind`/`dco` keys, `dco` None there)
+  selecting one of three per-kind baked dirs (`baked_co`/`baked_co_hems`/
+  `baked_co_hems_rlo`). `co_binary_track`/`_meta`/`_payload` all take `kind`; `_resolve_kind` validates
+  against the explicit set (never string-slice — the one-letter **co-hms-rlo vs co-hems-rlo** hazard;
+  the API maps its ValueError → 422; a regression test asserts the two kinds resolve to distinct grids).
+- **`bake_posydon.py`** gained `--grid-type co-hems`/`co-hems-rlo` (both through the SAME `bake_co()`),
+  plus a new per-track SN-model scalar block (`SN_MODEL_DEFAULT = "S1_SN_MODEL_v2_01"` — POSYDON's own
+  prediction of what S1 becomes at collapse: CO_type/SN_type/mass/f_fb/spin). Baked CO-HeMS_RLO solar
+  FIRST (4997 tracks — the drop-in proof) then CO-HeMS (11100). **NO `BAKE_VERSION_CO` bump:** the SN
+  arrays are ADDITIVE and read OPTIONALLY (`_load_baked` guards `"track_sn_CO_type" in npz.files`), so
+  the 8 pre-existing CO-HMS_RLO npzs (baked without them, their extracted h5s deleted at Chunk 1c) still
+  load — re-baking them would cost real time for nothing (advisor-confirmed).
+- **The DCO classifier (`dco_classification` → `DcoClassification`, He kinds only; None for co-hms-rlo,
+  gated on `kind in _HE_KINDS` NOT on scalars-present):** combines POSYDON's predicted S1 remnant with
+  the KNOWN existing S2 → "BH + BH"/"NS + BH"/"NS + NS" merger progenitor, or honest **no-DCO** when
+  either ends a WD or is unresolved (run demos: 16.6 M☉ → BH(5.90)+BH(5.99); a WD-remnant node →
+  "no double-compact merger"). **Keys off the remnant TYPE (BH/NS/WD/None), not `sn_type`** — so a
+  low-Z pair-instability SN (massless remnant → CO_type None) falls through to the honest unresolved
+  branch for free when Chunk 2c reaches the metal-poor buckets. **No kick model, no merger TIME** (that
+  needs the post-second-SN orbit — a natal-kick prescription this grid doesn't serve, two prescriptions
+  deep; deliberately deferred, honesty-tier note in the docstring). Prescription labeled BY INDEX
+  (`v2_01` of 24; caption-owned — the boron-b8 discipline, since index→mechanism isn't verifiable from
+  the grid file). **S2's DCO mass = the FINAL-row (post-accretion) mass, not `m_co_init`** (advisor).
+- **The Eddington bound was RE-DERIVED, NOT inherited (the explicit task requirement):** He-star
+  Case-BB/BC transfer could differ from an H donor, so 3.46× was not assumed. Measured across BOTH He
+  SOLAR grids under the same three-part `active` gate → max **3.47×** Eddington (the same physical ULX
+  ceiling — POSYDON caps stable transfer). **SOLAR-SCOPED** in the docstring + test: the metal-poor He
+  buckets carry the same `unstable_MT` artifact class CO-HMS_RLO's did (Chunk 1c: solar clean,
+  metal-poor 505,221×), so Chunk 2c MUST re-derive across all 8 He buckets — don't re-ship the 1a→1c
+  mistake. (Even ungated the solar He max was 3.47×, i.e. the gate doesn't bite at solar — but it's
+  load-bearing at other Z and independently correct for the WD-regime η argument.)
+- **Advisor trap #1 (positive presence, not tolerance):** the optional SN-scalar load degrades
+  SILENTLY (a missing scalar → `dco=None`, no error), so the DCO regression asserts `dco is not None`
+  + the correct label on a known BH+BH node, not just tolerance.
+- **The CO-HeMS index-identity tolerance (`_CO_INDEX_IDENTITY_RTOL = 5e-2`, advisor-flagged pre-2c):**
+  the strict 1e-3 check (fine for near-ZAMS HMS-HMS) was dropping ~20% of CO-HeMS runs (2798, all
+  index-identity, 0 length-mismatch) — measured as BENIGN He-star WIND drift: the point-mass CO's
+  `star_2_mass` matches EXACTLY, only the bare He star's `star_1_mass` drifts ≤0.24% and the orbit
+  widens ≤1.1% between the `initial_values` grid point and the first saved row. Concentrated in `no_MT`
+  (the DCO-payoff home). Loosened to 5e-2 (still far below the ≥40%-in-M1 inter-node spacing, so a real
+  misindex is caught; star_2 kept at strict 1e-3). CO-HeMS re-bake: 11100 → 13898 tracks. CO-HeMS_RLO
+  unaffected (0 drops either way — its RLOF He stars don't drift as far). Lesson: an unexplained
+  high drop rate is the measure-first anomaly to understand, not wave past.
+- **Tests:** `test_posydon_co_he.py` (38, gated `requires_posydon_co_he_data` — both He grids baked)
+  + `requires_posydon_co_he_multifeh` (for 2c). 4 pure `dco_classification` unit tests are UNGATED
+  (no data). **Next = Chunk 2b (frontend render — He star via the stripped-star shader path, the
+  schematic CO glyph, the DCO-endpoint caption) → 2c (full 8-bucket [Fe/H] axis + re-derive the
+  Eddington bound across all He buckets).** [[star-sim-supernova-remnant-endgame]] for the NS/BH
+  remnant vocabulary the DCO classifier reuses.
 
 **Prior "Not built" note (superseded by Chunk 1c above):** Chunk 1c was more metallicities + custom
 sliders; both now built.

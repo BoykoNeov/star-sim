@@ -427,3 +427,43 @@ requires_posydon_co_multifeh = pytest.mark.skipif(
     reason="needs >=2 baked POSYDON CO-HMS_RLO metallicity grids — bake another with "
     "scripts/bake_posydon.py --grid-type co-hms-rlo (Chunk 1c)",
 )
+
+
+def posydon_co_he_data_available() -> bool:
+    """True if BOTH baked He-star CO grids (CO-HeMS + CO-HeMS_RLO) are present — the
+    double-compact-object channel (Chunk 2a). The suite exercises both (one for the
+    He-donor accretion payoff, one for the DCO-classification payoff), so both are needed.
+
+    Baked on the host from the extracted He-star CO grids (never committed — same multi-GB
+    Zenodo tarball, different internal paths):
+    `scripts/bake_posydon.py --grid-type co-hems-rlo` and `--grid-type co-hems`
+    (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 2a)."""
+    from star_sim.posydon_co import BAKED_CO_HEMS_DIR, BAKED_CO_HEMS_RLO_DIR
+
+    return (BAKED_CO_HEMS_DIR.is_dir() and any(BAKED_CO_HEMS_DIR.glob("*.npz"))
+            and BAKED_CO_HEMS_RLO_DIR.is_dir() and any(BAKED_CO_HEMS_RLO_DIR.glob("*.npz")))
+
+
+requires_posydon_co_he_data = pytest.mark.skipif(
+    not posydon_co_he_data_available(),
+    reason="no baked POSYDON CO-HeMS / CO-HeMS_RLO grids — run scripts/bake_posydon.py "
+    "--grid-type co-hems-rlo and --grid-type co-hems (see "
+    "docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 2a)",
+)
+
+
+def posydon_co_he_multifeh_available() -> bool:
+    """True if >=2 baked metallicity grids exist for BOTH He-star CO grids (the Chunk-2c
+    axis). Bake more buckets with `scripts/bake_posydon.py --grid-type co-hems[-rlo]`."""
+    from star_sim.posydon_co import BAKED_CO_HEMS_DIR, BAKED_CO_HEMS_RLO_DIR
+
+    return (BAKED_CO_HEMS_DIR.is_dir() and len(list(BAKED_CO_HEMS_DIR.glob("*.npz"))) >= 2
+            and BAKED_CO_HEMS_RLO_DIR.is_dir()
+            and len(list(BAKED_CO_HEMS_RLO_DIR.glob("*.npz"))) >= 2)
+
+
+requires_posydon_co_he_multifeh = pytest.mark.skipif(
+    not posydon_co_he_multifeh_available(),
+    reason="needs >=2 baked metallicity grids for both He CO grids — bake more with "
+    "scripts/bake_posydon.py --grid-type co-hems[-rlo] (Chunk 2c)",
+)

@@ -366,8 +366,20 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   bound test RECOMPUTED over raw columns rather than reading the served cue (so test-gate and
   production-gate could diverge) — is closed by a new `test_served_accretion_cue_is_bounded_and_only_in_regime`
   that asserts the bound on `co_binary_track`'s OWN served `accretion_lum_lsun`, plus a WD-None served
-  regression. **Not built:** `CO-HeMS`/`CO-HeMS_RLO` (double-compact-object
-  channel — a separate extraction). [[star-sim-co-hms-rlo]].
+  regression. **CO-HeMS / CO-HeMS_RLO Chunk 2a BUILT 2026-07-08 (backend-only, +38 tests):** the
+  double-compact-object channel — the He-star twins of CO-HMS_RLO (schema recon confirmed a clean
+  drop-in: `history2` absent, every column present, S1 a bare He star). `posydon_co.py` is
+  **parameterized by a `kind` arg** (`VALID_KINDS = co-hms-rlo | co-hems | co-hems-rlo`, default
+  behavior-compatible — additive `kind`/`dco` payload keys only) over per-kind baked dirs; `bake_posydon.py` gained `--grid-type co-hems`/`co-hems-rlo`
+  (both through the existing `bake_co()` + a new per-track SN-model scalar block, `SN_MODEL_DEFAULT =
+  S1_SN_MODEL_v2_01`). The novel payoff is `dco_classification` (a `DcoClassification` on
+  `CoBinaryTrack`, **He kinds only**): POSYDON's own predicted S1 remnant + the known S2 → "BH + BH" /
+  "NS + BH" / "NS + NS" merger progenitor, or honest "no DCO" (WD remnant / unresolved). Keys off
+  remnant TYPE (handles low-Z PISN → None for free at 2c); prescription labeled BY INDEX; S2 DCO mass =
+  final-row post-accretion. Optional SN-scalar load = **NO `BAKE_VERSION_CO` bump** (8 CO-HMS_RLO npzs
+  not re-baked). **Eddington bound RE-DERIVED** (not assumed): 3.47× across both He solar grids
+  (solar-scoped — re-derive at 2c, the metal-poor buckets carry the same `unstable_MT` artifact class).
+  **Next = Chunk 2b (frontend render) → 2c (full [Fe/H] axis).** [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
   [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
@@ -660,7 +672,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **335 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **373 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
   gated `requires_posydon_co_data`) has **24** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
@@ -678,7 +690,19 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `accretion_lum_lsun` from a sampled cue-bearing population, not recomputed over raw columns — so the
   test-gate and production-gate can't silently diverge). The Chunk-1a Eddington-bound test was updated
   to mirror the now THREE-part gate (not-detached AND not-unstable_MT AND not-WD, ceiling tightened
-  10→5×). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
+  10→5×). The POSYDON **CO-HeMS / CO-HeMS_RLO** double-compact-object sibling (Chunk 2a — the
+  He-star twins of CO-HMS_RLO, `posydon_co.py` parameterized by a `kind` arg over
+  `baked_co_hems`/`baked_co_hems_rlo`) adds `test_posydon_co_he.py` (**38**, gated
+  `requires_posydon_co_he_data`): 4 UNGATED pure `dco_classification` unit tests
+  (BH+BH/NS+BH/NS+NS labels, WD/None → no DCO, nan-mass); parametrized-over-kind snap/parse
+  honesty, whole-grid no-NaN/no-dupe, per-step StellarState + H-stripped-surface validity; the
+  He-donor (Case BB/BC) accretion regression + the detached-`no_MT`-cue-stays-None + unresolved-
+  companion graceful-degradation locks; the **DCO POSITIVE-presence regression** (assert
+  `dco is not None` + label — the optional SN-scalar load must not silently degrade); the
+  **re-derived Eddington bound** across both He solar grids (raw + served-level, measured 3.47×,
+  solar-scoped — re-derive at 2c); the `kind` axis + the one-letter `co-hms-rlo`/`co-hems-rlo`
+  hazard guard; route shape + 422 (incl. unknown kind). The POSYDON co-evolved-binary sibling
+  (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an
   exact-node round-trip over a 300-track sample), no duplicate grid nodes and no
