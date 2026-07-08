@@ -1,6 +1,7 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: DESIGN ONLY — not yet built. Sequential order (also the efficient order):
+## Status: Phase 1 Chunk 1a BUILT (2026-07-08, backend vertical) — see below. Phases 1b/1c,
+2, and 3 not yet built. Sequential order (also the efficient order):
 **Phase 1** binary CE/compact-object tail → **Phase 2** initial-helium (Y) axis →
 **Phase 3** α-enhanced evolution axis (reuses Phase 2's plumbing).
 
@@ -102,17 +103,27 @@ hydrogen-burning stars. This phase covers what happens **after one star dies**:
 
 ### Chunked build
 
-**Chunk 1a — schema recon + bake (backend, solar-first)**
-- Extract `CO-HMS_RLO` (and `CO-HeMS`/`CO-HeMS_RLO` if the schema allows the same treatment)
-  from the already-downloaded solar tarball.
-- Inspect the real HDF5 structure; branch/extend `bake_posydon.py` (or write a sibling bake
-  script) once the real schema is seen — never coded blind against the HMS-HMS assumption.
-- New `CoBinaryStep`/`CoBinaryTrack` shapes; extend `/binary_track` with a CO-aware branch, or
-  add a new `/co_binary_track` route — decided by how different the real schema turns out to be.
-- Tests (`test_posydon.py` extension, gated `requires_posydon_data`): schema validation, snap
-  honesty (real grid node, never interpolated — §6), no NaN/no duplicate nodes across the bake,
-  and — if the accretion-luminosity cue is built — a sanity check that it's non-negative and
-  only nonzero during active RLOF.
+**Chunk 1a — schema recon + bake (backend, solar-first) — BUILT 2026-07-08**
+- Extracted `CO-HMS_RLO` from the already-downloaded solar tarball (`CO-HeMS`/`CO-HeMS_RLO`
+  deferred — not needed for this chunk's scope).
+- Schema recon (measured, not assumed): `history2` is absent in ALL 9069 sampled runs,
+  unconditionally — S1 is always the normal star, S2 always the compact object. This settled
+  the architecture: a genuinely new sibling, not a `posydon.py` branch.
+- Built: `bake_posydon.py` gained `bake_co()` + `--grid-type co-hms-rlo` (reuses input-reading
+  helpers, writes to a separate `data/posydon/baked_co/` dir); `posydon.py`'s per-row helpers
+  promoted to public (`state_from_row`/`mt_state_label`/etc.) for reuse; new sibling
+  `posydon_co.py` (`CoBinaryStep`/`CoBinaryTrack`, snap-only in (log M_star, log M_co, log P));
+  new `/co_binary_track` + `/co_binary_track_meta` routes (bypass PROVIDER, mirror
+  `/binary_track`'s snap-always + 422/503 discipline).
+- The accretion-luminosity cue was built (`L=eta*Mdot*c^2`, `ACCRETION_EFFICIENCY=0.1`) and
+  characterized across the WHOLE baked grid (not just spot-checked): 2-3.5x Eddington, a real
+  bounded super-Eddington/ULX-like regime — pinned as a permanent regression test.
+- Tests: `test_posydon_co.py` (18 new, gated `requires_posydon_co_data`) — schema/snap honesty,
+  no NaN/duplicate nodes across the whole bake, the accretion-cue sanity + Eddington-bound
+  regression, the Gate-1 measure-first regression (CO mass genuinely grows via accretion; RLOF
+  fires then detaches; the donor ends heavily stripped and hot), route shape + 422s.
+- Full detail + the float32-overflow characterization gotcha: `star-sim-co-hms-rlo.md` (memory).
+- **Not done in this chunk:** `CO-HeMS`/`CO-HeMS_RLO` extraction, more metallicities (Chunk 1c).
 
 **Chunk 1b — frontend render**
 - Extend the existing binary-track HR/Roche/3D machinery to the new step shape: one real

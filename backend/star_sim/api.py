@@ -42,6 +42,11 @@ from .binary import (
 from .structure import StructureDataMissing, interior_structure
 from .supernova import Progenitor, supernova_model
 from .posydon import PosydonDataMissing, binary_track_meta, binary_track_payload
+from .posydon_co import (
+    PosydonCoDataMissing,
+    co_binary_track_meta,
+    co_binary_track_payload,
+)
 from .providers import MISTProvider
 
 # --- the single provider-swap point ------------------------------------------
@@ -472,6 +477,46 @@ def binary_track_route(
     try:
         return binary_track_payload(m1, q, p, feh)
     except PosydonDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/co_binary_track_meta")
+def co_binary_track_meta_route(
+    feh: float = Query(0.0, description="initial [Fe/H] (snaps to the nearest baked grid)"),
+) -> dict:
+    """[Fe/H] -> the baked POSYDON CO-HMS_RLO grid bounds (M_star/M_co/P ranges + track
+    count) at the nearest available metallicity — mirrors `/binary_track_meta`."""
+    try:
+        return co_binary_track_meta(feh)
+    except PosydonCoDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/co_binary_track")
+def co_binary_track_route(
+    m_star: float = Query(..., gt=0.0, description="normal star's initial mass / M_sun"),
+    m_co: float = Query(..., gt=0.0, description="compact object's initial mass / M_sun"),
+    p: float = Query(..., gt=0.0, description="initial orbital period / days"),
+    feh: float = Query(0.0, description="initial [Fe/H]"),
+) -> dict:
+    """(M_star, M_co_init, P, [Fe/H]) -> a POSYDON CO-HMS_RLO track: a compact object
+    (NS/BH/WD, left by an earlier primary's collapse) orbiting a still hydrogen-rich
+    secondary — path (b) Phase 1 Chunk 1a (docs/plans/tempered-lineage-inspiral.md), the
+    stage AFTER `/binary_track`'s two-normal-star episode.
+
+    Unlike `/binary_track`, each step carries only ONE real `StellarState` (the normal
+    star — `history2`, the compact-object side, is absent on this grid unconditionally,
+    per the schema recon in `posydon_co.py`'s docstring) plus the compact object's own
+    mass/type/accretion-rate as routing scalars, and a schematic `accretion_lum_lsun` cue
+    (a standard L=eta*Mdot*c^2 formula on the grid's real accretion rate — NOT a measured
+    X-ray spectrum, see `posydon_co.py`'s `ACCRETION_EFFICIENCY`).
+
+    Snap-always, same discipline as `/binary_track`: (M_star, M_co, P) snaps to the
+    nearest real track in (log M_star, log M_co, log P) space — never interpolated (§6).
+    422 is reserved for structurally invalid input; a missing baked grid -> 503."""
+    try:
+        return co_binary_track_payload(m_star, m_co, p, feh)
+    except PosydonCoDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

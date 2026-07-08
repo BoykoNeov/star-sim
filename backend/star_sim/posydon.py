@@ -201,7 +201,7 @@ def _snap_feh(grids: list[_BakedGrid], feh: float) -> _BakedGrid:
 
 # --- per-row phase label (composition-derived, since POSYDON gives no per-row phase) --
 
-def _phase_label(center_h1: float, center_he4: float, surface_h1: float) -> str:
+def phase_label(center_h1: float, center_he4: float, surface_h1: float) -> str:
     """A coarse, data-derived phase string from the burning-fraction columns that ARE
     per-row (POSYDON's S1_state/S2_state are FINAL-row-only). Not MIST's EEP-window
     vocabulary — a different provenance, so a deliberately different (honest) label set."""
@@ -212,14 +212,14 @@ def _phase_label(center_h1: float, center_he4: float, surface_h1: float) -> str:
     return "post-He-burning"
 
 
-def _logg(mass_msun: float, r_rsun: float) -> float:
+def logg_from_mass_radius(mass_msun: float, r_rsun: float) -> float:
     m_g = max(mass_msun, 1e-6) * _MSUN_G
     r_cm = max(r_rsun, 1e-6) * _RSUN_CM
     return math.log10(_G_CGS * m_g / (r_cm * r_cm))
 
 
-def _state_from_row(rows: dict[str, np.ndarray], r: int, prefix: str,
-                     mass_init: float, mass_current: float, feh: float) -> StellarState:
+def state_from_row(rows: dict[str, np.ndarray], r: int, prefix: str,
+                    mass_init: float, mass_current: float, feh: float) -> StellarState:
     log_l = float(rows[f"{prefix}_log_L"][r])
     log_teff = float(rows[f"{prefix}_log_Teff"][r])
     log_r = float(rows[f"{prefix}_log_R"][r])
@@ -236,14 +236,14 @@ def _state_from_row(rows: dict[str, np.ndarray], r: int, prefix: str,
         age_yr=float(rows["age"][r]),
         eep=0.0,                        # POSYDON tracks carry no EEP — a documented
                                          # sentinel (age_yr is the real time axis here).
-        phase=_phase_label(x_c, y_c, x_s),
+        phase=phase_label(x_c, y_c, x_s),
         mass_init_msun=mass_init,       # this STAR's own initial mass (constant down the
                                          # track); the changing mass is a BinaryStep scalar
         feh_init=feh,
         L_lsun=10.0 ** log_l,
         Teff_K=10.0 ** log_teff,
         R_rsun=r_rsun,
-        logg=_logg(mass_current, r_rsun),
+        logg=logg_from_mass_radius(mass_current, r_rsun),
         X_surf=x_s, Y_surf=y_s, Z_surf=z_s,
         X_core=x_c, Y_core=y_c, Z_core=z_c,
         metals_surf={
@@ -262,7 +262,7 @@ def _state_from_row(rows: dict[str, np.ndarray], r: int, prefix: str,
     )
 
 
-def _mt_state(rl1: float, rl2: float) -> str:
+def mt_state_label(rl1: float, rl2: float) -> str:
     if rl1 > 0.0 and rl2 > 0.0:
         return "contact"
     if rl1 > 0.0:
@@ -329,12 +329,12 @@ def binary_track(m1: float, q: float, p: float, feh: float = 0.0) -> BinaryTrack
         if not (np.isfinite(m1_cur) and np.isfinite(m2_cur) and m1_cur > 0 and m2_cur > 0):
             break
 
-        star_1 = _state_from_row(rows, r, "s1", m1_node, m1_cur, grid.feh)
-        star_2 = _state_from_row(rows, r, "s2", m2_node, m2_cur, grid.feh)
+        star_1 = state_from_row(rows, r, "s1", m1_node, m1_cur, grid.feh)
+        star_2 = state_from_row(rows, r, "s2", m2_node, m2_cur, grid.feh)
 
         rl1 = float(rows["rl_relative_overflow_1"][r])
         rl2 = float(rows["rl_relative_overflow_2"][r])
-        mt_state = _mt_state(rl1, rl2)
+        mt_state = mt_state_label(rl1, rl2)
         lg_mdot = float(rows["lg_mtransfer_rate"][r])
         mdot = 10.0 ** lg_mdot if mt_state != "detached" and -30.0 < lg_mdot < 10.0 else None
 

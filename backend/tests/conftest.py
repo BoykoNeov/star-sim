@@ -391,3 +391,22 @@ requires_posydon_data = pytest.mark.skipif(
     reason="no baked POSYDON grid — run fetch_posydon.py's recipe then "
     "scripts/bake_posydon.py (see docs/plans/entwined-consort-inspiral.md)",
 )
+
+
+def posydon_co_data_available() -> bool:
+    """True if at least one baked POSYDON CO-HMS_RLO grid npz is present.
+
+    Baked on the host from an extracted POSYDON CO-HMS_RLO grid (never committed — same
+    multi-GB Zenodo tarball as the HMS-HMS grid, a different internal path):
+    `scripts/bake_posydon.py --grid-type co-hms-rlo --z-label <label> --feh <feh>`
+    (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 1a)."""
+    from star_sim.posydon_co import BAKED_CO_DIR
+
+    return BAKED_CO_DIR.is_dir() and any(BAKED_CO_DIR.glob("*.npz"))
+
+
+requires_posydon_co_data = pytest.mark.skipif(
+    not posydon_co_data_available(),
+    reason="no baked POSYDON CO-HMS_RLO grid — run scripts/bake_posydon.py "
+    "--grid-type co-hms-rlo (see docs/plans/tempered-lineage-inspiral.md)",
+)
