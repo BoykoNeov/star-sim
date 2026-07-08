@@ -72,8 +72,20 @@ const els = {
   binaryDemoRow: document.getElementById("binary-demo-row"),
   binaryDemoBack: document.getElementById("binary-demo-back"),
   // CE/compact-object tail Chunk 1b: the standalone CO-HMS_RLO demo (one curated system).
+  // Chunk 1c: + a [Fe/H] picker and free M_star/M_co/P sliders behind "Custom system".
   coBinaryDemoXrb: document.getElementById("co-binary-demo-xrb"),
+  coBinaryDemoCustom: document.getElementById("co-binary-demo-custom"),
   coBinaryDemoBack: document.getElementById("co-binary-demo-back"),
+  coBinaryFeh: document.getElementById("co-binary-feh"),
+  coBinaryFehNote: document.getElementById("co-binary-feh-note"),
+  coBinaryCustomControls: document.getElementById("co-binary-custom-controls"),
+  coBinaryCustomMstar: document.getElementById("co-binary-custom-mstar"),
+  coBinaryCustomMstarNum: document.getElementById("co-binary-custom-mstar-num"),
+  coBinaryCustomMco: document.getElementById("co-binary-custom-mco"),
+  coBinaryCustomMcoNum: document.getElementById("co-binary-custom-mco-num"),
+  coBinaryCustomP: document.getElementById("co-binary-custom-p"),
+  coBinaryCustomPNum: document.getElementById("co-binary-custom-p-num"),
+  coBinaryCustomNote: document.getElementById("co-binary-custom-note"),
   binaryCustomControls: document.getElementById("binary-custom-controls"),
   binaryCustomM1: document.getElementById("binary-custom-m1"),
   binaryCustomM1Num: document.getElementById("binary-custom-m1-num"),
@@ -505,6 +517,143 @@ let coBinaryTrackData = null;   // the full /co_binary_track payload
 let coBinaryStar = null;        // data.steps[].star, pulled out for hr.setBinaryTrack (star only)
 let coBinaryFraction = 0;       // 0..1 slider position, index-linear over steps
 let coBinaryToken = 0;          // latest-wins guard for /co_binary_track fetches
+let coBinaryDemoKey = null;     // "xrb" (curated Gate-1 system) | "custom" — which is live
+
+// Chunk 1c: the [Fe/H] picker + free M_star/M_co/P sliders. /co_binary_track was always
+// general (snap-always over the WHOLE baked CO grid, §6) — the single curated demo was a
+// de-risking UI choice, not a backend limit, so this needs no backend change (it mirrors
+// how HMS-HMS Chunk 4c/4d added its own custom sliders + [Fe/H] picker). The CO axis is
+// (M_star, M_co, P), NOT (M1, q, P): a compact object's mass is a real physical value, not
+// a mass ratio, so all THREE are log-scale (each spans a wide dynamic range; M_co runs
+// ~1.2–307 M☉). `coBinaryMeta` (the grid bounds — /co_binary_track_meta) is fetched lazily
+// per [Fe/H] bucket and cached; the 8 POSYDON metallicities are separate grids with
+// different spans, so a bucket change invalidates it (the exact stale-slider bug 4d fixed).
+let coBinaryMeta = null;
+let coBinaryMetaPromise = null;
+let coBinaryMetaPromiseFeh = null;
+let coBinaryMetaFeh = null;
+const CO_CUSTOM_DEFAULT = { m_star: CO_BINARY_DEMO.m_star, m_co: CO_BINARY_DEMO.m_co, p: CO_BINARY_DEMO.p };
+let coCustomMstar = CO_CUSTOM_DEFAULT.m_star;
+let coCustomMco = CO_CUSTOM_DEFAULT.m_co;
+let coCustomP = CO_CUSTOM_DEFAULT.p;
+let coCustomFeh = 0.0;          // the selected POSYDON metallicity bucket (solar by default),
+                                // applies to EITHER CO demo (curated or custom) — orthogonal
+                                // to which (M_star, M_co, P) is picked.
+
+// The CO counterpart of ensureBinaryMeta — fetches /co_binary_track_meta for the current
+// bucket, clamps the custom values into the new bucket's grid span, (re)builds the [Fe/H]
+// options + slider bounds. Cached per-feh; a bucket change clears the cache (each POSYDON
+// metallicity is a separate baked grid with its own M_star/M_co/P spans).
+function ensureCoBinaryMeta() {
+  if (coBinaryMeta && coBinaryMetaFeh === coCustomFeh) return Promise.resolve(coBinaryMeta);
+  if (coBinaryMetaPromise && coBinaryMetaPromiseFeh === coCustomFeh) return coBinaryMetaPromise;
+  const fehAtCall = coCustomFeh;   // snapshot — coCustomFeh may change again before this resolves
+  coBinaryMetaPromiseFeh = fehAtCall;
+  coBinaryMetaPromise = fetchJSON(`/co_binary_track_meta?feh=${fehAtCall}`)
+    .then((meta) => {
+      coBinaryMeta = meta;
+      coBinaryMetaFeh = fehAtCall;
+      coCustomMstar = Math.min(Math.max(coCustomMstar, meta.m_star_min), meta.m_star_max);
+      coCustomMco = Math.min(Math.max(coCustomMco, meta.m_co_min), meta.m_co_max);
+      coCustomP = Math.min(Math.max(coCustomP, meta.p_min), meta.p_max);
+      populateCoBinaryFehOptions(meta.available_feh);
+      configureCoBinaryCustomSliders();
+      return meta;
+    })
+    .catch(() => { coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; return null; });
+  return coBinaryMetaPromise;
+}
+
+// Build the CO [Fe/H] <select> from the real baked bucket list — never hardcoded, so a
+// newly-baked bucket just appears (the HMS-HMS populateBinaryFehOptions twin). Skip if the
+// list hasn't changed (keeps the user's own selection from being clobbered mid-interaction).
+function populateCoBinaryFehOptions(list) {
+  if (!els.coBinaryFeh || !list || !list.length) return;
+  const current = [...els.coBinaryFeh.options].map((o) => Number(o.value));
+  const same = current.length === list.length && current.every((v, i) => v === list[i]);
+  if (!same) {
+    els.coBinaryFeh.innerHTML = list.map((f) => `<option value="${f}">${f.toFixed(2)}</option>`).join("");
+  }
+  els.coBinaryFeh.value = String(coCustomFeh);
+}
+
+// All three CO axes span a wide dynamic range (and M_co is a physical mass, not a <1-dex
+// ratio like q) → log-scale position sliders on every one, the mni-slider idiom.
+const coMstarFromPos = (pos) => {
+  const lo = Math.log10(coBinaryMeta.m_star_min), hi = Math.log10(coBinaryMeta.m_star_max);
+  return 10 ** (lo + clamp01(pos) * (hi - lo));
+};
+const posFromCoMstar = (m) => {
+  const lo = Math.log10(coBinaryMeta.m_star_min), hi = Math.log10(coBinaryMeta.m_star_max);
+  return clamp01((Math.log10(m) - lo) / (hi - lo));
+};
+const coMcoFromPos = (pos) => {
+  const lo = Math.log10(coBinaryMeta.m_co_min), hi = Math.log10(coBinaryMeta.m_co_max);
+  return 10 ** (lo + clamp01(pos) * (hi - lo));
+};
+const posFromCoMco = (m) => {
+  const lo = Math.log10(coBinaryMeta.m_co_min), hi = Math.log10(coBinaryMeta.m_co_max);
+  return clamp01((Math.log10(m) - lo) / (hi - lo));
+};
+const coPFromPos = (pos) => {
+  const lo = Math.log10(coBinaryMeta.p_min), hi = Math.log10(coBinaryMeta.p_max);
+  return 10 ** (lo + clamp01(pos) * (hi - lo));
+};
+const posFromCoP = (p) => {
+  const lo = Math.log10(coBinaryMeta.p_min), hi = Math.log10(coBinaryMeta.p_max);
+  return clamp01((Math.log10(p) - lo) / (hi - lo));
+};
+
+function configureCoBinaryCustomSliders() {
+  if (!coBinaryMeta || !els.coBinaryCustomMstar) return;
+  els.coBinaryCustomMstar.min = 0; els.coBinaryCustomMstar.max = 1; els.coBinaryCustomMstar.step = 0.001;
+  els.coBinaryCustomMstar.value = String(posFromCoMstar(coCustomMstar));
+  els.coBinaryCustomMstarNum.min = String(coBinaryMeta.m_star_min); els.coBinaryCustomMstarNum.max = String(coBinaryMeta.m_star_max);
+  setNum(els.coBinaryCustomMstarNum, fmt(coCustomMstar));
+
+  els.coBinaryCustomMco.min = 0; els.coBinaryCustomMco.max = 1; els.coBinaryCustomMco.step = 0.001;
+  els.coBinaryCustomMco.value = String(posFromCoMco(coCustomMco));
+  els.coBinaryCustomMcoNum.min = String(coBinaryMeta.m_co_min); els.coBinaryCustomMcoNum.max = String(coBinaryMeta.m_co_max);
+  setNum(els.coBinaryCustomMcoNum, fmt(coCustomMco));
+
+  els.coBinaryCustomP.min = 0; els.coBinaryCustomP.max = 1; els.coBinaryCustomP.step = 0.001;
+  els.coBinaryCustomP.value = String(posFromCoP(coCustomP));
+  els.coBinaryCustomPNum.min = String(coBinaryMeta.p_min); els.coBinaryCustomPNum.max = String(coBinaryMeta.p_max);
+  setNum(els.coBinaryCustomPNum, fmt(coCustomP));
+}
+
+// The honesty line under the CO custom sliders (the updateBinaryCustomNote twin): always
+// the TRUE snapped grid node the backend returned, never the raw drag; + the *_snapped_far
+// off-grid flags; + a caveat when the snapped companion is a POSYDON "WD" (that channel is
+// a placeholder in the source grid — every WD-companion node is exactly 1.00 M☉, not real
+// data; the Chunk-1a schema recon, surfaced now that dragging M_co low can reach it).
+function updateCoBinaryCustomNote() {
+  if (!els.coBinaryCustomNote || !coBinaryTrackData) return;
+  const t = coBinaryTrackData;
+  const far = [];
+  if (t.m_star_snapped_far) far.push("star mass");
+  if (t.m_co_snapped_far) far.push("compact-object mass");
+  if (t.p_snapped_far) far.push("P");
+  if (t.feh_snapped_far) far.push("[Fe/H]");
+  const farNote = far.length ? ` — snapped far off-grid on ${far.join(", ")}` : "";
+  const wdNote = t.co_type === "WD"
+    ? " Note: POSYDON's WD-companion channel is a placeholder (every WD node is exactly 1.00 M☉, not modelled)."
+    : "";
+  els.coBinaryCustomNote.textContent =
+    `Nearest real POSYDON track: star ${fmt(t.m_star_init_msun)} M☉, ${t.co_type} ${fmt(t.m_co_init_msun)} M☉, ` +
+    `P=${fmt(t.p_init_d)} d — outcome: ${t.outcome}${farNote}.${wdNote}`;
+}
+
+// The [Fe/H] snap-honesty line — shown for EITHER CO demo (curated or custom), unlike the
+// M_star/M_co/P note above (only visible inside the custom controls). The updateBinaryFehNote twin.
+function updateCoBinaryFehNote() {
+  if (!els.coBinaryFehNote) return;
+  if (!coBinaryTrackData) { els.coBinaryFehNote.textContent = ""; return; }
+  const t = coBinaryTrackData;
+  els.coBinaryFehNote.textContent = t.feh_snapped_far
+    ? `Nearest available POSYDON metallicity: [Fe/H]=${fmt(t.feh, 2)} (snapped far off-grid).`
+    : `POSYDON metallicity bucket: [Fe/H]=${fmt(t.feh, 2)}.`;
+}
 
 // path (b) Chunk 4c: free M1/q/P sliders behind the "Custom orbit" demo. /binary_track was
 // always general (snap-always over the WHOLE POSYDON grid, §6) — the three curated demos
@@ -2579,6 +2728,8 @@ async function enterStripped() {
   updateBinaryDemoButtons();
   ensureBinaryMeta();   // pre-warm the [Fe/H] bucket list (populates the select) + the
                          // current bucket's M1/q/P bounds, so "Co-evolve" is instant on click
+  ensureCoBinaryMeta(); // same for the CO-HMS_RLO [Fe/H] picker (Chunk 1c) — populates its
+                         // select + M_star/M_co/P bounds so its custom system is instant too
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -2812,9 +2963,33 @@ function rebuildCoBinaryTicks() {
   els.ageTicks.innerHTML = "";
 }
 
-// Enter the CO-HMS_RLO movie (mode stays "stripped" — a sub-view, like the HMS-HMS one).
-// Mutually exclusive with the HMS-HMS binary view: entering here exits that one first.
-async function enterCoBinaryView() {
+// Apply a fetched /co_binary_track payload to the CO view's consumers (HR, ticks, notes) —
+// shared by a fresh entry (enterCoBinaryView) and a live re-fetch while scrubbing a custom
+// system or switching [Fe/H] (refetchCoBinaryTrack); the caller owns coBinaryFraction/
+// refreshCoBinary. The _applyBinaryTrackData twin.
+function _applyCoBinaryTrackData(data) {
+  coBinaryTrackData = data;
+  coBinaryStar = data.steps.map((s) => s.star);
+  // Only the living star goes on the HR diagram — the compact object has no photosphere, so
+  // NO second marker (star2States = null); label the one marker "star" (not "donor").
+  hr.setBinaryTrack(coBinaryStar, null, { s1: "star" });
+  rebuildCoBinaryTicks();
+  updateCoBinaryCustomNote();
+  updateCoBinaryFehNote();
+}
+
+// Resolve the (m_star, m_co, p) triple for a CO demo key — the curated Gate-1 system, or the
+// free sliders for "custom". [Fe/H] is NOT part of this: it's the orthogonal coCustomFeh
+// selector, applied by the caller (the _binaryParamsFor twin).
+function _coBinaryParamsFor(demoKey) {
+  if (demoKey === "custom") return { m_star: coCustomMstar, m_co: coCustomMco, p: coCustomP };
+  return { m_star: CO_BINARY_DEMO.m_star, m_co: CO_BINARY_DEMO.m_co, p: CO_BINARY_DEMO.p };
+}
+
+// Enter the CO-HMS_RLO movie (mode stays "stripped" — a sub-view, like the HMS-HMS one) for
+// the curated "xrb" system OR the free "custom" one. Mutually exclusive with the HMS-HMS
+// binary view: entering here exits that one first.
+async function enterCoBinaryView(demoKey) {
   if (mode !== "stripped") return;
   // Mutually exclusive with the HMS-HMS movie. Bump binaryToken UNCONDITIONALLY (the
   // symmetric guard to enterBinaryView) — a /binary_track fetch may be IN FLIGHT with its
@@ -2822,27 +2997,33 @@ async function enterCoBinaryView() {
   // already true) would miss it and let it re-open binary-view over this one.
   binaryToken++;
   if (binaryView) exitBinaryView();
+  if (demoKey === "custom") {
+    await ensureCoBinaryMeta();
+    if (!coBinaryMeta) return;   // meta fetch failed — bail quietly (the 503 case)
+  }
+  const { m_star, m_co, p } = _coBinaryParamsFor(demoKey);
   const tok = ++coBinaryToken;
+  coBinaryDemoKey = demoKey;
   els.age.disabled = true;
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the compact-object binary track…";
   let data;
   try {
     data = await fetchJSON(
-      `/co_binary_track?m_star=${CO_BINARY_DEMO.m_star}&m_co=${CO_BINARY_DEMO.m_co}&p=${CO_BINARY_DEMO.p}&feh=0`);
+      `/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}`);
   } catch {
     if (tok === coBinaryToken && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the compact-object binary track.";
     return;
   }
   if (tok !== coBinaryToken || mode !== "stripped") return;
-  coBinaryTrackData = data;
-  coBinaryStar = data.steps.map((s) => s.star);
-  // Only the living star goes on the HR diagram — the compact object has no photosphere, so
-  // NO second marker (star2States = null); label the one marker "star" (not "donor").
-  hr.setBinaryTrack(coBinaryStar, null, { s1: "star" });
-  rebuildCoBinaryTicks();
+  _applyCoBinaryTrackData(data);
   coBinaryView = true;
   document.body.classList.add("co-binary-view");
+  // Reveal the custom sliders only once coBinaryView is actually true (not before the fetch
+  // resolves) — a drag while it's still "fetching…" would hit refetchCoBinaryTrack's
+  // !coBinaryView guard and get silently dropped (the exact Chunk-4c bug the Playwright
+  // pass caught for HMS-HMS).
+  if (els.coBinaryCustomControls) els.coBinaryCustomControls.hidden = demoKey !== "custom";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = false;
   els.age.disabled = false;
   els.mass.disabled = true; els.feh.disabled = true;    // POSYDON's grid, not the MIST axes
@@ -2855,9 +3036,11 @@ async function enterCoBinaryView() {
 
 function exitCoBinaryView() {
   coBinaryView = false;
-  coBinaryTrackData = null; coBinaryStar = null;
+  coBinaryTrackData = null; coBinaryStar = null; coBinaryDemoKey = null;
   coBinaryToken++;
   document.body.classList.remove("co-binary-view");
+  if (els.coBinaryCustomControls) els.coBinaryCustomControls.hidden = true;
+  if (els.coBinaryFehNote) els.coBinaryFehNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   hr.clearBinaryTrack();
   roche.clear();
@@ -2866,6 +3049,25 @@ function exitCoBinaryView() {
   if (els.massNum) els.massNum.disabled = false;
   if (els.fehNum) els.fehNum.disabled = false;
   if (strippedData) { hr.setEndgame([strippedData.state], "stripped"); refreshStripped(); }
+}
+
+// Re-fetch the CURRENTLY active CO demo/custom track (debounced, latest-wins) — shared by a
+// custom M_star/M_co/P slider drag AND a [Fe/H] bucket change (orthogonal: [Fe/H] applies to
+// whichever system is showing, curated or custom, unlike M_star/M_co/P which only ever drive
+// "custom"). PRESERVES the current scrub position (coBinaryFraction is a 0..1 fraction,
+// re-indexed against the new track's length) — a change is "show me this other system," not
+// "restart the movie." The refetchBinaryTrack twin.
+async function refetchCoBinaryTrack() {
+  if (mode !== "stripped" || !coBinaryView || !coBinaryDemoKey) return;
+  const demoKey = coBinaryDemoKey;
+  const { m_star, m_co, p } = _coBinaryParamsFor(demoKey);
+  const tok = ++coBinaryToken;
+  let data;
+  try { data = await fetchJSON(`/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}`); }
+  catch { return; }
+  if (tok !== coBinaryToken || mode !== "stripped" || !coBinaryView || coBinaryDemoKey !== demoKey) return;
+  _applyCoBinaryTrackData(data);
+  refreshCoBinary();
 }
 
 // Paint step `i` (picked from coBinaryFraction — no fetch). The living star drives the ONE
@@ -3322,14 +3524,88 @@ async function init() {
     if (mode === "stripped" && binaryView) exitBinaryView();
   });
 
-  // CE/compact-object tail Chunk 1b: the standalone CO-HMS_RLO demo (one curated Gate-1
-  // system) + its own "Back to the snapshot". Enters/exits the reversible co-binary-view,
-  // mutually exclusive with the HMS-HMS "Co-evolve" movie (enterCoBinaryView exits it first).
+  // CE/compact-object tail Chunk 1b/1c: the standalone CO-HMS_RLO demo — the curated Gate-1
+  // "xrb" system OR (Chunk 1c) a free "custom" one — + its own "Back to the snapshot".
+  // Enters/exits the reversible co-binary-view, mutually exclusive with the HMS-HMS
+  // "Co-evolve" movie (enterCoBinaryView exits it first). enterCoBinaryView branches on the
+  // demo key (custom → reveal the M_star/M_co/P sliders once the view is live).
   if (els.coBinaryDemoXrb) els.coBinaryDemoXrb.addEventListener("click", () => {
-    if (mode === "stripped") enterCoBinaryView();
+    if (mode === "stripped") enterCoBinaryView("xrb");
+  });
+  if (els.coBinaryDemoCustom) els.coBinaryDemoCustom.addEventListener("click", () => {
+    if (mode === "stripped") enterCoBinaryView("custom");
   });
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.addEventListener("click", () => {
     if (mode === "stripped" && coBinaryView) exitCoBinaryView();
+  });
+
+  // Chunk 1c: the free M_star/M_co/P sliders behind the CO "Custom system" — dragging
+  // refetches /co_binary_track (debounced + latest-wins) and re-snaps to the nearest real
+  // track; updateCoBinaryCustomNote (inside _applyCoBinaryTrackData) always states the TRUE
+  // snapped node + the WD-placeholder caveat, never the raw dragged number.
+  const debouncedCoBinaryCustom = debounce(refetchCoBinaryTrack, SLIDER_FETCH_DELAY_MS);
+  if (els.coBinaryCustomMstar) {
+    els.coBinaryCustomMstar.addEventListener("input", () => {
+      coCustomMstar = coMstarFromPos(Number(els.coBinaryCustomMstar.value));
+      setNum(els.coBinaryCustomMstarNum, fmt(coCustomMstar));
+      debouncedCoBinaryCustom();
+    });
+    els.coBinaryCustomMstar.addEventListener("change", () => debouncedCoBinaryCustom.flush());
+  }
+  if (els.coBinaryCustomMstarNum) els.coBinaryCustomMstarNum.addEventListener("change", () => {
+    if (!coBinaryMeta || els.coBinaryCustomMstarNum.value.trim() === "") return;
+    const m = Number(els.coBinaryCustomMstarNum.value);
+    if (!isFinite(m)) return;
+    coCustomMstar = Math.min(Math.max(m, coBinaryMeta.m_star_min), coBinaryMeta.m_star_max);
+    els.coBinaryCustomMstar.value = String(posFromCoMstar(coCustomMstar));
+    refetchCoBinaryTrack();
+  });
+
+  if (els.coBinaryCustomMco) {
+    els.coBinaryCustomMco.addEventListener("input", () => {
+      coCustomMco = coMcoFromPos(Number(els.coBinaryCustomMco.value));
+      setNum(els.coBinaryCustomMcoNum, fmt(coCustomMco));
+      debouncedCoBinaryCustom();
+    });
+    els.coBinaryCustomMco.addEventListener("change", () => debouncedCoBinaryCustom.flush());
+  }
+  if (els.coBinaryCustomMcoNum) els.coBinaryCustomMcoNum.addEventListener("change", () => {
+    if (!coBinaryMeta || els.coBinaryCustomMcoNum.value.trim() === "") return;
+    const m = Number(els.coBinaryCustomMcoNum.value);
+    if (!isFinite(m)) return;
+    coCustomMco = Math.min(Math.max(m, coBinaryMeta.m_co_min), coBinaryMeta.m_co_max);
+    els.coBinaryCustomMco.value = String(posFromCoMco(coCustomMco));
+    refetchCoBinaryTrack();
+  });
+
+  if (els.coBinaryCustomP) {
+    els.coBinaryCustomP.addEventListener("input", () => {
+      coCustomP = coPFromPos(Number(els.coBinaryCustomP.value));
+      setNum(els.coBinaryCustomPNum, fmt(coCustomP));
+      debouncedCoBinaryCustom();
+    });
+    els.coBinaryCustomP.addEventListener("change", () => debouncedCoBinaryCustom.flush());
+  }
+  if (els.coBinaryCustomPNum) els.coBinaryCustomPNum.addEventListener("change", () => {
+    if (!coBinaryMeta || els.coBinaryCustomPNum.value.trim() === "") return;
+    const p = Number(els.coBinaryCustomPNum.value);
+    if (!isFinite(p)) return;
+    coCustomP = Math.min(Math.max(p, coBinaryMeta.p_min), coBinaryMeta.p_max);
+    els.coBinaryCustomP.value = String(posFromCoP(coCustomP));
+    refetchCoBinaryTrack();
+  });
+
+  // The CO [Fe/H] picker — applies to WHICHEVER CO demo is showing (curated or custom), the
+  // binaryFeh twin. A bucket change can shift the M_star/M_co/P grid bounds (each POSYDON
+  // metallicity is its own baked grid), so invalidate the cached meta + await the bounds
+  // refresh (which clamps/repositions the sliders) BEFORE re-fetching the track.
+  if (els.coBinaryFeh) els.coBinaryFeh.addEventListener("change", async () => {
+    const f = Number(els.coBinaryFeh.value);
+    if (!isFinite(f)) return;
+    coCustomFeh = f;
+    coBinaryMeta = null; coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; coBinaryMetaFeh = null;
+    await ensureCoBinaryMeta();
+    refetchCoBinaryTrack();
   });
 
   // path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches

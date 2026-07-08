@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) of the CE/compact-object-tail plan, BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode; a standalone curated demo with a schematic point-mass 3D/Roche marker and NO HR luminosity point.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) & 1c (full 8-bucket [Fe/H] axis + free M_star/M_co/P custom sliders) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode. Chunk 1c also fixed a metal-poor-grid accretion-cue artifact by gating the η·Ṁ·c² cue off POSYDON unstable_MT (CE/merger) tracks.
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -164,10 +164,58 @@ is free").
   3D star canvas + HR + Roche stay (they DO animate). Note: the HMS-HMS `.binary-view` has the same
   latent wart (its readout/scale also freeze) — left as-is (pre-existing, out of Chunk-1b scope).
 
-**Not built yet:** Chunk 1c (more metallicities — currently solar-only; a data + frontend-picker
-drop-in mirroring the HMS-HMS `[Fe/H]` rollout — the CO demo is presently a single hardcoded solar
-system, no custom M_star/M_co/P sliders yet). Phases 2 (initial-He) and 3 (α-enhanced evolution)
-of the parent plan haven't started.
+**Chunk 1c BUILT 2026-07-08 (data + frontend + one backend correctness fix, 332 pytest [+3],
+Playwright-verified 1440+390 zero console errors).** The metallicity axis + free sliders — the
+CO grid's catch-up to the HMS-HMS Chunk 4c/4d rollout. **NO runtime-logic change was needed for
+the axis itself** (`co_binary_track`/`co_binary_track_meta` were already snap-always over the WHOLE
+baked grid, §6, and `available_feh` was already served) — exactly like HMS-HMS 4c/4d.
+- **Data:** extracted + baked the 7 non-solar CO-HMS_RLO buckets → the **full 8-bucket axis**
+  ([Fe/H] −4.0/−3.0/−2.0/−1.0/−0.69897/−0.34679/0.0/+0.30103, coextensive with the HMS-HMS
+  axis — exact `--feh` values reused so `available_feh` aligns). All 8 grids non-empty + clean
+  (7208–8329 tracks each, ~38–49 MB npz). Extraction batch = the Chunk-1a gotcha verbatim
+  (`-C <destdir>` BEFORE the wildcard, separate `CO-HMS_RLO_<label>` dir, verify by SIZE;
+  extracted h5 deleted after each bake to reclaim ~1 GB). Measure-first (Gate-1-at-a-new-Z):
+  the SAME (20 M☉ + 8 M☉ BH, P=300 d) system → "stripped + BH companion" at solar vs "unstable
+  mass transfer onto BH" at [Fe/H]=−2.0 — a real outcome change, not a relabel.
+- **Frontend (`main.js`/`index.html`, mirrors 4c/4d):** a `<select id="co-binary-feh">` populated
+  from the real `available_feh` (never hardcoded — the [[star-sim-hosted-data-assets]] lesson) +
+  a "Custom system…" button revealing three **log-scale** sliders. **The CO custom axis is
+  (M_star, M_co, P), NOT (M1, q, P)** — a compact object's mass is a real physical value (~1.2–307
+  M☉), not a <1-dex ratio like the HMS-HMS q, so M_co is its own log slider. `ensureCoBinaryMeta`/
+  `refetchCoBinaryTrack`/`_applyCoBinaryTrackData`/`_coBinaryParamsFor` are the CO twins of the
+  HMS-HMS meta/refetch/apply/params functions. [Fe/H] applies to EITHER demo (curated or custom);
+  M_star/M_co/P only drive "custom". A bucket change invalidates the cached meta + re-fetches it
+  FIRST (each POSYDON metallicity is its own grid with different M_star/M_co/P spans — the exact
+  4d stale-slider bug) before re-fetching the track. Pre-warmed in `enterStripped()` so the picker
+  is populated + the custom system instant. The stale narration claim ("Mass and [Fe/H] are fixed
+  for this demo") was corrected.
+- **THE ONE REAL BUG the full-grid pytest caught (the honesty payoff of "existing tests ARE the
+  gate"):** the Chunk-1a accretion-luminosity Eddington-bound regression (characterized on
+  SOLAR-ONLY as 2–3.5×, "no cap needed") FAILED on the new buckets — feh=−3.0 reached 11.5×, and
+  a full-grid characterization found feh=−4.0 at **505,221× Eddington** and +0.30 at 2789×. Root
+  cause (measured, not assumed): **all three outlier rows are on POSYDON `interpolation_class ==
+  "unstable_MT"` tracks** — dynamically-unstable mass transfer → common-envelope/merger, where the
+  parametrized `lg_mstar_dot_2` spikes to runaway values (the served cue would have shown ~10^13×
+  the star's own L in the caption — a caption-poisoning false-data leak the Chunk-1c [Fe/H] picker
+  + custom sliders newly make REACHABLE). The cue models a STABLE X-ray-binary accretion
+  luminosity, which an unstable-MT episode physically is NOT. **Fix (prefer-gate-over-cap, motivated
+  by POSYDON's own instability label — not a magic-number cap):** `co_binary_track`'s `active` gate
+  now ALSO requires `not is_unstable_mt` (the snapped track's `interpolation_class != "unstable_MT"`).
+  With it, the cue is bounded to **≤3.46× Eddington across all 8 buckets / 2.5M rows** (median
+  ~2.3–2.6×), the honest ULX regime. The Gate-1 payoff is preserved (the stable-transfer curated demo
+  still surfaces 162 cues peaking at 3.3× the star's L). Two tests updated/added: the Eddington-bound
+  test now mirrors the two-part gate (excludes unstable_MT, ceiling tightened 10→5×), and a NEW
+  served-level regression asserts `accretion_lum_lsun is None` on an unstable_MT track through the real
+  runtime. **Lesson (added to the existing float32 one):** the "2–3.5×, no cap needed" bound was a
+  SOLAR-ONLY characterization; the metal-poor grids carry a class of artifact solar didn't. The bound
+  holds because of the GATE (now two-part: not-detached AND not-unstable_MT), never as an intrinsic
+  property of the formula — widening the gate (wind accretion, re-admitting unstable MT) re-opens an
+  unbounded tail and must re-derive the bound.
+- **Not built:** Phases 2 (initial-He) and 3 (α-enhanced evolution) of the parent plan. `CO-HeMS`/
+  `CO-HeMS_RLO` (the double-compact-object channel) also remain deferred — a separate grid extraction.
+
+**Prior "Not built" note (superseded by Chunk 1c above):** Chunk 1c was more metallicities + custom
+sliders; both now built.
 
 See [[star-sim-binary-stripped]] for the parent binary arc, [[star-sim-hosted-data-assets]] for
 how the raw POSYDON tarballs got onto disk, [[star-sim-supernova-remnant-endgame]] for the

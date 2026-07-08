@@ -53,19 +53,25 @@ more direct than the donor-side `lg_mtransfer_rate`, which is pre-`xfer_fraction
 with `ACCRETION_EFFICIENCY` a round literature number (~0.1, the GM/Rc^2 order of
 magnitude for a NS/BH), NOT fit to this grid or a measured X-ray spectrum.
 
-**Scoped to RLOF-phase accretion only** — the cue is `None` whenever `mt_state ==
-"detached"` (see the `active` gate in `co_binary_track`), which on this grid means
-`rl_relative_overflow_1 <= 0`. Characterized across the WHOLE baked grid (every RLOF-
-active row, every bucket): 2-3.5x the CO's own Eddington luminosity, a real bounded
-super-Eddington/ULX-like regime, no cap needed. **That bound holds BECAUSE of the RLOF
-gate, not as an intrinsic property of the formula** — over ALL rows (including detached
-ones), `lg_mstar_dot_2` reaches values that would push this formula to ~10^14 Lsun (a
-numerical/model artifact of a non-transferring row, not physics). Wind-fed accretion
-(e.g. Cyg X-1's own configuration, the plan's motivating example) is NOT captured this
-pass — a detached CO orbiting a normal star shows no accretion cue here, even though a
-real wind-fed X-ray binary would. Broadening the `active` gate to include wind accretion
-is a real Chunk-1b design question, but it reopens the unbounded-tail problem above and
-would need its own cap — don't do it by loosening the filter without re-deriving the bound.
+**Scoped to STABLE RLOF-phase accretion only** — the cue is `None` whenever `mt_state ==
+"detached"` OR the track's POSYDON `interpolation_class == "unstable_MT"` (see the `active`
+gate in `co_binary_track`). Characterized across the WHOLE 8-bucket baked grid (every
+stable-transfer active row): <=3.46x the CO's own Eddington luminosity (median ~2.3-2.6x),
+a real bounded mildly-super-Eddington/ULX-like regime, no cap needed. **That bound holds
+BECAUSE of the two-part gate, not as an intrinsic property of the formula:**
+  * over DETACHED rows, `lg_mstar_dot_2` reaches values that would push this formula to
+    ~10^14 Lsun (a non-transferring-row artifact);
+  * over `unstable_MT` tracks (CE/merger — dynamically unstable, not a clean X-ray binary),
+    a handful of runaway `lg_mstar_dot_2` spikes push it to ~10^5x Eddington / ~10^13x the
+    star's own L (a Chunk-1c finding — solar happened to carry none, but the metal-poor
+    grids do; measured across all 8 buckets, all three outliers were `unstable_MT`).
+The cue models a STABLE X-ray-binary accretion luminosity, which an unstable-MT episode is
+physically not — so gating it off there is honest, not a magic-number cap. Wind-fed
+accretion (e.g. Cyg X-1's own configuration, the plan's motivating example) is likewise
+NOT captured this pass — a detached CO orbiting a normal star shows no accretion cue here,
+even though a real wind-fed X-ray binary would. Broadening the `active` gate (wind
+accretion, or re-admitting unstable MT) reopens an unbounded tail and would need its own
+cap — don't do it by loosening the filter without re-deriving the bound.
 """
 
 from __future__ import annotations
@@ -269,6 +275,16 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0) -> C
     m_co_node = float(grid.m_co_init[idx])
     p_node = float(grid.p_init_d[idx])
     co_type = str(grid.co_type[idx])
+    interp_class = str(grid.interpolation_class[idx])
+    # POSYDON's own dynamical-stability class for the WHOLE track. The accretion-luminosity
+    # cue models STABLE Roche-lobe overflow (a clean X-ray binary); on an `unstable_MT`
+    # track the transfer runs away into a common envelope / merger, so the parametrized
+    # `lg_mstar_dot_2` spikes to physically-meaningless values (measured on the full 8-bucket
+    # grid: a handful of unstable_MT rows push the cue to ~10^5x Eddington / ~10^13x the
+    # star's own L — pure artifact) and is NOT a real accretion luminosity. Gate the cue off
+    # for these tracks (see the `active` mask below). This is why the module docstring's
+    # tight bound is stated for stable transfer only.
+    is_unstable_mt = interp_class == "unstable_MT"
 
     start = int(grid.row_start[idx])
     count = int(grid.row_count[idx])
@@ -291,14 +307,21 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0) -> C
         mt_state = mt_state_label(rl1, rl2)
 
         lg_mdot2 = float(rows["lg_mstar_dot_2"][r])
-        # `mt_state != "detached"` is the load-bearing bound here, not just an activity
-        # flag: `lg_mstar_dot_2` reaches values on DETACHED rows that would push
-        # `_accretion_luminosity` to ~10^14 Lsun (a numerical/model artifact of a
-        # non-transferring row). The measured "2-3.5x Eddington, no cap needed" result
-        # (module docstring) holds ONLY because this gate excludes those rows — widening
-        # it (e.g. to add wind-fed accretion) requires re-deriving that bound, not just
-        # relaxing the `-30 < lg2 < 10` magnitude filter below.
-        active = mt_state != "detached" and -30.0 < lg_mdot2 < 10.0
+        # The `active` mask is what BOUNDS the cue — it is not just an activity flag. Two
+        # load-bearing conditions, each measured against a real artifact tail on the full
+        # 8-bucket grid:
+        #   * `mt_state != "detached"`: DETACHED rows carry `lg_mstar_dot_2` values that push
+        #     `_accretion_luminosity` to ~10^14 Lsun (a non-transferring-row artifact).
+        #   * `not is_unstable_mt`: `unstable_MT` tracks (CE/merger, POSYDON's own instability
+        #     class) carry runaway `lg_mstar_dot_2` spikes that push the cue to ~10^5x
+        #     Eddington / ~10^13x the star's own L (Chunk-1c finding, measured across all 8
+        #     buckets — solar happened to have none, the metal-poor grids do). The cue models
+        #     a STABLE X-ray-binary accretion luminosity, which an unstable-MT episode is not.
+        # WITH both conditions the cue is bounded to <=3.46x the CO's own Eddington luminosity
+        # grid-wide (the mildly-super-Eddington ULX regime). Widening this gate (e.g. to add
+        # wind-fed accretion) re-opens an unbounded tail — re-derive the bound, don't just
+        # relax the `-30 < lg2 < 10` magnitude filter.
+        active = mt_state != "detached" and not is_unstable_mt and -30.0 < lg_mdot2 < 10.0
         mdot = 10.0 ** lg_mdot2 if active else None
         acc_lum = _accretion_luminosity(mdot) if mdot is not None else None
 

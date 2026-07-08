@@ -156,31 +156,36 @@ def test_accretion_cue_nonnegative_and_only_during_transfer():
 # --- Gate 1 (the plan's measure-first discipline gate), as a regression --------
 
 def test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid():
-    """Characterized 2026-07-08 across the WHOLE baked grid (every active-RLOF row, every
-    bucket): the schematic accretion-luminosity cue lands at 2-3.5x the CO's own Eddington
-    luminosity (median ~2.5x, max ~3.46x, zero rows above 10x) — the known mildly-super-
-    Eddington regime real ULX/X-ray-binary literature describes, not an unbounded number.
-    Pinned as a regression: if a future bake/column change ever pushes this cue to a wildly
-    unphysical multiple, this should fail loudly rather than silently ship into Chunk 1b's
-    render. (A naive vectorized characterization of the raw float32 columns overflows
-    float32's range — `co_binary_track`'s per-row `float(...)` casts avoid this; this test
-    mirrors that casting discipline, not the raw-array one.)
+    """Characterized 2026-07-08 (Chunk 1a solar) then RE-characterized across the WHOLE
+    8-bucket grid (Chunk 1c): with the STABLE-transfer gate `co_binary_track` uses (active
+    RLOF AND the track is not POSYDON `unstable_MT`), the schematic accretion-luminosity cue
+    lands at <=3.46x the CO's own Eddington luminosity (median ~2.3-2.6x) — the mildly-super-
+    Eddington ULX regime, not an unbounded number.
 
-    IMPORTANT BLIND SPOT: this test uses the SAME `rl1 > 0` gate `co_binary_track` uses to
-    decide `mt_state != "detached"` — the bound above holds BECAUSE of that gate, not as an
-    intrinsic property of `_accretion_luminosity`. Over ALL rows (including detached ones),
-    `lg_mstar_dot_2` reaches values that push the formula to ~10^14 Lsun (a numerical/model
-    artifact of a non-transferring row). If `co_binary_track`'s `active` gate is ever
-    widened (e.g. Chunk 1b adds wind-fed accretion for a Cyg-X-1-like detached state), THIS
-    TEST WON'T CATCH a reintroduced unbounded tail unless its own `active` mask is widened
-    to match — re-derive the bound, don't just relax the filter here in lockstep."""
+    THE GATE IS THE BOUND — this test mirrors BOTH conditions of the production `active`
+    mask, because each excludes a real artifact tail measured on the full grid:
+      * DETACHED rows carry `lg_mstar_dot_2` values pushing the formula to ~10^14 Lsun;
+      * `unstable_MT` tracks (CE/merger) carry runaway `lg_mstar_dot_2` spikes pushing it to
+        ~10^5x Eddington (all three grid-wide outliers were `unstable_MT` — solar had none,
+        the metal-poor grids do). If `co_binary_track`'s gate is ever widened (wind-fed
+        accretion; re-admitting unstable MT), THIS TEST WON'T CATCH a reintroduced unbounded
+        tail unless its own mask is widened to match — re-derive the bound, don't just relax
+        the filter here in lockstep. (Raw float32 columns overflow under a naive vectorized
+        pass — `co_binary_track` casts each value to float64 per row; this test mirrors that.)
+    """
     lsun_erg_s = 3.828e33
     edd_const = 1.26e38   # erg/s per Msun of accretor (standard Eddington-limit coefficient)
     for grid in pc._available_grids():
         rl1 = grid.rows["rl_relative_overflow_1"]
         lg2 = grid.rows["lg_mstar_dot_2"]
         m_co = grid.rows["star_2_mass"]
-        active = np.where((rl1 > 0) & (lg2 > -30) & (lg2 < 10))[0]
+        # Per-row mask of "belongs to an unstable_MT track" (the class is per-track).
+        unstable = np.zeros(rl1.size, dtype=bool)
+        for i in range(grid.m_star_init.size):
+            if str(grid.interpolation_class[i]) == "unstable_MT":
+                s = int(grid.row_start[i])
+                unstable[s:s + int(grid.row_count[i])] = True
+        active = np.where((rl1 > 0) & (lg2 > -30) & (lg2 < 10) & ~unstable)[0]
         assert active.size > 100, f"feh={grid.feh}: too few active rows to characterize"
         max_ratio = 0.0
         for r in active:
@@ -188,10 +193,34 @@ def test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid():
             lum = pc._accretion_luminosity(mdot)
             l_edd_lsun = edd_const * float(m_co[r]) / lsun_erg_s
             max_ratio = max(max_ratio, lum / l_edd_lsun)
-        assert max_ratio < 10.0, (
-            f"feh={grid.feh}: accretion cue reached {max_ratio:.1f}x Eddington — "
-            f"re-examine ACCRETION_EFFICIENCY / whether a cap is now needed"
+        assert max_ratio < 5.0, (
+            f"feh={grid.feh}: stable-transfer accretion cue reached {max_ratio:.1f}x "
+            f"Eddington — re-examine ACCRETION_EFFICIENCY / whether a cap is now needed"
         )
+
+
+@requires_posydon_co_data
+def test_accretion_cue_is_none_on_unstable_mt_tracks():
+    """The Chunk-1c served-level regression: `co_binary_track` must NOT surface the
+    accretion-luminosity cue on a POSYDON `unstable_MT` track (a CE/merger, not a clean
+    X-ray binary — its parametrized `lg_mstar_dot_2` spikes to ~10^13x the star's own L on
+    the metal-poor grids, a caption-poisoning artifact the frontend now reaches via the
+    Chunk-1c [Fe/H] picker + custom sliders). Locks the gate at the SERVED level, not just
+    the raw-array level, so a future gate regression fails loudly here."""
+    for grid in pc._available_grids():
+        idxs = [i for i in range(grid.m_star_init.size)
+                if str(grid.interpolation_class[i]) == "unstable_MT"]
+        if not idxs:
+            continue
+        i = idxs[0]
+        t = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                float(grid.p_init_d[i]), feh=grid.feh)
+        assert all(s.accretion_lum_lsun is None for s in t.steps), (
+            f"feh={grid.feh}: an unstable_MT track surfaced an accretion cue "
+            f"(should be gated off — see posydon_co.py's `active` mask)"
+        )
+        return   # one unstable_MT track through the real runtime is enough
+    pytest.skip("no unstable_MT track in any baked bucket to exercise the gate")
 
 
 def test_gate1_co_mass_grows_via_accretion():
@@ -328,3 +357,39 @@ def test_track_route_422_on_invalid_input():
                   params={"m_star": 10.0, "m_co": 0.0, "p": 5.0}).status_code == 422
     assert c.get("/co_binary_track",
                   params={"m_star": 10.0, "m_co": 10.0, "p": 0.0}).status_code == 422
+
+
+# --- Chunk 1c: the metallicity axis (mirrors the HMS-HMS multi-[Fe/H] rollout) -----
+
+from .conftest import requires_posydon_co_multifeh  # noqa: E402
+
+
+@requires_posydon_co_multifeh
+def test_meta_lists_every_baked_metallicity_bucket():
+    """`available_feh` reflects the REAL baked bucket set, never hardcoded — the honesty
+    the frontend picker is populated from (docs/memory/star-sim-hosted-data-assets.md's
+    recurring hardcoded-feh lesson)."""
+    baked = sorted(g.feh for g in pc._available_grids())
+    assert len(baked) >= 2
+    meta = pc.co_binary_track_meta(0.0)
+    assert meta["available_feh"] == baked
+
+
+@requires_posydon_co_multifeh
+def test_metallicity_axis_is_real_same_request_different_track_across_buckets():
+    """The Chunk-1c measure-first regression: the SAME (M_star, M_co, P) request snaps to a
+    genuinely DIFFERENT real track at different [Fe/H] (each POSYDON metallicity is its own
+    baked grid), and can change the physical OUTCOME — not a cosmetic [Fe/H] relabel over one
+    shared grid. Measured example: 20 M☉ + 8 M☉ BH, P=300 d → 'stripped + BH companion' at
+    solar vs 'unstable mass transfer onto BH' at [Fe/H]=−2.0."""
+    fehs = sorted(g.feh for g in pc._available_grids())
+    nodes, outcomes = set(), set()
+    for feh in fehs:
+        t = pc.co_binary_track(20.0, 8.0, 300.0, feh=feh)
+        assert t.steps, f"empty track at feh={feh}"
+        nodes.add((round(t.m_star_init_msun, 4), round(t.m_co_init_msun, 4), round(t.p_init_d, 4)))
+        outcomes.add(t.outcome)
+    # Distinct real nodes across buckets — the axis genuinely resolves to separate grids.
+    assert len(nodes) > 1, "same snapped node at every [Fe/H] — the metallicity axis is inert"
+    # And a well-formed outcome at every bucket (the frontend caption/note reads it).
+    assert all(isinstance(o, str) and o for o in outcomes)

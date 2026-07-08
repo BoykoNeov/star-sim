@@ -1,7 +1,7 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: Phase 1 Chunk 1a BUILT (2026-07-08, backend vertical) — see below. Phases 1b/1c,
-2, and 3 not yet built. Sequential order (also the efficient order):
+## Status: Phase 1 Chunks 1a/1b/1c ALL BUILT (2026-07-08) — see below. Phases
+2 and 3 not yet built. Sequential order (also the efficient order):
 **Phase 1** binary CE/compact-object tail → **Phase 2** initial-helium (Y) axis →
 **Phase 3** α-enhanced evolution axis (reuses Phase 2's plumbing).
 
@@ -147,8 +147,27 @@ hydrogen-burning stars. This phase covers what happens **after one star dies**:
 - **Not done:** custom M_star/M_co/P sliders (the demo is one hardcoded solar system) and more
   metallicities — both fold into Chunk 1c.
 
-**Chunk 1c — extend to more metallicities** (drop-in, mirrors the HMS-HMS metallicity
-rollout) once 1a/1b are validated on solar.
+**Chunk 1c — the full [Fe/H] axis + free M_star/M_co/P sliders — BUILT 2026-07-08**
+(data + frontend + one backend correctness fix, 332 pytest [+3], Playwright 1440+390 zero
+console errors). Mirrors the HMS-HMS Chunk 4c/4d rollout; **no runtime-logic change for the
+axis itself** (`co_binary_track` was already snap-always over the whole grid, §6).
+- Extracted + baked the **7 non-solar buckets** → the full 8-bucket axis (coextensive with
+  the HMS-HMS [Fe/H] axis, −4.0…+0.30, exact `--feh` values reused). All 8 grids non-empty
+  + clean. Measure-first passed: the same (M_star, M_co, P) flips outcome across [Fe/H].
+- Frontend: a `#co-binary-feh` picker (populated from the real `available_feh`) + a "Custom
+  system…" picker revealing three **log** sliders — the CO axis is **(M_star, M_co, P), not
+  (M1, q, P)** (a CO's mass is a physical value, not a ratio). CO twins of the HMS-HMS
+  meta/refetch/apply/params helpers; bucket change re-fetches meta (per-bucket spans) before
+  the track. WD-placeholder + snapped-far honesty in the custom note; narration corrected.
+- **The one real fix (the full-grid pytest caught it):** the Chunk-1a accretion-cue Eddington
+  bound was SOLAR-ONLY characterized (2–3.5×, "no cap needed"); the metal-poor grids reach
+  505,221× on a few rows — ALL on POSYDON `unstable_MT` (CE/merger) tracks, where the
+  parametrized ṁ is not a real accretion luminosity. Gated the cue off `unstable_MT` (the
+  `active` mask now needs `not is_unstable_mt`) → bounded ≤3.46× Eddington grid-wide, the
+  stable X-ray-binary payoff preserved. Detail: memory `star-sim-co-hms-rlo.md`.
+
+**Not built:** `CO-HeMS`/`CO-HeMS_RLO` (the double-compact-object channel) — a separate grid
+extraction, deferred.
 
 ### Measure-first gate (Gate 1, mirrors Chunk 4a's Gate 0)
 

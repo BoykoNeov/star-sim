@@ -410,3 +410,20 @@ requires_posydon_co_data = pytest.mark.skipif(
     reason="no baked POSYDON CO-HMS_RLO grid — run scripts/bake_posydon.py "
     "--grid-type co-hms-rlo (see docs/plans/tempered-lineage-inspiral.md)",
 )
+
+
+def posydon_co_multifeh_available() -> bool:
+    """True if >=2 baked CO-HMS_RLO metallicity grids are present (the Chunk-1c axis).
+
+    Bake more buckets with `scripts/bake_posydon.py --grid-type co-hms-rlo --z-label
+    <label> --feh <feh>` (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 1c)."""
+    from star_sim.posydon_co import BAKED_CO_DIR
+
+    return BAKED_CO_DIR.is_dir() and len(list(BAKED_CO_DIR.glob("*.npz"))) >= 2
+
+
+requires_posydon_co_multifeh = pytest.mark.skipif(
+    not posydon_co_multifeh_available(),
+    reason="needs >=2 baked POSYDON CO-HMS_RLO metallicity grids — bake another with "
+    "scripts/bake_posydon.py --grid-type co-hms-rlo (Chunk 1c)",
+)

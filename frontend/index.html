@@ -184,13 +184,47 @@
         <!-- CE/compact-object tail Chunk 1b: the CO-HMS_RLO demo — the stage AFTER the
              HMS-HMS episode, a compact object (NS/BH) orbiting a still hydrogen-rich star.
              A STANDALONE curated demo (the settled Chunk-1a navigation decision), a sibling
-             row to the HMS-HMS "Co-evolve" one, inside stripped-mode. Solar-only, one
-             representative system (no custom sliders / [Fe/H] picker yet — Chunk 1c). -->
+             row to the HMS-HMS "Co-evolve" one, inside stripped-mode. Chunk 1c adds the
+             [Fe/H] picker (the full POSYDON metallicity axis, mirroring the HMS-HMS one) and
+             a "Custom system…" picker that reveals free M_star/M_co/P sliders below — the CO
+             axis is (M_star, M_co, P) not (M1, q, P): a compact object's mass is a real
+             physical value, not a ratio, so all three are log-scale sliders. -->
         <div class="co-binary-demo-row" id="co-binary-demo-row">
           <span class="binary-demo-label">A compact-object companion (a later chapter):</span>
-          <button type="button" class="binary-demo-btn" id="co-binary-demo-xrb">Star + black hole → X-ray binary</button>
+          <label class="binary-feh-label" for="co-binary-feh">[Fe/H]
+            <select id="co-binary-feh"></select>
+          </label>
+          <button type="button" class="binary-demo-btn" id="co-binary-demo-xrb" data-co-demo="xrb">Star + black hole → X-ray binary</button>
+          <button type="button" class="binary-demo-btn" id="co-binary-demo-custom" data-co-demo="custom">Custom system…</button>
           <button type="button" class="binary-demo-back" id="co-binary-demo-back" hidden>← Back to the snapshot</button>
-          <span class="help" tabindex="0" data-tip="A real POSYDON CO-HMS_RLO track (Fragos+2023): a compact object (here a black hole) left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. This is the NEXT chapter after the stripped-star/HMS-HMS story — one of the two stars has finished its life. Scrub system time: the living star evolves and swells until it fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, and the orbit widens. Only the LIVING star is on the HR diagram — a black hole has no photosphere, no temperature, no luminosity point; it's drawn as a schematic point-mass marker in the 3D and Roche panels. The accretion power released is a standard L = η·Ṁ·c² estimate on the model's real mass-transfer rate (a mildly super-Eddington X-ray source), NOT a measured X-ray spectrum. Mass/[Fe/H] are fixed for this demo (POSYDON's own grid).">?</span>
+          <span class="help" tabindex="0" data-tip="A real POSYDON CO-HMS_RLO track (Fragos+2023): a compact object (here a black hole) left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. This is the NEXT chapter after the stripped-star/HMS-HMS story — one of the two stars has finished its life. Scrub system time: the living star evolves and swells until it fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, and the orbit widens. Only the LIVING star is on the HR diagram — a black hole has no photosphere, no temperature, no luminosity point; it's drawn as a schematic point-mass marker in the 3D and Roche panels. The accretion power released is a standard L = η·Ṁ·c² estimate on the model's real mass-transfer rate (a mildly super-Eddington X-ray source), NOT a measured X-ray spectrum. The [Fe/H] picker switches POSYDON metallicity bucket; 'Custom system' lets you drag the star mass, the compact object's mass, and the initial period — each snaps to the nearest real track on the grid.">?</span>
+        </div>
+        <p class="note binary-feh-note" id="co-binary-feh-note"></p>
+        <!-- Chunk 1c: the free M_star/M_co/P sliders behind the CO "Custom system" picker —
+             all three log-scale (the CO grid spans a wide dynamic range on each axis, and
+             M_co is a physical mass 1.2–307 M☉, not a <1-dex ratio like the HMS-HMS q).
+             Shown/hidden via main.js toggling .hidden directly (the binary-custom precedent).
+             Reuses the .binary-custom-* layout classes. -->
+        <div class="binary-custom-controls" id="co-binary-custom-controls" hidden>
+          <div class="binary-custom-row">
+            <label for="co-binary-custom-mstar">Star mass
+              <input id="co-binary-custom-mstar-num" class="val-input" type="number" /> M<sub>☉</sub>
+            </label>
+            <input id="co-binary-custom-mstar" type="range" />
+          </div>
+          <div class="binary-custom-row">
+            <label for="co-binary-custom-mco">Compact object
+              <input id="co-binary-custom-mco-num" class="val-input" type="number" /> M<sub>☉</sub>
+            </label>
+            <input id="co-binary-custom-mco" type="range" />
+          </div>
+          <div class="binary-custom-row">
+            <label for="co-binary-custom-p">P<sub>init</sub>
+              <input id="co-binary-custom-p-num" class="val-input" type="number" /> d
+            </label>
+            <input id="co-binary-custom-p" type="range" />
+          </div>
+          <p class="note binary-custom-note" id="co-binary-custom-note"></p>
         </div>
         <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
           The star has shed its outer layers as a <b>planetary nebula</b> — a step this
@@ -267,7 +301,9 @@
           under the time slider) is a standard <b>L = η·Ṁ·c²</b> estimate on the model's real
           mass-transfer rate — a mildly super-Eddington source — <b>not</b> a measured X-ray spectrum. The earlier
           <b>common-envelope / supernova</b> steps that made this compact object are named, not
-          modeled. Mass and [Fe/H] are fixed for this demo (POSYDON's own grid).
+          modeled. The top mass/[Fe/H] sliders are disabled here (they drive the single-star
+          MIST grid, a different axis); pick the POSYDON metallicity and a <b>custom system</b>
+          — the star mass, the compact object's mass, the initial period — from the controls above.
         </p>
       </div>
 

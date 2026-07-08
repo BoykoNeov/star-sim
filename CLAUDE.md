@@ -327,7 +327,8 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
-- **CE/COMPACT-OBJECT TAIL — CHUNKS 1a (backend) & 1b (frontend render) BUILT** (Phase 1 of
+- **CE/COMPACT-OBJECT TAIL — CHUNKS 1a (backend) & 1b (frontend render) & 1c (full 8-bucket
+  [Fe/H] axis + free M_star/M_co/P custom sliders) ALL BUILT** (Phase 1 of
   `docs/plans/tempered-lineage-inspiral.md`; a compact object NS/BH/WD orbiting a still-H-rich
   star — the stage AFTER the HMS-HMS episode, the ~X-ray-binary/GW-progenitor channel). A
   genuinely new sibling `posydon_co.py` + `/co_binary_track` (schema recon: `history2` is absent
@@ -344,8 +345,19 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   geometry by reusing `binary.track_roche_geometry` via a `SimpleNamespace` adapter (star→donor,
   CO→accretor, q=m_co/m_star). An advisor-flagged false-data leak fixed: the readout/scale/MK-class
   single-star consumers froze on the unrelated stripped snapshot → CSS-hidden in `.co-binary-view`.
-  **Not built:** Chunk 1c (more metallicities + free M_star/M_co/P sliders — solar-only single
-  demo now). [[star-sim-co-hms-rlo]].
+  **Chunk 1c** (data + frontend + one backend correctness fix, mirrors HMS-HMS 4c/4d, **no
+  runtime-logic change for the axis** — `co_binary_track` was already snap-always over the whole
+  grid): extracted + baked the 7 non-solar buckets → the **full 8-bucket [Fe/H] axis** (−4.0…+0.30,
+  coextensive with the HMS-HMS axis); a `#co-binary-feh` picker (populated from the real
+  `available_feh`) + a "Custom system…" picker revealing three **log** sliders — the CO custom axis
+  is **(M_star, M_co, P), NOT (M1, q, P)** (a CO's mass is a physical value ~1.2–307 M☉, not a
+  ratio). **The full-grid pytest caught a real artifact:** the accretion-cue Eddington bound was
+  SOLAR-ONLY characterized (2–3.5×); the metal-poor grids reach **505,221× Eddington** on a few rows
+  — ALL on POSYDON `unstable_MT` (CE/merger) tracks (the served caption would've shown ~10^13× the
+  star's own L, newly reachable via the picker/sliders). Gated the η·Ṁ·c² cue OFF `unstable_MT` (the
+  `active` mask now needs `not is_unstable_mt`) → bounded **≤3.46× Eddington grid-wide**, the stable
+  X-ray-binary payoff preserved. **Not built:** `CO-HeMS`/`CO-HeMS_RLO` (double-compact-object
+  channel — a separate extraction). [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
   [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
@@ -638,14 +650,20 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **330 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **333 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
-  gated `requires_posydon_co_data`) adds **20** — Chunk 1a's 18 (snap/parse honesty, whole-grid
+  gated `requires_posydon_co_data`) adds **23** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
   the Gate-1 CO-mass-growth/RLOF-then-detach regression, route shape + 422/503) plus Chunk 1b's
   **2** (the `/co_binary_track` payload carries a non-null per-step `roche` block; the Gate-1
   Roche reshape/lobe-swap: q sweeps 0.53→1.18 as the star strips and the BH accretes, the star
-  fills its lobe on every RLOF1 step). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
+  fills its lobe on every RLOF1 step) plus Chunk 1c's **3** (gated `requires_posydon_co_multifeh`:
+  `available_feh` reflects the real baked bucket set; the metallicity axis is real — the same
+  (M_star, M_co, P) request snaps to a different real track / outcome across [Fe/H] buckets; and
+  the served-level regression that the η·Ṁ·c² accretion cue is `None` on POSYDON `unstable_MT`
+  tracks — the gate that keeps the metal-poor 505,221×-Eddington artifact off the caption). The
+  Chunk-1a Eddington-bound test was updated to mirror the now two-part gate (not-detached AND
+  not-unstable_MT, ceiling tightened 10→5×). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an
   exact-node round-trip over a 300-track sample), no duplicate grid nodes and no
