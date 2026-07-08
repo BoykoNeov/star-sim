@@ -280,6 +280,21 @@ Suggested order if picked: instability-strip overlay ✓ → rotation toggle ✓
 mass-ramp diff) → v sin i broadening ✓ → **[α/Fe] via Coelho-2014/SVO** (Gate 0 done,
 Gate 1 pending — NOT the CAP18-large/Docker path) → binarity/live-solver.
 
+**Tier-D initial-helium and α-enhanced-evolution axes are now DESIGNED (2026-07-08), not
+built** — Phases 2 & 3 of `docs/plans/tempered-lineage-inspiral.md` (a 3-phase plan whose
+Phase 1 is the binarity CE/compact-object tail, [[star-sim-binary-stripped]]). Both phases:
+zero new downloads (the user's call — self-run MESA, not BaSTI), hosted publicly once baked
+(the user's call, mirrors [[star-sim-hosted-data-assets]]'s override for the other five
+"cite on use" datasets). Architecture (advisor-mandated, the key design constraint): a
+**what-if overlay sibling** comparing a self-run MESA BASELINE track against a self-run
+MESA ENHANCED track at matched mass/[Fe/H] — **never** an enhanced-MESA track compared
+against the live MIST spine, which would conflate the He/α effect with the already-documented
+MESA-vs-MIST systematic (`test_mesa_vs_mist.py`). Phase 2 (He, `initial_y`≈0.35–0.40 vs.
+baseline, mind the `Zbase` gotcha from `mesa_structure_recipe.md`) is the lighter build;
+Phase 3 (α, needs an α-enhanced opacity table + custom abundance mixture, not a flag flip)
+reuses Phase 2's plumbing and is flagged as the heavier of the two. Neither started; the
+first user action needed is running a Docker MESA batch once inlists are handed over.
+
 **UX correction (2026-07-01):** the vvcrit **track toggle now HIDES** where it is a
 data-derived no-op (below the ~1.2 M☉ Kraft break, `!rotStatus.active`) instead of showing
 **greyed** — `showToggle = has_grid && active` in `updateRotControl` (`main.js`). A greyed,

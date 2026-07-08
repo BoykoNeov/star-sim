@@ -551,7 +551,19 @@ picker (frontend-only, wiring the UI up to the full 8-bucket POSYDON axis the ba
 baked+hosted — [[star-sim-hosted-data-assets]]). The core "both stars co-evolving through
 time, the Algol reversal as a movie" payoff is real end-to-end, and now explorable at ANY real grid
 node AND any real metallicity bucket, not just solar. What remains is explicitly unscoped: richer
-mass-transfer outcomes (CE/compact-object channels), a population overlay (BPASS). Related:
+mass-transfer outcomes (CE/compact-object channels), a population overlay (BPASS).
+
+**The CE/compact-object tail is now DESIGNED (2026-07-08), not built** — Phase 1 of
+`docs/plans/tempered-lineage-inspiral.md` (a 3-phase plan bundling this with the He and
+α-evolution axes, [[star-sim-rotation-subpop-atlas]]'s Tier-D items). Key findings from that
+design pass: **zero new downloads** — the `CO-HMS_RLO`/`CO-HeMS`/`CO-HeMS_RLO` grid types
+already live inside the same per-metallicity POSYDON tarballs already on disk (only HMS-HMS has
+been extracted so far); a post-SN CO-binary step needs a **new data shape** (one real
+`StellarState` + a point-mass NS/BH scalar, not two `StellarState`s); the CO-grid HDF5 schema
+must be validated fresh (not assumed to mirror HMS-HMS, since one side has no stellar history);
+and the biggest open UX question is entry/navigation (chain from an ended HMS-HMS/SN track vs. a
+standalone curated demo — recommended starting standalone). Not started; see the plan's Chunk 1a.
+Related:
 [[star-sim-phase5-spectra]] (the sibling spectrum cubes), [[star-sim-wr-wd-endgame-plan]] (the WR/WD
 spectrum cubes this mirrors + the single-star WR it complements), [[star-sim-rotation-subpop-atlas]]
 (Tier D binarity), [[star-sim-supernova-remnant-endgame]] (sibling pattern).
