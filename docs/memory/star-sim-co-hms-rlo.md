@@ -107,6 +107,23 @@ when bulk-characterizing a baked `.npz`'s raw arrays for a sanity check, cast to
 (mirror however the production code casts) — a naive vectorized pass over float32 columns can
 produce a false alarm that looks like a real physics finding.
 
+**A second, subtler advisor catch on the SAME cue — the bound is conditional, not intrinsic.**
+The "2-3.5× Eddington, no cap needed" characterization above only covers rows where `mt_state
+!= "detached"` (i.e. `rl_relative_overflow_1 > 0` — real Roche-lobe overflow). Over ALL rows,
+including detached ones, `lg_mstar_dot_2` reaches values (max 2.40, i.e. ~251 M☉/yr) that push
+the SAME formula to ~10¹⁴ L☉ — a numerical/model artifact of a non-transferring row, not
+physics. The bound holds **because** `co_binary_track`'s `active` gate excludes those rows, not
+because `_accretion_luminosity` is intrinsically bounded — and the regression test uses the
+SAME gate, so it can't catch a future change that widens the gate and re-admits the artifact
+tail. Consequence: **the cue is scoped to RLOF-phase accretion only.** Wind-fed accretion (the
+plan's own motivating example, Cygnus X-1 — a BH accreting its O-star companion's stellar
+wind, genuinely NOT Roche-lobe overflow) is NOT captured by this grid or this cue; a detached
+CO orbiting a normal star shows no accretion cue here, even though a real wind-fed X-ray binary
+would show one. If Chunk 1b (or later) ever widens the `active` gate to add wind-fed accretion,
+the Eddington bound must be RE-DERIVED, not assumed to still hold — this is documented inline
+at the `active` gate in `posydon_co.py` and in the regression test's docstring specifically so
+it isn't silently lost.
+
 **Not built yet:** Chunk 1b (frontend render — a real Teff-colored star + a schematic point-mass
 NS/BH marker, entry/navigation still an open UX question per the plan: chain-from-SN vs.
 standalone curated demo), Chunk 1c (more metallicities — currently solar-only). Phases 2

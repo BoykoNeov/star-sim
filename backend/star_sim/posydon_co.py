@@ -4,9 +4,13 @@
 The built path (b) (`posydon.py`) covers only the FIRST mass-transfer episode between two
 normal, hydrogen-burning stars (the POSYDON HMS-HMS grid). This module covers what happens
 AFTER one star has already died: a compact object (NS/BH, occasionally a WD) orbits a
-still hydrogen-rich secondary. If the secondary later overflows onto the compact object,
-accretion releases gravitational potential energy — an X-ray binary (Cygnus X-1's
-configuration), a genuinely new luminosity mechanism for this sim (not photospheric).
+still hydrogen-rich secondary. If the secondary later overflows its Roche lobe onto the
+compact object, accretion releases gravitational potential energy — a genuinely new
+luminosity mechanism for this sim (not photospheric). This grid (and the cue below) covers
+**Roche-lobe-overflow-fed** accretion specifically — the wind-fed configuration (Cygnus
+X-1's own real system: a BH accreting from its O-star companion's stellar wind, not RLOF)
+is a DIFFERENT accretion channel this grid doesn't model and this module doesn't claim to
+cover; don't read the "X-ray binary" language below as covering that case.
 
 Schema recon (2026-07-08, measured against the real extracted solar `CO-HMS_RLO` HDF5, not
 assumed against the HMS-HMS bake's schema):
@@ -48,6 +52,20 @@ to the grid's own served accretion rate (`lg_mstar_dot_2`, the CO's own mass-gai
 more direct than the donor-side `lg_mtransfer_rate`, which is pre-`xfer_fraction` loss),
 with `ACCRETION_EFFICIENCY` a round literature number (~0.1, the GM/Rc^2 order of
 magnitude for a NS/BH), NOT fit to this grid or a measured X-ray spectrum.
+
+**Scoped to RLOF-phase accretion only** — the cue is `None` whenever `mt_state ==
+"detached"` (see the `active` gate in `co_binary_track`), which on this grid means
+`rl_relative_overflow_1 <= 0`. Characterized across the WHOLE baked grid (every RLOF-
+active row, every bucket): 2-3.5x the CO's own Eddington luminosity, a real bounded
+super-Eddington/ULX-like regime, no cap needed. **That bound holds BECAUSE of the RLOF
+gate, not as an intrinsic property of the formula** — over ALL rows (including detached
+ones), `lg_mstar_dot_2` reaches values that would push this formula to ~10^14 Lsun (a
+numerical/model artifact of a non-transferring row, not physics). Wind-fed accretion
+(e.g. Cyg X-1's own configuration, the plan's motivating example) is NOT captured this
+pass — a detached CO orbiting a normal star shows no accretion cue here, even though a
+real wind-fed X-ray binary would. Broadening the `active` gate to include wind accretion
+is a real Chunk-1b design question, but it reopens the unbounded-tail problem above and
+would need its own cap — don't do it by loosening the filter without re-deriving the bound.
 """
 
 from __future__ import annotations
@@ -271,6 +289,13 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0) -> C
         mt_state = mt_state_label(rl1, rl2)
 
         lg_mdot2 = float(rows["lg_mstar_dot_2"][r])
+        # `mt_state != "detached"` is the load-bearing bound here, not just an activity
+        # flag: `lg_mstar_dot_2` reaches values on DETACHED rows that would push
+        # `_accretion_luminosity` to ~10^14 Lsun (a numerical/model artifact of a
+        # non-transferring row). The measured "2-3.5x Eddington, no cap needed" result
+        # (module docstring) holds ONLY because this gate excludes those rows — widening
+        # it (e.g. to add wind-fed accretion) requires re-deriving that bound, not just
+        # relaxing the `-30 < lg2 < 10` magnitude filter below.
         active = mt_state != "detached" and -30.0 < lg_mdot2 < 10.0
         mdot = 10.0 ** lg_mdot2 if active else None
         acc_lum = _accretion_luminosity(mdot) if mdot is not None else None

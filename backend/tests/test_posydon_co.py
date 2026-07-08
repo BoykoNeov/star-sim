@@ -164,7 +164,16 @@ def test_accretion_luminosity_stays_within_a_few_eddington_across_the_grid():
     unphysical multiple, this should fail loudly rather than silently ship into Chunk 1b's
     render. (A naive vectorized characterization of the raw float32 columns overflows
     float32's range — `co_binary_track`'s per-row `float(...)` casts avoid this; this test
-    mirrors that casting discipline, not the raw-array one.)"""
+    mirrors that casting discipline, not the raw-array one.)
+
+    IMPORTANT BLIND SPOT: this test uses the SAME `rl1 > 0` gate `co_binary_track` uses to
+    decide `mt_state != "detached"` — the bound above holds BECAUSE of that gate, not as an
+    intrinsic property of `_accretion_luminosity`. Over ALL rows (including detached ones),
+    `lg_mstar_dot_2` reaches values that push the formula to ~10^14 Lsun (a numerical/model
+    artifact of a non-transferring row). If `co_binary_track`'s `active` gate is ever
+    widened (e.g. Chunk 1b adds wind-fed accretion for a Cyg-X-1-like detached state), THIS
+    TEST WON'T CATCH a reintroduced unbounded tail unless its own `active` mask is widened
+    to match — re-derive the bound, don't just relax the filter here in lockstep."""
     lsun_erg_s = 3.828e33
     edd_const = 1.26e38   # erg/s per Msun of accretor (standard Eddington-limit coefficient)
     for grid in pc._available_grids():
