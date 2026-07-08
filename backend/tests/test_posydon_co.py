@@ -268,6 +268,43 @@ def test_track_route_payload_shape():
                            "accretion_lum_lsun", "star_current_msun"}
     assert set(step0["star"]) >= {"Teff_K", "L_lsun", "R_rsun", "logg", "X_surf", "Y_surf", "Z_surf"}
     assert any(s["mt_state"] == "RLOF1" for s in d["steps"])
+    # Chunk 1b: every step also carries its own Roche-lobe geometry (the normal star as the
+    # donor at origin, the compact object as the accretor at (1,0)) — None only on a
+    # degenerate step, not observed on this real track (the reshape test covers the shape).
+    assert all(s["roche"] is not None for s in d["steps"])
+    assert set(step0["roche"]) >= {"q", "m_donor_msun", "m_companion_msun", "separation_rsun",
+                                    "l1_x", "l2_x", "l3_x", "donor_lobe", "companion_lobe", "stream"}
+
+
+def test_gate1_roche_lobes_reshape_and_swap_over_the_episode():
+    """Chunk 1b's payoff: per-step Roche geometry over the REAL Gate-1 track. The normal
+    star is the donor at origin, the compact object the accretor at (1,0), so q = m_co/m_star
+    starts < 1 (the H-rich star still outmasses its ~14.7 Msun BH) and ends > 1 (the star is
+    stripped, the BH has accreted) — the donor lobe shrinks below the companion lobe, a real
+    swap driven by the mass evolution, and the star fills its Roche lobe throughout RLOF1
+    (the causal reason it's transferring). Uses the payload (the shape the frontend consumes),
+    through the real runtime — not a synthetic step."""
+    p = pc.co_binary_track_payload(_DEMO_M_STAR, _DEMO_M_CO, _DEMO_P, 0.0)
+    steps = p["steps"]
+    assert all(s["roche"] is not None for s in steps)
+
+    def extent(lobe):
+        return max(pt[0] for pt in lobe) - min(pt[0] for pt in lobe)
+
+    r0, rL = steps[0]["roche"], steps[-1]["roche"]
+    assert r0["q"] < 1.0 and rL["q"] > 1.0          # star heavier -> CO heavier (strip+accrete)
+    assert extent(r0["donor_lobe"]) > extent(r0["companion_lobe"])   # start: star's lobe bigger
+    assert extent(rL["companion_lobe"]) > extent(rL["donor_lobe"])   # end: CO's lobe bigger
+    assert rL["separation_rsun"] > r0["separation_rsun"]             # orbit widens
+
+    # the donor genuinely fills its Roche lobe on every RLOF1 step (why it's transferring);
+    # the point-mass CO never overflows its own lobe on this grid (schema recon) — so no
+    # step is ever labeled RLOF2/contact
+    rlof = [s for s in steps if s["mt_state"] == "RLOF1"]
+    assert rlof, "expected an RLOF1 phase on the Gate-1 track"
+    for s in rlof:
+        assert s["star"]["R_rsun"] >= s["roche"]["donor_roche_radius_rsun"] * 0.999
+        assert s["mt_state"] != "RLOF2"
 
 
 def test_track_route_snaps_far_in_band_not_422():

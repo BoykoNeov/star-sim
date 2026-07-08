@@ -206,6 +206,10 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let binaryStar1 = null;  // array of StellarState (star_1, the donor) across steps
   let binaryStar2 = null;  // array of StellarState (star_2, the companion) — may be shorter
   let binaryIdx = -1;
+  // Marker labels, fixed by IDENTITY (never relabeled as masses cross). Default names the
+  // HMS-HMS pair; the CO-HMS_RLO path (Chunk 1b) passes {s1:"star"} and NO star_2 array
+  // (a compact object has no photosphere → it never gets an HR luminosity point).
+  let binaryLabels = { s1: "donor", s2: "companion" };
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -833,13 +837,13 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       const s1 = binaryStar1[binaryIdx];
       const x = xOf(Math.log10(s1.Teff_K)), y = yOf(Math.log10(s1.L_lsun));
       drawMarker(x, y, s1.Teff_K);
-      markerLabel(x, y, "donor", -12);
+      markerLabel(x, y, binaryLabels.s1, -12);
     }
     if (binaryStar2 && idx2 >= 0) {
       const s2 = binaryStar2[idx2];
       const x = xOf(Math.log10(s2.Teff_K)), y = yOf(Math.log10(s2.L_lsun));
       drawMarker(x, y, s2.Teff_K);
-      markerLabel(x, y, "companion", 13);
+      markerLabel(x, y, binaryLabels.s2, 13);
     }
   }
 
@@ -847,8 +851,9 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // every step of a `/binary_track` payload). Auto-fits BOTH tracks in full — unlike
   // setEndgame's marker-relative fit, the whole movie must stay in frame since the marker
   // will visit every point on both curves as the scrub plays.
-  function setBinaryTrack(star1States, star2States) {
+  function setBinaryTrack(star1States, star2States, labels) {
     binaryMode = true;
+    binaryLabels = labels || { s1: "donor", s2: "companion" };
     binaryStar1 = star1States && star1States.length ? star1States : null;
     // star_2 can go null after a merger (never observed on the current bake, but the
     // type allows it) — truncate the companion's trail at the first null step rather

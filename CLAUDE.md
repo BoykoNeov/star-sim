@@ -327,6 +327,25 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   zero console errors at 1440 + 390 px. [[star-sim-supernova-remnant-endgame]]; plan `docs/plans/radioactive-afterglow-requiem.md`.
 
 ### Binary-stripped stars (the ~70% WR channel — a **sibling**, not a provider; `/binary` bypasses PROVIDER)
+- **CE/COMPACT-OBJECT TAIL — CHUNKS 1a (backend) & 1b (frontend render) BUILT** (Phase 1 of
+  `docs/plans/tempered-lineage-inspiral.md`; a compact object NS/BH/WD orbiting a still-H-rich
+  star — the stage AFTER the HMS-HMS episode, the ~X-ray-binary/GW-progenitor channel). A
+  genuinely new sibling `posydon_co.py` + `/co_binary_track` (schema recon: `history2` is absent
+  grid-wide, so there's only ever ONE real star — not a `posydon.py` branch). **Chunk 1b** is a
+  **standalone curated demo** inside stripped-mode (its own `.co-binary-view` body class, mutually
+  exclusive with the HMS-HMS `.binary-view` — each hides the other's demo row + an unconditional
+  cross-token bump kills a slow-in-flight-fetch race): HR shows ONLY the living star (a point-mass
+  CO gets NO luminosity point — `hr.setBinaryTrack(states, null, {s1:"star"})`), `star.js`
+  `CO_MARKER_FRAG`/`coMarker` draws a schematic 3D glyph beside it (BH = a persistent dark disc +
+  ring, deliberately NOT the SN "winks out"; NS = a hot point), `roche.js drawLiveCo` draws the
+  same point-mass marker (never a Teff disc) with the lobe as the accretion target, and the
+  η·Ṁ·c² accretion cue is surfaced in the age-slider caption **relative to the star's own L**
+  (~2.5× during RLOF1). The one backend touch: `co_binary_track_payload` folds in per-step Roche
+  geometry by reusing `binary.track_roche_geometry` via a `SimpleNamespace` adapter (star→donor,
+  CO→accretor, q=m_co/m_star). An advisor-flagged false-data leak fixed: the readout/scale/MK-class
+  single-star consumers froze on the unrelated stripped snapshot → CSS-hidden in `.co-binary-view`.
+  **Not built:** Chunk 1c (more metallicities + free M_star/M_co/P sliders — solar-only single
+  demo now). [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
   [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
@@ -619,8 +638,14 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **310 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
+- **330 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
+  gated `requires_posydon_co_data`) adds **20** — Chunk 1a's 18 (snap/parse honesty, whole-grid
+  no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
+  the Gate-1 CO-mass-growth/RLOF-then-detach regression, route shape + 422/503) plus Chunk 1b's
+  **2** (the `/co_binary_track` payload carries a non-null per-step `roche` block; the Gate-1
+  Roche reshape/lobe-swap: q sweeps 0.53→1.18 as the star strips and the BH accretes, the star
+  fills its lobe on every RLOF1 step). The POSYDON co-evolved-binary sibling (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an
   exact-node round-trip over a 300-track sample), no duplicate grid nodes and no

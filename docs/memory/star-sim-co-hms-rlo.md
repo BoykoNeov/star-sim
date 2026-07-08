@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunk 1a of the CE/compact-object-tail plan, BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a (backend) & 1b (frontend render) of the CE/compact-object-tail plan, BUILT. A compact object (NS/BH/WD) orbiting a still hydrogen-rich star, the stage after posydon.py's HMS-HMS episode; a standalone curated demo with a schematic point-mass 3D/Roche marker and NO HR luminosity point.
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -124,10 +124,50 @@ the Eddington bound must be RE-DERIVED, not assumed to still hold — this is do
 at the `active` gate in `posydon_co.py` and in the regression test's docstring specifically so
 it isn't silently lost.
 
-**Not built yet:** Chunk 1b (frontend render — a real Teff-colored star + a schematic point-mass
-NS/BH marker, entry/navigation still an open UX question per the plan: chain-from-SN vs.
-standalone curated demo), Chunk 1c (more metallicities — currently solar-only). Phases 2
-(initial-He) and 3 (α-enhanced evolution) of the parent plan haven't started.
+**Chunk 1b BUILT 2026-07-08 (frontend render + one backend addition, 330 pytest [+2],
+Playwright-verified 1440+390 zero console errors).** The standalone curated demo the Chunk-1a
+consult settled on (NOT chained from an SN): a **sibling demo row inside stripped-mode**
+(`.co-binary-demo-row`, one button "Star + black hole → X-ray binary" for the Gate-1 system
+27.6 M☉ + 14.7 M☉ BH), its OWN body class `.co-binary-view` **mutually exclusive** with the
+HMS-HMS `.binary-view` (each view's CSS hides the other's demo row; plus a race fix below).
+The age slider becomes a system-time scrubber over the pre-fetched steps (index-linear, "scrub
+is free").
+- **Backend (the one addition):** `co_binary_track_payload` now folds in per-step Roche geometry
+  by reusing `binary.track_roche_geometry` (sibling-calls-sibling) via a `SimpleNamespace` adapter
+  — the engine duck-types on `m1_current_msun`/`m2_current_msun`/`separation_rsun`, so each
+  `CoBinaryStep` maps `star_current_msun→m1` (donor/origin), `co_mass_msun→m2` (accretor at (1,0)),
+  giving q=m_co/m_star. Measured: q sweeps 0.53→1.18 (star heavier → BH heavier after strip+accrete),
+  the lobes swap, the star fills its lobe on every RLOF1 step. +2 tests (`test_posydon_co.py`): the
+  route carries a non-null roche block per step + the Gate-1 reshape/lobe-swap regression.
+- **HR (`hr.js`):** `setBinaryTrack(states, null, {s1:"star"})` — the CO is a point mass with NO
+  photosphere, so it gets NO HR luminosity point (advisor); parameterized the hardcoded "donor"
+  label so the star marker reads "star". Only the living star's track + one marker draw.
+- **3D (`star.js`):** a new `CO_MARKER_FRAG` + `coMarker` mesh — a schematic point-mass glyph
+  beside the living star via the existing two-body `applyCompanionScale` layout. BH = a persistent
+  dark disc rimmed by a bright ring (deliberately NOT the SN remnant's "winks out" — this is an
+  ongoing companion, advisor); NS/other = a tiny hot point + halo. `opts.coMarker` string-gated,
+  byte-identical when absent.
+- **Roche (`roche.js`):** a `drawLiveCo` branch — the CO side renders as the same schematic marker
+  (never a Teff disc); the lobe is still drawn (the accretion target). CO-specific caption.
+- **Accretion-luminosity cue** surfaced in the age-slider caption **relative to the star's own L**
+  (advisor: an accreting CO can outshine its donor) — measured ~2.5× the star's L during RLOF1.
+- **A real race caught + fixed (Playwright):** each view's demo button is only CSS-hidden once the
+  OTHER view's class is set, which happens AFTER its `/…_track` fetch resolves — so during a slow
+  in-flight fetch (the 142 MB HMS-HMS grid's first load) the other button is still clickable. Both
+  `enterBinaryView`/`enterCoBinaryView` now bump the OTHER view's token UNCONDITIONALLY (not only
+  when that view is already active), and `exitBinaryView` bumps `binaryToken`, so a late-resolving
+  fetch can't re-open its view on top of the one you switched to.
+- **A false-data leak caught by the advisor + fixed:** the STATE READOUT, the true-size SCALE strip
+  and the MK class line are single-star consumers NOT wired to the per-step CO scrub — left visible
+  they showed the FROZEN stripped-snapshot's numbers (a 10 M☉ subdwarf beside the animating 27.6 M☉
+  system). Now CSS-hidden in `.co-binary-view` (same treatment as comp/spectrum/sed/structure); the
+  3D star canvas + HR + Roche stay (they DO animate). Note: the HMS-HMS `.binary-view` has the same
+  latent wart (its readout/scale also freeze) — left as-is (pre-existing, out of Chunk-1b scope).
+
+**Not built yet:** Chunk 1c (more metallicities — currently solar-only; a data + frontend-picker
+drop-in mirroring the HMS-HMS `[Fe/H]` rollout — the CO demo is presently a single hardcoded solar
+system, no custom M_star/M_co/P sliders yet). Phases 2 (initial-He) and 3 (α-enhanced evolution)
+of the parent plan haven't started.
 
 See [[star-sim-binary-stripped]] for the parent binary arc, [[star-sim-hosted-data-assets]] for
 how the raw POSYDON tarballs got onto disk, [[star-sim-supernova-remnant-endgame]] for the

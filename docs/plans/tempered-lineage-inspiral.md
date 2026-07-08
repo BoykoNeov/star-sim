@@ -125,14 +125,27 @@ hydrogen-burning stars. This phase covers what happens **after one star dies**:
 - Full detail + the float32-overflow characterization gotcha: `star-sim-co-hms-rlo.md` (memory).
 - **Not done in this chunk:** `CO-HeMS`/`CO-HeMS_RLO` extraction, more metallicities (Chunk 1c).
 
-**Chunk 1b — frontend render**
-- Extend the existing binary-track HR/Roche/3D machinery to the new step shape: one real
-  Teff-colored star + one schematic point-mass marker (labeled NS/BH, explicitly no
-  photosphere).
-- Entry point per the settled navigation decision (Chunk 1a's consult).
-- Honest captions: CE as a prescription not hydro; kicks (and, if the chained path is built,
-  the tie to the SN sibling's kick physics); the accretion-luminosity treatment labeled for
-  what it is (a standard formula applied to the served Ṁ, not a measured X-ray spectrum).
+**Chunk 1b — frontend render — BUILT 2026-07-08** (frontend + one backend addition, 330 pytest
+[+2], Playwright-verified 1440+390 zero console errors)
+- Extended the binary-track HR/Roche/3D machinery to the new step shape: one real Teff-colored
+  star + one schematic point-mass marker. HR shows ONLY the living star (a point mass has no
+  photosphere → NO luminosity point — advisor); 3D + Roche draw a schematic CO glyph (BH = a
+  persistent dark disc + bright ring, deliberately NOT the SN "winks out"; NS = a hot point).
+- Backend addition: `co_binary_track_payload` folds in per-step Roche geometry by reusing
+  `binary.track_roche_geometry` (sibling-calls-sibling) via a `SimpleNamespace` adapter
+  (star→donor/origin, CO→accretor at (1,0), q=m_co/m_star). +2 tests.
+- Entry point = the settled **standalone curated demo** (Chunk-1a consult, NOT SN-chained): a
+  sibling demo row inside stripped-mode, its own `.co-binary-view` body class, mutually exclusive
+  with the HMS-HMS `.binary-view`.
+- Honest captions: CE/SN steps named-not-modeled; the accretion-luminosity cue labeled as a
+  standard η·Ṁ·c² formula on the served Ṁ (not a measured X-ray spectrum), surfaced in the
+  age-slider caption RELATIVE to the star's own L (~2.5× during RLOF1).
+- Two bugs caught+fixed during verification: a slow-in-flight-fetch mutual-exclusivity race
+  (both enter funcs now bump the other view's token unconditionally); an advisor-flagged
+  false-data leak (the readout/scale/MK-class single-star consumers froze on the unrelated
+  stripped snapshot — now CSS-hidden in `.co-binary-view`, like comp/spectrum/sed/structure).
+- **Not done:** custom M_star/M_co/P sliders (the demo is one hardcoded solar system) and more
+  metallicities — both fold into Chunk 1c.
 
 **Chunk 1c — extend to more metallicities** (drop-in, mirrors the HMS-HMS metallicity
 rollout) once 1a/1b are validated on solar.

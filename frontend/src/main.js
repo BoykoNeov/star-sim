@@ -71,6 +71,9 @@ const els = {
   // behind a fourth "Custom orbit" picker.
   binaryDemoRow: document.getElementById("binary-demo-row"),
   binaryDemoBack: document.getElementById("binary-demo-back"),
+  // CE/compact-object tail Chunk 1b: the standalone CO-HMS_RLO demo (one curated system).
+  coBinaryDemoXrb: document.getElementById("co-binary-demo-xrb"),
+  coBinaryDemoBack: document.getElementById("co-binary-demo-back"),
   binaryCustomControls: document.getElementById("binary-custom-controls"),
   binaryCustomM1: document.getElementById("binary-custom-m1"),
   binaryCustomM1Num: document.getElementById("binary-custom-m1-num"),
@@ -490,6 +493,18 @@ let binaryStar2 = null;         // data.steps[].star_2 (may contain a trailing n
 let binaryFraction = 0;         // 0..1 slider position, index-linear over steps (the WR idiom)
 let binaryDemoKey = null;       // which BINARY_DEMOS entry (or "custom") is live
 let binaryToken = 0;            // latest-wins guard for /binary_track fetches
+
+// CE/compact-object tail Chunk 1b: the CO-HMS_RLO demo — a compact object (NS/BH) orbiting a
+// still hydrogen-rich star, the stage AFTER the HMS-HMS episode. A STANDALONE curated demo
+// (the settled Chunk-1a navigation decision), solar-only, a sibling to the HMS-HMS movie but
+// its OWN state + body class (.co-binary-view) so the two are mutually exclusive. The demo is
+// the measured Gate-1 system (a 27.6 M☉ star + 14.7 M☉ BH → X-ray binary → stripped + BH).
+const CO_BINARY_DEMO = { m_star: 27.61912143189711, m_co: 14.66048571159418, p: 203.9763401890043 };
+let coBinaryView = false;
+let coBinaryTrackData = null;   // the full /co_binary_track payload
+let coBinaryStar = null;        // data.steps[].star, pulled out for hr.setBinaryTrack (star only)
+let coBinaryFraction = 0;       // 0..1 slider position, index-linear over steps
+let coBinaryToken = 0;          // latest-wins guard for /co_binary_track fetches
 
 // path (b) Chunk 4c: free M1/q/P sliders behind the "Custom orbit" demo. /binary_track was
 // always general (snap-always over the WHOLE POSYDON grid, §6) — the three curated demos
@@ -1928,6 +1943,10 @@ function exitEndgame() {
   binaryDemoKey = null; binaryToken++;
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
+  // Chunk 1b: drop the CO-HMS_RLO sub-view too (hr.clearBinaryTrack ran above).
+  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
+  document.body.classList.remove("co-binary-view");
+  if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   els.mass.disabled = false; els.feh.disabled = false;    // in case binaryView had disabled them
   if (els.massNum) els.massNum.disabled = false;
   if (els.fehNum) els.fehNum.disabled = false;
@@ -2554,6 +2573,9 @@ async function enterStripped() {
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   if (els.binaryFehNote) els.binaryFehNote.textContent = "";
+  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
+  document.body.classList.remove("co-binary-view");   // Chunk 1b — snapshot first here too
+  if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   updateBinaryDemoButtons();
   ensureBinaryMeta();   // pre-warm the [Fe/H] bucket list (populates the select) + the
                          // current bucket's M1/q/P bounds, so "Co-evolve" is instant on click
@@ -2650,6 +2672,12 @@ function _binaryParamsFor(demoKey) {
 // track / WD / WR scrubs).
 async function enterBinaryView(demoKey) {
   if (mode !== "stripped") return;
+  // Mutually exclusive with the CO-HMS_RLO movie. Bump coBinaryToken UNCONDITIONALLY (not
+  // only when coBinaryView is already true) — a CO track fetch may be IN FLIGHT (its view
+  // class not set yet, so its demo button was still clickable), and a late-resolving CO
+  // fetch must not re-open co-binary-view on top of this one.
+  coBinaryToken++;
+  if (coBinaryView) exitCoBinaryView();
   if (demoKey === "custom") {
     await ensureBinaryMeta();
     if (!binaryMeta) return;   // meta fetch failed — bail quietly, the /binary_track_meta 503 case
@@ -2694,6 +2722,9 @@ async function enterBinaryView(demoKey) {
 // donor + its one representative state, exactly as it was before "Co-evolve" was clicked).
 function exitBinaryView() {
   binaryView = false;
+  binaryToken++;   // invalidate any in-flight /binary_track — leaving the view for ANY reason
+                    // (incl. enterCoBinaryView's mutual-exclusivity exit) must not let a slow
+                    // fetch re-apply binary-view on top of the view we switched to.
   binaryTrackData = null; binaryStar1 = null; binaryStar2 = null; binaryDemoKey = null;
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
@@ -2760,6 +2791,116 @@ function refreshBinary() {
   }
 }
 
+// --- CO-HMS_RLO co-evolving view (CE/compact-object tail Chunk 1b) ------------------------
+// A parallel, minimal sibling to enterBinaryView/refreshBinary. Kept SEPARATE (not an
+// overloaded refreshBinary) because the step shape differs: one real star + a point-mass
+// compact object (no star_2 StellarState), so the HR gets only ONE marker and the 3D/Roche
+// panels draw a schematic CO glyph, never a second photosphere.
+function coBinaryIndexFromFraction(frac) {
+  if (!coBinaryStar || !coBinaryStar.length) return 0;
+  return Math.max(0, Math.min(coBinaryStar.length - 1, Math.round(clamp01(frac) * (coBinaryStar.length - 1))));
+}
+
+function rebuildCoBinaryTicks() {
+  if (!coBinaryTrackData) return;
+  const steps = coBinaryTrackData.steps;
+  const n = steps.length;
+  const marks = [{ pos01: 0, label: "start" }, { pos01: 1, label: "end" }];
+  const mtStart = steps.findIndex((s) => s.mt_state !== "detached");
+  if (mtStart > 0 && mtStart < n - 1) marks.push({ pos01: mtStart / (n - 1), label: "accretion begins" });
+  buildTickStrip(els.ageMarks, marks);
+  els.ageTicks.innerHTML = "";
+}
+
+// Enter the CO-HMS_RLO movie (mode stays "stripped" — a sub-view, like the HMS-HMS one).
+// Mutually exclusive with the HMS-HMS binary view: entering here exits that one first.
+async function enterCoBinaryView() {
+  if (mode !== "stripped") return;
+  // Mutually exclusive with the HMS-HMS movie. Bump binaryToken UNCONDITIONALLY (the
+  // symmetric guard to enterBinaryView) — a /binary_track fetch may be IN FLIGHT with its
+  // view class not yet set, so exitBinaryView() alone (which only runs if binaryView is
+  // already true) would miss it and let it re-open binary-view over this one.
+  binaryToken++;
+  if (binaryView) exitBinaryView();
+  const tok = ++coBinaryToken;
+  els.age.disabled = true;
+  if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the compact-object binary track…";
+  let data;
+  try {
+    data = await fetchJSON(
+      `/co_binary_track?m_star=${CO_BINARY_DEMO.m_star}&m_co=${CO_BINARY_DEMO.m_co}&p=${CO_BINARY_DEMO.p}&feh=0`);
+  } catch {
+    if (tok === coBinaryToken && mode === "stripped")
+      els.endgameAgeCaption.textContent = "Could not fetch the compact-object binary track.";
+    return;
+  }
+  if (tok !== coBinaryToken || mode !== "stripped") return;
+  coBinaryTrackData = data;
+  coBinaryStar = data.steps.map((s) => s.star);
+  // Only the living star goes on the HR diagram — the compact object has no photosphere, so
+  // NO second marker (star2States = null); label the one marker "star" (not "donor").
+  hr.setBinaryTrack(coBinaryStar, null, { s1: "star" });
+  rebuildCoBinaryTicks();
+  coBinaryView = true;
+  document.body.classList.add("co-binary-view");
+  if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = false;
+  els.age.disabled = false;
+  els.mass.disabled = true; els.feh.disabled = true;    // POSYDON's grid, not the MIST axes
+  if (els.massNum) els.massNum.disabled = true;
+  if (els.fehNum) els.fehNum.disabled = true;
+  coBinaryFraction = 0;
+  els.age.value = coBinaryFraction;
+  refreshCoBinary();
+}
+
+function exitCoBinaryView() {
+  coBinaryView = false;
+  coBinaryTrackData = null; coBinaryStar = null;
+  coBinaryToken++;
+  document.body.classList.remove("co-binary-view");
+  if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
+  hr.clearBinaryTrack();
+  roche.clear();
+  els.age.disabled = true;
+  els.mass.disabled = false; els.feh.disabled = false;
+  if (els.massNum) els.massNum.disabled = false;
+  if (els.fehNum) els.fehNum.disabled = false;
+  if (strippedData) { hr.setEndgame([strippedData.state], "stripped"); refreshStripped(); }
+}
+
+// Paint step `i` (picked from coBinaryFraction — no fetch). The living star drives the ONE
+// HR marker + the 3D star; the compact object is a schematic point-mass glyph in 3D and the
+// Roche panel. The accretion power is surfaced RELATIVE to the star's own L (the pedagogy:
+// an accreting compact object can outshine its donor — advisor).
+function refreshCoBinary() {
+  if (!coBinaryView || !coBinaryTrackData) return;
+  const i = coBinaryIndexFromFraction(coBinaryFraction);
+  const step = coBinaryTrackData.steps[i];
+  const s = coBinaryStar[i];
+  const coType = coBinaryTrackData.co_type;
+
+  hr.updateBinaryIndex(i);
+  star.update(s, { coMarker: coType });
+  if (step.roche) roche.drawLiveCo(step.roche, s, coType, step.mt_state);
+  else roche.clear();
+
+  if (els.endgameAgeCaption) {
+    const yrs = step.age_yr >= 1e6 ? `${(step.age_yr / 1e6).toFixed(2)} Myr`
+      : step.age_yr < 1 ? "<1 yr" : `${Math.round(step.age_yr)} yr`;
+    const sepAU = (step.separation_rsun / 215.032).toFixed(2);
+    let acc = "";
+    if (step.accretion_lum_lsun != null) {
+      const ratio = step.accretion_lum_lsun / Math.max(1e-30, s.L_lsun);
+      acc = ` · accretion L ≈ ${step.accretion_lum_lsun.toExponential(1)} L☉ (≈${ratio.toFixed(1)}× the star's own L, schematic η·Ṁ·c²)`;
+    }
+    els.endgameAgeCaption.textContent =
+      `System age ${yrs} · period ${step.period_d.toFixed(2)} d · separation ${step.separation_rsun.toFixed(0)} R☉ ` +
+      `(${sepAU} AU) · star ${step.star_current_msun.toFixed(2)} M☉, ${coType} ${step.co_mass_msun.toFixed(2)} M☉ · ${step.mt_state}` +
+      acc +
+      (i === coBinaryStar.length - 1 ? ` · outcome: ${coBinaryTrackData.outcome}` : "");
+  }
+}
+
 // Dispatch a mass/[Fe/H] re-snap to the active endgame / what-if mode.
 function tryResnap() {
   // path (b) Chunk 4b: the co-evolving binary is keyed on POSYDON's own (M1, q, P) grid,
@@ -2769,6 +2910,7 @@ function tryResnap() {
   // binary track (mode stays "stripped" throughout, so it would otherwise fall through
   // to tryStrippedResnap below and repaint the WRONG (single-donor) model over it).
   if (mode === "stripped" && binaryView) return;
+  if (mode === "stripped" && coBinaryView) return;   // POSYDON CO grid, not the MIST axes
   if (mode === "wd") return tryWDResnap();
   if (mode === "wr") return tryWRResnap();
   if (mode === "sn") return trySNResnap();
@@ -3072,6 +3214,12 @@ async function init() {
       refreshBinary();
       return;
     }
+    if (mode === "stripped" && coBinaryView) {
+      // CE/compact-object tail Chunk 1b: the CO-HMS_RLO system-time scrubber.
+      coBinaryFraction = clamp01(Number(els.age.value));
+      refreshCoBinary();
+      return;
+    }
     // NOT debounced, on purpose. The marker is now PICKED from the already-fetched
     // track (no fetch at all, Chunk E), so age-scrub frames are essentially free — and
     // age intermediates are *wanted*: scrubbing age is the "watch the star evolve"
@@ -3172,6 +3320,16 @@ async function init() {
   });
   if (els.binaryDemoBack) els.binaryDemoBack.addEventListener("click", () => {
     if (mode === "stripped" && binaryView) exitBinaryView();
+  });
+
+  // CE/compact-object tail Chunk 1b: the standalone CO-HMS_RLO demo (one curated Gate-1
+  // system) + its own "Back to the snapshot". Enters/exits the reversible co-binary-view,
+  // mutually exclusive with the HMS-HMS "Co-evolve" movie (enterCoBinaryView exits it first).
+  if (els.coBinaryDemoXrb) els.coBinaryDemoXrb.addEventListener("click", () => {
+    if (mode === "stripped") enterCoBinaryView();
+  });
+  if (els.coBinaryDemoBack) els.coBinaryDemoBack.addEventListener("click", () => {
+    if (mode === "stripped" && coBinaryView) exitCoBinaryView();
   });
 
   // path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches

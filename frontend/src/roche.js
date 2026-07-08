@@ -63,6 +63,15 @@ export function createRoche() {
   let donorState = null;
   let mtState = "detached";
 
+  // Chunk 1b — the CO-HMS_RLO variant of the live view: the accretor is a COMPACT OBJECT
+  // (NS/BH/WD), a point mass with no photosphere. `coMode` swaps the companion's Teff disc
+  // for a schematic marker (a real compact object is ~km across — utterly invisible at
+  // orbital scale, so a fixed-pixel schematic marker is the HONEST render, not a scaled
+  // disc). `coType` picks the marker: BH = a persistent dark disc + bright ring (an ongoing
+  // orbiting companion — NOT the SN arc's "winks out"), NS/other = a tiny hot point + halo.
+  let coMode = false;
+  let coType = null;
+
   // World-space (units of separation a) → canvas, EQUAL aspect on both axes (this is a
   // physical geometry — it must not be stretched). The frame spans L3 (behind the donor)
   // to L2 (behind the companion) in x, and the taller lobe in y, with a little margin.
@@ -127,6 +136,32 @@ export function createRoche() {
     ctx.beginPath(); ctx.arc(T.X(cx), T.Y(0), rPx, 0, 2 * Math.PI); ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.stroke();
   }
+
+  // A schematic point-mass marker for a compact-object accretor (Chunk 1b). It is NOT sized
+  // by any radius — a compact object is a point at orbital scale; this is a fixed-pixel
+  // glyph, the same honesty tier as the stream/lobe-fill cues.
+  function drawCoMarker(cx, T) {
+    const px = T.X(cx), py = T.Y(0);
+    if (coType === "BH") {
+      // Persistent dark disc + a thin bright ring so it reads against the dark panel — an
+      // ongoing orbiting companion, deliberately NOT the SN remnant's wink-out.
+      ctx.fillStyle = "#05070d";
+      ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.fill();
+      ctx.strokeStyle = "#8fb4ff"; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(px, py, 7.5, 0, 2 * Math.PI); ctx.stroke();
+    } else {
+      // NS (or WD/other): a tiny hot point + soft halo — evocative, NOT a photosphere.
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, 9);
+      grad.addColorStop(0, "rgba(212,229,255,0.9)");
+      grad.addColorStop(1, "rgba(212,229,255,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(px, py, 9, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = "#eaf1ff";
+      ctx.beginPath(); ctx.arc(px, py, 3, 0, 2 * Math.PI); ctx.fill();
+    }
+  }
+
+  const CO_NAME = { BH: "black hole", NS: "neutron star", WD: "white dwarf" };
 
   function drawLPointsAndCM(T) {
     ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center";
@@ -199,7 +234,9 @@ export function createRoche() {
     drawAxisLine(T);
 
     const donorFilling = mtState === "RLOF1" || mtState === "contact";
-    const companionFilling = mtState === "RLOF2" || mtState === "contact";
+    // A point-mass CO can never itself overflow (RLOF2/contact never fire on this grid) —
+    // force it false so the CO lobe stays an unfilled accretion-target outline.
+    const companionFilling = !coMode && (mtState === "RLOF2" || mtState === "contact");
     const donorCol = donorState ? teffToCSS(donorState.Teff_K) : DONOR_STROKE;
     const compCol = companion ? teffToCSS(companion.Teff_K) : COMP_LOBE_STROKE;
     const rgbaFromTeff = (teffK, alpha) => {
@@ -224,20 +261,23 @@ export function createRoche() {
     // donor is the one actively overflowing, so it never implies the wrong direction.
     if (donorFilling) drawStream(T, geo.stream, STREAM_COL);
 
-    // Real stellar discs — both stars, every step, at their true Teff/R.
+    // The star's real disc (every step, true Teff/R). The accretor: a real disc for a normal
+    // companion (HMS-HMS), or a schematic point-mass marker for a compact object (CO-HMS_RLO).
     if (donorState) drawStarDisc(0, donorState, T);
-    if (companion) drawStarDisc(1, companion, T);
+    if (coMode) drawCoMarker(1, T);
+    else if (companion) drawStarDisc(1, companion, T);
 
     drawLPointsAndCM(T);
 
     ctx.fillStyle = "#c9d2e4"; ctx.font = "11px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("donor", T.X(0), T.Y(0) + 4 + labelDrop(T, geo.donor_lobe));
-    ctx.fillText("companion", T.X(1), T.Y(0) - 6 - labelDrop(T, geo.companion_lobe));
+    ctx.fillText(coMode ? "star" : "donor", T.X(0), T.Y(0) + 4 + labelDrop(T, geo.donor_lobe));
+    ctx.fillText(coMode ? (CO_NAME[coType] || coType) : "companion",
+      T.X(1), T.Y(0) - 6 - labelDrop(T, geo.companion_lobe));
 
     drawScaleBar(T);
 
-    if (caption) caption.textContent = captionTextLive();
+    if (caption) caption.textContent = coMode ? captionTextCo() : captionTextLive();
   }
 
   // Push a label just past the lobe's vertical extent so it doesn't sit on the star.
@@ -301,8 +341,24 @@ export function createRoche() {
     );
   }
 
+  function captionTextCo() {
+    const a = geo.separation_rsun;
+    const label = MT_LABEL[mtState] || mtState;
+    const coName = CO_NAME[coType] || `${coType} remnant`;
+    return (
+      `${label}. The accretor is a ${coName} — a POINT MASS, drawn as a schematic marker, ` +
+      `NOT a photosphere (a compact object is ~km across, invisible at this orbital scale, ` +
+      `and has no surface temperature). Separation a ≈ ${a.toFixed(0)} R☉. The star sits ` +
+      `LEFT, the compact object RIGHT, by fixed identity throughout — it is the lobe SIZES ` +
+      `that swap as the star is stripped and the compact object accretes. During overflow ` +
+      `the star streams gas through L₁ toward the compact object (the lobe fill + stream are ` +
+      `the schematic "transferring now" cue); the released accretion power is shown in the ` +
+      `caption under the time slider, not here.`
+    );
+  }
+
   function drawPanel(rocheBlock, companionState) {
-    liveMode = false;
+    liveMode = false; coMode = false; coType = null;
     donorState = null; mtState = "detached";
     geo = rocheBlock || null;
     companion = companionState || null;
@@ -315,7 +371,7 @@ export function createRoche() {
   // step's own geometry (`binary.track_roche_geometry`, real q(t)/a(t), NOT the static
   // fixed-q=0.8 snapshot). `donor`/`companionState` are that step's real StellarStates.
   function drawLive(rocheBlock, donor, companionState, mtStateNow) {
-    liveMode = true;
+    liveMode = true; coMode = false; coType = null;
     geo = rocheBlock || null;
     donorState = donor || null;
     companion = companionState || null;
@@ -324,8 +380,22 @@ export function createRoche() {
     draw();
   }
 
+  // Chunk 1b: one step of a CO-HMS_RLO track — the star (a real StellarState) plus a
+  // compact-object accretor rendered as a schematic point-mass marker (`coTypeNow` picks
+  // the glyph). Same per-step Roche geometry as drawLive, but with no companion StellarState.
+  function drawLiveCo(rocheBlock, star, coTypeNow, mtStateNow) {
+    liveMode = true; coMode = true; coType = coTypeNow || "NS";
+    geo = rocheBlock || null;
+    donorState = star || null;
+    companion = null;
+    mtState = mtStateNow || "detached";
+    ({ ctx, W, H } = fitCanvas(canvas, canvas.clientWidth || 380, canvas.clientHeight || 300));
+    draw();
+  }
+
   function clear() {
     geo = null; companion = null; donorState = null; liveMode = false; mtState = "detached";
+    coMode = false; coType = null;
     ctx.clearRect(0, 0, W, H);
     if (caption) caption.textContent = "";
   }
@@ -337,5 +407,5 @@ export function createRoche() {
     draw();
   }
 
-  return { draw: drawPanel, drawLive, resize, clear };
+  return { draw: drawPanel, drawLive, drawLiveCo, resize, clear };
 }

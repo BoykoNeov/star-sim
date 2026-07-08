@@ -181,6 +181,17 @@
           </div>
           <p class="note binary-custom-note" id="binary-custom-note"></p>
         </div>
+        <!-- CE/compact-object tail Chunk 1b: the CO-HMS_RLO demo — the stage AFTER the
+             HMS-HMS episode, a compact object (NS/BH) orbiting a still hydrogen-rich star.
+             A STANDALONE curated demo (the settled Chunk-1a navigation decision), a sibling
+             row to the HMS-HMS "Co-evolve" one, inside stripped-mode. Solar-only, one
+             representative system (no custom sliders / [Fe/H] picker yet — Chunk 1c). -->
+        <div class="co-binary-demo-row" id="co-binary-demo-row">
+          <span class="binary-demo-label">A compact-object companion (a later chapter):</span>
+          <button type="button" class="binary-demo-btn" id="co-binary-demo-xrb">Star + black hole → X-ray binary</button>
+          <button type="button" class="binary-demo-back" id="co-binary-demo-back" hidden>← Back to the snapshot</button>
+          <span class="help" tabindex="0" data-tip="A real POSYDON CO-HMS_RLO track (Fragos+2023): a compact object (here a black hole) left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. This is the NEXT chapter after the stripped-star/HMS-HMS story — one of the two stars has finished its life. Scrub system time: the living star evolves and swells until it fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, and the orbit widens. Only the LIVING star is on the HR diagram — a black hole has no photosphere, no temperature, no luminosity point; it's drawn as a schematic point-mass marker in the 3D and Roche panels. The accretion power released is a standard L = η·Ṁ·c² estimate on the model's real mass-transfer rate (a mildly super-Eddington X-ray source), NOT a measured X-ray spectrum. Mass/[Fe/H] are fixed for this demo (POSYDON's own grid).">?</span>
+        </div>
         <p class="endgame-narrate endgame-narrate-wd" id="endgame-narrate">
           The star has shed its outer layers as a <b>planetary nebula</b> — a step this
           simulator doesn't model — leaving the hot, bare core. You're now scrubbing that
@@ -242,6 +253,21 @@
           REAL orbit; the lobe that's currently overflowing (the stream lights up) swaps sides
           as the ratio reverses. Mass and [Fe/H] are fixed for this demo (POSYDON's own grid,
           not the MIST progenitor grid) — untick back to the snapshot to change them.
+        </p>
+        <p class="endgame-narrate endgame-narrate-co-binary" id="endgame-narrate-co-binary">
+          A <b>later chapter</b> than the stripped-star story: here one of the two stars has
+          already <b>died</b>, leaving a <b>compact object</b> (a black hole) still orbiting
+          its living, hydrogen-rich companion — a real <b>POSYDON</b> CO-HMS_RLO track
+          (Fragos&nbsp;2023). Scrub <b>system time</b>: the living star swells until it fills
+          its Roche lobe and streams gas onto the black hole — an <b>X-ray binary</b> — and the
+          black hole's mass <b>grows by accretion</b> while the orbit widens. Only the living
+          star is on the HR diagram: a black hole has <b>no photosphere</b> — no temperature,
+          no luminosity point — so it's drawn as a <b>schematic point-mass marker</b> in the 3D
+          and Roche panels, never a star. The released <b>accretion power</b> (in the caption
+          under the time slider) is a standard <b>L = η·Ṁ·c²</b> estimate on the model's real
+          mass-transfer rate — a mildly super-Eddington source — <b>not</b> a measured X-ray spectrum. The earlier
+          <b>common-envelope / supernova</b> steps that made this compact object are named, not
+          modeled. Mass and [Fe/H] are fixed for this demo (POSYDON's own grid).
         </p>
       </div>
 
@@ -363,6 +389,7 @@
         <span class="age-sn">· time since explosion (supernova)</span>
         <span class="age-stripped">· one representative state (stripped star)</span>
         <span class="age-binary">· system time (co-evolving binary)</span>
+        <span class="age-co-binary">· system time (star + compact object)</span>
         <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
       </label>
       <div class="slider-wrap">

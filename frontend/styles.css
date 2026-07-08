@@ -750,7 +750,8 @@ body.binary-view .binary-demo-back { display: inline-block; }
 .endgame-narrate { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,
-.endgame-narrate-stripped, .endgame-narrate-binary { display: none; }
+.endgame-narrate-stripped, .endgame-narrate-binary,
+.endgame-narrate-co-binary { display: none; }
 body.wd-mode .endgame-narrate-wd { display: block; }
 body.wr-mode .endgame-narrate-wr { display: block; }
 body.sn-mode .endgame-narrate-sn { display: block; }
@@ -760,6 +761,48 @@ body.stripped-mode .endgame-narrate-stripped { display: block; }
 body.stripped-mode.binary-view .endgame-narrate-stripped { display: none; }
 body.binary-view .endgame-narrate-binary { display: block; }
 
+/* CE/compact-object tail Chunk 1b: the CO-HMS_RLO demo (a compact object orbiting a living
+   star) — a STANDALONE curated demo, a sibling row to the HMS-HMS "Co-evolve" one, inside
+   stripped-mode. Its own body class (.co-binary-view) keeps it mutually exclusive with the
+   HMS-HMS movie (.binary-view); the rules mirror the binary-view set. */
+.co-binary-demo-row { display: none; }
+body.stripped-mode .co-binary-demo-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border);
+}
+/* Mutual exclusivity: while one binary movie plays, the OTHER demo row steps aside (you
+   can't enter both). While the CO movie plays, its pickers give way to the single "back"
+   button, exactly like binary-view. */
+body.binary-view .co-binary-demo-row { display: none; }
+body.co-binary-view .binary-demo-row { display: none; }
+body.co-binary-view .co-binary-demo-row .binary-demo-btn,
+body.co-binary-view .co-binary-demo-row .binary-demo-label { display: none; }
+body.co-binary-view #co-binary-demo-back { display: inline-block; }
+/* The Roche panel goes live; the companion-toggle steps aside (a compact object is inherent
+   to this track); comp/spectrum/sed/structure hide — they'd show the frozen stripped
+   snapshot, misleading beside the animating panels (the binary-view precedent). */
+body.co-binary-view .roche-panel { display: block; }
+body.co-binary-view .companion-toggle-wrap { display: none; }
+body.co-binary-view .comp-panel, body.co-binary-view .spectrum-panel,
+body.co-binary-view .sed-panel, body.co-binary-view .structure-panel { display: none; }
+/* The STATE READOUT, the true-size SCALE strip and the MK class line are single-star
+   consumers NOT wired to the per-step CO scrub — left visible they'd show the FROZEN
+   stripped-snapshot's numbers (an unrelated star: a 10 M☉ subdwarf beside the animating
+   27.6 M☉ star + BH), a false-data leak by the project's honesty rule. Hide them, same as
+   comp/spectrum/sed/structure above (the 3D star canvas + its title stay — they DO animate).
+   The accretion power is surfaced in the age-slider caption instead. */
+body.co-binary-view .readout-panel { display: none; }
+body.co-binary-view .scale-title,
+body.co-binary-view #scale-canvas,
+body.co-binary-view #scale-caption,
+body.co-binary-view .star-class { display: none; }
+/* Narration + age-tag swap (more specific than the plain stripped-mode rules so they win
+   the tie — both classes sit on <body> at once while the CO movie plays). */
+body.stripped-mode.co-binary-view .endgame-narrate-stripped { display: none; }
+body.co-binary-view .endgame-narrate-co-binary { display: block; }
+body.stripped-mode.co-binary-view .age-stripped { display: none; }
+body.co-binary-view .age-co-binary { display: inline; }
+
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
   display: none; color: var(--accent); font-size: 12.5px; min-height: 1.4em;
@@ -767,7 +810,8 @@ body.binary-view .endgame-narrate-binary { display: block; }
 
 /* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling
    time / WR stripping sequence). */
-.age-wd, .age-wr, .age-sn, .age-stripped, .age-binary { display: none; color: var(--accent); }
+.age-wd, .age-wr, .age-sn, .age-stripped, .age-binary,
+.age-co-binary { display: none; color: var(--accent); }
 
 /* In an endgame: the age input becomes a scrubber (no number entry), the endgame
    caption shows, and the SED's rotation control is hidden (neither a degenerate WD

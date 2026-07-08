@@ -73,9 +73,11 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
+from .binary import track_roche_geometry
 from .posydon import mt_state_label, state_from_row
 from .state import StellarState
 
@@ -355,6 +357,24 @@ def co_binary_track_payload(m_star: float, m_co: float, p: float, feh: float = 0
     §3 dict shape) + the compact-object routing scalars + the orbit, plus the track-level
     snap/outcome metadata — mirrors `posydon.py`'s `binary_track_payload` shape."""
     track = co_binary_track(m_star, m_co, p, feh)
+
+    # Per-step Roche-lobe geometry (Chunk 1b) — reuse `binary.track_roche_geometry`, the
+    # SAME engine the HMS-HMS movie uses (sibling-calls-sibling). It duck-types on
+    # `m1_current_msun`/`m2_current_msun`/`separation_rsun`, so adapt each `CoBinaryStep`:
+    # the normal star is the DONOR (origin), the compact object is the accretor at (1, 0),
+    # giving q = m_co/m_star. The engine draws a lobe outline for the CO side too, but the
+    # frontend renders that side as a schematic point-mass marker (a CO has no photosphere),
+    # NOT a Teff disc — the lobe is still meaningful (the accretion target), the disc is not.
+    adapted = [
+        SimpleNamespace(
+            m1_current_msun=s.star_current_msun,
+            m2_current_msun=s.co_mass_msun,
+            separation_rsun=s.separation_rsun,
+        )
+        for s in track.steps
+    ]
+    roche = track_roche_geometry(adapted)
+
     return {
         "steps": [
             {
@@ -369,8 +389,9 @@ def co_binary_track_payload(m_star: float, m_co: float, p: float, feh: float = 0
                 "mdot_msun_yr": s.mdot_msun_yr,
                 "accretion_lum_lsun": s.accretion_lum_lsun,
                 "star_current_msun": s.star_current_msun,
+                "roche": g,
             }
-            for s in track.steps
+            for s, g in zip(track.steps, roche)
         ],
         "m_star_init_msun": track.m_star_init_msun,
         "m_co_init_msun": track.m_co_init_msun,
