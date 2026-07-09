@@ -177,15 +177,24 @@ mass, for **both** Y, report:
 - **τ_MS** = the age of the last row (central H exhausted, the TAMS stop) — the
   *shorter main-sequence lifetime* check (enhanced should be smaller).
 
+**Measure ZAMS + τ_MS through the parser, NOT raw row 0.** With
+`create_pre_main_sequence_model = .true.`, history.data **row 0 is the cool ~4400 K
+Hayashi pre-MS model for every mass** — an `awk NR==7` reads it and makes every ZAMS
+Teff look broken (a 1 M☉ ZAMS reads 4461 K instead of the real ~5750 K, so the
+bluer/brighter check can't be read off it). The `MESAProvider` parser the sibling
+reuses **windows the pre-MS rows off**, so the parsed track's row 0 IS the ZAMS. Use it
+(run from `backend/`):
+
 ```bash
-# ZAMS (row 0) and TAMS (last row): age / log_Teff / log_L per run
-for d in data/mesa_helium/*/[126]Msun; do
-  awk 'NR==6{for(i=1;i<=NF;i++){if($i=="star_age")A=i; if($i=="log_Teff")T=i; if($i=="log_L")L=i}}
-       NR==7{z_a=$A; z_T=$T; z_L=$L}
-       {l_a=$A; l_T=$T; l_L=$L}
-       END{printf "%-40s ZAMS Teff=%.0f L=%.3f | TAMS tau_MS=%.3e Gyr\n",
-             FILENAME, 10**z_T, 10**z_L, l_a/1e9}' "$d/history.data"
-done
+python -c "
+from star_sim.providers.mesa import _build_track, _state_from_track
+for M in (1, 2, 6):
+    for kind in ('baseline', 'enhanced'):
+        t = _build_track(f'../data/mesa_helium/{kind}/{M}Msun/history.data')
+        s = _state_from_track(t, 0.0)          # parsed row 0 = ZAMS (pre-MS windowed off)
+        tau = (t.age[-1] - t.age[0]) / 1e9     # windowed MS lifetime (TAMS - ZAMS age)
+        print(f'{kind:8s} {M}Msun  ZAMS Teff={s.Teff_K:5.0f} L={s.L_lsun:8.3f}  tau_MS={tau:.3f} Gyr')
+"
 ```
 
 If enhanced-Y is measurably bluer/brighter at ZAMS **and** shorter-lived than
