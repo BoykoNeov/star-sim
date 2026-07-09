@@ -751,7 +751,7 @@ body.binary-view .binary-demo-back { display: inline-block; }
 .endgame-narrate b { color: #cbd2e0; font-weight: 600; }
 .endgame-narrate-wd, .endgame-narrate-wr, .endgame-narrate-sn,
 .endgame-narrate-stripped, .endgame-narrate-binary,
-.endgame-narrate-co-binary { display: none; }
+.endgame-narrate-co-binary, .endgame-narrate-co-hems { display: none; }
 body.wd-mode .endgame-narrate-wd { display: block; }
 body.wr-mode .endgame-narrate-wr { display: block; }
 body.sn-mode .endgame-narrate-sn { display: block; }
@@ -785,6 +785,12 @@ body.co-binary-view .roche-panel { display: block; }
 body.co-binary-view .companion-toggle-wrap { display: none; }
 body.co-binary-view .comp-panel, body.co-binary-view .spectrum-panel,
 body.co-binary-view .sed-panel, body.co-binary-view .structure-panel { display: none; }
+/* Chunk 2b: the He-star kinds (co-hems / co-hems-rlo) DO have a real, measured surface
+   composition (the surviving star is a bare He star), driven per scrub-step via
+   comp.setStripped — so the composition panel comes back on. comp ALONE: spectrum/sed/
+   structure stay hidden (out of 2b scope). Higher specificity (two body classes) beats the
+   plain co-binary-view hide above. */
+body.co-binary-view.co-he-kind .comp-panel { display: block; }
 /* The STATE READOUT, the true-size SCALE strip and the MK class line are single-star
    consumers NOT wired to the per-step CO scrub — left visible they'd show the FROZEN
    stripped-snapshot's numbers (an unrelated star: a 10 M☉ subdwarf beside the animating
@@ -800,6 +806,10 @@ body.co-binary-view .star-class { display: none; }
    the tie — both classes sit on <body> at once while the CO movie plays). */
 body.stripped-mode.co-binary-view .endgame-narrate-stripped { display: none; }
 body.co-binary-view .endgame-narrate-co-binary { display: block; }
+/* Chunk 2b: on a He-star kind, swap the H-rich CO-HMS_RLO narration for the He/DCO one
+   (two body classes → wins the tie over the plain co-binary-view rule above). */
+body.co-binary-view.co-he-kind .endgame-narrate-co-binary { display: none; }
+body.co-binary-view.co-he-kind .endgame-narrate-co-hems { display: block; }
 body.stripped-mode.co-binary-view .age-stripped { display: none; }
 body.co-binary-view .age-co-binary { display: inline; }
 

@@ -191,15 +191,34 @@
              physical value, not a ratio, so all three are log-scale sliders. -->
         <div class="co-binary-demo-row" id="co-binary-demo-row">
           <span class="binary-demo-label">A compact-object companion (a later chapter):</span>
+          <!-- Chunk 2b: the grid-KIND selector — the CO axis orthogonal to [Fe/H]. Three real
+               POSYDON grids behind the same routes (a `kind` param, default co-hms-rlo): an
+               H-rich companion (the X-ray-binary accretion payoff), or a bare He star orbiting
+               the compact object — detached (the double-compact-object / gravitational-wave-
+               merger progenitor) or in Roche-lobe overflow (a He-donor X-ray binary). Physical
+               labels, not the POSYDON grid jargon. -->
+          <label class="binary-feh-label" for="co-binary-kind">System
+            <select id="co-binary-kind">
+              <option value="co-hms-rlo">Compact object + H-rich star</option>
+              <option value="co-hems">Compact object + He star (inspiral → merger)</option>
+              <option value="co-hems-rlo">Compact object + He star (mass transfer)</option>
+            </select>
+          </label>
           <label class="binary-feh-label" for="co-binary-feh">[Fe/H]
             <select id="co-binary-feh"></select>
           </label>
           <button type="button" class="binary-demo-btn" id="co-binary-demo-xrb" data-co-demo="xrb">Star + black hole → X-ray binary</button>
           <button type="button" class="binary-demo-btn" id="co-binary-demo-custom" data-co-demo="custom">Custom system…</button>
           <button type="button" class="binary-demo-back" id="co-binary-demo-back" hidden>← Back to the snapshot</button>
-          <span class="help" tabindex="0" data-tip="A real POSYDON CO-HMS_RLO track (Fragos+2023): a compact object (here a black hole) left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. This is the NEXT chapter after the stripped-star/HMS-HMS story — one of the two stars has finished its life. Scrub system time: the living star evolves and swells until it fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, and the orbit widens. Only the LIVING star is on the HR diagram — a black hole has no photosphere, no temperature, no luminosity point; it's drawn as a schematic point-mass marker in the 3D and Roche panels. The accretion power released is a standard L = η·Ṁ·c² estimate on the model's real mass-transfer rate (a mildly super-Eddington X-ray source), NOT a measured X-ray spectrum. The [Fe/H] picker switches POSYDON metallicity bucket; 'Custom system' lets you drag the star mass, the compact object's mass, and the initial period — each snaps to the nearest real track on the grid.">?</span>
+          <span class="help" id="co-binary-help" tabindex="0" data-tip="A real POSYDON CO-HMS_RLO track (Fragos+2023): a compact object (here a black hole) left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. This is the NEXT chapter after the stripped-star/HMS-HMS story — one of the two stars has finished its life. Scrub system time: the living star evolves and swells until it fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, and the orbit widens. Only the LIVING star is on the HR diagram — a black hole has no photosphere, no temperature, no luminosity point; it's drawn as a schematic point-mass marker in the 3D and Roche panels. The accretion power released is a standard L = η·Ṁ·c² estimate on the model's real mass-transfer rate (a mildly super-Eddington X-ray source), NOT a measured X-ray spectrum. The 'System' picker switches which POSYDON grid you're on; the [Fe/H] picker switches metallicity bucket; 'Custom system' lets you drag the star mass, the compact object's mass, and the initial period — each snaps to the nearest real track on the grid.">?</span>
         </div>
         <p class="note binary-feh-note" id="co-binary-feh-note"></p>
+        <!-- Chunk 2b: the double-compact-object endpoint (He kinds only) — POSYDON's own
+             predicted remnant of the surviving He star combined with the known companion:
+             a BH+BH / NS+BH / NS+NS gravitational-wave-merger progenitor, or an honest
+             "no merger" when either ends a white dwarf. The served one-liner is printed
+             verbatim (it can't drift from the classifier). -->
+        <p class="note co-binary-dco-note" id="co-binary-dco-note"></p>
         <!-- Chunk 1c: the free M_star/M_co/P sliders behind the CO "Custom system" picker —
              all three log-scale (the CO grid spans a wide dynamic range on each axis, and
              M_co is a physical mass 1.2–307 M☉, not a <1-dex ratio like the HMS-HMS q).
@@ -304,6 +323,26 @@
           modeled. The top mass/[Fe/H] sliders are disabled here (they drive the single-star
           MIST grid, a different axis); pick the POSYDON metallicity and a <b>custom system</b>
           — the star mass, the compact object's mass, the initial period — from the controls above.
+        </p>
+        <p class="endgame-narrate endgame-narrate-co-hems" id="endgame-narrate-co-hems">
+          The <b>last chapter</b> of a massive binary's life: the surviving companion has
+          <b>also</b> been stripped to a bare, hot <b>helium star</b>, now orbiting the compact
+          object its dead partner left behind — a real <b>POSYDON</b> CO-HeMS track
+          (Fragos&nbsp;2023). Scrub <b>system time</b>: the He star is the only one on the HR
+          diagram (the compact object is a <b>schematic point-mass marker</b> — no photosphere).
+          The composition panel shows its measured <b>helium-rich surface</b> (carbon- and
+          oxygen-rich once the most massive ones burn on). The payoff is the <b>endpoint</b>:
+          POSYDON predicts what the He star becomes when <b>it</b> collapses, and combined with
+          the existing compact object that classifies the pair as a <b>double compact object</b>
+          — a <b>BH+BH / NS+BH / NS+NS gravitational-wave-merger progenitor</b> (a LIGO/Virgo
+          source), or honestly <b>no merger</b> when either ends a white dwarf (shown above the
+          slider). This is POSYDON's own remnant prediction under one pinned core-collapse
+          prescription — <b>not</b> a merger <i>time</i> (that needs the post-collapse orbit and
+          a natal-kick model this grid doesn't serve). In the <b>mass-transfer</b> variant the He
+          star overflows onto the compact object (a He-donor X-ray binary — the accretion cue
+          fires in the caption); in the <b>inspiral</b> variant the orbit is detached and quietly
+          shrinking toward merger. The <b>common-envelope / supernova</b> steps that made this
+          configuration are named, not modeled.
         </p>
       </div>
 

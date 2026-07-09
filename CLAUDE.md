@@ -379,7 +379,28 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   final-row post-accretion. Optional SN-scalar load = **NO `BAKE_VERSION_CO` bump** (8 CO-HMS_RLO npzs
   not re-baked). **Eddington bound RE-DERIVED** (not assumed): 3.47× across both He solar grids
   (solar-scoped — re-derive at 2c, the metal-poor buckets carry the same `unstable_MT` artifact class).
-  **Next = Chunk 2b (frontend render) → 2c (full [Fe/H] axis).** [[star-sim-co-hms-rlo]].
+  **CO-HeMS / CO-HeMS_RLO Chunk 2b BUILT 2026-07-09 (frontend render; frontend-only, NO backend
+  change, 373 pytest unchanged, Playwright 1440+390 zero console errors):** the He-star channel's UI.
+  Navigation settled to **advisor-endorsed Option A — a grid-`kind` `<select>` inside the EXISTING
+  `.co-binary-view`** (not a parallel view), the axis orthogonal to `[Fe/H]`, mirroring the backend's
+  parameterize-don't-fork: a `coKind` state var (default `co-hms-rlo`, byte-compatible) threaded into
+  BOTH the track + meta fetch URLs as `&kind=`; the meta cache re-keyed on **`(kind, feh)`** (each kind
+  is its own grid — the 4d stale-slider bug class). Three physical-label options; a kind change resets
+  the custom triple to that kind's curated demo, re-fetches meta then track, and swaps the demo-button
+  label + demo-row `?` tooltip. The curated demo triples are the **exact Chunk-2a-verified nodes**
+  (`test_posydon_co_he.py`) — never guessed (a guess snaps to a WD/`unstable_MT` node → a dead demo).
+  The **DCO-endpoint caption** (`#co-binary-dco-note`, He kinds only) prints the classifier's OWN served
+  `data.dco.label` verbatim (+ a friendly prescription gloss). **He-surface comp** returns for He kinds
+  (a `co-he-kind` body class set off the SERVED `data.kind`) driven per step by
+  `comp.setStripped(s,{source:"posydon"})` — comp ALONE (spectrum/sed/structure stay hidden). **An
+  advisor-caught false caption I'd hand-waved (the load-bearing fix):** the flagship CO-HeMS BH+BH demo
+  scrubs He 99% → **Z≈72% C/O** (a WC/WO surface), where the reused `drawStripped`'s `heRich=Y>X` falsely
+  read "helium-rich / the bared core is helium" — the SAME false-caption class the narration blocker
+  killed. Fixed with a three-way `surfKind` (Z>Y → "carbon/oxygen-rich surface (Wolf–Rayet WC/WO)") AND a
+  `source`-aware caption (the Götberg "one representative state" attribution is false on a time-varying
+  POSYDON track); the single-star Götberg snapshot path is byte-unchanged. **Next = Chunk 2c (full
+  8-bucket [Fe/H] axis for both He grids + re-derive the Eddington bound across all He buckets).**
+  [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
   [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis

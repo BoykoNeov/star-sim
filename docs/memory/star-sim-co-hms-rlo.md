@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunk 2a (CO-HeMS/CO-HeMS_RLO backend, the double-compact-object channel) of the CE/compact-object-tail plan, ALL BUILT. A compact object (NS/BH/WD) orbiting a still-H-rich star (CO-HMS_RLO) or a bare He star (CO-HeMS/CO-HeMS_RLO, the GW-merger progenitor). posydon_co.py is now parameterized by a `kind` arg (VALID_KINDS) over per-kind baked dirs; Chunk 2a added the DCO classifier (dco_classification: predicted S1 remnant + known S2 → BH+BH/NS+BH/NS+NS or honest no-DCO). The accretion-luminosity cue (η·Ṁ·c²) is gated THREE ways (not-detached AND not-unstable_MT AND not-WD); the Eddington bound was RE-DERIVED on the He grids (3.47×, solar-scoped, not assumed to inherit CO-HMS_RLO's 3.46×). Optional SN-scalar load = no BAKE_VERSION_CO bump. The CO-HeMS index-identity check was loosened (5e-2) — the strict 1e-3 was dropping ~20% of good He-star tracks to benign wind drift. 373 pytest.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a (backend) & 2b (frontend) (CO-HeMS/CO-HeMS_RLO, the double-compact-object channel) of the CE/compact-object-tail plan, ALL BUILT. Chunk 2b = a `kind` selector in the existing .co-binary-view (Option A), He-surface comp per step (drawStripped made honest for the C/O WC/WO regime + POSYDON-provenance caption), a DCO-endpoint caption (data.dco.label verbatim); frontend-only, 373 pytest unchanged. Next = 2c (full [Fe/H] axis for both He grids). A compact object (NS/BH/WD) orbiting a still-H-rich star (CO-HMS_RLO) or a bare He star (CO-HeMS/CO-HeMS_RLO, the GW-merger progenitor). posydon_co.py is now parameterized by a `kind` arg (VALID_KINDS) over per-kind baked dirs; Chunk 2a added the DCO classifier (dco_classification: predicted S1 remnant + known S2 → BH+BH/NS+BH/NS+NS or honest no-DCO). The accretion-luminosity cue (η·Ṁ·c²) is gated THREE ways (not-detached AND not-unstable_MT AND not-WD); the Eddington bound was RE-DERIVED on the He grids (3.47×, solar-scoped, not assumed to inherit CO-HMS_RLO's 3.46×). Optional SN-scalar load = no BAKE_VERSION_CO bump. The CO-HeMS index-identity check was loosened (5e-2) — the strict 1e-3 was dropping ~20% of good He-star tracks to benign wind drift. 373 pytest.
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -309,10 +309,65 @@ object — the direct progenitor of a BH-BH / NS-BH / NS-NS gravitational-wave-m
   high drop rate is the measure-first anomaly to understand, not wave past.
 - **Tests:** `test_posydon_co_he.py` (38, gated `requires_posydon_co_he_data` — both He grids baked)
   + `requires_posydon_co_he_multifeh` (for 2c). 4 pure `dco_classification` unit tests are UNGATED
-  (no data). **Next = Chunk 2b (frontend render — He star via the stripped-star shader path, the
-  schematic CO glyph, the DCO-endpoint caption) → 2c (full 8-bucket [Fe/H] axis + re-derive the
-  Eddington bound across all He buckets).** [[star-sim-supernova-remnant-endgame]] for the NS/BH
-  remnant vocabulary the DCO classifier reuses.
+  (no data). [[star-sim-supernova-remnant-endgame]] for the NS/BH remnant vocabulary the DCO
+  classifier reuses.
+
+**Chunk 2b BUILT 2026-07-09 (frontend render — CO-HeMS / CO-HeMS_RLO; frontend-only, NO backend
+change, 373 pytest unchanged, Playwright-verified 1440+390 zero console errors).** The He-star
+double-compact-object channel gets its UI. Navigation was the one open design call
+(plan flagged it): **advisor-endorsed Option A — a grid-`kind` `<select>` inside the EXISTING
+`.co-binary-view`, NOT a parallel `.co-he-binary-view`** — mirrors the backend's
+parameterize-don't-fork (`kind` param on the same routes), so every consumer (HR-star-only, the
+schematic CO glyph, the accretion cue, the live Roche panel) is byte-identical across kinds.
+- **The `kind` axis (orthogonal to `[Fe/H]`):** a `coKind` state var (default `co-hms-rlo`,
+  byte-compatible) threaded into BOTH the `/co_binary_track` AND `/co_binary_track_meta` fetch URLs
+  as `&kind=`. The three options carry PHYSICAL labels (Compact object + H-rich star / + He star
+  inspiral→merger / + He star mass transfer), not the POSYDON grid jargon (advisor). The meta cache
+  now keys on **`(kind, feh)`** not feh alone (`ensureCoBinaryMeta` + new `coBinaryMetaKind`/
+  `coBinaryMetaPromiseKind`) — each kind is its OWN grid with its own M_star/M_co/P spans, so
+  switching kind at unchanged feh must re-fetch bounds (the 4d stale-slider bug class). A kind change
+  is a fresh grid: reset the custom triple to that kind's curated demo, invalidate meta, re-fetch
+  meta THEN track, and swap the demo-button label + demo-row `?` tooltip via `applyCoKindUi()`.
+- **The three BLOCKERS the advisor flagged, all closed:** (1) the narration + tooltip were hardcoded
+  H-rich ("hydrogen-rich companion") — a false-caption class → a He-kind narration block
+  `endgame-narrate-co-hems` gated on a `co-he-kind` body class + per-kind tooltip text in
+  `CO_KIND_UI`; (2) the curated demo triples are the EXACT Chunk-2a-verified nodes pulled from
+  `test_posydon_co_he.py` (`CO_BINARY_DEMOS` map: CO-HeMS 16.559711/5.990075/0.561443 → BH+BH DCO;
+  CO-HeMS_RLO 1.422924/10.248538/0.045189 → He-donor XRB, cue fires ≈205–610× the star's own L) —
+  NEVER guessed (a guess can snap to a WD/`unstable_MT` node where the payoff is gated off → a dead
+  demo); (3) the meta cache key (above).
+- **The DCO-endpoint caption** (`#co-binary-dco-note`, He kinds only) prints the classifier's OWN
+  served one-liner **verbatim** (`data.dco.label` — advisor: can't drift from the backend), + a
+  friendly gloss of the index-labeled prescription (`S1_SN_MODEL_v2_01` → "core-collapse prescription
+  v2_01"): "Endpoint: BH + BH merger progenitor (…)." / "no double-compact merger — the He star
+  ends as a white dwarf."
+- **He-surface comp** — the panel (CSS-hidden on the H-rich kind via `.co-binary-view .comp-panel`)
+  comes back on for He kinds (`body.co-binary-view.co-he-kind .comp-panel`, higher specificity)
+  driven per scrub-step by `comp.setStripped(s, {source:"posydon"})`. **comp ALONE** (spectrum/sed/
+  structure stay hidden — out of 2b scope, advisor). The `co-he-kind` body class is set off the
+  SERVED `data.kind` in `_applyCoBinaryTrackData` (authoritative, can't desync from the shown track).
+- **The advisor-caught false caption I'd WRONGLY hand-waved (the load-bearing fix):** the flagship
+  CO-HeMS BH+BH demo scrubs from He 99% (step 0) → **Z≈72% carbon/oxygen** (step 19, a WC/WO
+  surface); the reused `drawStripped`'s `heRich = Y>X` was still true there, so it falsely printed
+  "helium-rich surface" + "the bared core is helium" over a 72%-Z bar — the SAME false-caption class
+  the narration blocker existed to kill, just in a different panel. I'd dismissed it as "minor
+  cosmetic"; the advisor (who saw the transcript) was right that it wasn't. Fixed `drawStripped` with
+  a three-way **`surfKind = Z>Y ? "co" : Y>X ? "he" : "h"`** (the `co` branch → "carbon/oxygen-rich
+  surface" + "The helium has burned to carbon & oxygen — a Wolf–Rayet (WC/WO) surface") AND a
+  **`source`-aware caption**: the Götberg "(Götberg 2018) … one representative state (halfway through
+  core-helium burning)" attribution is FALSE on a time-varying POSYDON track, so `strippedCaption`
+  now takes a `source` ("gotberg"|"posydon") — the posydon caption says "The MEASURED surface
+  abundances from the POSYDON binary track … a real evolving step (scrub the time slider to watch it
+  change)." **The single-star Götberg stripped snapshot path is byte-unchanged** (`setStripped(state,
+  opts={})`, source defaults to "gotberg"; Götberg `Z_surf≈0.014` never trips the `co` branch — the
+  he/h branches are identical to before). **Lesson (mine, not the code's): when a plan says "reuse
+  view X for a new regime," look at the NEW regime's states through X before declaring it a drop-in —
+  the He-dominant recon example didn't stress-test the C/O-dominant late scrub.**
+- **Not built:** Chunk 2c (full 8-bucket [Fe/H] axis for both He grids — currently solar-only;
+  re-derive the Eddington bound across all 8 He buckets, the exact step that caught the 505,221×
+  `unstable_MT` artifact for CO-HMS_RLO in Chunk 1c). Phases 2 (initial-He) & 3 (α-enhanced). **Next
+  = Chunk 2c.** [[star-sim-supernova-remnant-endgame]] for the NS/BH remnant vocabulary the DCO
+  classifier reuses; [[star-sim-binary-stripped]] for the `comp.setStripped` He-surface view 2b reuses.
 
 **Prior "Not built" note (superseded by Chunk 1c above):** Chunk 1c was more metallicities + custom
 sliders; both now built.

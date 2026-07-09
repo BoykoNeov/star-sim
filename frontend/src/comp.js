@@ -60,16 +60,27 @@ const WD_CAPTION =
 // heavy shells are BEYOND what MIST computed — the tracks end before the iron core forms —
 // so they're the canonical pre-collapse structure theory predicts, never measured here.
 // Honesty caption for the binary-stripped-star SURFACE view (see drawStripped). Only the
-// surface X/Y/Z is measured (from the Götberg grid); the grid carries no interior
-// composition, so the core is a He-burning core by construction — not shown as if measured.
-// It is composition-AWARE: the He-richness is the story only at the HIGH-mass end. At the
-// low-mass end (~2–3 M☉ progenitors) the stripped star keeps a thin hydrogen envelope and is
-// still H-rich (an sdB-like hot subdwarf) — asserting "helium-rich" there would be a false
-// measured label (the boron-b8 / VO-7400 discipline), so the clause follows the real X vs Y.
-function strippedCaption(heRich) {
-  const surf = heRich
+// surface X/Y/Z is measured; the model carries no interior composition, so the core is a
+// He/C-burning core by construction — not shown as if measured. It is composition-AWARE (the
+// clause follows the real X/Y/Z, never a hardcoded label — the boron-b8 / VO-7400 discipline):
+//   * "co" — the helium itself has burned to carbon & oxygen (a Wolf–Rayet WC/WO surface);
+//   * "he" — hydrogen-poor, helium-rich (the classic bared He core, HIGH-mass end);
+//   * "h"  — still H-rich, a thin envelope survives (the hot-subdwarf low-mass end).
+// `source` swaps the PROVENANCE (Chunk 2b): "gotberg" = the single-snapshot Götberg 2018
+// stripped-star what-if (one representative state); "posydon" = a time-varying POSYDON CO-HeMS
+// binary-track step (NOT Götberg, NOT one representative state) — using the Götberg attribution
+// there would be a false-source label (the same discipline as the He/CO clause).
+function strippedCaption(surfKind, source) {
+  const surf = surfKind === "co"
+    ? "the helium itself burned to carbon and oxygen (a Wolf–Rayet WC/WO surface)"
+    : surfKind === "he"
     ? "hydrogen-poor and helium-rich, the bared core"
     : "still hydrogen-rich — a thin envelope survives (the hot-subdwarf low-mass end)";
+  if (source === "posydon") {
+    return "The MEASURED surface abundances from the POSYDON binary track — " + surf + ". " +
+      "This is a real evolving step (scrub the time slider to watch it change); the grid " +
+      "carries no interior profile, so only the surface is shown.";
+  }
   return "The MEASURED surface of the stripped star (Götberg 2018) — " + surf + ". This is " +
     "one representative state (halfway through core-helium burning); the grid carries no " +
     "interior profile, so only the surface is shown. The core is a helium-burning core by " +
@@ -143,6 +154,8 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
                              // (the measured He-rich surface IS the story; no EEP track, and the
                              // core is by-construction, so the burning-abundance views don't apply)
   let strippedState = null;  // the stripped StellarState (drawStripped reads its surface X/Y/Z)
+  let strippedSource = "gotberg";  // caption provenance: "gotberg" (single-snapshot what-if) or
+                                    // "posydon" (a time-varying CO-HeMS binary-track step, Chunk 2b)
   // Per-element visibility for the cno view (legend-click toggles). Session-only
   // (not persisted). Scoped to the cno view — the light view is only three lines.
   const hidden = new Set();
@@ -163,7 +176,7 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
   function setSupernova(model) { sn = true; wd = false; stripped = false; if (model) snData = model; draw(); }
   // Enter the binary-stripped what-if: the single-state SURFACE composition view (drawStripped),
   // driven by the stripped StellarState's surface X/Y/Z alone (no track — one representative state).
-  function setStripped(state) { stripped = true; wd = false; sn = false; if (state) strippedState = state; draw(); }
+  function setStripped(state, opts = {}) { stripped = true; wd = false; sn = false; if (state) strippedState = state; strippedSource = opts.source === "posydon" ? "posydon" : "gotberg"; draw(); }
   function clearEndgame() { wd = false; sn = false; stripped = false; draw(); }
   function setScale(s) { scale = s === "log" ? "log" : "lin"; draw(); }
   // Toggle one per-element line in the cno view on/off, returning its new
@@ -630,9 +643,12 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     if (!s) return;
     const PAD = 12;
     const X = clamp01(s.X_surf ?? 0), Y = clamp01(s.Y_surf ?? 0), Z = clamp01(s.Z_surf ?? 0);
-    const heRich = Y > X;   // the He story is the HIGH-mass end; the low-mass end stays H-rich
+    // Three-way surface classification, following the REAL X/Y/Z (never a hardcoded label):
+    // an EVOLVED He star (the CO-HeMS DCO channel scrubs into this) bares a carbon/oxygen
+    // (WC/WO) surface once its helium burns — "helium-rich" would be a false label there.
+    const surfKind = Z > Y ? "co" : Y > X ? "he" : "h";
     const coolCol = teffToCSS(s.Teff_K);
-    const caption = strippedCaption(heRich);
+    const caption = strippedCaption(surfKind, strippedSource);
 
     // dynamic caption reserve (wraps to more lines on a narrow canvas — mirrors drawWD)
     const titleH = 24, capLh = 11;
@@ -644,7 +660,8 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     labelPill("surface composition", PAD, PAD);
     ctx.font = "600 12px system-ui, sans-serif";
     ctx.fillStyle = coolCol; ctx.textAlign = "right";
-    ctx.fillText(heRich ? "helium-rich surface" : "hydrogen-rich surface", W - PAD, PAD + 12);
+    ctx.fillText(surfKind === "co" ? "carbon/oxygen-rich surface"
+      : surfKind === "he" ? "helium-rich surface" : "hydrogen-rich surface", W - PAD, PAD + 12);
     ctx.textAlign = "left";
 
     // one wide horizontal stacked bar: H | He | Z, segment widths ∝ surface mass fraction.
@@ -672,7 +689,9 @@ export function createComp(canvas, cssW = 300, cssH = 280) {
     ctx.fillStyle = "#8a93a6"; ctx.font = "11px system-ui, sans-serif";
     // Kept short so it doesn't clip on a phone-width canvas (drawn unwrapped, unlike the caption).
     // Follows the real composition: the bared-He story only holds where He actually dominates.
-    ctx.fillText(heRich
+    ctx.fillText(surfKind === "co"
+      ? "The helium has burned to carbon & oxygen — a Wolf–Rayet (WC/WO) surface."
+      : surfKind === "he"
       ? "Normal surface: ~74% H — the bared core is helium."
       : "A thin hydrogen envelope survives — a hot subdwarf (sdB/O).",
       barX, barY + barH + 40);

@@ -76,8 +76,11 @@ const els = {
   coBinaryDemoXrb: document.getElementById("co-binary-demo-xrb"),
   coBinaryDemoCustom: document.getElementById("co-binary-demo-custom"),
   coBinaryDemoBack: document.getElementById("co-binary-demo-back"),
+  coBinaryKind: document.getElementById("co-binary-kind"),
+  coBinaryHelp: document.getElementById("co-binary-help"),
   coBinaryFeh: document.getElementById("co-binary-feh"),
   coBinaryFehNote: document.getElementById("co-binary-feh-note"),
+  coBinaryDcoNote: document.getElementById("co-binary-dco-note"),
   coBinaryCustomControls: document.getElementById("co-binary-custom-controls"),
   coBinaryCustomMstar: document.getElementById("co-binary-custom-mstar"),
   coBinaryCustomMstarNum: document.getElementById("co-binary-custom-mstar-num"),
@@ -511,13 +514,48 @@ let binaryToken = 0;            // latest-wins guard for /binary_track fetches
 // (the settled Chunk-1a navigation decision), solar-only, a sibling to the HMS-HMS movie but
 // its OWN state + body class (.co-binary-view) so the two are mutually exclusive. The demo is
 // the measured Gate-1 system (a 27.6 M☉ star + 14.7 M☉ BH → X-ray binary → stripped + BH).
-const CO_BINARY_DEMO = { m_star: 27.61912143189711, m_co: 14.66048571159418, p: 203.9763401890043 };
+// Chunk 2b: the CO grid KIND — the axis orthogonal to [Fe/H], mirroring the backend's three
+// `kind` grids behind one route (default "co-hms-rlo", byte-compatible). Each kind is its OWN
+// baked grid (different M_star/M_co/P spans + a different payoff), so a kind change is a fresh
+// grid: it resets the custom triple to that kind's curated demo, invalidates the meta cache,
+// and re-fetches — exactly like a [Fe/H] bucket change, just also swapping the demo node/labels.
+//   * co-hms-rlo — compact object + still-H-rich star: the X-ray-binary accretion payoff.
+//   * co-hems     — compact object + bare He star, detached inspiral: the double-compact-object
+//                   (gravitational-wave-merger) CLASSIFICATION payoff (data.dco).
+//   * co-hems-rlo — the same He star in Roche-lobe overflow: a He-donor X-ray binary (accretion
+//                   cue fires) + a DCO endpoint (usually "no merger" — the He star ends a WD).
+// The curated demo triples are the exact Chunk-2a-verified nodes (test_posydon_co_he.py) that
+// are GUARANTEED to hit each kind's payoff node — never guessed (a guess can snap to a WD /
+// unstable_MT node where the feature is gated off, showing a dead demo).
+const CO_BINARY_DEMOS = {
+  "co-hms-rlo":  { m_star: 27.61912143189711, m_co: 14.66048571159418, p: 203.9763401890043 },
+  "co-hems":     { m_star: 16.559711, m_co: 5.990075, p: 0.561443 },   // BH+BH DCO progenitor
+  "co-hems-rlo": { m_star: 1.422924, m_co: 10.248538, p: 0.045189 },   // He-donor X-ray binary
+};
+// Per-kind demo-button label + demo-row `?` tooltip (the H-rich default HTML tooltip would
+// MISDESCRIBE a He kind — a false-data-in-caption leak, the class this project keeps catching).
+const CO_KIND_UI = {
+  "co-hms-rlo": {
+    demoLabel: "Star + black hole → X-ray binary",
+    tip: "A real POSYDON CO-HMS_RLO track (Fragos+2023): a black hole left behind by an already-dead star, still orbiting its living, hydrogen-rich companion. Scrub system time — the living star swells, fills its Roche lobe and pours gas onto the black hole (an X-ray binary), the black hole's mass grows by real accretion, the orbit widens. Only the living star is on the HR diagram (a black hole has no photosphere); the accretion power is a schematic L = η·Ṁ·c² estimate on the model's real transfer rate, not a measured X-ray spectrum.",
+  },
+  "co-hems": {
+    demoLabel: "He star + black hole → BH+BH merger",
+    tip: "A real POSYDON CO-HeMS track (Fragos+2023): the surviving companion has ALSO been stripped to a bare helium star, now orbiting the compact object — the direct progenitor of a double compact object (a gravitational-wave-merger source). Scrub system time: only the He star is on the HR diagram; the composition panel shows its measured helium-rich surface. The payoff is the endpoint (shown above the slider) — POSYDON's own predicted remnant of the He star, combined with the existing compact object: a BH+BH / NS+BH / NS+NS merger progenitor, or honestly no merger if either ends a white dwarf. This orbit is detached (no accretion cue) — the merger itself is not modeled (no natal kick, no merger time).",
+  },
+  "co-hems-rlo": {
+    demoLabel: "He star + black hole → X-ray binary",
+    tip: "A real POSYDON CO-HeMS_RLO track (Fragos+2023): a bare helium star overflowing its Roche lobe onto the compact object — a He-donor X-ray binary (Case BB/BC mass transfer). Scrub system time: only the He star is on the HR diagram (helium-rich surface in the composition panel); the accretion power onto the compact object is surfaced in the caption (schematic L = η·Ṁ·c²). The double-compact-object endpoint is shown above the slider — often 'no merger' here, since the He star frequently ends as a white dwarf.",
+  },
+};
+function isHeKind(kind) { return kind === "co-hems" || kind === "co-hems-rlo"; }
+let coKind = "co-hms-rlo";      // the selected CO grid (VALID_KINDS), orthogonal to coCustomFeh
 let coBinaryView = false;
 let coBinaryTrackData = null;   // the full /co_binary_track payload
 let coBinaryStar = null;        // data.steps[].star, pulled out for hr.setBinaryTrack (star only)
 let coBinaryFraction = 0;       // 0..1 slider position, index-linear over steps
 let coBinaryToken = 0;          // latest-wins guard for /co_binary_track fetches
-let coBinaryDemoKey = null;     // "xrb" (curated Gate-1 system) | "custom" — which is live
+let coBinaryDemoKey = null;     // "xrb" (curated demo system) | "custom" — which is live
 
 // Chunk 1c: the [Fe/H] picker + free M_star/M_co/P sliders. /co_binary_track was always
 // general (snap-always over the WHOLE baked CO grid, §6) — the single curated demo was a
@@ -532,10 +570,14 @@ let coBinaryMeta = null;
 let coBinaryMetaPromise = null;
 let coBinaryMetaPromiseFeh = null;
 let coBinaryMetaFeh = null;
-const CO_CUSTOM_DEFAULT = { m_star: CO_BINARY_DEMO.m_star, m_co: CO_BINARY_DEMO.m_co, p: CO_BINARY_DEMO.p };
-let coCustomMstar = CO_CUSTOM_DEFAULT.m_star;
-let coCustomMco = CO_CUSTOM_DEFAULT.m_co;
-let coCustomP = CO_CUSTOM_DEFAULT.p;
+// The meta cache also keys on KIND (Chunk 2b): each `kind` is its own grid with its own
+// M_star/M_co/P spans, so switching kind at unchanged [Fe/H] must NOT reuse the old bounds
+// (that would mis-position the custom sliders — the same class as the 4d stale-slider bug).
+let coBinaryMetaKind = null;
+let coBinaryMetaPromiseKind = null;
+let coCustomMstar = CO_BINARY_DEMOS[coKind].m_star;
+let coCustomMco = CO_BINARY_DEMOS[coKind].m_co;
+let coCustomP = CO_BINARY_DEMOS[coKind].p;
 let coCustomFeh = 0.0;          // the selected POSYDON metallicity bucket (solar by default),
                                 // applies to EITHER CO demo (curated or custom) — orthogonal
                                 // to which (M_star, M_co, P) is picked.
@@ -545,14 +587,19 @@ let coCustomFeh = 0.0;          // the selected POSYDON metallicity bucket (sola
 // options + slider bounds. Cached per-feh; a bucket change clears the cache (each POSYDON
 // metallicity is a separate baked grid with its own M_star/M_co/P spans).
 function ensureCoBinaryMeta() {
-  if (coBinaryMeta && coBinaryMetaFeh === coCustomFeh) return Promise.resolve(coBinaryMeta);
-  if (coBinaryMetaPromise && coBinaryMetaPromiseFeh === coCustomFeh) return coBinaryMetaPromise;
-  const fehAtCall = coCustomFeh;   // snapshot — coCustomFeh may change again before this resolves
+  if (coBinaryMeta && coBinaryMetaFeh === coCustomFeh && coBinaryMetaKind === coKind)
+    return Promise.resolve(coBinaryMeta);
+  if (coBinaryMetaPromise && coBinaryMetaPromiseFeh === coCustomFeh && coBinaryMetaPromiseKind === coKind)
+    return coBinaryMetaPromise;
+  const fehAtCall = coCustomFeh;   // snapshot — coCustomFeh/coKind may change again before this resolves
+  const kindAtCall = coKind;
   coBinaryMetaPromiseFeh = fehAtCall;
-  coBinaryMetaPromise = fetchJSON(`/co_binary_track_meta?feh=${fehAtCall}`)
+  coBinaryMetaPromiseKind = kindAtCall;
+  coBinaryMetaPromise = fetchJSON(`/co_binary_track_meta?feh=${fehAtCall}&kind=${kindAtCall}`)
     .then((meta) => {
       coBinaryMeta = meta;
       coBinaryMetaFeh = fehAtCall;
+      coBinaryMetaKind = kindAtCall;
       coCustomMstar = Math.min(Math.max(coCustomMstar, meta.m_star_min), meta.m_star_max);
       coCustomMco = Math.min(Math.max(coCustomMco, meta.m_co_min), meta.m_co_max);
       coCustomP = Math.min(Math.max(coCustomP, meta.p_min), meta.p_max);
@@ -560,7 +607,7 @@ function ensureCoBinaryMeta() {
       configureCoBinaryCustomSliders();
       return meta;
     })
-    .catch(() => { coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; return null; });
+    .catch(() => { coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; coBinaryMetaPromiseKind = null; return null; });
   return coBinaryMetaPromise;
 }
 
@@ -2095,6 +2142,8 @@ function exitEndgame() {
   // Chunk 1b: drop the CO-HMS_RLO sub-view too (hr.clearBinaryTrack ran above).
   coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
   document.body.classList.remove("co-binary-view");
+  document.body.classList.remove("co-he-kind");
+  if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   els.mass.disabled = false; els.feh.disabled = false;    // in case binaryView had disabled them
   if (els.massNum) els.massNum.disabled = false;
@@ -2724,6 +2773,8 @@ async function enterStripped() {
   if (els.binaryFehNote) els.binaryFehNote.textContent = "";
   coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
   document.body.classList.remove("co-binary-view");   // Chunk 1b — snapshot first here too
+  document.body.classList.remove("co-he-kind");
+  if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   updateBinaryDemoButtons();
   ensureBinaryMeta();   // pre-warm the [Fe/H] bucket list (populates the select) + the
@@ -2973,9 +3024,36 @@ function _applyCoBinaryTrackData(data) {
   // Only the living star goes on the HR diagram — the compact object has no photosphere, so
   // NO second marker (star2States = null); label the one marker "star" (not "donor").
   hr.setBinaryTrack(coBinaryStar, null, { s1: "star" });
+  // Drive the He-kind body class + narration/comp swap off the SERVED kind (authoritative),
+  // not the selector — so they can never desync from the track actually being shown.
+  document.body.classList.toggle("co-he-kind", isHeKind(data.kind));
+  updateCoBinaryDcoNote();
   rebuildCoBinaryTicks();
   updateCoBinaryCustomNote();
   updateCoBinaryFehNote();
+}
+
+// The double-compact-object endpoint line (He kinds only). Prints the classifier's OWN served
+// one-liner verbatim (data.dco.label) — it resolves BH+BH/NS+BH/NS+NS/no-merger/unresolved, so
+// it can't drift from the backend. Cleared for co-hms-rlo (data.dco is null there).
+function updateCoBinaryDcoNote() {
+  if (!els.coBinaryDcoNote) return;
+  const dco = coBinaryTrackData && coBinaryTrackData.dco;
+  if (!dco) { els.coBinaryDcoNote.textContent = ""; return; }
+  // Prescription labeled by index (POSYDON ships 24 core-collapse models; index→mechanism
+  // isn't verifiable from the grid file — the boron-b8 discipline), with a friendlier gloss.
+  const presc = String(dco.sn_model).replace(/^S1_SN_MODEL_/, "");
+  els.coBinaryDcoNote.textContent = `Endpoint: ${dco.label} (POSYDON core-collapse prescription ${presc}).`;
+}
+
+// Sync the demo-button label + the demo-row `?` tooltip to the selected grid kind. The HTML
+// defaults describe co-hms-rlo (H-rich) only — for a He kind that text would MISDESCRIBE the
+// system (a false-data-in-caption leak), so JS is the single source of truth per kind.
+function applyCoKindUi() {
+  const ui = CO_KIND_UI[coKind];
+  if (!ui) return;
+  if (els.coBinaryDemoXrb) els.coBinaryDemoXrb.textContent = ui.demoLabel;
+  if (els.coBinaryHelp) els.coBinaryHelp.dataset.tip = ui.tip;
 }
 
 // Resolve the (m_star, m_co, p) triple for a CO demo key — the curated Gate-1 system, or the
@@ -2983,7 +3061,8 @@ function _applyCoBinaryTrackData(data) {
 // selector, applied by the caller (the _binaryParamsFor twin).
 function _coBinaryParamsFor(demoKey) {
   if (demoKey === "custom") return { m_star: coCustomMstar, m_co: coCustomMco, p: coCustomP };
-  return { m_star: CO_BINARY_DEMO.m_star, m_co: CO_BINARY_DEMO.m_co, p: CO_BINARY_DEMO.p };
+  const d = CO_BINARY_DEMOS[coKind];   // the curated demo follows the selected grid kind
+  return { m_star: d.m_star, m_co: d.m_co, p: d.p };
 }
 
 // Enter the CO-HMS_RLO movie (mode stays "stripped" — a sub-view, like the HMS-HMS one) for
@@ -3009,7 +3088,7 @@ async function enterCoBinaryView(demoKey) {
   let data;
   try {
     data = await fetchJSON(
-      `/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}`);
+      `/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}&kind=${coKind}`);
   } catch {
     if (tok === coBinaryToken && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the compact-object binary track.";
@@ -3039,8 +3118,10 @@ function exitCoBinaryView() {
   coBinaryTrackData = null; coBinaryStar = null; coBinaryDemoKey = null;
   coBinaryToken++;
   document.body.classList.remove("co-binary-view");
+  document.body.classList.remove("co-he-kind");
   if (els.coBinaryCustomControls) els.coBinaryCustomControls.hidden = true;
   if (els.coBinaryFehNote) els.coBinaryFehNote.textContent = "";
+  if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   hr.clearBinaryTrack();
   roche.clear();
@@ -3063,7 +3144,7 @@ async function refetchCoBinaryTrack() {
   const { m_star, m_co, p } = _coBinaryParamsFor(demoKey);
   const tok = ++coBinaryToken;
   let data;
-  try { data = await fetchJSON(`/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}`); }
+  try { data = await fetchJSON(`/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}&kind=${coKind}`); }
   catch { return; }
   if (tok !== coBinaryToken || mode !== "stripped" || !coBinaryView || coBinaryDemoKey !== demoKey) return;
   _applyCoBinaryTrackData(data);
@@ -3085,6 +3166,13 @@ function refreshCoBinary() {
   star.update(s, { coMarker: coType });
   if (step.roche) roche.drawLiveCo(step.roche, s, coType, step.mt_state);
   else roche.clear();
+  // He kinds (co-hems / co-hems-rlo): the surviving star is a bare He star with a REAL,
+  // measured surface — drive the composition panel per step (the reused He-surface view; the
+  // panel is CSS-hidden on the H-rich co-hms-rlo kind, so this is He-only). The surface
+  // genuinely evolves over the scrub (He → C/O on the most massive ones — the surfKind branch
+  // in drawStripped labels that honestly). source:"posydon" swaps the caption OFF the Götberg
+  // single-snapshot provenance (this is a time-varying POSYDON binary track, not Götberg 2018).
+  if (isHeKind(coBinaryTrackData.kind)) comp.setStripped(s, { source: "posydon" });
 
   if (els.endgameAgeCaption) {
     const yrs = step.age_yr >= 1e6 ? `${(step.age_yr / 1e6).toFixed(2)} Myr`
@@ -3604,9 +3692,34 @@ async function init() {
     if (!isFinite(f)) return;
     coCustomFeh = f;
     coBinaryMeta = null; coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; coBinaryMetaFeh = null;
+    coBinaryMetaPromiseKind = null; coBinaryMetaKind = null;
     await ensureCoBinaryMeta();
     refetchCoBinaryTrack();
   });
+
+  // Chunk 2b: the CO grid-KIND picker — orthogonal to [Fe/H], the axis that swaps between an
+  // H-rich companion (CO-HMS_RLO) and a bare He star + compact object (CO-HeMS / CO-HeMS_RLO).
+  // A kind change is a FRESH grid: reset the custom triple to that kind's curated demo (the
+  // grids' spans differ wildly — CO-HMS_RLO periods ~200 d vs CO-HeMS ~0.5 d, so clamping the
+  // old values alone would pin the sliders to a boundary), swap the button/tooltip text,
+  // invalidate the cached meta + await the new bounds, then re-fetch the active track. When
+  // NOT in the CO movie yet, refetch no-ops — the next demo click uses the updated coKind.
+  applyCoKindUi();
+  if (els.coBinaryKind) {
+    els.coBinaryKind.value = coKind;
+    els.coBinaryKind.addEventListener("change", async () => {
+      const k = els.coBinaryKind.value;
+      if (!(k in CO_BINARY_DEMOS)) return;
+      coKind = k;
+      applyCoKindUi();
+      const d = CO_BINARY_DEMOS[coKind];
+      coCustomMstar = d.m_star; coCustomMco = d.m_co; coCustomP = d.p;
+      coBinaryMeta = null; coBinaryMetaPromise = null; coBinaryMetaPromiseFeh = null; coBinaryMetaFeh = null;
+      coBinaryMetaPromiseKind = null; coBinaryMetaKind = null;
+      await ensureCoBinaryMeta();
+      refetchCoBinaryTrack();
+    });
+  }
 
   // path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches
   // /binary_track (debounced + latest-wins, the ⁵⁶Ni-slider idiom) and re-snaps to the

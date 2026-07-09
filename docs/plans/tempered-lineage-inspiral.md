@@ -1,13 +1,14 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunk 2a (CO-HeMS/CO-HeMS_RLO backend) ALL BUILT (2026-07-08) — see below.
-Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** — see
-"Chunk 2a" under "Phase 1 (cont.)". Chunk 2b (frontend render) and 2c (full 8-bucket [Fe/H]
-axis + re-derive the Eddington bound across all He buckets) are next. Phases 2 and 3 not yet
-built. Sequential order (also the efficient order): **Phase 1** binary CE/compact-object tail
-(Chunk 1 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend → 2c [Fe/H] axis)
-→ **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis (reuses
-Phase 2's plumbing).
+## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a (backend) & 2b (frontend) (CO-HeMS/CO-HeMS_RLO) ALL BUILT — see below.
+Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** (2026-07-08)
+and Chunk 2b (frontend render — the `kind` selector + He-surface comp + DCO-endpoint caption) is
+**BUILT** (2026-07-09) — see "Chunk 2a"/"Chunk 2b" under "Phase 1 (cont.)". Chunk 2c (full 8-bucket
+[Fe/H] axis for both He grids + re-derive the Eddington bound across all He buckets) is **next**.
+Phases 2 and 3 not yet built. Sequential order (also the efficient order): **Phase 1** binary
+CE/compact-object tail (Chunk 1 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend done
+→ 2c [Fe/H] axis) → **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis
+(reuses Phase 2's plumbing).
 
 ## Scope and non-goals
 
@@ -323,13 +324,42 @@ helper + a `DcoClassification` on `CoBinaryTrack` (He kinds only), and the `kind
   label, advisor trap #1); the re-derived Eddington bound (raw + served-level); the `kind` axis +
   the one-letter co-hms-rlo/co-hems-rlo hazard guard; route shape + 422 (incl. unknown kind).
 
-**Chunk 2b — frontend render.** Extend the `.co-binary-view` machinery (settle sub-selector
-vs a parallel `.co-he-binary-view` at chunk time — low stakes, the CO-HMS_RLO consult
-precedent). One real Teff-colored He star (HR + 3D via the stripped-star shader path) + the
-schematic CO glyph (reuse `CO_MARKER_FRAG`/`coMarker`); comp panel = the reused He-surface
-`comp.setStripped` view; the accretion cue in the age caption on CO-HeMS_RLO; a **DCO-endpoint
-readout/caption** ("this system ends as a BH+BH merger progenitor" / "…a WD — no merger").
-Roche panel goes live on the RLOF grid exactly as CO-HMS_RLO. Playwright-verify 1440+390.
+**Chunk 2b — frontend render — BUILT 2026-07-09** (frontend-only, NO backend change, 373 pytest
+unchanged, Playwright-verified 1440+390 zero console errors). Settled navigation = **a `kind`
+`<select>` inside the EXISTING `.co-binary-view`** (advisor-endorsed Option A — sub-selector, not
+a parallel `.co-he-binary-view`), the axis orthogonal to `[Fe/H]`, mirroring the backend's
+parameterize-don't-fork: three physical-label options (Compact object + H-rich star / + He star
+inspiral→merger / + He star mass transfer) driving the same routes with `&kind=`. A `coKind` state
+var (default `co-hms-rlo`, byte-compatible), threaded into BOTH the track and meta fetch URLs; the
+meta cache now keys on **`(kind, feh)`** (each kind is its own grid with its own M_star/M_co/P
+spans — switching kind at unchanged feh must re-fetch bounds, the 4d stale-slider bug class). A
+kind change is a fresh grid: it resets the custom triple to that kind's curated demo, invalidates
+the meta cache, re-fetches meta then track, and swaps the demo-button label + the demo-row `?`
+tooltip (both were hardcoded H-rich — a false-caption class the advisor blocked).
+- **Curated demo triples are the exact Chunk-2a-verified nodes** (`test_posydon_co_he.py`), NOT
+  guessed — a guess can snap to a WD / `unstable_MT` node where the payoff is gated off (a dead
+  demo). CO-HeMS = 16.559711/5.990075/0.561443 (BH+BH DCO); CO-HeMS_RLO = 1.422924/10.248538/
+  0.045189 (He-donor X-ray binary — the accretion cue fires, measured ≈205–610× the star's own L).
+- **The DCO-endpoint caption** (`#co-binary-dco-note`, He kinds only) prints the classifier's OWN
+  served one-liner **verbatim** (`data.dco.label`, advisor: can't drift), + a friendly gloss of the
+  index-labeled prescription: "Endpoint: BH + BH merger progenitor (POSYDON core-collapse
+  prescription v2_01)." / honestly "no double-compact merger — the He star ends as a white dwarf."
+- **He-surface comp** — the panel (CSS-hidden on the H-rich kind) comes back on for He kinds via a
+  `co-he-kind` body class set off the SERVED `data.kind`, driven per scrub-step by
+  `comp.setStripped(s, {source:"posydon"})`. **comp ALONE** (spectrum/sed/structure stay hidden —
+  out of 2b scope, advisor). **The reused `drawStripped` was made honest for the new C/O regime**
+  (advisor-caught false caption on the flagship demo's LATE state, which I'd wrongly hand-waved):
+  the CO-HeMS BH+BH demo scrubs from He 99% → **Z≈72% carbon/oxygen** (a WC/WO surface), where the
+  old `heRich = Y>X` label falsely read "helium-rich / the bared core is helium." Added a three-way
+  `surfKind` (Z>Y → "carbon/oxygen-rich surface (Wolf–Rayet WC/WO)") AND a `source`-aware caption
+  (the Götberg "one representative state" attribution is false on a time-varying POSYDON track).
+  The single-star Götberg snapshot path is byte-unchanged (opts defaults to `gotberg`; its
+  Z_surf≈0.014 never trips the `co` branch).
+- HR-star-only + the schematic CO glyph + the accretion cue + the live Roche panel all reused
+  UNCHANGED from CO-HMS_RLO (byte-identical across kinds — the point of Option A). A He-kind
+  narration block (`endgame-narrate-co-hems`) swaps in for the H-rich one via the `co-he-kind`
+  class. All co-he-kind class + DCO-note cleanup wired into `exitCoBinaryView` + the two
+  snapshot-reset spots. Mobile 390 stacks single-column, no overflow.
 
 **Chunk 2c — the full [Fe/H] axis.** Extract + bake the 7 non-solar buckets for both grids
 (zero new downloads — the 8 tarballs are on disk), giving the full 8-bucket axis, coextensive
