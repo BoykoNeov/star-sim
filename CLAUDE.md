@@ -398,9 +398,29 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   read "helium-rich / the bared core is helium" — the SAME false-caption class the narration blocker
   killed. Fixed with a three-way `surfKind` (Z>Y → "carbon/oxygen-rich surface (Wolf–Rayet WC/WO)") AND a
   `source`-aware caption (the Götberg "one representative state" attribution is false on a time-varying
-  POSYDON track); the single-star Götberg snapshot path is byte-unchanged. **Next = Chunk 2c (full
-  8-bucket [Fe/H] axis for both He grids + re-derive the Eddington bound across all He buckets).**
-  [[star-sim-co-hms-rlo]].
+  POSYDON track); the single-star Götberg snapshot path is byte-unchanged.
+  **CO-HeMS / CO-HeMS_RLO Chunk 2c BUILT 2026-07-09 (data + tests only — NO runtime-logic or frontend
+  code change; 379 pytest [+6], Playwright 1440+390 zero console errors — PHASE 1 COMPLETE):** the full
+  8-bucket [Fe/H] axis (−4.0…+0.30103, coextensive with CO-HMS_RLO) for BOTH He grids. Mirrors Chunk 1c/4d:
+  `co_binary_track`/`_meta` were already snap-always over the whole per-kind grid and the `#co-binary-feh`
+  picker already reads the real `available_feh` (meta cache keyed on `(kind, feh)`), so the He kinds picked
+  up all 8 buckets with ZERO code edit (Playwright-verified: both He pickers list 8, a bucket switch
+  re-fetches meta+track, the DCO caption re-computes). Extracted + baked the 7 non-solar buckets per He grid
+  (one tar scan extracting both `*/CO-HeMS/*.h5` + `*/CO-HeMS_RLO/*.h5`, delete-after-bake; npzs gitignored).
+  **The mandatory Eddington re-derivation across all 8 He buckets** (ungated, float64-cast, full grid — the
+  exact step that caught the 505,221× `unstable_MT` artifact in CO-HMS_RLO Chunk 1c): the cue holds at
+  **≤3.65× the CO's own Eddington** (co-hems-rlo at the metal-poor floor feh=−4.0; co-hems uniform 3.47×),
+  and the **key finding is that the He grids are genuinely CLEANER than CO-HMS_RLO** — ZERO ungated rows >5×
+  anywhere (no `unstable_MT`/WD artifact), so the re-derivation confirms "no artifact" rather than assuming
+  it. Tests: +6 gated on `requires_posydon_co_he_multifeh` (×2 He kinds) — `available_feh` reflects the real
+  baked set; the axis-is-real regression via the EVOLVED-track fingerprint (POSYDON reuses the SAME initial
+  (M_star, M_co, P) grid per Z, so the signal is the evolved track not a distinct node — co-hems final
+  He-star mass falls monotonically 16.46→8.42 M☉ across the axis from Z-dependent winds); DCO honest
+  degradation over a whole metal-poor grid. The existing Eddington test auto-covers all 8 (loops
+  `_available_grids(kind)`), its docstring updated to the re-derived number. The recurring wrong-bucket-test
+  hazard ([[star-sim-hosted-data-assets]]) was checked and doesn't bite — every He test iterates the grids +
+  fetches with `grid.feh`. **Phase 1 (the CE/compact-object tail) is now COMPLETE; next = Phase 2
+  (initial-He / Y axis).** [[star-sim-co-hms-rlo]].
 - **PATH (b) CHUNK 4d BUILT (frontend-only, NO backend change, Playwright-verified 1440+390 zero
   console errors):** the [Fe/H] metallicity-bucket picker — the frontend catch-up once
   [[star-sim-hosted-data-assets]] finished baking+hosting the FULL 8-bucket POSYDON axis
@@ -693,7 +713,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **373 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+- **379 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
   if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
   gated `requires_posydon_co_data`) has **24** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
@@ -713,16 +733,22 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   to mirror the now THREE-part gate (not-detached AND not-unstable_MT AND not-WD, ceiling tightened
   10→5×). The POSYDON **CO-HeMS / CO-HeMS_RLO** double-compact-object sibling (Chunk 2a — the
   He-star twins of CO-HMS_RLO, `posydon_co.py` parameterized by a `kind` arg over
-  `baked_co_hems`/`baked_co_hems_rlo`) adds `test_posydon_co_he.py` (**38**, gated
+  `baked_co_hems`/`baked_co_hems_rlo`) adds `test_posydon_co_he.py` (**44**, gated
   `requires_posydon_co_he_data`): 4 UNGATED pure `dco_classification` unit tests
   (BH+BH/NS+BH/NS+NS labels, WD/None → no DCO, nan-mass); parametrized-over-kind snap/parse
   honesty, whole-grid no-NaN/no-dupe, per-step StellarState + H-stripped-surface validity; the
   He-donor (Case BB/BC) accretion regression + the detached-`no_MT`-cue-stays-None + unresolved-
   companion graceful-degradation locks; the **DCO POSITIVE-presence regression** (assert
   `dco is not None` + label — the optional SN-scalar load must not silently degrade); the
-  **re-derived Eddington bound** across both He solar grids (raw + served-level, measured 3.47×,
-  solar-scoped — re-derive at 2c); the `kind` axis + the one-letter `co-hms-rlo`/`co-hems-rlo`
-  hazard guard; route shape + 422 (incl. unknown kind). The POSYDON co-evolved-binary sibling
+  **re-derived Eddington bound** across all 8 [Fe/H] buckets of both He grids (raw + served-level,
+  measured **≤3.65×** — co-hems-rlo at feh=−4.0, co-hems uniform 3.47× — the He grids CLEANER than
+  CO-HMS_RLO with zero ungated >5× rows); the `kind` axis + the one-letter `co-hms-rlo`/`co-hems-rlo`
+  hazard guard; route shape + 422 (incl. unknown kind); **plus Chunk 2c's +6** (gated
+  `requires_posydon_co_he_multifeh`, ×2 He kinds): `available_feh` reflects the real baked bucket set
+  per kind, the metallicity axis is real via the EVOLVED-track fingerprint (co-hems final He-star mass
+  falls 16.46→8.42 M☉ across the axis — POSYDON reuses the same initial grid per Z, so the signal is
+  the evolved track not a distinct node), and the DCO classifier degrades honestly over a whole
+  metal-poor grid. The POSYDON co-evolved-binary sibling
   (path (b) Chunk 4a) adds
   **19** tests (`test_posydon.py`, gated `requires_posydon_data`): snap honesty (a
   request lands on a true (M1,q,P) grid node, never interpolated, verified via an

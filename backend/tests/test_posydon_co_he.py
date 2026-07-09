@@ -290,12 +290,15 @@ def test_dco_s2_mass_is_post_accretion_final_row():
 
 def test_accretion_cue_within_a_few_eddington_across_he_grids():
     """RE-DERIVED for the He grids (the task's explicit requirement — He Case-BB/BC transfer
-    could differ from an H donor). Measured 2026-07-08 across BOTH He SOLAR grids under the
-    same three-part `active` gate (not detached AND not unstable_MT AND not WD): max 3.47x the
-    CO's own Eddington luminosity — the same physical ULX ceiling as CO-HMS_RLO (POSYDON caps
-    stable transfer). SOLAR-SCOPED: the metal-poor He buckets must be re-derived at Chunk 2c
-    (CO-HMS_RLO's solar was clean but its metal-poor grids hit 505,221x — do not assume solar
-    generalizes). Mirrors the three-part gate over raw float64-cast columns."""
+    could differ from an H donor). Measured 2026-07-09 across ALL 8 [Fe/H] buckets of BOTH He
+    grids (feh -4.0 .. +0.30103) under the same three-part `active` gate (not detached AND not
+    unstable_MT AND not WD): max 3.65x the CO's own Eddington luminosity (co-hems-rlo at the
+    metal-poor floor feh=-4.0; co-hems uniform 3.47x) — the same physical ULX ceiling as
+    CO-HMS_RLO (POSYDON caps stable transfer). Notably the He grids are CLEANER than CO-HMS_RLO:
+    the ungated float64 pass finds ZERO rows above 5x anywhere (no unstable_MT/WD artifact — the
+    metal-poor CO-HMS_RLO grids by contrast hit 505,221x on unstable_MT, which is why this
+    re-derivation was mandatory and not assumed). Mirrors the three-part gate over the raw
+    columns."""
     lsun_erg_s = 3.828e33
     edd_const = 1.26e38
     for kind in _HE_KINDS:
@@ -446,3 +449,83 @@ def test_track_route_snaps_far_in_band_not_422():
     })
     assert r.status_code == 200
     assert r.json()["m_star_snapped_far"] is True
+
+
+# =============================================================================================
+# Chunk 2c: the full 8-bucket [Fe/H] axis for BOTH He grids (mirrors CO-HMS_RLO's Chunk 1c and
+# the HMS-HMS multi-[Fe/H] rollout). Data + tests only — the runtime was already snap-always
+# over the whole grid, so no posydon_co.py change. Gated `requires_posydon_co_he_multifeh`
+# (>=2 buckets baked per He grid) so these SKIP not FAIL on a solar-only checkout.
+# =============================================================================================
+
+from .conftest import requires_posydon_co_he_multifeh  # noqa: E402
+
+
+@requires_posydon_co_he_multifeh
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_he_meta_lists_every_baked_metallicity_bucket(kind):
+    """`available_feh` reflects the REAL baked bucket set for EACH He grid, never hardcoded —
+    the frontend #co-binary-feh picker is populated from it (the hosted-data-assets recurring
+    hardcoded-feh lesson). Mirrors test_posydon_co.py's CO-HMS_RLO version, per kind."""
+    baked = sorted(g.feh for g in pc._available_grids(kind))
+    assert len(baked) >= 2
+    meta = pc.co_binary_track_meta(0.0, kind=kind)
+    assert meta["available_feh"] == baked
+
+
+@requires_posydon_co_he_multifeh
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_he_metallicity_axis_is_real_across_buckets(kind):
+    """The Chunk-2c measure-first regression: the SAME (M_star, M_co, P) request resolves to a
+    genuinely DIFFERENT real EVOLUTIONARY TRACK at different [Fe/H] (each POSYDON metallicity is
+    its own baked grid), reporting the requested bucket back — not a cosmetic [Fe/H] relabel over
+    one shared grid. NB the fingerprint is the *track*, not the initial node: POSYDON samples the
+    SAME initial (M_star, M_co, P) grid at every Z, so an exact-node demo (co-hems) snaps to the
+    identical initial coordinates at all 8 buckets — but the He-star evolves differently
+    (Z-dependent winds → different final donor mass), which IS the axis doing real work. Measured:
+    co-hems 16.56+5.99, P=0.56 d → final He-star mass falls MONOTONICALLY 16.46 M☉ (feh=-4, weak
+    winds) → 8.42 M☉ (feh=+0.3, strong winds) across the axis; co-hems-rlo also shifts the snapped
+    node and final CO mass (10.58–10.97). Fingerprint = (node, nstep, final donor & CO mass)."""
+    m_star, m_co, p = _KIND_DEMO[kind]
+    fehs = sorted(g.feh for g in pc._available_grids(kind))
+    tracks, outcomes = set(), set()
+    for feh in fehs:
+        t = pc.co_binary_track(m_star, m_co, p, feh=feh, kind=kind)
+        assert t.steps, f"empty track at feh={feh}"
+        assert t.feh == feh, "the served track reports the requested bucket"
+        last = t.steps[-1]
+        tracks.add((round(t.m_star_init_msun, 4), round(t.m_co_init_msun, 4),
+                    round(t.p_init_d, 4), len(t.steps),
+                    round(last.star_current_msun, 3), round(last.co_mass_msun, 3)))
+        outcomes.add(t.outcome)
+    assert len(tracks) > 1, f"kind={kind}: identical track at every [Fe/H] — the axis is inert"
+    assert all(isinstance(o, str) and o for o in outcomes)
+
+
+@requires_posydon_co_he_multifeh
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_dco_classifier_robust_and_honest_across_full_axis(kind):
+    """The 2a DCO payoff must degrade HONESTLY across the whole new axis, not just solar. At the
+    most metal-poor bucket a pair-instability SN can leave no bound remnant (POSYDON CO_type not
+    NS/BH) — `dco_classification` keys off remnant TYPE, so it must return a well-formed
+    no-DCO rather than crash on a nan remnant mass. Assert over a low-Z sample: every track
+    carries a DcoClassification with a non-empty label, and its remnant mass is finite-or-None
+    (never a raw nan leaking to JSON). The robustness — no crash / no nan leak over a whole
+    metal-poor grid — is the point; we don't assert which branches appear (a single low-Z
+    sample can legitimately be all one kind)."""
+    grids = sorted(pc._available_grids(kind), key=lambda g: g.feh)
+    low = grids[0]  # the axis floor — the most metal-poor bucket
+    assert low.feh <= -2.0, "expected a genuinely metal-poor bucket at the axis floor"
+    rng = np.random.default_rng(7)
+    n = low.m_star_init.size
+    sample = rng.choice(n, size=min(150, n), replace=False)
+    seen_dco = set()
+    for i in sample:
+        t = pc.co_binary_track(float(low.m_star_init[i]), float(low.m_co_init[i]),
+                                float(low.p_init_d[i]), feh=low.feh, kind=kind)
+        assert t.dco is not None, "a He kind must always carry a DCO classification"
+        assert isinstance(t.dco.label, str) and t.dco.label
+        m = t.dco.s1_remnant_mass_msun
+        assert m is None or math.isfinite(m), "a nan remnant mass must degrade to None, not leak"
+        seen_dco.add(bool(t.dco.is_dco))
+    assert seen_dco, "no tracks sampled"

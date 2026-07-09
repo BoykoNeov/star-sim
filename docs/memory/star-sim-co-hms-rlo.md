@@ -1,6 +1,6 @@
 ---
 name: star-sim-co-hms-rlo
-description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a (backend) & 2b (frontend) (CO-HeMS/CO-HeMS_RLO, the double-compact-object channel) of the CE/compact-object-tail plan, ALL BUILT. Chunk 2b = a `kind` selector in the existing .co-binary-view (Option A), He-surface comp per step (drawStripped made honest for the C/O WC/WO regime + POSYDON-provenance caption), a DCO-endpoint caption (data.dco.label verbatim); frontend-only, 373 pytest unchanged. Next = 2c (full [Fe/H] axis for both He grids). A compact object (NS/BH/WD) orbiting a still-H-rich star (CO-HMS_RLO) or a bare He star (CO-HeMS/CO-HeMS_RLO, the GW-merger progenitor). posydon_co.py is now parameterized by a `kind` arg (VALID_KINDS) over per-kind baked dirs; Chunk 2a added the DCO classifier (dco_classification: predicted S1 remnant + known S2 → BH+BH/NS+BH/NS+NS or honest no-DCO). The accretion-luminosity cue (η·Ṁ·c²) is gated THREE ways (not-detached AND not-unstable_MT AND not-WD); the Eddington bound was RE-DERIVED on the He grids (3.47×, solar-scoped, not assumed to inherit CO-HMS_RLO's 3.46×). Optional SN-scalar load = no BAKE_VERSION_CO bump. The CO-HeMS index-identity check was loosened (5e-2) — the strict 1e-3 was dropping ~20% of good He-star tracks to benign wind drift. 373 pytest.
+description: POSYDON CO-HMS_RLO compact-object binary sibling (posydon_co.py + /co_binary_track) — Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a/2b/2c (CO-HeMS/CO-HeMS_RLO, the double-compact-object/GW-merger channel) of the CE/compact-object-tail plan, ALL BUILT — PHASE 1 COMPLETE. Chunk 2c = the full 8-bucket [Fe/H] axis for both He grids (data + tests only, NO runtime-logic or frontend code change — the routes were already snap-always + the picker already reads available_feh; mirrors 1c/4d). The mandatory Eddington re-derivation across all 8 He buckets: ≤3.65× (co-hems-rlo at feh=−4.0; co-hems uniform 3.47×), and the He grids are genuinely CLEANER than CO-HMS_RLO (ZERO ungated rows >5× anywhere — no unstable_MT artifact, unlike CO-HMS_RLO's 505,221×). +6 gated tests (available_feh honesty; axis-is-real via the EVOLVED-track fingerprint since POSYDON reuses the same initial grid per Z — co-hems final He-star mass falls 16.46→8.42 M☉ from Z-winds; DCO honest degradation at low Z). 379 pytest. A compact object (NS/BH/WD) orbiting a still-H-rich star (CO-HMS_RLO) or a bare He star (CO-HeMS/CO-HeMS_RLO, the GW-merger progenitor). posydon_co.py is parameterized by a `kind` arg (VALID_KINDS) over per-kind baked dirs; Chunk 2a added the DCO classifier (dco_classification: predicted S1 remnant + known S2 → BH+BH/NS+BH/NS+NS or honest no-DCO); Chunk 2b = a `kind` selector in the existing .co-binary-view (Option A), He-surface comp per step, DCO-endpoint caption (data.dco.label verbatim). The accretion-luminosity cue (η·Ṁ·c²) is gated THREE ways (not-detached AND not-unstable_MT AND not-WD). Optional SN-scalar load = no BAKE_VERSION_CO bump. The CO-HeMS index-identity check was loosened (5e-2) — the strict 1e-3 was dropping ~20% of good He-star tracks to benign wind drift. Next = Phase 2 (initial-He/Y axis).
 metadata:
   type: project
   originSessionId: 1cedfc45-b5c5-40d2-976c-236b41653d9c
@@ -368,6 +368,57 @@ schematic CO glyph, the accretion cue, the live Roche panel) is byte-identical a
   `unstable_MT` artifact for CO-HMS_RLO in Chunk 1c). Phases 2 (initial-He) & 3 (α-enhanced). **Next
   = Chunk 2c.** [[star-sim-supernova-remnant-endgame]] for the NS/BH remnant vocabulary the DCO
   classifier reuses; [[star-sim-binary-stripped]] for the `comp.setStripped` He-surface view 2b reuses.
+
+**Chunk 2c BUILT 2026-07-09 (data + tests only — NO runtime-logic or frontend code change; 379
+pytest [+6], Playwright 1440+390 zero console errors). PHASE 1 IS NOW COMPLETE.** The full
+8-bucket [Fe/H] axis for BOTH He grids — the He twin of Chunk 1c, and just as clean a drop-in.
+- **Data:** extracted + baked the 7 non-solar buckets for CO-HeMS AND CO-HeMS_RLO → the full
+  8-bucket axis ([Fe/H] −4.0/−3.0/−2.0/−1.0/−0.69897/−0.34679/0.0/+0.30103, coextensive with
+  CO-HMS_RLO and HMS-HMS; the exact `--feh` values reused so `available_feh` aligns). One tar scan
+  per bucket extracting BOTH He grids together (they share the tarball at `*/CO-HeMS/*.h5` and
+  `*/CO-HeMS_RLO/*.h5` — the `-C` before the wildcard gotcha; `'*/CO-HeMS/*.h5'` cannot match
+  CO-HeMS_RLO, no `/CO-HeMS/` substring), bake both, delete the h5 to reclaim disk. All clean
+  (only expected `not_converged`/`missing-history` drops; CO-HeMS ~13.9k tracks/bucket, CO-HeMS_RLO
+  ~4.7k). npzs gitignored (GitHub-Release-hosted later, [[star-sim-hosted-data-assets]]).
+- **NO runtime-logic change (mirrors 1c/4d):** `co_binary_track`/`_meta` were already snap-always
+  over the whole per-kind baked grid and served `available_feh`; the frontend `#co-binary-feh`
+  picker (Chunk 1c) already populates from the real `available_feh` with the meta cache keyed on
+  `(kind, feh)` (Chunk 2b). So the He kinds picked up all 8 buckets with ZERO code edit — verified
+  end-to-end via Playwright: both `co-hems` and `co-hems-rlo` pickers now list 8 buckets (were
+  solar-only), a bucket switch re-fetches meta+track, the DCO-endpoint caption re-computes, zero
+  console errors at 1440 + 390.
+- **The MANDATORY Eddington re-derivation across all 8 He buckets** (ungated, float64-cast, full
+  grid over both He grids — the exact step that caught the 505,221× `unstable_MT` artifact in
+  CO-HMS_RLO Chunk 1c; NOT skipped): the accretion cue holds at **≤3.65× the CO's own Eddington**
+  (co-hems-rlo at the metal-poor floor feh=−4.0; co-hems uniform 3.47× at every bucket) — the
+  metal-poor buckets edge the solar 3.47× up only slightly, well under the test's 5.0 ceiling.
+  **Key measured finding: the He grids are genuinely CLEANER than CO-HMS_RLO** — the ungated pass
+  finds ZERO rows above 5× ANYWHERE (no `unstable_MT`/WD artifact in the magnitude window),
+  `BIG_ADMITTED=0` at every bucket → no new artifact class. So unlike CO-HMS_RLO (whose metal-poor
+  grids hit 505,221×), the He grids never had the artifact — but the re-derivation was mandatory
+  precisely because that couldn't be assumed. (Characterization script:
+  `M:\claud_projects\temp\chunk2c\eddington_rederive.py`.)
+- **Tests (+6, gated `requires_posydon_co_he_multifeh` = ≥2 buckets baked per He grid; parametrized
+  ×2 He kinds):** (1) `available_feh` reflects the real baked bucket set per kind; (2) the axis is
+  real — the SAME (M_star, M_co, P) request resolves to a genuinely different EVOLUTIONARY TRACK
+  across buckets. **A test-design correction (mine, caught on first run):** POSYDON reuses the SAME
+  initial (M_star, M_co, P) grid at every Z, so an exact-node demo (co-hems 16.56+5.99, P=0.56 d)
+  snaps to the identical INITIAL coordinates at all 8 buckets — the CO-HMS_RLO analogue happened to
+  use a request that snapped to different nodes, but the physically robust signal is the *evolved*
+  track, not the initial node. Fingerprint = (node, nstep, final donor & CO mass); measured the
+  co-hems final He-star mass falls MONOTONICALLY 16.46→8.42 M☉ across the axis (metal-poor weak
+  winds → metal-rich strong winds — real Z-dependent wind physics, not a decimation quirk). (3) the
+  DCO classifier degrades HONESTLY (no nan leak, no crash, non-empty label) over a whole metal-poor
+  grid. The existing `test_accretion_cue_within_a_few_eddington_across_he_grids` AUTO-covers all 8
+  buckets (it loops `_available_grids(kind)`); its docstring was updated from "3.47× solar-scoped"
+  to the re-derived all-8-bucket ≤3.65× number + the "He grids cleaner than CO-HMS_RLO" finding.
+- **The recurring wrong-bucket-test hazard ([[star-sim-hosted-data-assets]]) was checked and does
+  NOT bite here:** every Chunk-2a He test iterates `for grid in _available_grids(kind)` and fetches
+  with `grid.feh` — none assume a single/solar grid (`_available_grids(kind)[0]` or hardcoded
+  `feh=0`), so opening the axis to 8 buckets can't silently run an assertion against the wrong
+  metallicity. The He test file was bucket-safe from the start.
+- **Not built:** Phases 2 (initial-He / Y axis) & 3 (α-enhanced evolution) of the parent plan —
+  Phase 2 is next in the plan's sequential order.
 
 **Prior "Not built" note (superseded by Chunk 1c above):** Chunk 1c was more metallicities + custom
 sliders; both now built.

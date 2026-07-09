@@ -1,14 +1,15 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a (backend) & 2b (frontend) (CO-HeMS/CO-HeMS_RLO) ALL BUILT — see below.
-Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** (2026-07-08)
-and Chunk 2b (frontend render — the `kind` selector + He-surface comp + DCO-endpoint caption) is
-**BUILT** (2026-07-09) — see "Chunk 2a"/"Chunk 2b" under "Phase 1 (cont.)". Chunk 2c (full 8-bucket
-[Fe/H] axis for both He grids + re-derive the Eddington bound across all He buckets) is **next**.
-Phases 2 and 3 not yet built. Sequential order (also the efficient order): **Phase 1** binary
-CE/compact-object tail (Chunk 1 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend done
-→ 2c [Fe/H] axis) → **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis
-(reuses Phase 2's plumbing).
+## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a/2b/2c (CO-HeMS/CO-HeMS_RLO) ALL BUILT — Phase 1 COMPLETE.
+Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** (2026-07-08),
+Chunk 2b (frontend render — the `kind` selector + He-surface comp + DCO-endpoint caption) is
+**BUILT** (2026-07-09), and Chunk 2c (full 8-bucket [Fe/H] axis for both He grids + the re-derived
+Eddington bound) is **BUILT** (2026-07-09) — see "Chunk 2a"/"Chunk 2b"/"Chunk 2c" under "Phase 1
+(cont.)". **Phase 1 (the CE/compact-object tail) is now COMPLETE.** Phases 2 and 3 not yet built.
+Sequential order (also the efficient order): **Phase 1** binary CE/compact-object tail (Chunk 1
+CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend done → 2c [Fe/H] axis done) →
+**Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis (reuses Phase 2's
+plumbing).
 
 ## Scope and non-goals
 
@@ -361,12 +362,31 @@ tooltip (both were hardcoded H-rich — a false-caption class the advisor blocke
   class. All co-he-kind class + DCO-note cleanup wired into `exitCoBinaryView` + the two
   snapshot-reset spots. Mobile 390 stacks single-column, no overflow.
 
-**Chunk 2c — the full [Fe/H] axis.** Extract + bake the 7 non-solar buckets for both grids
-(zero new downloads — the 8 tarballs are on disk), giving the full 8-bucket axis, coextensive
-with CO-HMS_RLO. Mirrors Chunk 1c exactly: a `#co-he-binary-feh` picker from the real
-`available_feh`, per-bucket meta refetch, snapped-far honesty. **Re-run the accretion-cue
-Eddington-bound characterization across all 8 He buckets** (this is the exact step that caught
-the 505,221× `unstable_MT` artifact in Chunk 1c — do not skip it for the He grids).
+**Chunk 2c — the full [Fe/H] axis. BUILT 2026-07-09 (data + tests only; NO runtime-logic or
+frontend code change, 379 pytest, Playwright 1440+390 zero console errors).** Extracted + baked
+the 7 non-solar buckets for both He grids (zero new downloads — the 8 tarballs were on disk),
+giving the full 8-bucket [Fe/H] axis (−4.0…+0.30103), coextensive with CO-HMS_RLO. Mirrored
+Chunk 1c: **no runtime change** — `co_binary_track`/`_meta` were already snap-always over the
+whole grid and the existing `#co-binary-kind`-scoped `#co-binary-feh` picker already populates
+from the real `available_feh` (meta cache keyed on `(kind, feh)`), so the frontend picked up all
+8 buckets for the He kinds with no edit (verified end-to-end via Playwright: both He kinds' picker
+lists 8, a bucket switch re-fetches meta+track, the DCO-endpoint caption re-computes). **The
+mandatory Eddington re-derivation** (ungated, float64-cast, full-grid over both He grids × all 8
+buckets): the accretion cue holds at **≤3.65× the CO's own Eddington** (co-hems-rlo at the
+metal-poor floor feh=−4.0; co-hems uniform 3.47×) — the metal-poor buckets edge the solar 3.47×
+up only slightly, well under the test's 5.0 ceiling. **Notable measured finding:** the He grids
+are genuinely CLEANER than CO-HMS_RLO — the ungated pass finds ZERO rows above 5× anywhere (no
+`unstable_MT`/WD artifact), unlike the metal-poor CO-HMS_RLO grids that hit 505,221× — so the
+re-derivation was mandatory and the result is a genuine "no artifact" confirmation, not an
+assumption. Tests: +3 metallicity-axis tests (×2 He kinds = +6 gated on `requires_posydon_co_he_multifeh`):
+`available_feh` reflects the real baked set per kind; the same request resolves to a genuinely
+different real *track* across buckets (the axis-is-real regression — POSYDON reuses the same
+initial grid per Z, so the fingerprint is the *evolved* track: co-hems final He-star mass falls
+monotonically 16.46→8.42 M☉ across the axis from Z-dependent winds); and the DCO classifier
+degrades honestly (no nan leak, no crash) over a whole metal-poor grid. The existing
+`test_accretion_cue_within_a_few_eddington_across_he_grids` auto-covers all 8 buckets (it loops
+`_available_grids(kind)`); its docstring was updated from "3.47× solar-scoped" to the re-derived
+all-8-bucket number.
 
 ### What's needed from you
 
