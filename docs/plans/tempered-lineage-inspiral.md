@@ -428,26 +428,45 @@ horizontal-branch "second-parameter problem."
 
 ### Chunked build
 
-**Chunk 2a** — MESA batch (needs you to run Docker MESA; exact inlist diffs handed over when
-ready) + bake (baseline+enhanced pairs, column-trimmed/decimated/float32/gzip).
-- **INPUTS PREPARED 2026-07-09 — awaiting user compute.** The full handoff is written:
-  `backend/docs/mesa_helium_recipe.md` (the recipe + Docker mechanics + the Gate-2
-  matched-Xc reporting commands) and the **six ready-to-`docker cp` inlists** at
-  `M:\claud_projects\temp\mesa_helium_inlists\inlist_{base,enh}_{1,2,6}`. **Decisions
-  confirmed with the user** (2026-07-09): enhanced **Y = 0.40** (baseline explicit 0.2704 —
-  ΔY ≈ +0.13, NGC 2808 bluest-MS extreme); mass set **1/2/6 M☉**; **re-run BOTH** baseline
-  and enhanced fresh with `initial_y` explicit in each (a verifiable one-variable diff — the
-  advisor-load-bearing call; do NOT reuse the on-disk `data/mesa/solar/` runs as the shipped
-  baseline). **`Zbase` stays 0.0152 in both** (the Y axis leaves Z fixed — the metallicity
-  gotcha does NOT apply). Output layout: `data/mesa_helium/{baseline,enhanced}/<M>Msun/`.
-  **The bake + backend sibling (2b) + overlay (2c) are BLOCKED on Gate 2** (measured through
-  the real runs: enhanced ZAMS bluer/brighter + shorter τ_MS at matched Xc) — nothing to
-  build until the six `history.data` files land.
+**Chunk 2a** — MESA batch + bake. **BUILT 2026-07-09 (Claude ran the batch in Docker MESA).**
+The six runs (`inlist_{base,enh}_{1,2,6}`, enhanced **Y=0.40** vs baseline explicit **0.2704**,
+`Zbase=initial_z=0.0152` in both — the Y axis leaves Z fixed) converged (exit 0, ~100–130
+exposed rows each) and landed at `data/mesa_helium/{baseline,enhanced}/<M>Msun/history.data`
+(gitignored, MESA-local like `data/mesa/` — the hosted-data-assets pattern excludes MESA, so
+tests skip via `requires_helium_data`). **No bespoke npz bake** (advisor): 4 MB of `history.data`
+is read directly by the reused MESA parser, like `MESAProvider`. **Gate-2 PASSED emphatically at
+every mass** (measured through the real runs, matched-phase): enhanced-Y is hotter, brighter, and
+shorter-lived — 1 M☉ 5752→6559 K / 0.80→1.86 L☉ / τ_MS 8.33→3.03 Gyr (2.7×); 2 M☉ 9491→11152 K /
+17.9→33.8 L☉ / 0.86→0.41 Gyr (2.1×); 6 M☉ 19611→22312 K / 1069→1839 L☉ / 0.055→0.029 Gyr (1.9×).
+Recipe `backend/docs/mesa_helium_recipe.md`.
 
-**Chunk 2b** — backend sibling + route serving both tracks for a requested mass.
+**Chunk 2b** — backend sibling + route. **BUILT 2026-07-09.** `star_sim/helium.py` (a §3 sibling
+like `binary.py`/`structure.py` — imports only `state.StellarState` + the MESA parser's free
+helpers `_build_track`/`_state_from_track`, never `PROVIDER`) globs the pairs, keys each member by
+its **ZAMS surface He** (`Ys[0]`, not dir name), and pairs lower-Y=baseline / higher-Y=enhanced
+(asserts exactly two per mass so a stray run fails loudly). `helium_overlay(mass)` snaps to the
+nearest grid mass (1/2/6, solar Z) and returns both tracks as §3 `StellarState` lists + each's
+ZAMS Teff/L and **windowed τ_MS**. `/helium?mass=` bypasses `PROVIDER`, snap-always (in-band
+`mass_snapped_far`), 422 on mass≤0. Refactor: lifted `_state_from_track` out of `MESAProvider` to
+module level (uses no `self`) so the sibling reuses it; the method now delegates (byte-behavior
+unchanged, 18 MESA tests green). **+8 tests** (`test_helium.py`, gated `requires_helium_data`):
+per-mass Teff/L/τ_MS Gate-2 assertions, the observed ΔY range, §3-StellarState validity,
+snap-always honesty, route shape/422, and an AST-level sibling-imports-no-PROVIDER check. 387 pytest.
 
-**Chunk 2c** — frontend overlay toggle: a paired-track HR overlay (Teff-colored,
-baseline/He-enhanced labeled), a Y readout on the composition panel.
+**Chunk 2c** — frontend overlay. **BUILT 2026-07-09 (Playwright-verified 1440+390, zero console
+errors).** A **light HR overlay, not a mode-swap** (advisor): a mass/[Fe/H]-gated `#helium-toggle`
+(shown in live mode, mass 0.7–7, |[Fe/H]|≤0.25 — the solar-Z grid) fetches `/helium` and hands both
+tracks to a new minimal `hr.setHeliumOverlay(baseline, enhanced, {yBase,yEnh})` (its own draw mode,
+NOT a bent `setBinaryTrack`): two full Teff-coloured MESA trails, each labeled at its ZAMS, **the
+MIST living track hidden** while on (the load-bearing honesty rule — the comparison is MESA-vs-MESA,
+never MESA-vs-MIST). Static (no scrub marker). 3D/spectrum/comp stay on the current star (they draw
+no tracks — no comparison trap; the live HR calls are guarded off by `heliumOn`). **τ_MS — invisible
+on an HR diagram (no time axis, advisor catch) — is surfaced in the `#helium-note` caption** with
+both lifetimes + the ratio ("τ_MS 3.03 Gyr vs. 8.32 Gyr (2.7× shorter)"). Latest-wins `/helium`
+refetch on mass change; drifting out of the band (or entering any endgame/stripped view) tears the
+overlay down and restores the live track (`dropHeliumForModeSwitch` at each mode-entry +
+`heliumMode=false` resets in the other `hr` mode-entries). **Phase 2 (initial-helium / Y axis) is
+COMPLETE.**
 
 ### Measure-first gate (Gate 2)
 

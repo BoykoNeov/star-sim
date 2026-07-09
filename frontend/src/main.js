@@ -63,6 +63,11 @@ const els = {
   strippedControl: document.getElementById("stripped-control"),
   strippedToggle: document.getElementById("stripped-toggle"),
   strippedNote: document.getElementById("stripped-note"),
+  // Initial-helium (Y) what-if overlay (Phase 2 — the globular-cluster 2nd-generation effect).
+  // A LIGHT HR overlay (not a mode-swap): two self-run MESA tracks, MIST spine hidden while on.
+  heliumControl: document.getElementById("helium-control"),
+  heliumToggle: document.getElementById("helium-toggle"),
+  heliumNote: document.getElementById("helium-note"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
@@ -480,10 +485,17 @@ let strippedToken = 0;          // latest-wins guard for /binary fetches (enter 
 // stripped star alone, "companion named not drawn") is the default; ticking "Show companion"
 // reveals the accretor and the Algol mass-ratio reversal.
 let companionOn = false;
+let heliumOn = false;           // the initial-helium overlay is active (MIST HR track hidden)
+let heliumToken = 0;            // latest-wins guard for the /helium fetch (mass/feh can change fast)
 // The eligible progenitor-mass range for the toggle's gate (the Götberg Z=0.014 grid spans
 // ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
 // snapped-far note rather than reverting; the toggle just doesn't OFFER entry outside them.
 const STRIP_MASS_MIN = 2.0, STRIP_MASS_MAX = 18.2;
+// Initial-helium overlay eligibility: the self-run MESA grid is 1/2/6 M☉ at solar Z, so the
+// toggle is offered across a mass band that snaps sensibly (edges flagged "snapped-far" in-band)
+// and only near solar [Fe/H] — the grid carries no other metallicity, so showing it elsewhere
+// would mislabel a solar-Z pair as "at your [Fe/H]".
+const HE_MASS_MIN = 0.7, HE_MASS_MAX = 7.0, HE_FEH_TOL = 0.25;
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -2060,6 +2072,7 @@ function updateLiveGateway() {
 // Enter the reversible white-dwarf endgame from the gateway button.
 function enterWD() {
   if (!endgame || endgame.type !== "WD" || !endgame.states.length) return;
+  dropHeliumForModeSwitch();
   mode = "wd";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
@@ -2092,6 +2105,7 @@ function enterWD() {
 // structure view (no comp.setEndgame).
 function enterWR() {
   if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
+  dropHeliumForModeSwitch();
   mode = "wr";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
@@ -2499,6 +2513,7 @@ async function fetchSNModel(mni) {
 // the track — /endgame returns states=[] for SN — so this FETCHES /supernova on click, with
 // a loading caption + a latest-wins guard (a slow fetch can't paint after we've left).
 async function enterSN() {
+  dropHeliumForModeSwitch();
   mode = "sn";
   updateRotControl();   // hide the rotation control inside the endgame (mode != live)
   updatePeculiarControl();
@@ -2589,6 +2604,92 @@ function updateStrippedControl() {
     els.strippedNote.textContent = mode === "stripped"
       ? "The hot stripped star a close companion would bare by stripping the envelope — untick to return."
       : "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)";
+}
+
+// --- initial-helium (Y) what-if overlay --------------------------------------
+// The mass/[Fe/H]-gated entry toggle for the GC 2nd-generation overlay. Shown in live mode
+// within the MESA grid's mass band and near solar [Fe/H] (the grid is solar-Z only). Like the
+// other what-ifs it's a track-stable gate on massValue/feh, not an age-scrub flicker. If the
+// star drifts out of the eligible region while the overlay is ON, tear it down (restore the
+// MIST HR track) so it can never linger mislabeled.
+function updateHeliumControl() {
+  const c = els.heliumControl;
+  if (!c) return;
+  const feh = Number(els.feh.value);
+  const eligible = mode === "live"
+    && massValue >= HE_MASS_MIN && massValue <= HE_MASS_MAX
+    && Math.abs(feh) <= HE_FEH_TOL;
+  c.hidden = !eligible;
+  if (!eligible) {
+    if (heliumOn) heliumOff();   // drifted out of range with the overlay up → restore the live HR
+    return;
+  }
+  if (els.heliumToggle) els.heliumToggle.checked = heliumOn;
+  if (!heliumOn && els.heliumNote)
+    els.heliumNote.textContent =
+      "What if this star were born helium-rich? (a globular-cluster 2nd-generation what-if)";
+}
+
+// Turn the overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
+function heliumOff() {
+  heliumOn = false;
+  heliumToken++;                 // cancel any in-flight /helium apply
+  if (els.heliumToggle) els.heliumToggle.checked = false;
+  hr.clearHeliumOverlay();
+  if (currentTrack && currentTrack.length) hr.setTrack(currentTrack);
+  refresh();                     // re-place the marker on the restored track
+  updateHeliumControl();         // reset the note text
+}
+
+// Turn the overlay ON (or re-fetch it after a mass/[Fe/H] change): fetch the baseline+enhanced
+// MESA pair for the current mass and hand both tracks to the HR panel. Latest-wins guarded — a
+// fast mass drag must not let a stale pair paint. The caption carries the WHOLE Gate-2 story:
+// the two ZAMS helium fractions AND both main-sequence lifetimes (the shorter-lived effect has
+// no HR axis, so it would silently vanish without this — advisor catch).
+async function refreshHelium() {
+  if (!heliumOn) return;
+  const token = ++heliumToken;
+  const mass = massValue;
+  let data;
+  try {
+    data = await fetchJSON(`/helium?mass=${mass}`);
+  } catch (e) {
+    if (token !== heliumToken || !heliumOn) return;
+    if (els.heliumNote) els.heliumNote.textContent = "Helium-enhanced tracks unavailable (no MESA data).";
+    return;
+  }
+  if (token !== heliumToken || !heliumOn || mode !== "live") return;
+  const b = data.baseline, en = data.enhanced;
+  hr.setHeliumOverlay(b.states, en.states, { yBase: b.y_init, yEnh: en.y_init });
+  if (els.heliumNote) {
+    const ratio = b.tau_ms_gyr / en.tau_ms_gyr;
+    const snap = data.mass_snapped_far
+      ? ` · snapped to ${fmt(data.mass_snapped)} M☉`
+      : "";
+    els.heliumNote.textContent =
+      `Baseline Y ${b.y_init.toFixed(2)} vs. helium-enhanced Y ${en.y_init.toFixed(2)}, ` +
+      `same mass & [Fe/H] (self-run MESA). Bluer + brighter, and shorter-lived: ` +
+      `τ_MS ${fmtGyr(en.tau_ms_gyr)} vs. ${fmtGyr(b.tau_ms_gyr)} (${ratio.toFixed(1)}× shorter)${snap}.`;
+  }
+}
+
+// Format a main-sequence lifetime for the caption: Gyr with a Myr fallback for the massive,
+// short-lived end (6 M☉ enhanced is ~29 Myr — "0.03 Gyr" reads as noise).
+function fmtGyr(gyr) {
+  return gyr >= 0.1 ? `${gyr.toFixed(2)} Gyr` : `${Math.round(gyr * 1000)} Myr`;
+}
+
+// Drop the overlay STATE when another view (endgame / stripped / SN) takes over the HR panel —
+// that view's own enter path repaints the panel, so unlike heliumOff() this does NOT restore the
+// live track (the hr.setEndgame/setBinaryTrack/… entries already clear heliumMode). Both the
+// helium and the target toggle can be visible at once in their overlapping mass band, so this is
+// reachable; call it at the top of every mode-entry that isn't "live".
+function dropHeliumForModeSwitch() {
+  if (!heliumOn) return;
+  heliumOn = false;
+  heliumToken++;
+  if (els.heliumToggle) els.heliumToggle.checked = false;
+  if (els.heliumControl) els.heliumControl.hidden = true;   // updateHeliumControl re-shows it on return to live
 }
 
 // Fetch the computed stripped model for the current (mass, [Fe/H]). No vvcrit — the stripped
@@ -2758,6 +2859,7 @@ function renderStrippedReadout(s, d) {
 // sibling route on entry, with a loading caption + latest-wins guard), but the entry is a
 // mid-life toggle, not an end-of-life gateway. The shared endgame bar carries the "Back".
 async function enterStripped() {
+  dropHeliumForModeSwitch();
   mode = "stripped";
   updateRotControl();       // hide the rotation control inside the mode (mode != live)
   updatePeculiarControl();
@@ -3226,7 +3328,10 @@ function paintState(s) {
   star.update(s, { peculiar: peculiarOn });
   classification.update(s);
   scale.update(s);
-  hr.update(s);
+  // The initial-helium overlay owns the HR panel while on (two MESA tracks, MIST spine
+  // hidden per the honesty rule) — so DON'T draw the live marker/track there; 3D/comp/
+  // spectrum/etc. still track the current star as the user scrubs (advisor-scoped).
+  if (!heliumOn) hr.update(s);
   comp.update(s);
   spectrum.update(s);
   structure.update(s);
@@ -3273,6 +3378,7 @@ function refresh() {
   updateRotControl();
   updatePeculiarControl();
   updateStrippedControl();   // the stripped what-if is offer-able only in the eligible mass band
+  updateHeliumControl();     // the He overlay is offer-able only near the solar-Z MESA grid
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -3301,7 +3407,7 @@ async function refreshTrack() {
     // the WD endgame must not overwrite the endgame view.
     if (token !== trackToken || mode !== "live") return;
     currentTrack = t;
-    hr.setTrack(t);
+    if (!heliumOn) hr.setTrack(t);   // the He overlay owns the HR panel; refreshHelium re-asserts it
     comp.setTrack(t);
     // The star changed, so any cached endgame is stale — drop BOTH caches (the full result
     // and the type-only fast-path one) + clear the gateway's CHILDREN (the buttons/note),
@@ -3371,6 +3477,9 @@ async function refreshTrack() {
   // later of two competing ~1 MB fetches instead of the one already in flight. Just paint
   // with what we have; fetchEndgamePreview's response repaints when it lands (faster).
   updateGateway();
+  // The mass/[Fe/H] moved — re-fetch the He overlay pair for the new star (no-op unless the
+  // overlay is on AND still eligible: refresh()'s updateHeliumControl just tore it down if not).
+  refreshHelium();
 }
 
 // When [Fe/H] changes, the valid *mass* span can change (the dead corner), so
@@ -3588,6 +3697,21 @@ async function init() {
       if (mode === "live") enterStripped();
     } else if (mode === "stripped") {
       exitEndgame();
+    }
+  });
+
+  // Initial-helium overlay (Phase 2): a light HR overlay, not a mode-swap. Checking it fetches
+  // the baseline+enhanced MESA pair and takes over the HR panel (MIST spine hidden); unchecking
+  // restores the live track. Only meaningful in live mode within the eligible region — the
+  // control is hidden otherwise, so this only fires when a real toggle is possible.
+  if (els.heliumToggle) els.heliumToggle.addEventListener("change", () => {
+    if (els.heliumToggle.checked) {
+      if (mode !== "live") { els.heliumToggle.checked = false; return; }
+      heliumOn = true;
+      if (els.heliumNote) els.heliumNote.textContent = "Loading helium-enhanced tracks…";
+      refreshHelium();
+    } else {
+      heliumOff();
     }
   });
 

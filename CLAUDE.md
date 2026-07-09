@@ -588,6 +588,34 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   tuple. **Next = Chunk 2** (frontend what-if `stripped-mode`). [[star-sim-binary-stripped]];
   plan `docs/plans/stripped-consort-unveiling.md`.
 
+### Initial-helium (Y) overlay (`helium.py` — a **sibling**; `/helium` bypasses PROVIDER)
+- **PHASE 2 of `docs/plans/tempered-lineage-inspiral.md` — BUILT end-to-end 2026-07-09 (Chunks
+  2a/2b/2c, 387 pytest, Playwright-verified 1440+390).** The globular-cluster **second-generation**
+  what-if: at fixed mass/[Fe/H] a He-enhanced star (Y≈0.40, ω Cen / NGC 2808) is **hotter, brighter,
+  shorter-lived** than a primordial-Y one (Y≈0.27) — μ↑→L↑→τ_MS=M/L↓, the HB "second-parameter"
+  effect. A **what-if overlay sibling** like Ap/Bp; the load-bearing honesty rule is it is **NEVER
+  compared against the live MIST spine** — a He-enhanced MESA track is only shown against a MESA
+  **baseline** (identical inlist, Y the sole difference), because MESA-vs-MIST would conflate the He
+  effect with the documented MESA-vs-MIST systematic. **Chunk 2a (data):** Claude ran the 6-run
+  batch in Docker MESA himself (the user said "docker is on, bake it yourself") — inlists differ ONLY
+  in `initial_mass` (1/2/6) and `initial_y` (baseline 0.2704 / enhanced 0.40); **`Zbase=initial_z=
+  0.0152` in BOTH** (the Y axis leaves Z fixed — the metallicity "change Zbase too" gotcha does NOT
+  apply). Output `data/mesa_helium/{baseline,enhanced}/<M>Msun/history.data` (gitignored, MESA-local —
+  the hosted-data-assets pattern excludes MESA; tests skip via `requires_helium_data`). **No npz bake**
+  (advisor): 4 MB read directly by the reused parser. **Gate 2 PASSED at every mass** (matched-phase):
+  τ_MS 2.7×/2.1×/1.9× shorter, ZAMS bluer+brighter. **Chunk 2b (backend):** `helium.py` imports only
+  `state.StellarState` + the MESA parser's **free** helpers `_build_track`/`_state_from_track` (never
+  PROVIDER), keys pairs by **ZAMS surface He** `Ys[0]` (not dir name), asserts exactly two per mass;
+  `/helium?mass=` snap-always (1/2/6, solar Z), 422 on mass≤0; lifted `_state_from_track` to module
+  level for reuse (method delegates, MESA tests unchanged). **Chunk 2c (frontend):** a **light HR
+  overlay, not a mode-swap** — `#helium-toggle` (mass 0.7–7, |[Fe/H]|≤0.25) → new minimal
+  `hr.setHeliumOverlay` draws two Teff-coloured MESA trails, each ZAMS-labeled, **MIST track hidden**;
+  static (no marker); 3D/spectrum/comp stay on the current star. **τ_MS (invisible on an HR diagram —
+  advisor catch) surfaced in the `#helium-note` caption** with both lifetimes + ratio. Tears down on
+  band-exit or any endgame/stripped entry. **Next = Phase 3** (α-enhanced axis, self-run MESA —
+  heavier: needs an α-enhanced opacity table + custom mixture, Gate 3 stricter).
+  [[star-sim-helium-overlay]]; recipe `backend/docs/mesa_helium_recipe.md`.
+
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
   bracket. Non-thermal overlay: a cool-star coronal X-ray band + Güdel–Benz radio
@@ -713,8 +741,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **379 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The POSYDON CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
+- **387 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The initial-helium (Y) overlay sibling (`test_helium.py`, gated
+  `requires_helium_data`) adds **8**: per-mass Gate-2 asserts (enhanced ZAMS Teff/L higher,
+  τ_MS shorter), the observed ΔY range, §3-StellarState validity, snap-always honesty,
+  route shape + 422, and an **AST-level** sibling-imports-no-PROVIDER check. The POSYDON
+  CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
   gated `requires_posydon_co_data`) has **24** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,
   the Gate-1 CO-mass-growth/RLOF-then-detach regression, route shape + 422/503) plus Chunk 1b's

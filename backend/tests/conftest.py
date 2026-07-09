@@ -349,6 +349,25 @@ requires_structure_transitional = pytest.mark.skipif(
 )
 
 
+def helium_data_available() -> bool:
+    """True if the initial-helium (Y) MESA runs are on disk (gitignored, host-run).
+
+    Phase 2's baseline+enhanced MESA pairs live under data/mesa_helium/ — self-run in
+    Docker MESA, never committed (see backend/docs/mesa_helium_recipe.md). The /helium
+    sibling tests skip until at least one complete pair is present."""
+    from star_sim.helium import _find_history_files
+
+    return len(_find_history_files()) > 0
+
+
+# The /helium (initial-helium what-if overlay) tests need the self-run baseline+enhanced
+# MESA pairs — generated on the host, never committed. See backend/docs/mesa_helium_recipe.md.
+requires_helium_data = pytest.mark.skipif(
+    not helium_data_available(),
+    reason="no initial-helium MESA runs — see backend/docs/mesa_helium_recipe.md",
+)
+
+
 def gotberg_seds_available() -> bool:
     """True if the Götberg stripped-star SEDs (VizieR, gitignored) are on disk.
 

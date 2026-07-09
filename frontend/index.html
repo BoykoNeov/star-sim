@@ -457,6 +457,21 @@
         <p class="note rot-note" id="stripped-note"></p>
       </div>
 
+      <!-- Initial-helium (Y) what-if overlay — the globular-cluster 2nd-generation effect.
+           A LIGHT overlay (not a mode-swap like stripped): the HR panel shows two self-run
+           MESA tracks (baseline Y≈0.27 vs. He-enhanced Y≈0.40) at matched mass/[Fe/H], the
+           MIST living track hidden. 3D/spectrum stay on the current star. Gated near solar
+           [Fe/H] (the grid is solar-Z) and within the MESA mass grid (1/2/6 M☉, snapped). -->
+      <div class="helium-control" id="helium-control" hidden>
+        <label class="rot-toggle-row" for="helium-toggle">
+          <input id="helium-toggle" type="checkbox" />
+          <span>Helium-enhanced (2nd generation)
+            <span class="help" tabindex="0" data-tip="A what-if: what if this star had been born HELIUM-rich? Globular clusters (ω Centauri, NGC 2808) host a second stellar generation enriched in initial helium (Y≈0.35–0.40 vs. the primordial ≈0.25–0.27) at the SAME iron abundance — helium tracks hydrogen-burning pollution from a first generation, not supernova iron, so it is an axis independent of [Fe/H]. Raising the helium fraction raises the gas's mean molecular weight, so by simple homology the star is MORE LUMINOUS, HOTTER (bluer), and SHORTER-LIVED — the same effect that resolves the horizontal-branch 'second-parameter problem'. This overlays two SELF-RUN MESA tracks — a baseline and a helium-enhanced one, identical in every input but the initial helium — and hides the usual MIST track while it is on, because the honest comparison is MESA-against-MESA (comparing to the MIST track would mix in the separate, already-documented MESA-vs-MIST modelling difference). The lifetime effect has no axis on the HR diagram, so both main-sequence lifetimes are printed in the caption. Solar-metallicity grid, snapped to the nearest of 1 / 2 / 6 M☉.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="helium-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

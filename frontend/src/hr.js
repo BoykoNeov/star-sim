@@ -210,6 +210,18 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // HMS-HMS pair; the CO-HMS_RLO path (Chunk 1b) passes {s1:"star"} and NO star_2 array
   // (a compact object has no photosphere → it never gets an HR luminosity point).
   let binaryLabels = { s1: "donor", s2: "companion" };
+  // --- initial-helium (Y) what-if overlay: two self-run MESA tracks, MIST spine hidden --
+  // Phase 2 (docs/plans/tempered-lineage-inspiral.md). A globular-cluster 2nd-generation
+  // what-if: a He-enhanced MESA track (Y≈0.40) drawn against a MESA BASELINE (Y≈0.27) at
+  // matched mass/[Fe/H]. Load-bearing honesty rule: the two are BOTH self-run MESA — the
+  // MIST living track is suppressed while this is on, because comparing MESA-to-MIST would
+  // conflate the He effect with the documented MESA-vs-MIST systematic. Static (no scrub):
+  // both tracks start at their own ZAMS, so the bluer/brighter shift reads directly; the
+  // shorter-lifetime effect has no HR axis and is surfaced in the caption instead.
+  let heliumMode = false;
+  let heliumBaseline = null;   // array of StellarState (Y≈0.27 track)
+  let heliumEnhanced = null;   // array of StellarState (Y≈0.40 track)
+  let heliumMeta = null;       // { yBase, yEnh } for the on-plot labels
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -707,6 +719,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // Re-called on an M_Ni refetch (the tail rescales) — re-fit each time, like setEndgame.
   function setSupernova(model, observed) {
     snMode = true;
+    heliumMode = false;
     snModel = model || null;
     snObserved = observed && observed.length ? observed : null;
     let lo = Infinity, hi = -Infinity, tmax = 0;
@@ -853,6 +866,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // will visit every point on both curves as the scrub plays.
   function setBinaryTrack(star1States, star2States, labels) {
     binaryMode = true;
+    heliumMode = false;
     binaryLabels = labels || { s1: "donor", s2: "companion" };
     binaryStar1 = star1States && star1States.length ? star1States : null;
     // star_2 can go null after a merger (never observed on the current bake, but the
@@ -878,10 +892,62 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     binaryStar1 = null; binaryStar2 = null; binaryIdx = -1;
   }
 
+  // The initial-helium (Y) overlay: both self-run MESA tracks drawn full + solid, each
+  // labeled at its ZAMS (hot-left end). No scrub marker (static comparison). The enhanced
+  // track sits up-and-left of the baseline — bluer and brighter — so the two ZAMS labels
+  // never collide; the "shorter-lived" third effect lives in the panel caption (no HR axis).
+  function drawHelium() {
+    drawAxes();
+    drawIsoRadius();
+    drawClassBands();                         // the O·B·A·F·G·K·M anchor, for context
+    if (!heliumBaseline || !heliumEnhanced) return;
+    // Draw both as full solid Teff-coloured trails (splitIdx = length ⇒ all "past"/bold).
+    drawBinaryTrail(heliumBaseline, heliumBaseline.length);
+    drawBinaryTrail(heliumEnhanced, heliumEnhanced.length);
+    // A dot + Y label at each ZAMS (row 0). Enhanced above-left, baseline below-right.
+    const yB = heliumMeta ? heliumMeta.yBase : null;
+    const yE = heliumMeta ? heliumMeta.yEnh : null;
+    labelHeliumZams(heliumEnhanced[0], `He-enhanced  Y ${fmtY(yE)}`, -13);
+    labelHeliumZams(heliumBaseline[0], `baseline  Y ${fmtY(yB)}`, 15);
+  }
+  function fmtY(y) { return y == null ? "?" : y.toFixed(2); }
+  function labelHeliumZams(s, text, dyOff) {
+    if (!s) return;
+    const x = xOf(Math.log10(s.Teff_K)), y = yOf(Math.log10(s.L_lsun));
+    ctx.save();
+    const [r, g, b] = teffToRGB(s.Teff_K).map((v) => Math.round(v * 255));
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "#e7ecf5"; ctx.stroke();
+    ctx.restore();
+    markerLabel(x, y, text, dyOff);
+  }
+
+  // Enter/refresh the initial-helium overlay: the baseline + enhanced MESA state arrays.
+  // Auto-fits BOTH tracks in full (like setBinaryTrack) since neither is the "current" star.
+  function setHeliumOverlay(baseline, enhanced, meta) {
+    heliumMode = true;
+    heliumBaseline = baseline && baseline.length ? baseline : null;
+    heliumEnhanced = enhanced && enhanced.length ? enhanced : null;
+    heliumMeta = meta || null;
+    const b = fitBounds(heliumBaseline, heliumEnhanced);
+    bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
+    gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
+    gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
+    draw();
+  }
+  function clearHeliumOverlay() {
+    heliumMode = false;
+    heliumBaseline = null; heliumEnhanced = null; heliumMeta = null;
+    applyLivingBounds();   // restore the living MIST frame
+    draw();
+  }
+
   function draw() {
     if (pulseMode) { drawThermalPulses(); return; }
     if (snMode) { drawSupernova(); return; }
     if (binaryMode) { drawBinary(); return; }
+    if (heliumMode) { drawHelium(); return; }
     drawAxes();
     drawIsoRadius();                  // constant-R graph paper, under everything
     if (endgameMode) {
@@ -948,6 +1014,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // framing — auto-fit is kind-agnostic. clearEndgame() restores the living bounds.
   function setEndgame(states, _kind = "wd") {
     endgameMode = true;
+    heliumMode = false;   // an endgame HR view supersedes the initial-helium overlay
     endgameTrack = states && states.length ? states : null;
     const b = fitBounds(endgameTrack, track, companion ? [companion] : null);
     bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
@@ -976,6 +1043,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // via the usual update(). clearThermalPulses / clearEndgame drop back out.
   function setThermalPulses(states) {
     pulseMode = true;
+    heliumMode = false;
     pulseStates = states && states.length ? states : null;
     if (pulseStates) {
       pAge0 = pulseStates[0].age_yr;
@@ -1012,5 +1080,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack, setHeliumOverlay, clearHeliumOverlay };
 }

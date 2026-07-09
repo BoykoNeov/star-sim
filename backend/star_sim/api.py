@@ -40,6 +40,7 @@ from .binary import (
     stripped_star_payload,
 )
 from .structure import StructureDataMissing, interior_structure
+from .helium import HeliumDataMissing, helium_overlay
 from .supernova import Progenitor, supernova_model
 from .posydon import PosydonDataMissing, binary_track_meta, binary_track_payload
 from .posydon_co import (
@@ -380,6 +381,31 @@ def binary(
     try:
         return stripped_star_payload(mass, feh)
     except BinaryDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/helium")
+def helium(
+    mass: float = Query(..., gt=0.0, description="initial mass / M_sun"),
+) -> dict:
+    """(mass) -> the initial-helium (Y) what-if: a baseline vs. He-enhanced MESA track
+    pair at matched mass/[Fe/H] (docs/plans/tempered-lineage-inspiral.md, Phase 2).
+
+    Like `/structure`, `/binary` and `/supernova`, this does **not** go through
+    `PROVIDER`. The globular-cluster second-generation what-if (omega Cen / NGC 2808:
+    Y ~ 0.40 vs primordial ~0.27 at the *same* [Fe/H]) cannot be an axis on the single-
+    star spine — it is a sibling, `helium.py`, that reads two self-run MESA `history.data`
+    runs (identical inlist, Y the sole difference) and returns both as §3 `StellarState`
+    tracks. The overlay is drawn ONLY against its own MESA baseline, never the live MIST
+    spine — comparing self-run MESA to MIST would conflate the He effect with the
+    documented MESA-vs-MIST systematic.
+
+    Snap-always (like `/structure`): `mass` snaps to the nearest grid mass (1/2/6 M_sun,
+    solar Z) and is flagged in-band (`mass_snapped_far`), never 422'd. 422 is reserved
+    for structurally invalid mass <= 0 (the Query bound); a missing MESA run set -> 503."""
+    try:
+        return helium_overlay(mass)
+    except HeliumDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

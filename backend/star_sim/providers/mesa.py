@@ -288,6 +288,51 @@ def _build_track(path: str) -> _MesaTrack | None:
     )
 
 
+def _state_from_track(t: _MesaTrack, frac: float) -> StellarState:
+    """Read a StellarState off one run's arrays at fractional row `frac`.
+
+    The single place a track row becomes a StellarState — shared by `state_at`
+    (frac from the age inversion) and `track` (frac = each integer row), so the two
+    can never drift. `mass_init_msun` is the run's *true* initial mass (the snap is
+    honest, not a silent extrapolation). Module-level (uses no provider state) so the
+    Phase-2 `helium.py` sibling can reuse it directly, exactly like `_build_track`."""
+    rows = np.arange(t.age.size, dtype=float)
+    age = float(np.interp(frac, rows, t.age))
+    L = 10.0 ** float(np.interp(frac, rows, t.logL))
+    teff = 10.0 ** float(np.interp(frac, rows, t.logT))
+    r = 10.0 ** float(np.interp(frac, rows, t.logR))
+    logg = float(np.interp(frac, rows, t.logg))
+
+    x_s = float(np.interp(frac, rows, t.Xs))
+    y_s = float(np.interp(frac, rows, t.Ys))
+    z_s = max(0.0, 1.0 - x_s - y_s)
+    x_c = float(np.interp(frac, rows, t.Xc))
+    y_c = float(np.interp(frac, rows, t.Yc))
+    z_c = max(0.0, 1.0 - x_c - y_c)
+
+    phase = str(t.phase[int(round(frac))])
+    eep = frac  # monotonic row index; NOT a MIST EEP number (see module docstring)
+    activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
+
+    return StellarState(
+        age_yr=age,
+        eep=eep,
+        phase=phase,
+        mass_init_msun=t.minit,
+        feh_init=t.feh,
+        L_lsun=L,
+        Teff_K=teff,
+        R_rsun=r,
+        logg=logg,
+        X_surf=x_s, Y_surf=y_s, Z_surf=z_s,
+        X_core=x_c, Y_core=y_c, Z_core=z_c,
+        metals_surf={},   # tutorial runs log no isotopes -> degrade gracefully (§3)
+        metals_core={},
+        v_rot_kms=None,
+        activity=activity,
+    )
+
+
 def _find_history_files(mesa_dir: Path) -> list[str]:
     """Every `history.data` under the MESA data dir (one per run), sorted."""
     return sorted(glob.glob(str(mesa_dir / "**" / "history.data"), recursive=True))
@@ -423,45 +468,10 @@ class MESAProvider:
     def _state_from_track(self, t: _MesaTrack, frac: float) -> StellarState:
         """Read a StellarState off one run's arrays at fractional row `frac`.
 
-        The single place a track row becomes a StellarState — shared by
-        `state_at` (frac from the age inversion) and `track` (frac = each integer
-        row), so the two can never drift. `mass_init_msun` is the run's *true*
-        initial mass (the snap is honest, not a silent extrapolation)."""
-        rows = np.arange(t.age.size, dtype=float)
-        age = float(np.interp(frac, rows, t.age))
-        L = 10.0 ** float(np.interp(frac, rows, t.logL))
-        teff = 10.0 ** float(np.interp(frac, rows, t.logT))
-        r = 10.0 ** float(np.interp(frac, rows, t.logR))
-        logg = float(np.interp(frac, rows, t.logg))
-
-        x_s = float(np.interp(frac, rows, t.Xs))
-        y_s = float(np.interp(frac, rows, t.Ys))
-        z_s = max(0.0, 1.0 - x_s - y_s)
-        x_c = float(np.interp(frac, rows, t.Xc))
-        y_c = float(np.interp(frac, rows, t.Yc))
-        z_c = max(0.0, 1.0 - x_c - y_c)
-
-        phase = str(t.phase[int(round(frac))])
-        eep = frac  # monotonic row index; NOT a MIST EEP number (see module docstring)
-        activity = max(0.0, min(1.0, (6500.0 - teff) / (6500.0 - 3000.0)))
-
-        return StellarState(
-            age_yr=age,
-            eep=eep,
-            phase=phase,
-            mass_init_msun=t.minit,
-            feh_init=t.feh,
-            L_lsun=L,
-            Teff_K=teff,
-            R_rsun=r,
-            logg=logg,
-            X_surf=x_s, Y_surf=y_s, Z_surf=z_s,
-            X_core=x_c, Y_core=y_c, Z_core=z_c,
-            metals_surf={},   # tutorial runs log no isotopes -> degrade gracefully (§3)
-            metals_core={},
-            v_rot_kms=None,
-            activity=activity,
-        )
+        Thin instance-method wrapper over the module-level `_state_from_track` (the
+        real implementation, lifted out so `helium.py` can reuse it). Kept as a method
+        so `state_at`/`track` call sites read unchanged."""
+        return _state_from_track(t, frac)
 
     # -- validation ------------------------------------------------------------
     def _snap_feh(self, feh: float) -> float:
