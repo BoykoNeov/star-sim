@@ -472,6 +472,20 @@
         <p class="note rot-note" id="helium-note"></p>
       </div>
 
+      <!-- α-enhanced (equivalent-Z) what-if overlay — the old-population [α/Fe] effect. Same
+           LIGHT overlay machinery as the He one and mutually exclusive with it: the HR panel
+           shows two self-run MESA tracks (scaled-solar baseline vs. the α-enhanced equivalent-Z
+           run) at matched mass, the MIST track hidden. Gated the same as He (solar-Z, 1/2/6 M☉). -->
+      <div class="helium-control" id="alpha-track-control" hidden>
+        <label class="rot-toggle-row" for="alpha-track-toggle">
+          <input id="alpha-track-toggle" type="checkbox" />
+          <span>α-enhanced (old population)
+            <span class="help" tabindex="0" data-tip="A what-if: what if this star had been α-enhanced? The α-elements (O, Ne, Mg, Si, S, Ca, Ti) are made promptly by core-collapse supernovae, while iron arrives ~1 Gyr later from Type Ia supernovae — so old, fast-formed populations (the halo, thick disk, globular clusters, massive ellipticals) lock in a HIGH [α/Fe] (~+0.3 to +0.4) at a given [Fe/H]. Oxygen and magnesium dominate the metal MASS, so at fixed iron, α-enhancement RAISES the true total metallicity Z — which increases envelope opacity and pushes the track COOLER (redder), slightly FAINTER, and LONGER-lived (the opposite sign from the helium effect). Because MESA ships only solar-scaled opacity tables and the α-enhanced-vs-equivalent-Z track difference is only a few percent (Salaris, Chieffi & Straniero 1993), the 'enhanced' track here is a scaled-solar MESA run at the EQUIVALENT total metallicity [M/H] = [Fe/H] + log(0.638·10^[α/Fe] + 0.362). The honest lesson: at fixed [Fe/H] the TRACK responds to α only through total Z — α's distinctive fingerprint is SPECTROSCOPIC (see the spectrum's α-enhancement toggle), not evolutionary. Two self-run MESA tracks are overlaid (baseline vs. equivalent-Z), the MIST track hidden (the comparison is MESA-against-MESA). Solar-metallicity grid, snapped to the nearest of 1 / 2 / 6 M☉.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="alpha-track-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

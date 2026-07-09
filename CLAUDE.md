@@ -614,10 +614,34 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   advisor catch) surfaced in the `#helium-note` caption** with both lifetimes + ratio. Tears down on
   band-exit or any endgame/stripped entry. **Data-availability honesty gate** (advisor-caught freeze
   on the data-absent fresh-clone path): `/helium_status`→`has_grid` (the `/rotation_status` pattern)
-  hides the toggle without local MESA runs, + a fetch-failure `heliumOff()` teardown. **Next = Phase 3**
-  (α-enhanced axis, self-run MESA —
-  heavier: needs an α-enhanced opacity table + custom mixture, Gate 3 stricter).
+  hides the toggle without local MESA runs, + a fetch-failure `heliumOff()` teardown.
   [[star-sim-helium-overlay]]; recipe `backend/docs/mesa_helium_recipe.md`.
+
+### α-enhanced (equivalent-Z) overlay (`alpha.py` — a **sibling**; `/alpha` bypasses PROVIDER)
+- **PHASE 3 of `docs/plans/tempered-lineage-inspiral.md` — BUILT end-to-end 2026-07-09 (Chunks
+  3a/3b/3c, 397 pytest, Playwright-verified 1440+390). This COMPLETES the whole tempered-lineage
+  plan (Phases 1–3).** The old-population what-if: at fixed [Fe/H], boosting [α/Fe] raises the
+  true total metallicity Z (α-elements dominate the metal mass), so at fixed mass the track is
+  **cooler, fainter, longer-lived** — the **opposite sign** from the He effect. A what-if overlay
+  sibling like `helium.py`; NEVER compared vs. the MIST spine (MESA-vs-MESA only). **The
+  "heaviest phase" collapsed to Phase-2 difficulty (advisor-endorsed):** MESA ships only
+  solar-scaled opacity tables (Type-1 on the MS; Type-2 only blends in H-poor → no α on the MS),
+  and **Salaris, Chieffi & Straniero (1993)** show an α-enhanced track ≈ a scaled-solar track at
+  the **equivalent total Z** to a few percent (below what this sim resolves) — so it's a **Z-only
+  change** (`[M/H]=[Fe/H]+log10(0.638·10^[α/Fe]+0.362)`; [α/Fe]=+0.4 → Z_equiv=0.0152·1.9646=
+  **0.029862**, Y held at 0.2704 — the "change Zbase too" gotcha **applies here**, unlike the Y
+  axis). **Chunk 3a:** Claude ran the 6-run MESA batch in Docker himself (user turned Docker on,
+  "you bake"); Gate 3 measured **via the parser that skips pre-MS** (raw row 0 is the cool Hayashi
+  pre-MS model — a gotcha): cooler/fainter/longer at every mass (1 M☉ ΔTeff −488 K/τ_MS 1.49×; 6
+  M☉ −1606 K/1.12×). **Chunk 3b:** `alpha.py` keys the pair by **ZAMS surface Z** (not Y); `alpha_fe`
+  is **DERIVED** from the measured baseline/enhanced Z ratio via inverted Salaris (recovers +0.40,
+  not hardcoded); `/alpha` + `/alpha_status`; +9 tests (`test_alpha.py`). **Chunk 3c:** a LIGHT HR
+  overlay **sharing the He overlay slot**, mutually exclusive with it (each toggle unchecks the
+  other); `hr.setHeliumOverlay` generalized to custom **[M/H]** ZAMS labels; the Coelho-paired
+  caption owns the lesson ("the track sees only total Z — α's signature is spectroscopic, see the
+  spectrum α-toggle"). **Playwright caught a duplicate-ID collision** — `#alpha-toggle` was already
+  the Coelho spectrum α-toggle; renamed mine to `#alpha-track-toggle`. Gate-3 part-2 (distinctiveness)
+  IS the lesson, not a defect. [[star-sim-alpha-overlay]]; recipe `backend/docs/mesa_alpha_recipe.md`.
 
 ### SED (broadband panel — **sibling**, Teff-driven; mostly frontend, one tiny spine touch)
 - `sed.js` plots the Planck blackbody γ→radio (~14 decades), Wien peak, optical
@@ -744,8 +768,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **388 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The initial-helium (Y) overlay sibling (`test_helium.py`) adds **9**:
+- **397 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The α-enhanced (equivalent-Z) overlay sibling (`test_alpha.py`) adds **9**
+  (gated `requires_alpha_data`, mirroring helium; 1 UNGATED `/alpha_status` test): the per-mass
+  Gate-3 asserts (enhanced ZAMS Teff/L **lower**, τ_MS **longer** — the opposite sign from He),
+  the derived-[α/Fe]≈+0.4 check (recovered from the Z ratio via inverted Salaris, not hardcoded),
+  §3-state validity, snap honesty, route/422, and the AST sibling-imports-no-PROVIDER check.
+  The initial-helium (Y) overlay sibling (`test_helium.py`) adds **9**:
   **8** gated `requires_helium_data` (per-mass Gate-2 asserts — enhanced ZAMS Teff/L higher,
   τ_MS shorter; the observed ΔY range; §3-StellarState validity; snap-always honesty; route
   shape + 422; an **AST-level** sibling-imports-no-PROVIDER check) plus **1 UNGATED**

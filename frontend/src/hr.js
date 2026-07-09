@@ -904,11 +904,14 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // Draw both as full solid Teff-coloured trails (splitIdx = length ⇒ all "past"/bold).
     drawBinaryTrail(heliumBaseline, heliumBaseline.length);
     drawBinaryTrail(heliumEnhanced, heliumEnhanced.length);
-    // A dot + Y label at each ZAMS (row 0). Enhanced above-left, baseline below-right.
-    const yB = heliumMeta ? heliumMeta.yBase : null;
-    const yE = heliumMeta ? heliumMeta.yEnh : null;
-    labelHeliumZams(heliumEnhanced[0], `He-enhanced  Y ${fmtY(yE)}`, -13);
-    labelHeliumZams(heliumBaseline[0], `baseline  Y ${fmtY(yB)}`, 15);
+    // A dot + label at each ZAMS (row 0). Enhanced above-left, baseline below-right.
+    // The same overlay slot serves both MESA what-ifs (initial-He and α-enhanced), so the
+    // caller may pass explicit `labels:{enh,base}`; otherwise fall back to the Y format.
+    const lbl = heliumMeta && heliumMeta.labels;
+    const enhTxt = lbl ? heliumMeta.labels.enh : `He-enhanced  Y ${fmtY(heliumMeta ? heliumMeta.yEnh : null)}`;
+    const baseTxt = lbl ? heliumMeta.labels.base : `baseline  Y ${fmtY(heliumMeta ? heliumMeta.yBase : null)}`;
+    labelHeliumZams(heliumEnhanced[0], enhTxt, -13);
+    labelHeliumZams(heliumBaseline[0], baseTxt, 15);
   }
   function fmtY(y) { return y == null ? "?" : y.toFixed(2); }
   function labelHeliumZams(s, text, dyOff) {

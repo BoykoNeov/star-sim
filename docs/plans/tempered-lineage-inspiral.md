@@ -1,15 +1,15 @@
 # Plan: Three subpopulation axes — post-SN compact-object binaries, initial-helium, α-enhanced evolution
 
-## Status: Phase 1 Chunks 1a/1b/1c (CO-HMS_RLO) + Chunks 2a/2b/2c (CO-HeMS/CO-HeMS_RLO) ALL BUILT — Phase 1 COMPLETE.
+## Status: ALL THREE PHASES COMPLETE (2026-07-09). Phase 1 (CO-binary tail) + Phase 2 (initial-He/Y) + Phase 3 (α-enhanced) all built end-to-end.
 Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BUILT** (2026-07-08),
 Chunk 2b (frontend render — the `kind` selector + He-surface comp + DCO-endpoint caption) is
 **BUILT** (2026-07-09), and Chunk 2c (full 8-bucket [Fe/H] axis for both He grids + the re-derived
 Eddington bound) is **BUILT** (2026-07-09) — see "Chunk 2a"/"Chunk 2b"/"Chunk 2c" under "Phase 1
 (cont.)". **Phase 1 (the CE/compact-object tail) is now COMPLETE.** **Phase 2 (initial-helium / Y
 axis) is COMPLETE** (2026-07-09, Chunks 2a/2b/2c — see "Phase 2" below). **Phase 3 (α-enhanced
-evolution) IN PROGRESS: Chunk 3a recipe + inlists PREPARED (2026-07-09), blocked only on the
-Docker MESA batch** — the "heaviest phase" collapsed to a Z-only change via the equivalent-Z
-(Salaris 1993) decision (see "Phase 3 → Architecture").
+evolution) is COMPLETE** (2026-07-09, Chunks 3a/3b/3c — the "heaviest phase" collapsed to a
+Z-only change via the equivalent-Z / Salaris 1993 decision; see "Phase 3" below). **The whole
+plan (Phases 1–3) is now built end-to-end.**
 Sequential order (also the efficient order): **Phase 1** binary CE/compact-object tail (Chunk 1
 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend done → 2c [Fe/H] axis done) →
 **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis (reuses Phase 2's
@@ -532,21 +532,45 @@ the *evolutionary track itself* respond to [α/Fe], not just the emergent spectr
 
 ### Chunked build
 
-**Chunk 3a** — MESA batch (baseline scaled-solar vs. α-equivalent-Z, 1/2/6 M☉, the Phase-2
-mass set) + no bespoke bake (read raw `history.data` like Phase 2). **Recipe + inlists
-PREPARED 2026-07-09, awaiting the Docker batch:** `backend/docs/mesa_alpha_recipe.md` written;
-the 6 inlists pre-generated at `M:\claud_projects\temp\mesa_alpha_inlists\inlist_{base,enh}_{1,2,6}`
-(baseline `initial_z=Zbase=0.0152` / enhanced `0.029862`, `initial_y=0.2704` in all). **Blocked
-only on compute** — Docker was off at prep time; running the batch (3 masses × 2 comps, ~4–5 min
-each) is the next action, then report Gate 3 (§5b of the recipe).
+**Chunk 3a** — MESA batch + no bespoke bake (read raw `history.data` like Phase 2). **BUILT
+2026-07-09 (Claude ran the batch in Docker himself — user turned Docker on, "you bake").** The
+six runs (`inlist_{base,enh}_{1,2,6}`, baseline `initial_z=Zbase=0.0152` / enhanced `0.029862`,
+`initial_y=0.2704` in all — a pure single-variable Z change) converged (exit 0, ~300 rows each)
+and landed at `data/mesa_alpha/{baseline,enhanced}/<M>Msun/history.data` (gitignored, MESA-local;
+tests skip via `requires_alpha_data`). **Composition honored exactly** (ZAMS: base Z=0.0152 /
+enh Z=0.0299, **Y=0.2704 in both**). **Gate 3 PASSED at every mass** (matched-phase, via the real
+parser that skips pre-MS — NOT raw row 0, which is the cool Hayashi pre-MS model): the enhanced
+track is cooler + fainter + longer-lived (the opposite sign from He) — 1 M☉ ΔTeff −488 K /
+ΔlogL −0.19 / τ_MS 1.49×; 2 M☉ −1247 K / −0.13 / 1.34×; 6 M☉ −1606 K / −0.06 / 1.12×. Recipe
+`backend/docs/mesa_alpha_recipe.md`. **Gate-3 part 2 (distinctiveness) confirmed as designed** —
+the enhanced run IS a higher-Z scaled-solar run, so the framing (Coelho-paired) is the lesson.
 
-**Chunk 3b** — backend sibling `alpha.py` (a near-clone of `helium.py`: reuse
-`_build_track`/`_state_from_track`, key the pair by ZAMS **Z** instead of Y) + a `/alpha` route
-+ `/alpha_status` data-availability gate. **NOT before Gate 3 passes.**
+**Chunk 3b** — backend sibling `alpha.py` + routes. **BUILT 2026-07-09.** A near-clone of
+`helium.py` (imports only `state.StellarState` + the MESA parser's free helpers, never
+`PROVIDER`), keying the pair by **ZAMS surface Z** (`1 − Xs[0] − Ys[0]`) instead of Y, asserting
+two-per-mass. `alpha_overlay(mass)` snaps 1/2/6 M☉ (solar [Fe/H]) and returns both tracks as §3
+`StellarState` lists + each's ZAMS Teff/L, equivalent [M/H], and windowed τ_MS. `alpha_fe` is the
+represented [α/Fe] **derived** from the measured baseline/enhanced Z ratio via the inverted Salaris
+relation (data-derived, not hardcoded → recovers +0.40). `/alpha` (snap-always, 422 on mass≤0, 503
+on missing data) + `/alpha_status` (the data-availability visibility gate). **+9 tests**
+(`test_alpha.py`, gated `requires_alpha_data`; 1 UNGATED status-route test) — the cooler/fainter/
+longer-lived Gate-3 asserts, the derived-[α/Fe]≈+0.4 check, §3-state validity, snap honesty,
+route/422, and the AST-level sibling-imports-no-PROVIDER check. **397 pytest.**
 
-**Chunk 3c** — frontend overlay, explicitly paired in caption with the existing spectrum-only
-Coelho α-toggle ("the track sees only the equivalent total Z; the α signature lives in the
-spectrum"). **NOT before Gate 3 passes.**
+**Chunk 3c** — frontend overlay. **BUILT 2026-07-09 (Playwright-verified 1440+390, zero console
+errors).** A LIGHT HR overlay like the He one, **mutually exclusive** with it (they share the
+`hr.js` overlay slot — only one MESA what-if owns the HR panel; each toggle unchecks the other).
+`#alpha-track-toggle` (renamed from `alpha-toggle` — that ID was already the Coelho **spectrum**
+α-toggle; a real duplicate-ID collision caught in Playwright) fetches `/alpha` and hands both
+tracks to the shared `hr.setHeliumOverlay` (generalized to accept custom ZAMS labels — the α
+labels show the equivalent **[M/H]**, reinforcing "the track sees only total Z"). MIST spine
+hidden while on. The caption carries the whole story + honesty framing: "[α/Fe] +0.4 raises the
+true metallicity to [M/H] +0.29 (Salaris 1993 equivalent-Z)… Cooler + fainter, and longer-lived:
+τ_MS 1.16 vs 0.86 Gyr (1.3× longer). The track sees only the total Z — α's own signature is
+spectroscopic (see the spectrum α-toggle)." τ_MS (LONGER here, invisible on an HR diagram) surfaced
+explicitly. Data-availability gate (`/alpha_status` → `alphaHasGrid`) + fetch-failure teardown,
+mirroring the He data-absent fixes. **Phase 3 (α-enhanced evolution) is COMPLETE — the whole
+`tempered-lineage-inspiral.md` plan (Phases 1–3) is now built end-to-end.**
 
 ### Measure-first gate (Gate 3, SHARPENED — two parts, not one)
 

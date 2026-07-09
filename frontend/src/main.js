@@ -68,6 +68,11 @@ const els = {
   heliumControl: document.getElementById("helium-control"),
   heliumToggle: document.getElementById("helium-toggle"),
   heliumNote: document.getElementById("helium-note"),
+  // α-enhanced (equivalent-Z) what-if overlay (Phase 3 — the old-population [α/Fe] effect).
+  // Same LIGHT HR-overlay machinery as the He one, and mutually exclusive with it.
+  alphaControl: document.getElementById("alpha-track-control"),
+  alphaToggle: document.getElementById("alpha-track-toggle"),
+  alphaNote: document.getElementById("alpha-track-note"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
@@ -497,6 +502,13 @@ const STRIP_MASS_MIN = 2.0, STRIP_MASS_MAX = 18.2;
 // and only near solar [Fe/H] — the grid carries no other metallicity, so showing it elsewhere
 // would mislabel a solar-Z pair as "at your [Fe/H]".
 const HE_MASS_MIN = 0.7, HE_MASS_MAX = 7.0, HE_FEH_TOL = 0.25;
+// α-enhanced overlay (Phase 3): the same self-run MESA grid shape as the He one (1/2/6 M☉ at
+// solar [Fe/H]), so the same eligibility band — offered near solar Z where the equivalent-Z
+// pair snaps sensibly, hidden elsewhere (the grid carries no other [Fe/H]).
+let alphaOn = false;            // the α-enhanced overlay is active (MIST HR track hidden; shares the He slot)
+let alphaToken = 0;            // latest-wins guard for the /alpha fetch
+let alphaHasGrid = false;      // /alpha_status: are the MESA runs present? (else never show the toggle)
+const ALPHA_MASS_MIN = 0.7, ALPHA_MASS_MAX = 7.0, ALPHA_FEH_TOL = 0.25;
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -2691,11 +2703,96 @@ function fmtGyr(gyr) {
 // helium and the target toggle can be visible at once in their overlapping mass band, so this is
 // reachable; call it at the top of every mode-entry that isn't "live".
 function dropHeliumForModeSwitch() {
+  dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
   if (els.heliumToggle) els.heliumToggle.checked = false;
   if (els.heliumControl) els.heliumControl.hidden = true;   // updateHeliumControl re-shows it on return to live
+}
+
+// --- α-enhanced (equivalent-Z) what-if overlay (Phase 3) ---------------------
+// The same LIGHT HR overlay as the initial-helium one, MUTUALLY EXCLUSIVE with it — only one
+// MESA baseline-vs-enhanced pair owns the HR panel at a time (they share the hr.js overlay slot,
+// hence alphaOff also calls hr.clearHeliumOverlay). [α/Fe] raises the true total metallicity Z at
+// fixed [Fe/H] (Salaris 1993 equivalent-Z), so the enhanced track is cooler/fainter/longer-lived
+// — the opposite sign from the He effect. The honesty lesson, owned by the caption: the TRACK
+// sees only total Z; α's own signature is spectroscopic (the already-shipped Coelho spectrum toggle).
+function updateAlphaControl() {
+  const c = els.alphaControl;
+  if (!c) return;
+  const feh = Number(els.feh.value);
+  const eligible = alphaHasGrid    // no local MESA runs → never offer the toggle (honesty gate)
+    && mode === "live"
+    && massValue >= ALPHA_MASS_MIN && massValue <= ALPHA_MASS_MAX
+    && Math.abs(feh) <= ALPHA_FEH_TOL;
+  c.hidden = !eligible;
+  if (!eligible) {
+    if (alphaOn) alphaOff();   // drifted out of range with the overlay up → restore the live HR
+    return;
+  }
+  if (els.alphaToggle) els.alphaToggle.checked = alphaOn;
+  if (!alphaOn && els.alphaNote)
+    els.alphaNote.textContent =
+      "What if this star were α-enhanced? (an old-population [α/Fe] what-if, track-level)";
+}
+
+// Turn the α overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
+function alphaOff() {
+  alphaOn = false;
+  alphaToken++;                  // cancel any in-flight /alpha apply
+  if (els.alphaToggle) els.alphaToggle.checked = false;
+  hr.clearHeliumOverlay();       // the shared MESA-overlay slot
+  if (currentTrack && currentTrack.length) hr.setTrack(currentTrack);
+  refresh();                     // re-place the marker on the restored track
+  updateAlphaControl();          // reset the note text
+}
+
+// Turn ON (or re-fetch after a mass change): fetch the baseline+enhanced (equivalent-Z) MESA pair
+// and hand both to the shared HR overlay slot. Latest-wins guarded. The caption carries the whole
+// Gate-3 story AND the honesty framing: the effect is a pure total-Z shift (Salaris), with τ_MS
+// (LONGER here — no HR axis) surfaced explicitly, and a pointer to the spectrum α-toggle for α's
+// own (spectroscopic) fingerprint.
+async function refreshAlpha() {
+  if (!alphaOn) return;
+  const token = ++alphaToken;
+  const mass = massValue;
+  let data;
+  try {
+    data = await fetchJSON(`/alpha?mass=${mass}`);
+  } catch (e) {
+    if (token !== alphaToken || !alphaOn) return;
+    alphaOff();                  // don't leave alphaOn stuck (it guards the live HR calls off)
+    if (els.alphaNote) els.alphaNote.textContent = "α-enhanced tracks unavailable (no MESA data).";
+    return;
+  }
+  if (token !== alphaToken || !alphaOn || mode !== "live") return;
+  const b = data.baseline, en = data.enhanced;
+  // On-plot ZAMS labels show the equivalent [M/H] — the axis the TRACK actually sees (the lesson).
+  hr.setHeliumOverlay(b.states, en.states, {
+    labels: { enh: `α-enhanced  [M/H] ${fmtMH(en.mh)}`, base: `baseline  [M/H] ${fmtMH(b.mh)}` },
+  });
+  if (els.alphaNote) {
+    const ratio = en.tau_ms_gyr / b.tau_ms_gyr;
+    const snap = data.mass_snapped_far ? ` · snapped to ${fmt(data.mass_snapped)} M☉` : "";
+    els.alphaNote.textContent =
+      `[α/Fe] +${data.alpha_fe.toFixed(1)} raises the true metallicity to [M/H] ${fmtMH(en.mh)} ` +
+      `(Salaris 1993 equivalent-Z), same mass (self-run MESA). Cooler + fainter, and longer-lived: ` +
+      `τ_MS ${fmtGyr(en.tau_ms_gyr)} vs. ${fmtGyr(b.tau_ms_gyr)} (${ratio.toFixed(1)}× longer). ` +
+      `The track sees only the total Z — α's own signature is spectroscopic (see the spectrum α-toggle)${snap}.`;
+  }
+}
+
+// Signed [M/H] for the caption/labels: "+0.29" / "0.00" / "-0.10".
+function fmtMH(mh) { return (mh >= 0 ? "+" : "") + mh.toFixed(2); }
+
+// Drop the α overlay STATE when another view takes over the HR panel (see dropHeliumForModeSwitch).
+function dropAlphaForModeSwitch() {
+  if (!alphaOn) return;
+  alphaOn = false;
+  alphaToken++;
+  if (els.alphaToggle) els.alphaToggle.checked = false;
+  if (els.alphaControl) els.alphaControl.hidden = true;
 }
 
 // Fetch the computed stripped model for the current (mass, [Fe/H]). No vvcrit — the stripped
@@ -3334,10 +3431,10 @@ function paintState(s) {
   star.update(s, { peculiar: peculiarOn });
   classification.update(s);
   scale.update(s);
-  // The initial-helium overlay owns the HR panel while on (two MESA tracks, MIST spine
-  // hidden per the honesty rule) — so DON'T draw the live marker/track there; 3D/comp/
-  // spectrum/etc. still track the current star as the user scrubs (advisor-scoped).
-  if (!heliumOn) hr.update(s);
+  // A MESA what-if overlay (initial-He or α-enhanced) owns the HR panel while on (two MESA
+  // tracks, MIST spine hidden per the honesty rule) — so DON'T draw the live marker/track
+  // there; 3D/comp/spectrum/etc. still track the current star as the user scrubs (advisor-scoped).
+  if (!heliumOn && !alphaOn) hr.update(s);
   comp.update(s);
   spectrum.update(s);
   structure.update(s);
@@ -3385,6 +3482,7 @@ function refresh() {
   updatePeculiarControl();
   updateStrippedControl();   // the stripped what-if is offer-able only in the eligible mass band
   updateHeliumControl();     // the He overlay is offer-able only near the solar-Z MESA grid
+  updateAlphaControl();      // likewise the α-enhanced overlay (same solar-Z MESA grid)
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -3413,7 +3511,7 @@ async function refreshTrack() {
     // the WD endgame must not overwrite the endgame view.
     if (token !== trackToken || mode !== "live") return;
     currentTrack = t;
-    if (!heliumOn) hr.setTrack(t);   // the He overlay owns the HR panel; refreshHelium re-asserts it
+    if (!heliumOn && !alphaOn) hr.setTrack(t);   // a MESA overlay owns the HR panel; its refresh re-asserts it
     comp.setTrack(t);
     // The star changed, so any cached endgame is stale — drop BOTH caches (the full result
     // and the type-only fast-path one) + clear the gateway's CHILDREN (the buttons/note),
@@ -3483,9 +3581,10 @@ async function refreshTrack() {
   // later of two competing ~1 MB fetches instead of the one already in flight. Just paint
   // with what we have; fetchEndgamePreview's response repaints when it lands (faster).
   updateGateway();
-  // The mass/[Fe/H] moved — re-fetch the He overlay pair for the new star (no-op unless the
-  // overlay is on AND still eligible: refresh()'s updateHeliumControl just tore it down if not).
+  // The mass/[Fe/H] moved — re-fetch the He / α overlay pair for the new star (no-op unless that
+  // overlay is on AND still eligible: refresh()'s update*Control just tore it down if not).
   refreshHelium();
+  refreshAlpha();
 }
 
 // When [Fe/H] changes, the valid *mass* span can change (the dead corner), so
@@ -3516,6 +3615,7 @@ async function init() {
     // locally — probe once so the toggle is hidden on a fresh clone (the /rotation_status gate
     // pattern; a control that could only ever 503 shouldn't appear).
     try { heliumHasGrid = !!(await fetchJSON("/helium_status")).has_grid; } catch { heliumHasGrid = false; }
+    try { alphaHasGrid = !!(await fetchJSON("/alpha_status")).has_grid; } catch { alphaHasGrid = false; }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
@@ -3717,11 +3817,28 @@ async function init() {
   if (els.heliumToggle) els.heliumToggle.addEventListener("change", () => {
     if (els.heliumToggle.checked) {
       if (mode !== "live") { els.heliumToggle.checked = false; return; }
+      // Mutually exclusive with the α overlay (shared HR slot): clear α state first, no repaint
+      // (refreshHelium repaints the slot). Reset α's note to its default prompt.
+      if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
       heliumOn = true;
       if (els.heliumNote) els.heliumNote.textContent = "Loading helium-enhanced tracks…";
       refreshHelium();
     } else {
       heliumOff();
+    }
+  });
+
+  // α-enhanced overlay (Phase 3): the twin of the He toggle, mutually exclusive with it. Checking
+  // it fetches the baseline+enhanced (equivalent-Z) MESA pair and takes over the HR panel.
+  if (els.alphaToggle) els.alphaToggle.addEventListener("change", () => {
+    if (els.alphaToggle.checked) {
+      if (mode !== "live") { els.alphaToggle.checked = false; return; }
+      if (heliumOn) { heliumOn = false; heliumToken++; if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
+      alphaOn = true;
+      if (els.alphaNote) els.alphaNote.textContent = "Loading α-enhanced tracks…";
+      refreshAlpha();
+    } else {
+      alphaOff();
     }
   });
 

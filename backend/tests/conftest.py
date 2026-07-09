@@ -368,6 +368,25 @@ requires_helium_data = pytest.mark.skipif(
 )
 
 
+def alpha_data_available() -> bool:
+    """True if the α-enhanced (equivalent-Z) MESA runs are on disk (gitignored, host-run).
+
+    Phase 3's baseline+enhanced MESA pairs live under data/mesa_alpha/ — self-run in
+    Docker MESA, never committed (see backend/docs/mesa_alpha_recipe.md). The /alpha
+    sibling tests skip until at least one complete pair is present."""
+    from star_sim.alpha import _find_history_files
+
+    return len(_find_history_files()) > 0
+
+
+# The /alpha (α-enhanced what-if overlay) tests need the self-run baseline+enhanced MESA
+# pairs — generated on the host, never committed. See backend/docs/mesa_alpha_recipe.md.
+requires_alpha_data = pytest.mark.skipif(
+    not alpha_data_available(),
+    reason="no α-enhanced MESA runs — see backend/docs/mesa_alpha_recipe.md",
+)
+
+
 def gotberg_seds_available() -> bool:
     """True if the Götberg stripped-star SEDs (VizieR, gitignored) are on disk.
 

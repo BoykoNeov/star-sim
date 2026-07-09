@@ -41,6 +41,7 @@ from .binary import (
 )
 from .structure import StructureDataMissing, interior_structure
 from .helium import HeliumDataMissing, helium_available, helium_overlay
+from .alpha import AlphaDataMissing, alpha_available, alpha_overlay
 from .supernova import Progenitor, supernova_model
 from .posydon import PosydonDataMissing, binary_track_meta, binary_track_payload
 from .posydon_co import (
@@ -416,6 +417,40 @@ def helium_status() -> dict:
     committed/hosted, so a fresh clone has none; hiding the toggle then beats showing one that
     can only 503. Cheap (a glob), always 200."""
     return {"has_grid": helium_available()}
+
+
+@app.get("/alpha")
+def alpha(
+    mass: float = Query(..., gt=0.0, description="initial mass / M_sun"),
+) -> dict:
+    """(mass) -> the α-enhanced what-if: a baseline vs. α-enhanced (equivalent-Z) MESA
+    track pair at matched mass/[Fe/H] (docs/plans/tempered-lineage-inspiral.md, Phase 3).
+
+    Like `/helium`, this does **not** go through `PROVIDER`. [α/Fe] raises the true total
+    metallicity Z at fixed [Fe/H] (Salaris 1993 equivalent-Z), pushing the track cooler,
+    fainter, and longer-lived — the opposite sign from the He effect. The "enhanced" member
+    is a scaled-solar MESA run at the equivalent Z (MESA ships no α-enhanced opacity tables;
+    the Salaris residual is below what this sim resolves), so the track responds to α only
+    through total Z — α's distinctive signature is spectroscopic (the Coelho α-toggle), which
+    the frontend caption pairs this with. The overlay is drawn ONLY against its own MESA
+    baseline, never the live MIST spine (that would conflate the effect with the MESA-vs-MIST
+    systematic).
+
+    Snap-always: an out-of-grid mass snaps to the nearest node (1/2/6 M_sun, solar [Fe/H]) and
+    is flagged in-band (`mass_snapped_far`), never 422'd. 422 is reserved for structurally
+    invalid mass <= 0 (the Query bound); a missing MESA run set -> 503."""
+    try:
+        return alpha_overlay(mass)
+    except AlphaDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/alpha_status")
+def alpha_status() -> dict:
+    """Whether the α-enhanced overlay has data — the frontend toggle-visibility gate
+    (mirrors `/helium_status`). Self-run MESA runs are never committed/hosted; hiding the
+    toggle on a fresh clone beats showing one that can only 503. Cheap (a glob), always 200."""
+    return {"has_grid": alpha_available()}
 
 
 def _donor_ms_lifetime(mass: float, feh: float) -> float:
