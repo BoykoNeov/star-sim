@@ -430,6 +430,19 @@ horizontal-branch "second-parameter problem."
 
 **Chunk 2a** — MESA batch (needs you to run Docker MESA; exact inlist diffs handed over when
 ready) + bake (baseline+enhanced pairs, column-trimmed/decimated/float32/gzip).
+- **INPUTS PREPARED 2026-07-09 — awaiting user compute.** The full handoff is written:
+  `backend/docs/mesa_helium_recipe.md` (the recipe + Docker mechanics + the Gate-2
+  matched-Xc reporting commands) and the **six ready-to-`docker cp` inlists** at
+  `M:\claud_projects\temp\mesa_helium_inlists\inlist_{base,enh}_{1,2,6}`. **Decisions
+  confirmed with the user** (2026-07-09): enhanced **Y = 0.40** (baseline explicit 0.2704 —
+  ΔY ≈ +0.13, NGC 2808 bluest-MS extreme); mass set **1/2/6 M☉**; **re-run BOTH** baseline
+  and enhanced fresh with `initial_y` explicit in each (a verifiable one-variable diff — the
+  advisor-load-bearing call; do NOT reuse the on-disk `data/mesa/solar/` runs as the shipped
+  baseline). **`Zbase` stays 0.0152 in both** (the Y axis leaves Z fixed — the metallicity
+  gotcha does NOT apply). Output layout: `data/mesa_helium/{baseline,enhanced}/<M>Msun/`.
+  **The bake + backend sibling (2b) + overlay (2c) are BLOCKED on Gate 2** (measured through
+  the real runs: enhanced ZAMS bluer/brighter + shorter τ_MS at matched Xc) — nothing to
+  build until the six `history.data` files land.
 
 **Chunk 2b** — backend sibling + route serving both tracks for a requested mass.
 
