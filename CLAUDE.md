@@ -612,7 +612,10 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `hr.setHeliumOverlay` draws two Teff-coloured MESA trails, each ZAMS-labeled, **MIST track hidden**;
   static (no marker); 3D/spectrum/comp stay on the current star. **τ_MS (invisible on an HR diagram —
   advisor catch) surfaced in the `#helium-note` caption** with both lifetimes + ratio. Tears down on
-  band-exit or any endgame/stripped entry. **Next = Phase 3** (α-enhanced axis, self-run MESA —
+  band-exit or any endgame/stripped entry. **Data-availability honesty gate** (advisor-caught freeze
+  on the data-absent fresh-clone path): `/helium_status`→`has_grid` (the `/rotation_status` pattern)
+  hides the toggle without local MESA runs, + a fetch-failure `heliumOff()` teardown. **Next = Phase 3**
+  (α-enhanced axis, self-run MESA —
   heavier: needs an α-enhanced opacity table + custom mixture, Gate 3 stricter).
   [[star-sim-helium-overlay]]; recipe `backend/docs/mesa_helium_recipe.md`.
 
@@ -741,11 +744,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-phase3-lane-emden]].
 
 ### Tests
-- **387 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The initial-helium (Y) overlay sibling (`test_helium.py`, gated
-  `requires_helium_data`) adds **8**: per-mass Gate-2 asserts (enhanced ZAMS Teff/L higher,
-  τ_MS shorter), the observed ΔY range, §3-StellarState validity, snap-always honesty,
-  route shape + 422, and an **AST-level** sibling-imports-no-PROVIDER check. The POSYDON
+- **388 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The initial-helium (Y) overlay sibling (`test_helium.py`) adds **9**:
+  **8** gated `requires_helium_data` (per-mass Gate-2 asserts — enhanced ZAMS Teff/L higher,
+  τ_MS shorter; the observed ΔY range; §3-StellarState validity; snap-always honesty; route
+  shape + 422; an **AST-level** sibling-imports-no-PROVIDER check) plus **1 UNGATED**
+  (`/helium_status` is 200 with a `has_grid` bool even with no data — the data-availability
+  visibility gate, the one test exercised on every checkout). The POSYDON
   CO-HMS_RLO compact-object sibling (`test_posydon_co.py`,
   gated `requires_posydon_co_data`) has **24** — Chunk 1a's 18 (snap/parse honesty, whole-grid
   no-NaN/no-dupe, per-step StellarState validity, the accretion-cue Eddington-bound regression,

@@ -96,6 +96,17 @@ def _find_history_files() -> list[str]:
     )
 
 
+def helium_available() -> bool:
+    """True if any He-enhanced MESA runs are on disk — the data-derived honesty gate.
+
+    The frontend reads this (via `/helium_status`) to decide whether to even SHOW the
+    overlay toggle: MESA data is never committed/hosted (unlike MIST), so a fresh public
+    clone has none, and a control that can only ever 503 shouldn't appear (the project's
+    "don't ship a control nobody can see work" rule, same stance as `/rotation_status`).
+    A cheap glob, never parses — safe to call on every gate re-evaluation."""
+    return len(_find_history_files()) > 0
+
+
 def _ensure_loaded() -> None:
     """Parse every run once, group by initial mass, pair by ZAMS-Y ordering.
 

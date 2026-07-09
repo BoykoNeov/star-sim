@@ -465,8 +465,15 @@ on an HR diagram (no time axis, advisor catch) — is surfaced in the `#helium-n
 both lifetimes + the ratio ("τ_MS 3.03 Gyr vs. 8.32 Gyr (2.7× shorter)"). Latest-wins `/helium`
 refetch on mass change; drifting out of the band (or entering any endgame/stripped view) tears the
 overlay down and restores the live track (`dropHeliumForModeSwitch` at each mode-entry +
-`heliumMode=false` resets in the other `hr` mode-entries). **Phase 2 (initial-helium / Y axis) is
-COMPLETE.**
+`heliumMode=false` resets in the other `hr` mode-entries). **Advisor-caught blocking defect (fixed):**
+the data-absent path — on a fresh clone (MESA data is never hosted), the toggle would show, `/helium`
+would 503, and `heliumOn` stayed stuck true → the guarded live HR calls **froze the panel** with no
+overlay. Two fixes: a **data-availability visibility gate** `/helium_status` → `has_grid` (the
+`/rotation_status` honesty-gate pattern — the toggle never appears without local MESA runs), plus a
+**fetch-failure teardown** (`heliumOff()` in the catch restores the live HR + unchecks, belt-and-
+suspenders for a race). Verified via a two-server Playwright run (data present → toggle works; data
+absent → toggle hidden AND the HR still scrubs, zero console errors). **Phase 2 (initial-helium / Y
+axis) is COMPLETE.**
 
 ### Measure-first gate (Gate 2)
 

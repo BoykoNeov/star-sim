@@ -62,6 +62,21 @@ draw both) is the load-bearing constraint not a style call; the τ_MS-invisible 
 feature-complete; pair by Y-ordering + assert 2; new `setHeliumOverlay` not bent `setBinaryTrack`;
 static not scrub; import the free parser functions not the class; read raw history.data (no npz).
 
+**Advisor "before-done" review caught a BLOCKING defect my tests couldn't (both pytest AND Playwright
+ran with data present):** the **data-absent path**. On a fresh public clone (MESA data is never
+hosted — `[[star-sim-hosted-data-assets]]` excludes it), the toggle showed, `/helium` 503'd, and my
+catch left `heliumOn` stuck true → the `if(!heliumOn)` guards on `hr.update`/`setTrack` **froze the HR
+panel** (marker/track stuck, no overlay to justify it). Fixed two ways: (1) a **data-availability
+visibility gate** — `helium_available()` + `/helium_status`→`{has_grid}` (the `/rotation_status`
+pattern), probed once at init into `heliumHasGrid`, gating `updateHeliumControl` so the toggle never
+appears without local runs; (2) a **fetch-failure teardown** — `heliumOff()` in `refreshHelium`'s
+catch (restores the live HR + unchecks), belt-and-suspenders for a race/mid-session removal. +1
+UNGATED test (`/helium_status` is 200 with a bool even with no data — the one test exercised on every
+checkout). **388 pytest.** Verified via a two-server Playwright run (8014 with data → toggle works;
+8015 with `STAR_SIM_HELIUM_DIR` at an empty dir → toggle hidden AND the HR still scrubs, 0 errors).
+Lesson: a data-gated feature needs the data-ABSENT path tested too — a green suite with data present
+proves nothing about the fresh-clone experience.
+
 **Next = Phase 3** (α-enhanced evolution axis, self-run MESA — heavier: needs an α-enhanced
 opacity table + custom mixture, not a single-knob flip; same overlay plumbing, Gate 3 stricter).
 [[star-sim-co-hms-rlo]] [[star-sim-phase4-mesa]] [[star-sim-interior-structure-mesa]]

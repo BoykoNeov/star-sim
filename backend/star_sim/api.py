@@ -40,7 +40,7 @@ from .binary import (
     stripped_star_payload,
 )
 from .structure import StructureDataMissing, interior_structure
-from .helium import HeliumDataMissing, helium_overlay
+from .helium import HeliumDataMissing, helium_available, helium_overlay
 from .supernova import Progenitor, supernova_model
 from .posydon import PosydonDataMissing, binary_track_meta, binary_track_payload
 from .posydon_co import (
@@ -407,6 +407,15 @@ def helium(
         return helium_overlay(mass)
     except HeliumDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/helium_status")
+def helium_status() -> dict:
+    """Whether the initial-helium overlay has data — the honesty gate the frontend reads
+    to decide if the toggle appears at all (mirrors `/rotation_status`). MESA runs are never
+    committed/hosted, so a fresh clone has none; hiding the toggle then beats showing one that
+    can only 503. Cheap (a glob), always 200."""
+    return {"has_grid": helium_available()}
 
 
 def _donor_ms_lifetime(mass: float, feh: float) -> float:

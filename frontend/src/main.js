@@ -487,6 +487,7 @@ let strippedToken = 0;          // latest-wins guard for /binary fetches (enter 
 let companionOn = false;
 let heliumOn = false;           // the initial-helium overlay is active (MIST HR track hidden)
 let heliumToken = 0;            // latest-wins guard for the /helium fetch (mass/feh can change fast)
+let heliumHasGrid = false;      // /helium_status: are the MESA runs present? (else never show the toggle)
 // The eligible progenitor-mass range for the toggle's gate (the Götberg Z=0.014 grid spans
 // ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
 // snapped-far note rather than reverting; the toggle just doesn't OFFER entry outside them.
@@ -2616,7 +2617,8 @@ function updateHeliumControl() {
   const c = els.heliumControl;
   if (!c) return;
   const feh = Number(els.feh.value);
-  const eligible = mode === "live"
+  const eligible = heliumHasGrid    // no local MESA runs → never offer the toggle (honesty gate)
+    && mode === "live"
     && massValue >= HE_MASS_MIN && massValue <= HE_MASS_MAX
     && Math.abs(feh) <= HE_FEH_TOL;
   c.hidden = !eligible;
@@ -2655,6 +2657,10 @@ async function refreshHelium() {
     data = await fetchJSON(`/helium?mass=${mass}`);
   } catch (e) {
     if (token !== heliumToken || !heliumOn) return;
+    // Tear the overlay DOWN on failure (don't leave heliumOn stuck — that guards the live HR
+    // calls off and FREEZES the panel with no overlay to justify it). heliumOff restores the
+    // live track + unchecks; set the note AFTER it (its updateHeliumControl resets the default).
+    heliumOff();
     if (els.heliumNote) els.heliumNote.textContent = "Helium-enhanced tracks unavailable (no MESA data).";
     return;
   }
@@ -3506,6 +3512,10 @@ async function init() {
     validMassMin = ranges.mass_msun.min;
     validMassMax = ranges.mass_msun.max;
     try { providerName = (await fetchJSON("/health")).provider || ""; } catch { /* non-fatal */ }
+    // The initial-helium overlay has data only if the (never-hosted) MESA runs were generated
+    // locally — probe once so the toggle is hidden on a fresh clone (the /rotation_status gate
+    // pattern; a control that could only ever 503 shouldn't appear).
+    try { heliumHasGrid = !!(await fetchJSON("/helium_status")).has_grid; } catch { heliumHasGrid = false; }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun

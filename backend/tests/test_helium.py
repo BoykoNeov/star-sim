@@ -20,14 +20,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from star_sim.api import app
-from star_sim.helium import helium_overlay
+from star_sim.helium import helium_available, helium_overlay
 from star_sim.state import StellarState
 
 from .conftest import requires_helium_data
 
 client = TestClient(app)
 
-pytestmark = requires_helium_data
+
+# --- the data-availability honesty gate (UNGATED — must answer even with no data) ---
+def test_helium_status_route_always_answers() -> None:
+    """/helium_status is the frontend's toggle-visibility gate — it must be a plain 200 with a
+    boolean whether or not the MESA runs are on disk (a fresh clone has none). This is the one
+    test here that does NOT require the data, so the gate is exercised on every checkout."""
+    resp = client.get("/helium_status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body.get("has_grid"), bool)
+    assert body["has_grid"] == helium_available()
+
 
 # The masses the batch ships (backend/docs/mesa_helium_recipe.md §0).
 _GRID_MASSES = [1.0, 2.0, 6.0]
