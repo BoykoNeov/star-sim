@@ -9,20 +9,27 @@ WHY THIS IS A SEPARATE THING FROM POSYDON (do not conflate — see fetch_posydon
     stars born together) vs age & metallicity, split single-star vs binary. An ENSEMBLE, not
     a track. That is what the population overlay wants. -> THIS is that on-ramp.
 
-WHAT BPASS v2.3 SHIPS (measured recon 2026-07-10; the SSP-spectra record):
+WHAT BPASS v2.3 SHIPS (MEASURED recon 2026-07-10 — the real HDF5 schema, not recalled):
   * Zenodo record 10.5281/zenodo.6383329, CC-BY 4.0. Ten HDF5 files, ~531 MB each:
         SSP_Spectra_BPASSv2.3_{sin,bin}-imf135_300-alpha{-02,+00,+02,+04,+06}.hdf5
     `sin` = single-star populations; `bin` = includes binaries. `alpha+00` = solar-scaled
-    (matches this sim's non-alpha evolution axis). Each file holds ALL 13 metallicities x the
-    age grid x the wavelength grid for one (IMF, alpha). ~531 MB is IN-SESSION fetchable
-    (Zenodo direct URLs), unlike POSYDON's ~10 GB/Z — so this validator can optionally pull
-    the sin+bin alpha+00 pair itself (opt-in), not just hand off a recipe.
-  * 13 metallicities (mass fraction Z): 1e-4, 0.001, 0.002, 0.003, 0.004, 0.006, 0.008,
-    0.010, 0.014, 0.017, 0.020, 0.030, 0.040. Map to [Fe/H]=log10(Z/Zsun) at bake time
-    (confirm BPASS's solar-Z convention against the release before pinning the label).
-  * Population born with 1e6 Msun; the classic age axis is 51 log-age bins (log(age/yr)
-    6.0..11.0 by 0.1 dex). VALIDATE the exact axes against the real HDF5 (this module prints
-    them) — the boron-b8 / Gotberg-transcription discipline: never hardcode a schema unseen.
+    (matches this sim's non-alpha evolution axis). ~531 MB is IN-SESSION fetchable (Zenodo
+    direct URLs), unlike POSYDON's ~10 GB/Z — this validator can optionally pull the sin+bin
+    alpha+00 pair itself (opt-in). This is the Benson/Galacticus repackaging: a single clean
+    cube, NOT per-Z datasets — so the bake needs no HDF5-demux / no HOKI reader.
+  * FOUR top-level datasets (measured): `spectra` (13, 51, 100000) float64; `ages` (51,);
+    `metallicities` (13,); `wavelengths` (100000,). Root attrs carry IMF/alpha/citation.
+  * `spectra` UNITS = **L_sun / Hz** (i.e. f_nu, NOT f_lambda), per the 10^6 Msun population
+    (attr `units='L☉/Hz'`, `unitsInSI=3.827e26`). The SED overlay must handle f_nu (convert
+    to f_lambda = f_nu*c/lambda^2 if the panel is per-Angstrom, or plot f_nu / annotate).
+  * `ages` = LINEAR age in **Gyr**, log-spaced 0.001 .. 100.0 (= 1 Myr .. 100 Gyr, the
+    classic 51-point 10^6..10^11 yr grid stored as Gyr, NOT as log). -> snap on the marker's
+    age_gyr directly.
+  * `metallicities` are ALREADY **[Fe/H] = log10(Z/0.020)** (Zsun=0.020 BPASS convention),
+    values -3.30103 .. +0.30103 (verified: 0.0->Z=0.020, +0.301->0.040, -0.155->0.014, …).
+    -> snap on the marker's [Fe/H] directly, NO Z->[Fe/H] conversion. (Note the ~0.15 dex
+    offset vs MIST's Zsun~0.0142 — a labeled systematic, honest either way.)
+  * `wavelengths` = 1 .. 100000 Angstrom, 1 Angstrom step (100000 points).
   * The HRD "numbers"/stellar-census product is a DIFFERENT release (classic plain-text .dat
     on the Warwick/gSTAR distribution), NOT this Zenodo spectra record. The HR-density overlay
     (plan Chunk 2) needs its own recon; do not infer its schema from the spectra file here.
@@ -152,7 +159,7 @@ def validate() -> int:
         if h5.attrs:
             print(f"\n  root attrs: {dict(list(h5.attrs.items())[:12])}")
 
-    print("\nSchema captured — design the plan Chunk-1 bake/parser against THIS "
+    print("\nSchema captured -- design the plan Chunk-1 bake/parser against THIS "
           "(docs/plans/coeval-ensemble-overlay.md).")
     return 0
 

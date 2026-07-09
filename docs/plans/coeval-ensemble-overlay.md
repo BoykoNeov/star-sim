@@ -1,6 +1,6 @@
 # Plan: The coeval-ensemble overlay — a whole population beside the one star (BPASS)
 
-## Status: DESIGN + RECON SCAFFOLD ONLY (no build, no data landed). Data-gated.
+## Status: RECON DONE (schema measured 2026-07-10, ~1 GB alpha+00 sin+bin pair landed under `data/bpass/`, gitignored). No build yet — Chunk 1 is the next decision.
 
 Every sibling so far renders **one** thing: a single star's track (`provider`), one
 representative state (`binary.py`, `structure.py`, `supernova.py`, `spectra.py`,
@@ -35,13 +35,20 @@ optimistic-framing discipline).
   pair matches this sim's non-α evolution axis → ~1 GB for the single+binary pair.
   Each file holds **all 13 metallicities × the age grid × the wavelength grid** for one
   (IMF, α). **In-session fetchable** (Zenodo direct file URLs), unlike POSYDON's ~10 GB/Z.
-- **BPASS metallicities** (13): Z = 1e-4, 0.001, 0.002, 0.003, 0.004, 0.006, 0.008, 0.010,
-  0.014, 0.017, 0.020, 0.030, 0.040 (mass fraction — map to `[Fe/H]` = log10(Z/Z☉),
-  Z☉≈0.020 in the BPASS convention; **validate the exact solar anchor against the release**).
-- **Population normalization:** each population is born with **10⁶ M☉** at a single
-  metallicity; the age axis is **51 log-age bins, log(age/yr) = 6.0 … 11.0 in 0.1 dex steps**
-  (the classic BPASS grid — validate against the real file). Spectra units are
-  L☉ Å⁻¹ per 10⁶ M☉ (the SSP convention — validate).
+- **REAL HDF5 schema (MEASURED 2026-07-10, `fetch_bpass.py` on the landed files — this is the
+  Benson/Galacticus repackaging, a single clean cube, no per-Z demux / no HOKI reader):**
+  four datasets — `spectra` **(13 Z × 51 age × 100000 λ)** float64; `ages` (51,);
+  `metallicities` (13,); `wavelengths` (100000,). Root attrs carry IMF / α / citations.
+  - `ages` = **linear age in Gyr**, log-spaced **0.001 → 100.0** (= 1 Myr → 100 Gyr; the
+    classic 10⁶–10¹¹ yr grid stored as Gyr, NOT as log). → snap on the marker's `age_gyr`.
+  - `metallicities` are **already `[Fe/H]` = log₁₀(Z/0.020)** (Z☉=0.020 BPASS convention),
+    **−3.30103 → +0.30103** (verified: 0.0→Z=0.020, +0.301→0.040, −0.155→0.014, …). →
+    snap on the marker's `[Fe/H]` **directly, no Z→[Fe/H] conversion**. (Note the ~0.15 dex
+    offset vs MIST's Z☉≈0.0142 — a labeled systematic, honest either way.)
+  - `spectra` **units = L☉ / Hz** (i.e. **f_ν, NOT f_λ**), per the **10⁶ M☉** population
+    (attr `units='L☉/Hz'`, `unitsInSI=3.827e26`). The SED overlay must handle f_ν — convert
+    to f_λ = f_ν·c/λ² if the panel is per-Å, or plot f_ν / annotate.
+  - `wavelengths` = **1 → 100000 Å, 1 Å step**.
 - **The HRD "numbers" / stellar-census product is a DIFFERENT release** (the classic
   BPASS main data release — plain-text `.dat` "numbers"/"starmass"/"supernova"/"ionizing"/
   "colours" files, tens of MB, on the Warwick/gSTAR/Google-Drive distribution, **not** the
@@ -82,19 +89,22 @@ is the natural shape: bake once → ship/cache a small `data/bpass/bpass_ssp.npz
 runtime. This also gives a `fetch_bpass_baked.py` hosting path later (BPASS is public
 third-party like MIST, which IS hosted — the CC-BY carve-out likely allows it; confirm).
 
-## Column / schema mapping (VALIDATE against the real HDF5 first — do not code blind)
+## Column / schema mapping — RECON DONE (measured against the real HDF5, 2026-07-10)
 
-`fetch_bpass.py` (this arc's recon scaffold, built alongside this plan) opens the extracted
-HDF5 and **prints the real internal layout** — dataset names, shapes, the wavelength grid,
-the age grid, how metallicity is keyed (a dataset per Z? a stacked axis?). The bake + parser
-are designed against THAT output, never this doc's recalled guess. Known unknowns to resolve
-in recon:
+`fetch_bpass.py` opened the landed files and printed the layout above. The unknowns this
+section flagged are now **answered by measurement** (recorded so the bake is coded against the
+real schema, not a recalled guess — the boron-b8 / α-axis discipline):
 
-- How is metallicity keyed — one HDF5 dataset per Z (13 datasets), or a single 3-D cube
-  (Z × age × λ)? Names?
-- Is the age axis 51 bins 6.0–11.0? Exact bin centers?
-- Wavelength grid — 1 Å sampling 1–100000 Å (the classic), or resampled? Units of f_λ?
-- The exact solar-Z convention for the `[Fe/H]` mapping.
+- **Metallicity keying:** a single 3-D cube `spectra[Z, age, λ]` — NOT per-Z datasets. Bake
+  = read the cube, decimate λ, stack `[sin, bin]`, save a compact `.npz`. Trivial.
+- **Age axis:** 51 log-spaced **linear-Gyr** values 0.001–100 (not log-age bins). Snap on
+  `age_gyr`.
+- **Wavelength:** 1 Å sampling, 1–100000 Å (the classic full grid). Decimate for the SED
+  panel (the panel shows ~decades on a log-λ axis; the full 100k-point 1-Å grid is overkill).
+- **Metallicity mapping:** the `metallicities` dataset **is `[Fe/H]`** already
+  (log₁₀(Z/0.020)) — snap directly, no conversion; note the Z☉=0.020-vs-0.0142 systematic.
+- **Flux units:** **f_ν [L☉/Hz] per 10⁶ M☉** — the one real handling wrinkle for the SED
+  overlay (see the Chunk-1 note).
 
 ## Chunked build (each chunk measured + Playwright-verified — the project cadence)
 
@@ -138,17 +148,22 @@ in recon:
 - `fetch_bpass_baked.py` (the MIST/POSYDON hosting precedent) for the small baked `.npz`.
 - Possibly surface derived scalars (ionizing photon rate, SN rate vs age) as a caption/readout.
 
-## Open questions (settle as they come up — several need the real data)
-1. **HDF5 internal schema** — the recon answers this; do not design the bake until seen.
-2. **[Fe/H] mapping** — the exact BPASS solar-Z convention (0.020 vs 0.0142) for a clean label.
-3. **Normalization framing** — the overlay is per-10⁶-M☉, the single star is one star; the
-   caption must own that they are not on the same absolute flux scale (a schematic scale
-   choice, or a dual-axis). Advisor consult at Chunk 1 if it reads as a bug.
-4. **In-session vs handoff fetch** — 531 MB is auto-fetchable but not trivial; confirm the
-   Zenodo direct-URL pull is reliable headless, else fall back to the recipe/handoff.
-5. **α composition** — BPASS ships α-enhanced population spectra (alpha±0.2…+0.6). Out of
-   scope for Chunk 1 (`alpha+00` only), but a natural times-with the existing Coelho α
-   spectrum axis later.
+## Open questions
+1. ~~HDF5 internal schema~~ — **ANSWERED** (single cube, see the recon section).
+2. ~~[Fe/H] mapping~~ — **ANSWERED**: the axis is already `[Fe/H]`=log₁₀(Z/0.020); note the
+   ~0.15 dex Z☉ systematic vs MIST in the caption.
+3. ~~In-session vs handoff fetch~~ — **ANSWERED**: the Zenodo direct-URL pull worked headless
+   (`--download` landed both 531 MB files, exit 0). In-session is fine.
+4. **Normalization framing (still open — the Chunk-1 UX call):** the overlay is per-10⁶-M☉
+   f_ν, the single star is one star's f_λ; the caption must own that they are not on the same
+   absolute scale (normalize the population curve to its own panel, or a schematic dual-axis).
+   Advisor consult at Chunk 1 if it reads as a bug.
+5. **f_ν → panel representation (still open — measure at Chunk 1):** the cube is f_ν [L☉/Hz];
+   the SED panel's axis convention decides whether to convert to f_λ (×c/λ²) or plot f_ν. A
+   build detail, settled by looking at `sed.js`.
+6. **α composition (deferred):** BPASS ships α-enhanced population spectra (alpha±0.2…+0.6).
+   Out of scope for Chunk 1 (`alpha+00` only), a natural tie-in with the Coelho α spectrum
+   axis later.
 
 ## Honesty tiering (the project rule, applied)
 - **Tier 1/2 (real, measured):** the integrated population spectrum vs (Z, age), single vs
