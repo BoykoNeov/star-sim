@@ -2803,9 +2803,10 @@ async function refreshPopulation(s) {
     const ageNote = data.age_snapped_far ? " (age off-grid)" : "";
     els.populationNote.textContent =
       `A coeval population at [Fe/H] ${data.feh_snapped.toFixed(2)}${fehNote}, ` +
-      `age ${fmtPopAge(data.age_gyr_snapped)}${ageNote}: the magenta WEDGE is the extra ` +
-      `UV/ionizing light binaries keep alive (stripped hot stars) vs. single-star only (dashed). ` +
-      `Scrub to ~0.1–1 Gyr to open it widest. Per 10⁶ M☉; BPASS Z_⊙=0.020.`;
+      `age ${fmtPopAge(data.age_gyr_snapped)}${ageNote}: the magenta WEDGE marks where binaries ` +
+      `exceed single-star only (dashed) — dominantly the UV/ionizing light they sustain ` +
+      `(stripped hot stars). Scrub younger for the ionizing extreme, ~1 Gyr for the FUV. ` +
+      `Per 10⁶ M☉; BPASS Z_⊙=0.020.`;
   }
 }
 

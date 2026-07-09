@@ -475,7 +475,7 @@ export function createSED(canvas) {
     ctx.fillStyle = COL_POP_BIN; ctx.fillText("coeval population: + binaries", PAD_L + 4, PAD_T + 11);
     ctx.fillStyle = COL_POP_SIN; ctx.fillText("single-star only", PAD_L + 4, PAD_T + 22);
     ctx.fillStyle = "rgba(255,120,205,0.85)";
-    ctx.fillText("◧ binary UV/ionizing excess", PAD_L + 4, PAD_T + 33);
+    ctx.fillText("◧ binary excess (UV/ionizing + IR)", PAD_L + 4, PAD_T + 33);
     ctx.restore();
   }
 
@@ -1020,8 +1020,9 @@ export function createSED(canvas) {
       caption.textContent =
         `Overlaid on the blackbody (Teff ${Math.round(teff)} K, shape reference): a coeval ` +
         `stellar population's integrated light — single-star only (dashed) vs. + binaries ` +
-        `(magenta). The magenta WEDGE is the extra UV/ionizing light binaries keep alive ` +
-        `(stripped hot stars). The coronal/wind overlays are hidden while this is shown.`;
+        `(magenta). The magenta WEDGE marks wherever binaries exceed single stars — ` +
+        `dominantly the extra UV/ionizing light they keep alive (stripped hot stars), plus a ` +
+        `mild IR excess. The coronal/wind overlays are hidden while this is shown.`;
       return;
     }
     const lamPeakNm = WIEN_NM_K / teff;
