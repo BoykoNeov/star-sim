@@ -41,7 +41,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `fetch_mist.py` / `fetch_mesa.py` (build-time grid fetches), `lane_emden.py`
   (the Phase 3 §8 polytrope solver — a **sibling** to the §3 spine, not a
   provider), `spectra.py` (the Phase 5 synthetic-spectrum runtime — also a
-  sibling), `structure.py` (the **real interior-structure** sibling — offline MESA
+  sibling), `bpass.py` (the **first ENSEMBLE sibling** behind `/population` — a whole
+  coeval population's integrated spectrum, single-star vs. +binaries, from a BPASS SSP
+  bake; pure numpy/stdlib, imports NOT even `StellarState`, never a provider),
+  `structure.py` (the **real interior-structure** sibling — offline MESA
   radial `profile.data` snapshots behind `/structure`; the honest successor to
   Lane–Emden, its own MESA-profile parser, snaps (mass,[Fe/H],age) to the nearest
   saved snapshot, never imports a provider), `binary.py` (the **binary-stripped-star**
@@ -771,9 +774,36 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-ux-age-tick-fixes]], [[star-sim-phase2-shaders]],
   [[star-sim-phase3-lane-emden]].
 
+### Coeval-ensemble overlay (BPASS — the **first ENSEMBLE sibling**; `/population` bypasses PROVIDER)
+- **Chunk 1 BUILT 2026-07-10** (`docs/plans/coeval-ensemble-overlay.md`, 403 pytest, Playwright
+  1440+390 zero console errors). Not a track / one state / one two-body system — a whole **coeval
+  stellar population** (10⁶ M☉ born together at the marker's [Fe/H], seen at the marker's age) as an
+  INTEGRATED spectrum, split **single-star vs. binary**, overlaid on the SED panel. Data = **BPASS
+  v2.3** (population synthesis — NOT POSYDON tracks). `bpass.py` is a **pure numpy/stdlib sibling**
+  (imports NOT even `StellarState`; AST-tested) over a host bake `scripts/bake_bpass_spectra.py` →
+  `data/bpass/bpass_ssp.npz` (4.1 MB gitignored; λ log-rebin-AVERAGED 100000→1200). `population_sed`
+  snaps ([Fe/H] linear, age **nearest-in-log10**), **converts f_ν→f_λ (×c/λ²)** (matches the panel's
+  F_λ axis, preserves the sin/bin ratio); `/population` (snap-always, 503 unbaked) + `/population_status`
+  (honesty gate). Frontend: `sed.js setPopulation`/`clearPopulation` (pushed-data consumer) draws BOTH
+  curves **co-scaled to one shared reference** (the gap IS `log(F_bin/F_sin)`, NOT own-peak-each) +
+  **fills the magenta WEDGE where bin>sin** — the payoff (binaries keep it UV/ionizing-bright:
+  measured **~256× ionizing @40 Myr, ~26× FUV @1 Gyr**, optical unchanged); coronal/wind decluttered
+  while on; population-aware caption. `#population-toggle` (opt-in, gated on the baked cube, **NOT
+  mass-gated** — reads only feh+age), fetches on (feh,age)-node change, torn down on mode switch.
+  **The build gotcha (Playwright caught it, not the tests):** a wrong dict-key (`lam_ang` vs served
+  `wavelength`) drew NOTHING → looked like a fatal 14-decade-axis compression problem → a one-line
+  fix; **verify the data reaches the canvas before blaming the representation.** Next = Chunk 2
+  (HRD number-density, separate BPASS "numbers" release) / Chunk 3 (host the npz).
+  [[star-sim-coeval-ensemble-bpass]].
+
 ### Tests
-- **397 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The α-enhanced (equivalent-Z) overlay sibling (`test_alpha.py`) adds **9**
+- **403 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The coeval-population overlay sibling (`test_bpass.py`) adds **6** (5 gated
+  `requires_bpass_data` + 1 UNGATED `/population_status`): the Gate-0 UV/ionizing bin>sin regression
+  through the runtime (ionizing bin>3× sin @40 Myr, FUV bin>3× sin @1 Gyr, optical ~unchanged), snap
+  honesty, age-log-snap, route shape+`population` selector+422, and the AST sibling-imports-no-
+  PROVIDER-**and-no-StellarState** check (a population is not a star). The α-enhanced (equivalent-Z)
+  overlay sibling (`test_alpha.py`) adds **9**
   (gated `requires_alpha_data`, mirroring helium; 1 UNGATED `/alpha_status` test): the per-mass
   Gate-3 asserts (enhanced ZAMS Teff/L **lower**, τ_MS **longer** — the opposite sign from He),
   the derived-[α/Fe]≈+0.4 check (recovered from the Z ratio via inverted Salaris, not hardcoded),

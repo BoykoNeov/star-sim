@@ -40,6 +40,7 @@ from .binary import (
     stripped_star_payload,
 )
 from .structure import StructureDataMissing, interior_structure
+from .bpass import BpassDataMissing, bpass_available, population_sed
 from .helium import HeliumDataMissing, helium_available, helium_overlay
 from .alpha import AlphaDataMissing, alpha_available, alpha_overlay
 from .supernova import Progenitor, supernova_model
@@ -383,6 +384,43 @@ def binary(
         return stripped_star_payload(mass, feh)
     except BinaryDataMissing as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/population")
+def population(
+    feh: float = Query(..., ge=-5.0, le=2.0, description="initial [Fe/H]"),
+    age_gyr: float = Query(..., gt=0.0, description="population age / Gyr"),
+    population: str = Query("both", pattern="^(both|sin|bin)$",
+                            description="which curves: both (default), sin, or bin"),
+) -> dict:
+    """(feh, age_gyr) -> the integrated single & binary COEVAL-POPULATION spectra at the
+    nearest ([Fe/H], age) BPASS node — the first ENSEMBLE overlay
+    (docs/plans/coeval-ensemble-overlay.md, Chunk 1).
+
+    Like `/spectrum`, `/structure` and `/helium`, this does **not** go through `PROVIDER`:
+    a coeval stellar population (a million stars born together, seen at the marker's age)
+    is not a single star — it is a sibling, `bpass.py`, over a build-time BPASS SSP-spectrum
+    bake. The headline (Gate 0, measured): binaries keep the population UV/ionizing-bright
+    far longer than single-star evolution can. Both curves are served by default (draw-both,
+    so a frontend single↔binary comparison needs no refetch).
+
+    Snap-always (like `/structure`): ([Fe/H], age) snap to the nearest grid node (nearest
+    [Fe/H] linearly, nearest age in log10) and are flagged in-band (`*_snapped_far`), never
+    422'd. 422 is reserved for structurally invalid input (age <= 0, absurd [Fe/H]); a
+    missing/unbaked cube -> 503."""
+    try:
+        return population_sed(feh, age_gyr, population)
+    except BpassDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/population_status")
+def population_status() -> dict:
+    """Whether the coeval-population overlay has data — the honesty gate the frontend reads
+    to decide if the toggle appears (mirrors `/helium_status`). The BPASS cube is
+    gitignored/host-baked (like the MESA runs), so a fresh clone has none; hiding the toggle
+    then beats showing one that can only 503. Cheap (a stat), always 200."""
+    return {"has_grid": bpass_available()}
 
 
 @app.get("/helium")

@@ -486,6 +486,21 @@
         <p class="note rot-note" id="alpha-track-note"></p>
       </div>
 
+      <!-- Coeval-population overlay (BPASS) — the first ENSEMBLE feature. Unlike the He/α
+           HR overlays, this draws on the BROADBAND SED panel: two integrated population
+           spectra (single-star vs. + binaries) at the marker's [Fe/H] and age. Always
+           available (any mass/[Fe/H]/age — it reads only [Fe/H] + age), gated only on the
+           host-baked BPASS cube being present (/population_status). -->
+      <div class="helium-control" id="population-control" hidden>
+        <label class="rot-toggle-row" for="population-toggle">
+          <input id="population-toggle" type="checkbox" />
+          <span>Coeval population (BPASS) — on the SED
+            <span class="help" tabindex="0" data-tip="A whole POPULATION beside the one star: a million stars born together at this star's metallicity, seen at this star's age — its integrated light drawn on the broadband SED panel, split two ways. The DASHED periwinkle curve is a single-star population; the SOLID magenta curve includes BINARIES. The headline result of binary population synthesis (BPASS): interacting binaries keep a population UV- and ionizing-bright far longer than single stars can — mass transfer strips envelopes to bare hot helium stars, spins up blue stragglers, and makes hot subdwarfs, all of which pour out ultraviolet light long after every single massive star has died. Scrub the age: at 10–300 Myr the binary population makes up to ~250× more ionizing (<912 Å) flux than the single-star one; at ~1 Gyr it is ~25× brighter in the far ultraviolet; the optical (where cool giants dominate both) barely changes. The two curves are co-scaled to a shared reference, so the vertical GAP between them is exactly the true flux ratio — a measured result, not a schematic. This is per 10⁶ M☉ of population, a different scale from the single star's own blackbody (kept for shape); the metallicity uses the BPASS convention Z_⊙=0.020, ~0.15 dex off the MIST scale — a labeled systematic.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="population-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

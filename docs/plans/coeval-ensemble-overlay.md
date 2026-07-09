@@ -1,6 +1,27 @@
 # Plan: The coeval-ensemble overlay — a whole population beside the one star (BPASS)
 
-## Status: RECON DONE (schema measured 2026-07-10, ~1 GB alpha+00 sin+bin pair landed under `data/bpass/`, gitignored). No build yet — Chunk 1 is the next decision.
+## Status: CHUNK 1 BUILT (2026-07-10, 403 pytest [+6], Playwright-verified 1440+390 zero console errors). The SED single-vs-binary integrated-population overlay is live — the first ENSEMBLE sibling. Gate 0 MEASURED-AND-PASSED off the raw HDF5 (below) AND visibly satisfied through the runtime (the magenta binary-excess wedge). Chunks 2 (HRD number-density) & 3 (hosting) remain deferred.
+
+## Chunk 1 — what shipped (the build, as built)
+
+- **Bake** `scripts/bake_bpass_spectra.py` (host, h5py): the landed `alpha+00` sin+bin HDF5 → `data/bpass/bpass_ssp.npz` (4.1 MB, gitignored): `feh(13)`, `age_gyr(51)`, `lam_ang(1200 log-rebinned)`, `spectra_sin/bin(13×51×1200, float32, f_ν)`. λ decimated by **log-rebin-AVERAGE** (faithful continuum breaks).
+- **Runtime** `bpass.py` — a pure numpy/stdlib sibling (imports NOT even `StellarState`; AST-tested). `population_sed(feh, age_gyr, population="both")` snaps (feh linear, age **nearest-in-log10**) → nearest node, **converts f_ν→f_λ (×c/λ²)** so served flux matches the panel's F_λ axis, returns both curves + snapped node + `*_snapped_far`. Lazy-loaded cube, `BpassDataMissing`→503.
+- **Routes** `/population?feh=&age_gyr=&population=` (bypasses PROVIDER, snap-always, 422 on age≤0/absurd feh/bad selector, 503 unbaked) + `/population_status` (honesty gate).
+- **Frontend** `sed.js` gains `setPopulation`/`clearPopulation` (a pushed-data consumer, owns no fetch). Draws BOTH curves **co-scaled to one shared reference** (the gap IS `log(F_bin/F_sin)`) + **fills the magenta wedge where bin>sin** (the payoff — huge in the UV at 40 Myr, clear FUV at 1 Gyr), sin drawn un-occluded, coronal/wind decluttered + rainbow dimmed while on, a population-aware caption. `main.js` `#population-toggle` (opt-in, gated on `/population_status`, NOT mass-gated — reads only feh+age), fetches on (feh,age)-node change (bucketed finer than the grid so a same-node age-scrub doesn't refetch), latest-wins, torn down on any mode switch (via `dropHeliumForModeSwitch`).
+- **Tests** `test_bpass.py` (6): the Gate-0 UV/ionizing bin>sin regression (through the runtime), snap honesty, age-log-snap, route shape+selectors+422, AST no-provider/no-StellarState; +1 ungated `/population_status`. `conftest` `requires_bpass_data`.
+
+### The build gotcha (caught in Playwright, not the tests)
+The overlay first drew NOTHING (a wrong dict-key — `population.lam_ang` vs the served `wavelength`), which read as a bare dimmed rainbow stripe and looked like a fatal 14-decade-axis compression problem. It was a one-line key fix; once fixed the population spans UV→optical→IR and the wedge is unmistakable. **Lesson: a "the panel can't show this" conclusion needs the data actually reaching the canvas first** — verify the array is non-empty on-screen before blaming the representation.
+
+## Gate 0 — MEASURED-AND-PASSED (2026-07-10, `temp/bpass_recon/gate0_uv.py`, raw HDF5 in f_ν units, solar Z, all 51 ages)
+
+The single-vs-binary UV payoff is **Tier-1 real and survives the repackaged f_ν units**:
+- **Ionizing continuum (<912 Å): bin/sin up to ~256×**, strongest at **10–300 Myr** (7× @10 Myr → 256× @40 Myr → 32× @100 Myr → 13× @250 Myr). BPASS's canonical LyC result.
+- **FUV (1500 Å): bin/sin up to ~26×**, strongest at **~0.6–2 Gyr** (12× @630 Myr → 26× @1 Gyr → 15× @1.6 Gyr).
+- **Optical (5500 Å): ~0.9–1.2× at all ages** — the cool-giant bulk is the same; the binary story is a UV/ionizing story, exactly as expected.
+- (A lone `8033×` at 25 Gyr is a divide-by-underflow artifact — both fluxes ≈0 that old; the intermediate-age window is clean and drives the test/caption.)
+
+**Advisor-settled Chunk-1 decisions** (see the design section): **draw BOTH curves** co-scaled to one shared reference (`F_ref = max over both`), so the vertical gap IS `log(F_bin/F_sin)`, Tier-1 not schematic (not own-peak-each); **f_ν→f_λ (×c/λ²) in `bpass.py`** (preserves the ratio, matches the panel's F_λ axis); snap **age nearest-in-log10** (geometric grid), **[Fe/H] linear + snap-direct-and-label** (the ~0.15 dex Z☉=0.020-vs-MIST-0.0142 systematic is caption-owned, not silently converted); **λ decimated by log-rebin-AVERAGE** (faithful continuum breaks — the Lyman/Balmer jumps); status-gated gitignored `.npz` (hosting = Chunk 3).
 
 Every sibling so far renders **one** thing: a single star's track (`provider`), one
 representative state (`binary.py`, `structure.py`, `supernova.py`, `spectra.py`,

@@ -368,6 +368,26 @@ requires_helium_data = pytest.mark.skipif(
 )
 
 
+def bpass_data_available() -> bool:
+    """True if the baked BPASS coeval-population cube is on disk (gitignored, host-baked).
+
+    Chunk 1's SSP-spectrum cube lives at data/bpass/bpass_ssp.npz — baked once on the host
+    from the ~1 GB Zenodo pair (see backend/star_sim/fetch_bpass.py +
+    scripts/bake_bpass_spectra.py), never committed. The /population sibling tests skip
+    until the cube is present."""
+    from star_sim.bpass import bpass_available
+
+    return bpass_available()
+
+
+# The /population (coeval-population overlay) tests need the host-baked BPASS cube — never
+# committed. See backend/star_sim/fetch_bpass.py + scripts/bake_bpass_spectra.py.
+requires_bpass_data = pytest.mark.skipif(
+    not bpass_data_available(),
+    reason="no baked BPASS cube (data/bpass/bpass_ssp.npz) — see scripts/bake_bpass_spectra.py",
+)
+
+
 def alpha_data_available() -> bool:
     """True if the α-enhanced (equivalent-Z) MESA runs are on disk (gitignored, host-run).
 

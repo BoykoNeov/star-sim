@@ -252,6 +252,19 @@ const LAM_TICKS = [
 const COL_CURVE = "#eef2f9";
 const COL_GRID = "#283149";
 
+// ─── Coeval-population overlay (BPASS — the first ENSEMBLE sibling) ────────────
+// Two INTEGRATED SSP spectra at the marker's (Z, age): a single-star population and
+// one that includes binaries. They are CO-SCALED to ONE shared reference (the max over
+// both curves), so the vertical gap between them IS log₁₀(F_bin/F_sin) — the true flux
+// ratio, Tier-1 honest, not schematic. The payoff (measured, Gate 0): binaries keep the
+// population UV/ionizing-bright far longer (stripped hot stars, blue stragglers, hot
+// subdwarfs) — up to ~256× more ionizing flux at 10–300 Myr, ~26× more FUV at ~1 Gyr,
+// while the optical bulk (cool giants) is unchanged. This is a DIFFERENT normalization
+// than the star's own blackbody (per 10⁶ M☉, not the one star's flux) — the caption
+// (main.js #population-note) owns that. Living-star only; pushed in via setPopulation().
+const COL_POP_SIN = "rgba(150,165,255,0.92)";   // single-star population — periwinkle, dashed
+const COL_POP_BIN = "rgba(255,120,205,0.97)";   // + binaries — magenta, solid (sits above in the UV)
+
 export function createSED(canvas) {
   if (!canvas) return { update() {}, resize() {} };
   const caption = document.getElementById("sed-caption");
@@ -289,6 +302,9 @@ export function createSED(canvas) {
   // gyro-valid domain); userProt = a manual slider override (null = follow the
   // default). gyroFlag carries an honesty note ("young"/"old"/"mdwarf"/"warm").
   let protAuto = null, userProt = null, gyroFlag = "";
+  // The coeval-population overlay data (from /population), or null. Pushed in by main.js
+  // via setPopulation(); a pure pushed-data consumer (sed.js owns no fetch, like roche.js).
+  let population = null;
 
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
@@ -339,7 +355,12 @@ export function createSED(canvas) {
     ctx.clearRect(0, 0, W, H);
     if (teff == null) return;
 
-    drawBands();
+    // When the coeval-population overlay is on, the panel is ABOUT the population — dim the
+    // rainbow column and drop the evocative coronal/wind overlays so the sin-vs-binary wedge
+    // reads clearly (the advisor's de-clutter; the blackbody stays as the shape reference).
+    const popActive = population != null && !endgameMode;
+
+    drawBands(popActive);
     drawDetailWindow();
     drawGrid();
 
@@ -366,19 +387,96 @@ export function createSED(canvas) {
     // the degeneracy gate (the same (4−logg)/3 the 3D corona/granulation use), so the
     // AGB giant the endgame opens on keeps the band it had as a living star (continuity
     // across the gateway) and it dies with the dynamo as the remnant degenerates.
-    if (!endgameMode) {
+    if (!endgameMode && !popActive) {
       drawActivity(lamPeak);
       // The hot-star wind free–free excess (Chunk 2): the data-grounded solid line, drawn
       // for a living hot massive star (gated inside; WR-endgame is out of scope for v1).
       drawWindFreeFree(lamPeak);
-    } else if (!endgameWR && !endgameSN) {
+    } else if (endgameMode && !endgameWR && !endgameSN) {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
       if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // WD endgame: dying-giant band only
     }
     // WR / SN: no coronal overlay at all (wind / freely-expanding ejecta, not a dynamo) —
     // just the honest blackbody continuum of the expanding photosphere.
+    // The coeval-population overlay (BPASS): LIVING star only (a whole population isn't an
+    // endgame object). endgameMode is true for WD/WR/SN, so this is hidden there — and
+    // main.js also tears it down on any mode switch (belt-and-suspenders).
+    if (population && !endgameMode) drawPopulation();
     drawWienPeak(lamPeak);
     drawFrameAndAxes();
+  }
+
+  // Draw the single-star + binary integrated-population spectra, co-scaled to ONE shared
+  // reference so the gap between them is the true log₁₀(F_bin/F_sin) (see the header note).
+  // f_λ is already served by /population (bpass.py did the f_ν→f_λ conversion). Each curve
+  // is clamped to the floor and drawn over the BPASS window (1–10⁵ Å = 0.1–10⁴ nm), a
+  // sub-range of the panel; it exits where it underflows (the panel's clamp-and-exit idiom).
+  function drawPopulation() {
+    const lamA = population.wavelength, sin = population.flambda_sin, bin = population.flambda_bin;
+    if (!lamA || !sin || !bin) return;
+    const n = lamA.length;
+    // Shared reference = the max finite-positive over BOTH curves (co-scale, NOT own-peak
+    // each — own-peak would offset the gap by log(peak_bin/peak_sin) and corrupt the ratio).
+    let ref = 0;
+    for (let i = 0; i < n; i++) {
+      if (sin[i] > ref) ref = sin[i];
+      if (bin[i] > ref) ref = bin[i];
+    }
+    if (!(ref > 0)) return;
+    const logRef = Math.log10(ref);
+    // Precompute each curve's clamped dec + screen (x, y) once.
+    const toDec = (f) => {
+      let d = f > 0 ? Math.log10(f) - logRef : -FLOOR_DECADES;
+      if (d < -FLOOR_DECADES) d = -FLOOR_DECADES;
+      if (d > 0) d = 0;
+      return d;
+    };
+    const xs = new Array(n), ySin = new Array(n), yBin = new Array(n);
+    const dSin = new Array(n), dBin = new Array(n);
+    for (let i = 0; i < n; i++) {
+      xs[i] = xOf(lamA[i] / 10);                     // Å → nm
+      dSin[i] = toDec(sin[i]); dBin[i] = toDec(bin[i]);
+      ySin[i] = yOf(dSin[i]); yBin[i] = yOf(dBin[i]);
+    }
+
+    // (1) THE PAYOFF — fill the wedge where the binary population exceeds the single-star one
+    // (the "extra UV/ionizing light binaries keep alive"). A magenta area is unmistakable even
+    // where the gap is a narrow blueward band, unlike two near-coincident lines. Drawn as thin
+    // vertical strips between the two curves (bin above sin), only where bin is meaningfully
+    // brighter AND above the floor (so a floor-hugging deep-UV coincidence adds nothing).
+    ctx.save();
+    ctx.fillStyle = "rgba(255,120,205,0.26)";
+    for (let i = 0; i < n - 1; i++) {
+      if (dBin[i] > dSin[i] + 0.05 && dBin[i] > -FLOOR_DECADES + 0.2) {
+        const w = Math.max(1, xs[i + 1] - xs[i]);
+        ctx.fillRect(xs[i], yBin[i], w, ySin[i] - yBin[i]);
+      }
+    }
+    ctx.restore();
+
+    const stroke = (yArr, col, dashed) => {
+      ctx.save();
+      ctx.strokeStyle = col; ctx.lineWidth = 1.6;
+      if (dashed) ctx.setLineDash([5, 3]);
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) (i ? ctx.lineTo(xs[i], yArr[i]) : ctx.moveTo(xs[i], yArr[i]));
+      ctx.stroke();
+      ctx.restore();
+    };
+    // (2) Draw binary (solid) THEN single (dashed) on top — so the dashed single reads
+    // un-occluded across the optical bulk where the two nearly coincide (the advisor's
+    // occlusion fix); in the UV the wedge already separates them.
+    stroke(yBin, COL_POP_BIN, false);
+    stroke(ySin, COL_POP_SIN, true);
+
+    // A compact three-line legend near the top-left (away from the Wien-peak label at centre).
+    ctx.save();
+    ctx.font = "9px system-ui, sans-serif"; ctx.textAlign = "left";
+    ctx.fillStyle = COL_POP_BIN; ctx.fillText("coeval population: + binaries", PAD_L + 4, PAD_T + 11);
+    ctx.fillStyle = COL_POP_SIN; ctx.fillText("single-star only", PAD_L + 4, PAD_T + 22);
+    ctx.fillStyle = "rgba(255,120,205,0.85)";
+    ctx.fillText("◧ binary UV/ionizing excess", PAD_L + 4, PAD_T + 33);
+    ctx.restore();
   }
 
   // Regime gates the activity overlay honestly: a cool convective dynamo (full band)
@@ -800,14 +898,15 @@ export function createSED(canvas) {
   }
   const rot = setupRotControl();
 
-  // Faint translucent EM-band columns; the visible band is the true rainbow.
-  function drawBands() {
+  // Faint translucent EM-band columns; the visible band is the true rainbow. `dim` (the
+  // coeval-population overlay is on) fades the rainbow so it doesn't compete with the wedge.
+  function drawBands(dim = false) {
     for (const band of BANDS) {
       const x0 = xOf(Math.max(band.lo, LAM_MIN));
       const x1 = xOf(Math.min(band.hi, LAM_MAX));
       if (band.rainbow) {
         // Paint the visible band column-by-column in its per-wavelength colour.
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = dim ? 0.18 : 0.6;
         const step = 1;
         for (let x = x0; x < x1; x += step) {
           const lam = 10 ** (LOG_LO + (x - PAD_L) / plotW * (LOG_HI - LOG_LO));
@@ -913,6 +1012,18 @@ export function createSED(canvas) {
   // explicitly empty. "Evocative, not predictive", as for the 3D corona.
   function renderCaption() {
     if (!caption || teff == null) return;
+    // Coeval-population overlay on (living star): the panel is about the population, and the
+    // coronal/wind overlays are decluttered away — so the caption must describe THIS, not a
+    // coral band that is no longer drawn. The Controls-panel #population-note carries the
+    // snapped node + the full lesson; here we keep it short (the blackbody is the reference).
+    if (population != null && !endgameMode) {
+      caption.textContent =
+        `Overlaid on the blackbody (Teff ${Math.round(teff)} K, shape reference): a coeval ` +
+        `stellar population's integrated light — single-star only (dashed) vs. + binaries ` +
+        `(magenta). The magenta WEDGE is the extra UV/ionizing light binaries keep alive ` +
+        `(stripped hot stars). The coronal/wind overlays are hidden while this is shown.`;
+      return;
+    }
     const lamPeakNm = WIEN_NM_K / teff;
     let where = "the infrared";
     if (lamPeakNm < 10) where = "the X-ray / extreme-UV";
@@ -1022,5 +1133,21 @@ export function createSED(canvas) {
   // NOTE: main.js gates the period facet's *visibility* on the age-INDEPENDENT cool-MS
   // family instead (so it doesn't reflow above the Age slider mid-scrub), letting this
   // per-marker gate only grey/enable the slider — see coolDynamoFamily there.
-  return { update, resize, rotationAllowed: () => dynamoLineAllowed() };
+  // The coeval-population overlay is PUSHED in (sed.js owns no fetch): main.js fetches
+  // /population for the marker's (Z, age) and hands the data here; clearing it removes the
+  // overlay. Both trigger a redraw. Living-star only (draw() gates on !endgameMode).
+  function setPopulation(data) {
+    population = data;
+    draw();
+    renderCaption();   // swap the SED caption to the population story (coronal/wind now hidden)
+  }
+  function clearPopulation() {
+    if (population == null) return;
+    population = null;
+    draw();
+    renderCaption();   // restore the blackbody/coronal caption
+  }
+
+  return { update, resize, setPopulation, clearPopulation,
+           rotationAllowed: () => dynamoLineAllowed() };
 }

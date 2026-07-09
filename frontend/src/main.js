@@ -73,6 +73,11 @@ const els = {
   alphaControl: document.getElementById("alpha-track-control"),
   alphaToggle: document.getElementById("alpha-track-toggle"),
   alphaNote: document.getElementById("alpha-track-note"),
+  // Coeval-population overlay (BPASS — the first ENSEMBLE feature). Unlike He/α (HR
+  // overlays), this draws on the SED panel: single-star vs. +binaries integrated spectra.
+  populationControl: document.getElementById("population-control"),
+  populationToggle: document.getElementById("population-toggle"),
+  populationNote: document.getElementById("population-note"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
@@ -509,6 +514,15 @@ let alphaOn = false;            // the α-enhanced overlay is active (MIST HR tr
 let alphaToken = 0;            // latest-wins guard for the /alpha fetch
 let alphaHasGrid = false;      // /alpha_status: are the MESA runs present? (else never show the toggle)
 const ALPHA_MASS_MIN = 0.7, ALPHA_MASS_MAX = 7.0, ALPHA_FEH_TOL = 0.25;
+// Coeval-population (BPASS) overlay on the SED panel. Unlike He/α it's NOT gated to a
+// mass/[Fe/H] band — it applies at any marker (it reads only [Fe/H] + age), so the only
+// gate is the host-baked cube being present (/population_status). It re-fetches when the
+// snapped ([Fe/H], age) node could change; popNodeKey buckets requests so a same-node
+// age-scrub doesn't refetch (the payload would be identical).
+let populationOn = false;
+let populationToken = 0;        // latest-wins guard for the /population fetch (feh/age move fast)
+let populationHasGrid = false;  // /population_status: is the BPASS cube baked? (else hide the toggle)
+let popNodeKey = "";            // last-fetched ([Fe/H], age-node) bucket — skip refetch if unchanged
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -2704,11 +2718,102 @@ function fmtGyr(gyr) {
 // reachable; call it at the top of every mode-entry that isn't "live".
 function dropHeliumForModeSwitch() {
   dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
+  dropPopulationForModeSwitch(); // the SED population overlay is living-only — drop it on any mode switch too
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
   if (els.heliumToggle) els.heliumToggle.checked = false;
   if (els.heliumControl) els.heliumControl.hidden = true;   // updateHeliumControl re-shows it on return to live
+}
+
+// --- coeval-population (BPASS) overlay on the SED panel -----------------------
+// The first ENSEMBLE feature: single-star vs. +binaries integrated population spectra at
+// the marker's ([Fe/H], age), drawn on the broadband SED panel (sed.js). Unlike He/α this
+// is NOT a mode-swap and NOT mass-gated — it applies at any marker (reads only [Fe/H]+age).
+// The only gate is the host-baked cube (/population_status). Living-star only.
+function updatePopulationControl() {
+  const c = els.populationControl;
+  if (!c) return;
+  const eligible = populationHasGrid && mode === "live";
+  c.hidden = !eligible;
+  if (!eligible) {
+    if (populationOn) populationOff();   // e.g. mode changed under it → tear it down
+    return;
+  }
+  if (els.populationToggle) els.populationToggle.checked = populationOn;
+  if (!populationOn && els.populationNote)
+    els.populationNote.textContent =
+      "What would a whole population born with this star look like — and how do binaries change it?";
+}
+
+// Turn the overlay OFF: clear the SED-panel curves, uncheck, reset the note.
+function populationOff() {
+  populationOn = false;
+  populationToken++;             // cancel any in-flight /population apply
+  popNodeKey = "";
+  if (els.populationToggle) els.populationToggle.checked = false;
+  sed.clearPopulation();
+  updatePopulationControl();     // reset the note text
+}
+
+// Drop the overlay when a non-live mode takes over (endgame/stripped/SN/binary). sed.js hides
+// the population in endgame anyway, but clear the state so returning to live never flashes a
+// stale population before the next fetch (called from dropHeliumForModeSwitch, the mode hook).
+function dropPopulationForModeSwitch() {
+  if (!populationOn) return;
+  populationOn = false;
+  populationToken++;
+  popNodeKey = "";
+  if (els.populationToggle) els.populationToggle.checked = false;
+  if (els.populationControl) els.populationControl.hidden = true;
+  sed.clearPopulation();
+}
+
+// Fetch + push the population spectra for the marker's ([Fe/H], age). Called from paintState;
+// re-fetches only when the snapped node could change — popNodeKey buckets requests FINER than
+// the BPASS grid so a same-node age scrub doesn't refetch (the payload would be identical).
+// Latest-wins guarded. The note carries the snapped node + the measured UV-longevity lesson.
+async function refreshPopulation(s) {
+  if (!populationOn || mode !== "live" || !s) return;
+  const feh = s.feh_init ?? 0;
+  const ageGyr = (s.age_yr ?? 0) / 1e9;
+  if (!(ageGyr > 0)) return;
+  // Bucket the request finer than the grid (feh nodes ≥0.1 dex apart; age nodes ~0.1 dex),
+  // so every node change flips the key while scrubbing within one node does not.
+  const key = `${(Math.round(feh / 0.05) * 0.05).toFixed(2)}|` +
+    `${(Math.round(Math.log10(ageGyr) / 0.03) * 0.03).toFixed(2)}`;
+  if (key === popNodeKey) return;
+  const token = ++populationToken;
+  let data;
+  try {
+    data = await fetchJSON(`/population?feh=${feh}&age_gyr=${ageGyr}`);
+  } catch (e) {
+    if (token !== populationToken || !populationOn) return;
+    popNodeKey = "";
+    populationOff();
+    if (els.populationNote)
+      els.populationNote.textContent = "Population spectra unavailable (BPASS cube not baked).";
+    return;
+  }
+  if (token !== populationToken || !populationOn || mode !== "live") return;
+  popNodeKey = key;
+  sed.setPopulation(data);
+  if (els.populationNote) {
+    const fehNote = data.feh_snapped_far ? " (off-grid, snapped)" : "";
+    const ageNote = data.age_snapped_far ? " (age off-grid)" : "";
+    els.populationNote.textContent =
+      `A coeval population at [Fe/H] ${data.feh_snapped.toFixed(2)}${fehNote}, ` +
+      `age ${fmtPopAge(data.age_gyr_snapped)}${ageNote}: the magenta WEDGE is the extra ` +
+      `UV/ionizing light binaries keep alive (stripped hot stars) vs. single-star only (dashed). ` +
+      `Scrub to ~0.1–1 Gyr to open it widest. Per 10⁶ M☉; BPASS Z_⊙=0.020.`;
+  }
+}
+
+// Format a population age for the note (the Gyr grid spans 1 Myr–100 Gyr).
+function fmtPopAge(gyr) {
+  if (gyr < 0.001) return `${(gyr * 1e6).toPrecision(2)} kyr`;
+  if (gyr < 1) return `${Math.round(gyr * 1000)} Myr`;
+  return `${gyr.toPrecision(3)} Gyr`;
 }
 
 // --- α-enhanced (equivalent-Z) what-if overlay (Phase 3) ---------------------
@@ -3439,6 +3544,7 @@ function paintState(s) {
   spectrum.update(s);
   structure.update(s);
   sed.update(s);
+  refreshPopulation(s);   // the coeval-population SED overlay (no-op unless the toggle is on)
   renderReadout(s);
   els.status.style.color = teffToCSS(s.Teff_K);
   // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the
@@ -3483,6 +3589,7 @@ function refresh() {
   updateStrippedControl();   // the stripped what-if is offer-able only in the eligible mass band
   updateHeliumControl();     // the He overlay is offer-able only near the solar-Z MESA grid
   updateAlphaControl();      // likewise the α-enhanced overlay (same solar-Z MESA grid)
+  updatePopulationControl(); // the coeval-population SED overlay (any marker; gated on the baked cube)
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -3616,6 +3723,9 @@ async function init() {
     // pattern; a control that could only ever 503 shouldn't appear).
     try { heliumHasGrid = !!(await fetchJSON("/helium_status")).has_grid; } catch { heliumHasGrid = false; }
     try { alphaHasGrid = !!(await fetchJSON("/alpha_status")).has_grid; } catch { alphaHasGrid = false; }
+    // The coeval-population overlay likewise has data only if the BPASS cube was host-baked
+    // (gitignored) — probe once so the toggle is hidden on a fresh clone.
+    try { populationHasGrid = !!(await fetchJSON("/population_status")).has_grid; } catch { populationHasGrid = false; }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
@@ -3839,6 +3949,25 @@ async function init() {
       refreshAlpha();
     } else {
       alphaOff();
+    }
+  });
+
+  // Coeval-population (BPASS) overlay on the SED panel. Independent of the He/α HR overlays
+  // (different panel), so NOT mutually exclusive with them. Checking it fetches /population for
+  // the current marker and pushes the curves into the SED panel; paintState keeps it in sync.
+  if (els.populationToggle) els.populationToggle.addEventListener("change", () => {
+    if (els.populationToggle.checked) {
+      if (mode !== "live") { els.populationToggle.checked = false; return; }
+      populationOn = true;
+      popNodeKey = "";     // force the first fetch (no cached node yet)
+      if (els.populationNote) els.populationNote.textContent = "Loading population spectra…";
+      // Pick the current marker exactly as refresh() does (linear-in-EEP row) and fetch now.
+      if (currentTrack && currentTrack.length) {
+        const i = trackRowFromPos(ageFraction);
+        if (i >= 0) refreshPopulation(currentTrack[i]);
+      }
+    } else {
+      populationOff();
     }
   });
 
