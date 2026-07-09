@@ -600,8 +600,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   batch in Docker MESA himself (the user said "docker is on, bake it yourself") — inlists differ ONLY
   in `initial_mass` (1/2/6) and `initial_y` (baseline 0.2704 / enhanced 0.40); **`Zbase=initial_z=
   0.0152` in BOTH** (the Y axis leaves Z fixed — the metallicity "change Zbase too" gotcha does NOT
-  apply). Output `data/mesa_helium/{baseline,enhanced}/<M>Msun/history.data` (gitignored, MESA-local —
-  the hosted-data-assets pattern excludes MESA; tests skip via `requires_helium_data`). **No npz bake**
+  apply). Output `data/mesa_helium/{baseline,enhanced}/<M>Msun/history.data` (gitignored under `/data/*`;
+  tests skip via `requires_helium_data`) — but **now hosted** on the `mesa-helium-baked-v1` Release
+  (`python -m star_sim.fetch_helium_baked`, alongside `fetch_alpha_baked`): the hosted-data-assets
+  "excludes MESA" rule is specifically the **third-party bearums** validation tracks (all-rights-
+  reserved); **self-run** helium/alpha output is this project's OWN computed tracks — the same class as
+  MIST (itself published MESA output) — so it IS hosted (advisor-endorsed carve-out). **No npz bake**
   (advisor): 4 MB read directly by the reused parser. **Gate 2 PASSED at every mass** (matched-phase):
   τ_MS 2.7×/2.1×/1.9× shorter, ZAMS bluer+brighter. **Chunk 2b (backend):** `helium.py` imports only
   `state.StellarState` + the MESA parser's **free** helpers `_build_track`/`_state_from_track` (never

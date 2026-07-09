@@ -100,6 +100,8 @@ python -m star_sim.fetch_koester_baked   # white-dwarf spectra (/wd_spectrum) �
 python -m star_sim.fetch_powr_baked      # Wolf-Rayet wind-emission spectra (/wr_spectrum)
 python -m star_sim.fetch_coelho_baked    # [alpha/Fe] spectrum what-if (#alpha-toggle)
 python -m star_sim.fetch_gotberg_baked   # binary-stripped-star spectra (/stripped_spectrum)
+python -m star_sim.fetch_helium_baked    # initial-helium (Y) HR overlay (/helium, #helium-toggle)
+python -m star_sim.fetch_alpha_baked     # alpha-enhanced (equivalent-Z) HR overlay (/alpha, #alpha-track-toggle)
 ```
 
 Each is a **derived artifact** — a compact, resampled/re-serialized cube or cache
@@ -110,9 +112,15 @@ each module's docstring for the citation to use). MIST's is the one worth
 knowing about even if you don't need speed: MIST's raw EEP tracks carry ~80
 text columns of which this app reads ~40, so the baked cache is ~27x smaller
 than mirroring the raw grid (43-47 MB per [Fe/H]×rotation bucket vs ~1.2 GB) —
-see `backend/scripts/bake_mist_standalone.py`'s docstring for how. MESA
-validation doesn't have a pre-baked shortcut (it's a self-run Docker recipe, see
-`backend/docs/mesa_solar_recipe.md`); the other `fetch_*.py` modules under
+see `backend/scripts/bake_mist_standalone.py`'s docstring for how. The last two
+(`fetch_helium_baked`/`fetch_alpha_baked`) are the exception to the "derived from
+a third party's public data" framing — they're **self-run MESA output**, this
+project's own computed tracks (the same class of artifact as MIST, which is
+itself published MESA output), so they carry no third-party redistribution
+question at all. The MESAProvider *validation* grids (the bearums tracks, cross-
+checked against MIST) are the one dataset with **no** pre-baked shortcut — those
+are third-party and stay unhosted; regenerate them from the self-run Docker
+recipe (`backend/docs/mesa_solar_recipe.md`). The other `fetch_*.py` modules under
 `backend/star_sim/` document the from-source recipe if you'd rather not depend
 on this repo's releases.
 

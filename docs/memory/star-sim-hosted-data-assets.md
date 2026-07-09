@@ -1,6 +1,6 @@
 ---
 name: star-sim-hosted-data-assets
-description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user.
+description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg, + self-run helium/alpha MESA — 8 tags) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user. "MESA excluded" is ONLY the third-party bearums validation tracks — SELF-RUN MESA output IS hosted.
 metadata:
   type: project
   originSessionId: 614a40b0-c4a6-4698-a4c9-e486917bf270
@@ -10,10 +10,37 @@ Star Simulator hosts **pre-baked derived data artifacts as GitHub Release
 assets** on repo `BoykoNeov/star-sim`, one release tag per dataset, so a user can
 run a `python -m star_sim.fetch_<dataset>_baked` command (plain HTTPS + sha256
 verify) instead of running each feature's raw-source recipe (a multi-GB
-tarball/API-scrape fetch, then a host-side bake step). Six tags exist:
+tarball/API-scrape fetch, then a host-side bake step). Eight tags exist:
 `posydon-baked-v1`, `mist-baked-v1`, `koester-baked-v1`, `powr-baked-v1`,
-`coelho-baked-v1`, `gotberg-baked-v1`. Plans: `docs/plans/lantern-grid-waystation.md`
-(POSYDON, the original).
+`coelho-baked-v1`, `gotberg-baked-v1`, `mesa-helium-baked-v1`, `mesa-alpha-baked-v1`.
+Plans: `docs/plans/lantern-grid-waystation.md` (POSYDON, the original).
+
+**Self-run MESA output IS hosted (the helium/alpha carve-out, 2026-07-09).** When
+the user asked to make the helium + α what-if overlays "easier for casual users,"
+the apparent blocker was the "MESA stays excluded" rule below — but that rule is
+specifically about the **third-party bearums MESAProvider validation tracks**
+(all-rights-reserved, someone else's data). The helium/alpha `history.data` files
+are **self-run MESA r24.03.1 output** — this project's OWN computed tracks, the
+same class of artifact as MIST (which is itself published MESA output). No
+third-party redistribution question applies, and the user explicitly authorized
+the public publish. So `mesa-helium-baked-v1` + `mesa-alpha-baked-v1` host the six
+`history.data` files each (3 masses × baseline/enhanced, ~4.2 MB/dataset), fetched
+by `fetch_helium_baked.py` / `fetch_alpha_baked.py` (both onto `_baked_release.py`,
+like the rest). **The only structural difference from the other fetch modules:**
+every file is literally named `history.data`, and GitHub requires **unique asset
+names per release**, so `_ASSETS` maps a unique asset name (`helium_baseline_1Msun.data`)
+→ `(relpath_under_data_dir, sha256)` — a richer 2-tuple value than the flat
+`{filename: sha256}` the spectra modules use (`fetch_one` already takes `dest`
+separately from the URL, so this needed no `_baked_release.py` change). No npz bake
+(the siblings read `history.data` raw). **A Windows-console bug was caught in
+verification:** the fetch scripts printed `α`/`—` glyphs, which crash on cp1252
+(`UnicodeEncodeError`) — a casual Windows user's exact path; fixed to ASCII-only
+console output. Verified end-to-end: a real publish, then a real fetch into a clean
+`STAR_SIM_HELIUM_DIR`/`STAR_SIM_ALPHA_DIR` scratch dir (all 12 hashes verify from
+fresh bytes), then a real load through `helium_overlay`/`alpha_overlay` (enhanced
+hotter+shorter for He, cooler+longer + `alpha_fe`≈0.4 recovered for α). **MESA the
+provider-validation dataset stays the one hard exclusion** (bearums, third-party) —
+regenerate it from `mesa_solar_recipe.md`, it has no baked shortcut.
 
 **Why GitHub Releases, not the repo tree:** committed repo files cap at 100 MB
 and bloat clone size forever; release assets cap at 2 GB, live outside git

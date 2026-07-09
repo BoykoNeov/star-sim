@@ -6,6 +6,17 @@ exact MESA inputs you (the user) run once in Docker MESA, and where to drop the
 output. It mirrors `mesa_solar_recipe.md` / `mesa_structure_recipe.md`: self-run
 compute, gitignored output, hosted on a GitHub Release once baked.
 
+> **Fast path (casual users): skip this whole recipe.** The six `history.data`
+> files this recipe produces are already hosted on the `mesa-helium-baked-v1`
+> GitHub Release. Just run
+>
+> ```bash
+> python -m star_sim.fetch_helium_baked
+> ```
+>
+> and the `/helium` overlay lights up (no Docker, no MESA, no compute). The recipe
+> below is only for **regenerating** the data from scratch or changing the batch.
+
 ## What this is (and the one honesty rule that shapes the whole recipe)
 
 Globular-cluster CMDs (ω Cen, NGC 2808) show a **He-enhanced second generation**

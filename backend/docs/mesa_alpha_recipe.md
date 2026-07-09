@@ -6,6 +6,17 @@ MESA inputs you (the user) run once in Docker MESA, and where to drop the output
 mirrors `mesa_helium_recipe.md` / `mesa_solar_recipe.md`: self-run compute, gitignored
 output, hosted on a GitHub Release once baked.
 
+> **Fast path (casual users): skip this whole recipe.** The six `history.data`
+> files this recipe produces are already hosted on the `mesa-alpha-baked-v1`
+> GitHub Release. Just run
+>
+> ```bash
+> python -m star_sim.fetch_alpha_baked
+> ```
+>
+> and the `/alpha` overlay lights up (no Docker, no MESA, no compute). The recipe
+> below is only for **regenerating** the data from scratch or changing the batch.
+
 ## What this is — and the honesty call that collapsed the "heaviest phase" into the lightest
 
 [α/Fe] (O, Ne, Mg, Si, S, Ca, Ti vs. the Fe-peak) is a star-formation-history clock:
