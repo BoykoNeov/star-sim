@@ -5,7 +5,11 @@ Phase 1 Chunk 2a (CO-HeMS / CO-HeMS_RLO backend + DCO classifier, solar) is **BU
 Chunk 2b (frontend render — the `kind` selector + He-surface comp + DCO-endpoint caption) is
 **BUILT** (2026-07-09), and Chunk 2c (full 8-bucket [Fe/H] axis for both He grids + the re-derived
 Eddington bound) is **BUILT** (2026-07-09) — see "Chunk 2a"/"Chunk 2b"/"Chunk 2c" under "Phase 1
-(cont.)". **Phase 1 (the CE/compact-object tail) is now COMPLETE.** Phases 2 and 3 not yet built.
+(cont.)". **Phase 1 (the CE/compact-object tail) is now COMPLETE.** **Phase 2 (initial-helium / Y
+axis) is COMPLETE** (2026-07-09, Chunks 2a/2b/2c — see "Phase 2" below). **Phase 3 (α-enhanced
+evolution) IN PROGRESS: Chunk 3a recipe + inlists PREPARED (2026-07-09), blocked only on the
+Docker MESA batch** — the "heaviest phase" collapsed to a Z-only change via the equivalent-Z
+(Salaris 1993) decision (see "Phase 3 → Architecture").
 Sequential order (also the efficient order): **Phase 1** binary CE/compact-object tail (Chunk 1
 CO-HMS_RLO done → Chunk 2a CO-HeMS backend done → 2b frontend done → 2c [Fe/H] axis done) →
 **Phase 2** initial-helium (Y) axis → **Phase 3** α-enhanced evolution axis (reuses Phase 2's
@@ -502,30 +506,61 @@ the *evolutionary track itself* respond to [α/Fe], not just the emergent spectr
 
 - Same what-if-overlay pattern as Phase 2, **reusing its plumbing** (parser, bake discipline,
   overlay UI) — this is also why Phase 2 comes first even independent of the requested order.
-- **Heavier setup than Phase 2** (flagged explicitly, not a repeat of Phase 2's recipe):
-  α-enhancement isn't a single knob like `initial_y` — it needs an **α-enhanced opacity table**
-  (OPAL/OP at the target [α/Fe]) plus a **custom abundance mixture** (`zfracs`/isotope
-  fractions boosting O/Ne/Mg/Si/S/Ca/Ti relative to Fe), both of which MESA supports but which
-  require real inlist/table setup, not a flag flip. Budget real time here.
-- Same baseline-vs-enhanced comparison discipline as Phase 2: identical mass/[Fe/H], only
-  [α/Fe] differs.
+- **The "heaviest phase" collapsed to Phase-2 difficulty — the equivalent-Z decision
+  (advisor-endorsed 2026-07-09).** The plan originally scoped this as a custom α-enhanced
+  metal mixture **plus** an α-enhanced OPAL/OP opacity table. Two facts killed that path:
+  (1) **MESA ships only solar-scaled opacity tables** — on the MS (H-rich) it uses the
+  solar-scaled **Type-1** tables; the Type-2 tables that track individual C/O enhancement only
+  blend in when H-poor (He cores), so they do **not** capture α on the MS where Gate 3's effect
+  lives; a matching α-enhanced table is not in the box, and generating/downloading one
+  contradicts the "zero new downloads" rule. (2) **Salaris, Chieffi & Straniero (1993)** showed
+  an α-enhanced track is reproduced to a **few percent** by a **scaled-solar track at the
+  equivalent total metallicity** `[M/H] = [Fe/H] + log₁₀(0.638·10^[α/Fe] + 0.362)` — a residual
+  **below what this sim resolves** and below the MESA-vs-MIST systematic, so true α tables would
+  buy nothing *visible*. So Phase 3's MESA setup is a **Z-only change** (an `initial_z`/`Zbase`
+  bump; the metallicity gotcha "change Zbase too" **applies here**, unlike the Y axis). For
+  [Fe/H]=0, [α/Fe]=+0.4 → **Z_equiv = 0.0152·1.9646 = 0.029862** (Y held fixed at 0.2704, so X
+  drops). Full derivation + Docker recipe: `backend/docs/mesa_alpha_recipe.md`.
+- Same baseline-vs-enhanced comparison discipline as Phase 2: identical mass, only the
+  equivalent Z differs (Y and mass held fixed — a pure single-variable test).
+- **Caption honesty (load-bearing, easy to get subtly wrong):** the Z_equiv model is
+  scaled-solar — Fe is *not* held at solar in its interior; everything scales up together.
+  Salaris is a *track-equivalence* claim, not "Fe stays solar." The overlay must say: "α-enhanced
+  track approximated by its scaled-solar equivalent-Z counterpart (Salaris 1993); the α-boosted
+  mixture is not modeled in the interior — at fixed [Fe/H] the track responds to α only through
+  total Z; α's distinctive signature is spectroscopic (see the Coelho α-toggle)."
 
 ### Chunked build
 
-**Chunk 3a** — MESA batch (baseline solar-scaled vs. α-enhanced [α/Fe]≈+0.4, same
-mass/[Fe/H] pairs as Phase 2 where practical, for a consistent before/after story) + bake.
+**Chunk 3a** — MESA batch (baseline scaled-solar vs. α-equivalent-Z, 1/2/6 M☉, the Phase-2
+mass set) + no bespoke bake (read raw `history.data` like Phase 2). **Recipe + inlists
+PREPARED 2026-07-09, awaiting the Docker batch:** `backend/docs/mesa_alpha_recipe.md` written;
+the 6 inlists pre-generated at `M:\claud_projects\temp\mesa_alpha_inlists\inlist_{base,enh}_{1,2,6}`
+(baseline `initial_z=Zbase=0.0152` / enhanced `0.029862`, `initial_y=0.2704` in all). **Blocked
+only on compute** — Docker was off at prep time; running the batch (3 masses × 2 comps, ~4–5 min
+each) is the next action, then report Gate 3 (§5b of the recipe).
 
-**Chunk 3b** — backend sibling extension, reusing Phase 2's plumbing where the schema allows.
+**Chunk 3b** — backend sibling `alpha.py` (a near-clone of `helium.py`: reuse
+`_build_track`/`_state_from_track`, key the pair by ZAMS **Z** instead of Y) + a `/alpha` route
++ `/alpha_status` data-availability gate. **NOT before Gate 3 passes.**
 
 **Chunk 3c** — frontend overlay, explicitly paired in caption with the existing spectrum-only
-Coelho α-toggle ("this is the same [α/Fe] axis, now also moving the track").
+Coelho α-toggle ("the track sees only the equivalent total Z; the α signature lives in the
+spectrum"). **NOT before Gate 3 passes.**
 
-### Measure-first gate (Gate 3, stricter than Gate 2)
+### Measure-first gate (Gate 3, SHARPENED — two parts, not one)
 
-Confirm the α-enhanced track is measurably cooler/redder at fixed mass/[Fe/H] — a smaller
-opacity-driven shift than the He effect, so this gate has less margin: if it isn't visible at
-any mass tried, this phase gets flagged as a labeled non-feature, not silently shipped with a
-control nobody can see working.
+Because the equivalent-Z decision makes the enhanced run a higher-Z scaled-solar run, "is the
+shift visible" is no longer the real test (equiv-Z ≈ 2× solar → a large, obvious cooler/redder
+shift — it *will* pass). Gate 3 is now:
+1. **Visibility:** the α-equivalent-Z track is measurably cooler/redder + slightly fainter +
+   longer τ_MS at fixed mass (the opposite sign from the He effect), at matched Xc (never age).
+2. **Distinctiveness / framing:** the track responds to α *only* through total Z — by
+   construction the same thing the existing [Fe/H] axis does at higher Z. This is **the lesson,
+   not a defect**: own it in the caption (Coelho-paired), don't ship it as "the track
+   independently resolves α." If it can't be told apart from "just bump [Fe/H]," lean into the
+   Coelho pairing rather than pretend otherwise. Deciding this framing is what Gate 3 gates —
+   before any UI is built.
 
 ## Honesty tiering (the project rule, applied)
 
