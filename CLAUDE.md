@@ -866,9 +866,24 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   tag `mist-iso-baked-v1`): `fetch_mist_iso_baked.py` pulls the 7 baked cubes (~18 MB) past the
   6.7 GB raw fetch — mirrors `fetch_bpass_baked.py` (flat `{filename:sha256}` `_ASSETS`, all 7
   uniquely named), NO `isochrone.py` change (self-contained `np.load`+`bake_version`, the
-  BPASS/Coelho drop-in class, not the EEP-track source-less-fingerprint trick). **Follow-up
-  (unbuilt):** B3 decoupled cluster-age slider. [[star-sim-isochrone-cluster]],
-  [[star-sim-hosted-data-assets]]; plan `docs/plans/outward-quartet-atlas.md` §Axis B.
+  BPASS/Coelho drop-in class, not the EEP-track source-less-fingerprint trick). **B3 BUILT
+  2026-07-10 (frontend-only, NO backend change — the route already served `available_log_ages`
+  "for a slider"):** a decoupled cluster-age slider — an `#iso-decouple-toggle` ("Age the cluster
+  on its own clock") reveals an `#iso-cluster-age` log-age range (bounds = the grid's own
+  `available_log_ages`, grid-exact) so the cluster ages on its OWN clock, independent of the star's
+  age slider — the "cluster aging" movie (drag it: the turnoff ring marches down the MS, measured
+  10 Myr→12.6 Gyr sweeps the turnoff 27.2 kK/17.7 M☉ → 5.6 kK/0.92 M☉). Only the AGE decouples —
+  [Fe/H] stays the star's (age is the clock). Coupled-by-DEFAULT (byte-compatible); the seed on
+  decouple = the star's current age (a continuous hand-off). The star marker stays at its OWN age,
+  so it slides OFF the cluster locus once the ages differ — `drawIsochrone` already drew the marker
+  unconditionally at the star's Teff/L (verified, zero hr.js change), and the auto-fit already
+  includes it. **Advisor-guided:** the reset lives in ONE shared `resetIsoDecouple()` called from
+  every teardown path (updateIsochroneControl-when-off, dropIsochroneForModeSwitch, the toggle-ON
+  reset) so a stale decoupled age can never survive a teardown; the caption BRANCHES (the coupled
+  "scrub the age to age the cluster" clause is FALSE decoupled → replaced with the off-locus
+  age-comparison lesson, printing the star's own age). Playwright-verified 1440+390, zero console
+  errors. [[star-sim-isochrone-cluster]], [[star-sim-hosted-data-assets]]; plan
+  `docs/plans/outward-quartet-atlas.md` §Axis B.
 
 ### Tests
 - **412 pytest** (gated by data present via `conftest.py` markers; MIST tests skip

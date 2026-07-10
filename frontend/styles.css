@@ -264,6 +264,15 @@ main {
 .rot-control .sed-rot { max-width: none; margin: 8px 0 0; }
 .rot-control .sed-rot-note { text-align: left; }
 
+/* B3: the decoupled cluster-age slider (nested inside the isochrone control). Mirrors the
+   .rot-toggle-row / .rot-note idioms; the age-slider row is revealed only once decoupled. */
+.iso-decouple { margin: 6px 0 0; }
+.iso-decouple[hidden] { display: none; }
+.iso-cluster-age-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 0; }
+.iso-cluster-age-row[hidden] { display: none; }
+.iso-cluster-age-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.iso-cluster-age-row .note { color: var(--accent); font-size: 12px; white-space: nowrap; min-width: 4.5em; }
+
 /* Ap/Bp chemically-peculiar toggle (atlas Tier C) — an evocative surface what-if for A/B
    main-sequence stars; reuses the .rot-toggle-row / .rot-note idioms, gated to the A/B mass
    regime (hidden otherwise, so it never reads as a dead knob). */

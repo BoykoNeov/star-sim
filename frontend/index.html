@@ -513,6 +513,21 @@
             <span class="help" tabindex="0" data-tip="The TRANSPOSE of this star's track: a track is one mass over all ages; an ISOCHRONE is all masses at ONE age — a whole star cluster born together, frozen in a single snapshot, drawn as a locus across the HR diagram. Your star sits on it as one point. The bright ring marks the MAIN-SEQUENCE TURNOFF: the bluest, most luminous point still burning hydrogen in its core. Stars above it have already left the main sequence; stars below are still on it. That turnoff luminosity IS the cluster's age — the single most important clock in stellar astronomy: a young cluster (10–100 Myr) turns off high among luminous blue stars, an ancient one (12 Gyr) turns off low among faint yellow ones. Scrub the age slider to age the whole cluster and watch the turnoff march down the main sequence. This reads the PUBLISHED MIST v2.5 isochrone grid directly (the same models as your star's track, so it lands exactly on the locus — no interpolation-of-interpolation). Distinct from the BPASS coeval-population overlay: that is the population's integrated LIGHT and star counts; this is the individual-star locus you fit to a real cluster's photometry.">?</span>
           </span>
         </label>
+        <!-- B3: decouple the cluster's age from the star's age slider so the turnoff can be swept
+             down the main sequence on its own — the "cluster aging" movie. Shown only while the
+             overlay is on; the age slider itself is revealed only once decoupled. -->
+        <div class="iso-decouple" id="iso-decouple-wrap" hidden>
+          <label class="rot-toggle-row" for="iso-decouple-toggle">
+            <input id="iso-decouple-toggle" type="checkbox" />
+            <span>Age the cluster on its own clock
+              <span class="help" tabindex="0" data-tip="By default the cluster ages WITH your star — drag the age slider and both move together. Decouple it here to give the cluster its own age slider: pin your star at one age and sweep the CLUSTER's age independently, watching the turnoff ring march down the main sequence — the 'cluster aging' movie. Your star's marker still sits at its OWN age, so once the two ages differ it slides OFF the cluster locus: that gap is exactly the comparison astronomers make when they date a cluster by fitting the isochrone whose turnoff matches the observed one. Only the age is decoupled; the cluster keeps your star's [Fe/H] (metallicity is not the clock). The slider spans the isochrone grid's own tabulated ages.">?</span>
+            </span>
+          </label>
+          <div class="iso-cluster-age-row" id="iso-cluster-age-row" hidden>
+            <input id="iso-cluster-age" type="range" min="6" max="10.15" step="0.01" value="9.66" />
+            <span id="iso-cluster-age-val" class="note"></span>
+          </div>
+        </div>
         <p class="note rot-note" id="isochrone-note"></p>
       </div>
 

@@ -84,6 +84,13 @@ const els = {
   isochroneControl: document.getElementById("isochrone-control"),
   isochroneToggle: document.getElementById("isochrone-toggle"),
   isochroneNote: document.getElementById("isochrone-note"),
+  // B3: an independent cluster-age slider — decouple the cluster's age from the star's age
+  // slider so the turnoff can be swept down the MS on its own ("cluster aging" movie).
+  isoDecoupleWrap: document.getElementById("iso-decouple-wrap"),
+  isoDecoupleToggle: document.getElementById("iso-decouple-toggle"),
+  isoClusterAgeRow: document.getElementById("iso-cluster-age-row"),
+  isoClusterAge: document.getElementById("iso-cluster-age"),
+  isoClusterAgeVal: document.getElementById("iso-cluster-age-val"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
@@ -542,6 +549,13 @@ let isoHasGrid = false;        // /isochrone_status: is the .iso grid fetched? (
 let isoNodeKey = "";           // last-fetched (feh, age-node, vvcrit) bucket
 let isoLastStates = null;      // cached locus states (redraw the marker within a node w/o refetch)
 let isoLastTurnoff = null;     // cached MSTO for the same-node repaint
+// B3: decoupled cluster-age slider. When isoDecoupled, the cluster's age comes from
+// isoClusterLogAge (log10 yr) instead of the star's age — the star marker still moves with the
+// star's own age, so it slides OFF the locus (that gap IS the age comparison). isoLogAges are the
+// grid's tabulated log10 ages (served as available_log_ages) — the honest, grid-exact slider bounds.
+let isoDecoupled = false;
+let isoClusterLogAge = null;   // log10(age_yr) of the decoupled cluster; null until decoupled
+let isoLogAges = null;         // available_log_ages from the last fetch (slider min/max)
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -2875,9 +2889,27 @@ function updateIsochroneControl() {
     return;
   }
   if (els.isochroneToggle) els.isochroneToggle.checked = isoOn;
-  if (!isoOn && els.isochroneNote)
-    els.isochroneNote.textContent =
-      "See this star's age as a whole cluster — where the main-sequence turnoff dates it.";
+  // B3: the decouple sub-control lives only while the overlay is on; coupled-by-default off it.
+  if (isoOn) {
+    if (els.isoDecoupleWrap) els.isoDecoupleWrap.hidden = false;
+  } else {
+    resetIsoDecouple();
+    if (els.isochroneNote)
+      els.isochroneNote.textContent =
+        "See this star's age as a whole cluster — where the main-sequence turnoff dates it.";
+  }
+}
+
+// B3: the single shared teardown for the decoupled cluster-age slider — back to coupled-by-default
+// (the byte-compatible state) and the sub-control hidden. Called from every isochrone teardown path
+// (updateIsochroneControl when off, dropIsochroneForModeSwitch, and the toggle-ON reset) so the
+// decoupled age can never survive a teardown and re-fetch at a stale cluster age with the row hidden.
+function resetIsoDecouple() {
+  isoDecoupled = false;
+  isoClusterLogAge = null;
+  if (els.isoDecoupleToggle) els.isoDecoupleToggle.checked = false;
+  if (els.isoClusterAgeRow) els.isoClusterAgeRow.hidden = true;
+  if (els.isoDecoupleWrap) els.isoDecoupleWrap.hidden = true;
 }
 
 // Turn the overlay OFF: restore the live MIST HR track + marker, drop the caption.
@@ -2902,6 +2934,7 @@ function dropIsochroneForModeSwitch() {
   isoNodeKey = ""; isoLastStates = null; isoLastTurnoff = null;
   if (els.isochroneToggle) els.isochroneToggle.checked = false;
   if (els.isochroneControl) els.isochroneControl.hidden = true;
+  resetIsoDecouple();            // B3: never leave a stale decoupled cluster age behind a mode swap
 }
 
 // Fetch + push the cluster isochrone for the marker's (age, [Fe/H], vvcrit). Called from
@@ -2911,7 +2944,10 @@ function dropIsochroneForModeSwitch() {
 async function refreshIsochrone(s) {
   if (!isoOn || mode !== "live" || !s) return;
   const feh = s.feh_init ?? 0;
-  const ageYr = s.age_yr ?? 0;
+  // B3: when decoupled the cluster ages on its own clock (isoClusterLogAge); otherwise it
+  // tracks the star's age. Only the AGE is decoupled — [Fe/H] stays the star's (age is the clock).
+  const ageYr = isoDecoupled && isoClusterLogAge != null
+    ? 10 ** isoClusterLogAge : (s.age_yr ?? 0);
   if (!(ageYr > 0)) return;
   const vvcrit = effVvcrit();
   // Bucket finer than the iso grid (feh nodes ≥0.25 dex apart, age nodes ~0.05 dex in log10).
@@ -2935,6 +2971,8 @@ async function refreshIsochrone(s) {
   if (token !== isoToken || !isoOn || mode !== "live") return;
   isoNodeKey = key;
   isoLastStates = data.states; isoLastTurnoff = data.turnoff;
+  if (Array.isArray(data.available_log_ages) && data.available_log_ages.length)
+    isoLogAges = data.available_log_ages;   // B3: grid-exact slider bounds
   hr.setIsochroneOverlay(data.states, data.turnoff, s);
   if (els.isochroneNote) {
     const t = data.turnoff;
@@ -2949,11 +2987,19 @@ async function refreshIsochrone(s) {
         `${t.L_lsun < 100 ? t.L_lsun.toPrecision(2) : Math.round(t.L_lsun)} L☉ ` +
         `(${t.mass_msun.toFixed(2)} M☉ leaving the main sequence now).`
       : "";
+    // B3: branch the closing clause — "scrub the age to age the cluster" is FALSE once decoupled
+    // (the star's age slider no longer moves the cluster), and the marker now sits off the locus.
+    const closing = isoDecoupled
+      ? `Your star sits at its own age ${fmtPopAge((s.age_yr ?? 0) / 1e9)}, so its marker lies ` +
+        `OFF this cluster's locus — that gap is the age comparison: date a cluster by the ` +
+        `isochrone whose turnoff matches it. Drag the cluster-age slider to march the turnoff ` +
+        `down the main sequence.`
+      : `Scrub the age to age the cluster: the turnoff marches down the main sequence — ` +
+        `that luminosity is how clusters are dated.`;
     els.isochroneNote.textContent =
       `A coeval cluster at [Fe/H] ${data.feh.toFixed(2)}${fehNote}, ` +
       `age ${fmtPopAge(data.age_yr / 1e9)}${ageNote} — all masses at once, your star one point on it. ` +
-      `${toTxt} Scrub the age to age the cluster: the turnoff marches down the main sequence — ` +
-      `that luminosity is how clusters are dated.${rotNote}`;
+      `${toTxt} ${closing}${rotNote}`;
   }
 }
 
@@ -4132,6 +4178,8 @@ async function init() {
       if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
       isoOn = true;
       isoNodeKey = "";     // force the first fetch (no cached node yet)
+      resetIsoDecouple();  // B3: a fresh entry always starts coupled (byte-compatible default)
+      if (els.isoDecoupleWrap) els.isoDecoupleWrap.hidden = false;   // reveal the decouple sub-control
       if (els.isochroneNote) els.isochroneNote.textContent = "Loading cluster isochrone…";
       if (currentTrack && currentTrack.length) {
         const i = trackRowFromPos(ageFraction);
@@ -4139,6 +4187,56 @@ async function init() {
       }
     } else {
       isochroneOff();
+    }
+  });
+
+  // B3: decouple the cluster's age from the star's age slider. Checking it gives the cluster its
+  // own log-age slider (bounds = the isochrone grid's tabulated ages, served as available_log_ages);
+  // pin the star, sweep the cluster, watch the turnoff march down the MS. Only the AGE decouples —
+  // [Fe/H] stays the star's. A fresh seed = the star's current age (a continuous hand-off).
+  if (els.isoDecoupleToggle) els.isoDecoupleToggle.addEventListener("change", () => {
+    if (!isoOn) { els.isoDecoupleToggle.checked = false; return; }
+    if (els.isoDecoupleToggle.checked) {
+      isoDecoupled = true;
+      const lo = isoLogAges && isoLogAges.length ? isoLogAges[0] : 6;
+      const hi = isoLogAges && isoLogAges.length ? isoLogAges[isoLogAges.length - 1] : 10.15;
+      let seed = hi;
+      if (currentTrack && currentTrack.length) {
+        const i = trackRowFromPos(ageFraction);
+        const a = i >= 0 ? (currentTrack[i].age_yr ?? 0) : 0;
+        if (a > 0) seed = Math.min(hi, Math.max(lo, Math.log10(a)));
+      }
+      isoClusterLogAge = seed;
+      if (els.isoClusterAge) {
+        els.isoClusterAge.min = lo.toFixed(3);
+        els.isoClusterAge.max = hi.toFixed(3);
+        els.isoClusterAge.value = String(seed);
+      }
+      if (els.isoClusterAgeVal) els.isoClusterAgeVal.textContent = fmtPopAge(10 ** seed / 1e9);
+      if (els.isoClusterAgeRow) els.isoClusterAgeRow.hidden = false;
+    } else {
+      isoDecoupled = false;
+      isoClusterLogAge = null;
+      if (els.isoClusterAgeRow) els.isoClusterAgeRow.hidden = true;
+    }
+    isoNodeKey = "";     // the age source changed → force a refetch (not a same-node repaint)
+    if (currentTrack && currentTrack.length) {
+      const i = trackRowFromPos(ageFraction);
+      if (i >= 0) refreshIsochrone(currentTrack[i]);
+    }
+  });
+
+  // B3: the decoupled cluster-age slider itself — drag to age the cluster (the star marker stays
+  // at its own age, sliding off the locus). Node-key bucketing + latest-wins in refreshIsochrone
+  // dedupe the fetch, so no separate debounce is needed (mirrors the star age-scrub path).
+  if (els.isoClusterAge) els.isoClusterAge.addEventListener("input", () => {
+    if (!isoOn || !isoDecoupled) return;
+    isoClusterLogAge = parseFloat(els.isoClusterAge.value);
+    if (els.isoClusterAgeVal)
+      els.isoClusterAgeVal.textContent = fmtPopAge(10 ** isoClusterLogAge / 1e9);
+    if (currentTrack && currentTrack.length) {
+      const i = trackRowFromPos(ageFraction);
+      if (i >= 0) refreshIsochrone(currentTrack[i]);
     }
   });
 

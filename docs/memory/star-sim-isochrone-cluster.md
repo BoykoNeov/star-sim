@@ -75,8 +75,32 @@ Verified end-to-end into a fresh `STAR_SIM_ISOCHRONE_DIR` (7 `ok` + sha256, `has
 4.6 Gyr solar iso reproduces turnoff 6239 K/1.21 M☉ from downloaded bytes). Only vvcrit=0.0 is
 baked/hosted; add the rotating axis to `_ASSETS` if/when baked.
 
+## B3 — decoupled cluster-age slider — BUILT 2026-07-10 (frontend-only, NO backend change)
+The route already served `available_log_ages` "for a slider" (107 ages, log10 5.0–10.3), so B3 was
+pure frontend. `#iso-decouple-toggle` ("Age the cluster on its own clock", nested in
+`#isochrone-control`, shown only while the overlay is on) reveals `#iso-cluster-age` — a log-age
+range whose min/max = the grid's own `available_log_ages` (grid-exact, honest). Decoupled, the
+cluster's age comes from `isoClusterLogAge` instead of `s.age_yr`; **only the age decouples — [Fe/H]
+stays the star's** (age is the clock). **Coupled-by-DEFAULT** (byte-compatible); the decouple seed =
+the star's current age (a continuous hand-off, clamped to the grid range). The star marker keeps its
+OWN age, so it slides OFF the cluster locus once the ages differ — `drawIsochrone` already drew the
+marker unconditionally at the star's Teff/L (verified in the body, line ~1016, NOT projected onto the
+locus) and `setIsochroneOverlay`'s auto-fit already includes it → **zero hr.js change**.
+**Advisor-guided, two real fixes:** (1) the reset lives in ONE shared `resetIsoDecouple()` (back to
+coupled + sub-control hidden), called from every teardown path — `updateIsochroneControl` when
+`!isoOn`, `dropIsochroneForModeSwitch`, AND the toggle-ON reset (the He/α mutual-exclusion resets at
+~4081/4096 route through `updateIsochroneControl`, so they're covered too) — so a stale decoupled age
+can never survive a teardown and re-fetch with the row hidden; (2) the caption **branches** — the
+coupled clause "Scrub the age to age the cluster: the turnoff marches down the MS" is FALSE decoupled,
+so it's replaced with the off-locus age-comparison lesson (prints the star's own age + "date a cluster
+by the isochrone whose turnoff matches it"). Measured through the runtime: sweeping 10 Myr→12.6 Gyr
+marches the turnoff **27.2 kK/17.7 M☉ → 5.6 kK/0.92 M☉**; the star marker (Sun at 4.63 Gyr) sits high
+above the young turnoff and near the old one. Playwright-verified 1440+390, zero console errors.
+State vars: `isoDecoupled`/`isoClusterLogAge`/`isoLogAges` in `main.js`; els
+`isoDecoupleWrap`/`isoDecoupleToggle`/`isoClusterAgeRow`/`isoClusterAge`/`isoClusterAgeVal`. No new
+test (backend untouched — the Playwright pass IS the regression gate here).
+
 ## Follow-ups (unbuilt)
-- **B3** (plan-optional): a decoupled cluster-age slider (age the cluster independent of the star).
 - The **full locus includes the post-AGB→WD sequence** (the blue sweep across the top + the faint
   hot WD tail) — honest (it's the real published isochrone), Teff-coloured + thin/context; clip at
   the AGB if it ever reads as too busy (not done — the turnoff is clearly the focus).
