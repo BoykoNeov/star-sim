@@ -792,9 +792,17 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   mass-gated** — reads only feh+age), fetches on (feh,age)-node change, torn down on mode switch.
   **The build gotcha (Playwright caught it, not the tests):** a wrong dict-key (`lam_ang` vs served
   `wavelength`) drew NOTHING → looked like a fatal 14-decade-axis compression problem → a one-line
-  fix; **verify the data reaches the canvas before blaming the representation.** Next = Chunk 2
-  (HRD number-density, separate BPASS "numbers" release) / Chunk 3 (host the npz).
-  [[star-sim-coeval-ensemble-bpass]].
+  fix; **verify the data reaches the canvas before blaming the representation.**
+  **Chunk 3 BUILT 2026-07-10 (hosting):** `fetch_bpass_baked.py` + the `bpass-baked-v1` GitHub
+  Release (the **9th** hosted tag) pull the 4.1 MB `bpass_ssp.npz` past the ~1 GB Zenodo pair +
+  bake — mirrors `fetch_coelho_baked.py` (the single self-contained cube: a flat
+  `{GRID_FILENAME: sha256}` over `_baked_release.fetch_one`, NOT the helium/alpha 2-tuple mapping).
+  No loader/test change (the cube has no MIST-style raw-source fingerprint — pure `np.load` +
+  `bake_version`); the only runtime touch is `bpass.py`'s `_MISSING_HINT` (now leads with the baked
+  fast path). BPASS v2.3 is **CC-BY 4.0** (cleanest grant, like POSYDON). Verified end-to-end into
+  a fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → `"ok"` → `population_sed` serves the ionizing
+  wedge from downloaded bytes). Next = Chunk 2 (HRD number-density, separate BPASS "numbers"
+  release). [[star-sim-coeval-ensemble-bpass]], [[star-sim-hosted-data-assets]].
 
 ### Tests
 - **403 pytest** (gated by data present via `conftest.py` markers; MIST tests skip

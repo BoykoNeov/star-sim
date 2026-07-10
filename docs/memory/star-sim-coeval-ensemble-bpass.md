@@ -1,6 +1,6 @@
 ---
 name: star-sim-coeval-ensemble-bpass
-description: The BPASS coeval-population SED overlay — the first ENSEMBLE sibling (bpass.py + /population), single-vs-binary integrated spectra. Chunk 1 BUILT.
+description: The BPASS coeval-population SED overlay — the first ENSEMBLE sibling (bpass.py + /population), single-vs-binary integrated spectra. Chunks 1 (overlay) + 3 (hosting) BUILT; Chunk 2 (HRD number-density) deferred.
 metadata:
   type: project
 ---
@@ -65,9 +65,24 @@ reported the "compression" symptom with evidence contradicting his f_ν→f_λ c
 re-anchoring wouldn't help (age sets the position) and the real fix was wedge-fill + un-occlude +
 declutter → then the key bug surfaced.
 
+**Chunk 3 BUILT 2026-07-10 (hosting)**: `fetch_bpass_baked.py` pulls the 4.1 MB `bpass_ssp.npz`
+from the `bpass-baked-v1` GitHub Release (the **9th** tag — see [[star-sim-hosted-data-assets]]).
+Mirrors `fetch_coelho_baked.py` exactly (the single self-contained cube — a flat
+`{GRID_FILENAME: sha256}` over `_baked_release.fetch_one`, NOT the helium/alpha 2-tuple
+asset-name mapping, which only exists because every `history.data` collides). **No loader/test
+change**: `_Bpass.__init__` is `np.load` + a `bake_version` check with no MIST-style raw-source
+fingerprint, so a freshly-downloaded npz loads directly (the spectra-cube path). The ONLY runtime
+touch is `bpass.py`'s `_MISSING_HINT` (now leads with the baked fast path). BPASS v2.3 is
+**CC-BY 4.0** — an explicit redistribution grant, the cleanest footing (like POSYDON), no license
+judgment call. **Verified end-to-end** (not just skip-on-present): a real `gh release create` +
+upload, then a fetch into a FRESH empty `STAR_SIM_BPASS_DIR` under `M:\claud_projects\temp` via a
+**fresh subprocess** (the dir constant is read at import time — a same-process env poke wouldn't
+take), reporting `"ok"` (downloaded, hash-verified), then `population_sed(0.0, 0.04)` served the
+Gate-0 ionizing wedge (bin/sin ≈ 906× summed over all <912 Å bins) from nothing but downloaded
+bytes.
+
 **Next**: Chunk 2 (HRD number-density overlay — needs the SEPARATE BPASS "numbers" plain-text
-release, its own recon), Chunk 3 (hosting the 4 MB baked npz via `fetch_bpass_baked.py`, the
-MIST/POSYDON precedent — see [[star-sim-hosted-data-assets]]). See [[star-sim-binary-stripped]]
+release, its own recon). See [[star-sim-binary-stripped]]
 (the single-star stripped endpoint), [[star-sim-co-hms-rlo]] (POSYDON co-evolved binary tracks),
 [[star-sim-phase5-spectra]] (the spectra-bake precedent), [[star-sim-nonthermal-sed-plan]] (the
 SED panel this overlays).

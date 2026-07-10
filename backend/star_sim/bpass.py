@@ -56,10 +56,12 @@ class BpassDataMissing(RuntimeError):
 
 
 _MISSING_HINT = (
-    "BPASS population cube not baked. Fetch the SSP-spectra pair once and bake it:\n"
-    "    python -m star_sim.fetch_bpass --download   (opt-in ~1 GB, Zenodo)\n"
-    "    python scripts/bake_bpass_spectra.py        (-> data/bpass/bpass_ssp.npz)\n"
-    "(see backend/star_sim/fetch_bpass.py)."
+    "BPASS population cube not baked. Fastest path — fetch the pre-baked cube (4.1 MB):\n"
+    "    python -m star_sim.fetch_bpass_baked          (-> data/bpass/bpass_ssp.npz)\n"
+    "Or build it from source (the ~1 GB Zenodo pair + bake):\n"
+    "    python -m star_sim.fetch_bpass --download     (opt-in ~1 GB, Zenodo)\n"
+    "    python scripts/bake_bpass_spectra.py          (-> data/bpass/bpass_ssp.npz)\n"
+    "(see backend/star_sim/fetch_bpass_baked.py / fetch_bpass.py)."
 )
 
 

@@ -1,6 +1,6 @@
 ---
 name: star-sim-hosted-data-assets
-description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg, + self-run helium/alpha MESA — 8 tags) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user. "MESA excluded" is ONLY the third-party bearums validation tracks — SELF-RUN MESA output IS hosted.
+description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg, self-run helium/alpha MESA, + BPASS — 9 tags) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user. "MESA excluded" is ONLY the third-party bearums validation tracks — SELF-RUN MESA output IS hosted.
 metadata:
   type: project
   originSessionId: 614a40b0-c4a6-4698-a4c9-e486917bf270
@@ -10,10 +10,26 @@ Star Simulator hosts **pre-baked derived data artifacts as GitHub Release
 assets** on repo `BoykoNeov/star-sim`, one release tag per dataset, so a user can
 run a `python -m star_sim.fetch_<dataset>_baked` command (plain HTTPS + sha256
 verify) instead of running each feature's raw-source recipe (a multi-GB
-tarball/API-scrape fetch, then a host-side bake step). Eight tags exist:
+tarball/API-scrape fetch, then a host-side bake step). Nine tags exist:
 `posydon-baked-v1`, `mist-baked-v1`, `koester-baked-v1`, `powr-baked-v1`,
-`coelho-baked-v1`, `gotberg-baked-v1`, `mesa-helium-baked-v1`, `mesa-alpha-baked-v1`.
+`coelho-baked-v1`, `gotberg-baked-v1`, `mesa-helium-baked-v1`, `mesa-alpha-baked-v1`,
+`bpass-baked-v1`.
 Plans: `docs/plans/lantern-grid-waystation.md` (POSYDON, the original).
+
+**BPASS (`bpass-baked-v1`, 2026-07-10) — the 9th tag, a clean single-cube drop-in.**
+The coeval-population SED overlay's 4.1 MB `bpass_ssp.npz` (see
+[[star-sim-coeval-ensemble-bpass]]) is hosted so casual users skip the ~1 GB Zenodo
+sin+bin pair + the h5py bake. `fetch_bpass_baked.py` mirrors `fetch_coelho_baked.py`
+**exactly** — the self-contained-spectra-cube path: a flat `{GRID_FILENAME: sha256}`
+over `_baked_release.fetch_one`, NOT the helium/alpha 2-tuple asset-name mapping (that
+only exists because every `history.data` collides; BPASS has one uniquely-named file).
+**No code change beyond `bpass.py`'s `_MISSING_HINT`** — `_Bpass.__init__` is `np.load`
++ a `bake_version` check with no raw-source fingerprint like MIST, so the downloaded
+npz loads directly. **License is the cleanest case: BPASS v2.3 is CC-BY 4.0** (an
+explicit redistribution grant, same footing as POSYDON — not the "cite on use, no
+grant found" judgment call the MIST/Koester/PoWR/Coelho/Gotberg set needed). Verified
+end-to-end into a fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → `"ok"` → `population_sed`
+serves the Gate-0 ionizing wedge from downloaded bytes).
 
 **Self-run MESA output IS hosted (the helium/alpha carve-out, 2026-07-09).** When
 the user asked to make the helium + α what-if overlays "easier for casual users,"

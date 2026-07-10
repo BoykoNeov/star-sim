@@ -1,6 +1,6 @@
 # Plan: The coeval-ensemble overlay — a whole population beside the one star (BPASS)
 
-## Status: CHUNK 1 BUILT (2026-07-10, 403 pytest [+6], Playwright-verified 1440+390 zero console errors). The SED single-vs-binary integrated-population overlay is live — the first ENSEMBLE sibling. Gate 0 MEASURED-AND-PASSED off the raw HDF5 (below) AND visibly satisfied through the runtime (the magenta binary-excess wedge). Chunks 2 (HRD number-density) & 3 (hosting) remain deferred.
+## Status: CHUNK 1 BUILT (2026-07-10, 403 pytest [+6], Playwright-verified 1440+390 zero console errors). The SED single-vs-binary integrated-population overlay is live — the first ENSEMBLE sibling. Gate 0 MEASURED-AND-PASSED off the raw HDF5 (below) AND visibly satisfied through the runtime (the magenta binary-excess wedge). **Chunk 3 (hosting) BUILT 2026-07-10** — `fetch_bpass_baked.py` + the `bpass-baked-v1` GitHub Release (the 4.1 MB `bpass_ssp.npz`, CC-BY 4.0); verified end-to-end (fresh download → runtime serves the ionizing wedge from downloaded bytes). Chunk 2 (HRD number-density) remains deferred.
 
 ## Chunk 1 — what shipped (the build, as built)
 
@@ -165,9 +165,17 @@ real schema, not a recalled guess — the boron-b8 / α-axis discipline):
   populating the blue-straggler / stripped-He / hot-subdwarf regions single-star tracks leave
   empty. Gate 0 = those regions light up only in `bin`.
 
-### Chunk 3 (optional) — hosting + derived census
-- `fetch_bpass_baked.py` (the MIST/POSYDON hosting precedent) for the small baked `.npz`.
-- Possibly surface derived scalars (ionizing photon rate, SN rate vs age) as a caption/readout.
+### Chunk 3 (hosting) — BUILT 2026-07-10
+- `fetch_bpass_baked.py` (the `fetch_coelho_baked.py` single-cube precedent — flat
+  `{filename: sha256}` over `_baked_release.fetch_one`) pulls the 4.1 MB `bpass_ssp.npz`
+  from the `bpass-baked-v1` GitHub Release. No loader/test change (the cube has no
+  raw-source fingerprint like MIST — pure `np.load` + `bake_version` check); the only
+  runtime touch is `bpass.py`'s `_MISSING_HINT` (now leads with the baked fast path).
+  BPASS v2.3 is CC-BY 4.0 (explicit grant, cleanest footing — like POSYDON). Verified
+  end-to-end into a fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → `fetch_one` "ok" →
+  `population_sed` serves the Gate-0 ionizing wedge from nothing but downloaded bytes).
+- (Still optional/deferred) surface derived scalars (ionizing photon rate, SN rate vs
+  age) as a caption/readout.
 
 ## Open questions
 1. ~~HDF5 internal schema~~ — **ANSWERED** (single cube, see the recon section).
