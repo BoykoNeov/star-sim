@@ -74,9 +74,19 @@ wrong answer.
   E(B−V)=0.296 at A_V=1. **Advisor-settled: SVO ZeroPoints, not a Vega spectrum** (empirically ruled out —
   M_V nails it); synthetic B−V=0.612 is a known **common-mode** B-band ZP offset that cancels in relative
   CMD placement (so the star still sits on the cluster locus, the turnoff still dates it).
-- **A2 (frontend):** an **"Observer" control group** — distance, A_V, R_V — that draws a reddened
-  overlay on the SED + spectrum panels and an apparent-magnitude / color readout. Off by default →
-  intrinsic view byte-unchanged.
+- **A2 (frontend): ✅ BUILT 2026-07-10** (frontend-only, NO backend change, 422 pytest unchanged,
+  Playwright 1440+390 zero console errors). An opt-in **"Observer's view — distance & dust"** control
+  group (`#observer-control`, the population/isochrone toggle idiom): sliders for **distance (log
+  10 pc→100 kpc), A_V, R_V** that (1) draw a **reddened overlay** on the Spectrum + SED panels and (2)
+  show an **apparent-mag/colour readout**. Off by default → intrinsic view byte-unchanged. **Formula
+  client-side, data server-side (advisor):** CCM89 is a verbatim JS port (`reddening.js`, the hz.js
+  helper idiom — client-side is unavoidable since the SED synthesizes its own Planck curve); the mag
+  readout fetches `/photometry` (filters/ZPs/band-integration stay server-side). **A2 Gate 0: JS ccm89
+  == `photometry.py` to 10 decimals** at 5000/2175/1500 Å (both branches) BEFORE drawing. Spectrum
+  overlay = reddened curve UNDER the intrinsic (fmax pinned → intrinsic unchanged); SED overlay = a
+  reddened blackbody carving the **2175 Å bump**, its LABEL self-gated to Teff ≳ 10⁴ K where the bump
+  is visually distinct ("never label a non-feature"). Readout in the Observer group (not the §3 State
+  readout). Living-only. Observer state built for A3 reuse.
 - **A3 (frontend):** the **observational CMD panel** — the star (and its living track, transformed into
   observational coordinates) plotted in (BP−RP, M_G). Composes with Axis B (see interconnections).
 

@@ -35,6 +35,7 @@
 
 import { fitCanvas } from "./canvas.js";
 import { planck, HC_OVER_K_NM, wavelengthToCSS } from "./color.js";
+import { extinctionFactor } from "./reddening.js";
 
 const PAD_L = 46, PAD_R = 14, PAD_T = 28, PAD_B = 40;
 
@@ -251,6 +252,9 @@ const LAM_TICKS = [
 
 const COL_CURVE = "#eef2f9";
 const COL_GRID = "#283149";
+// Observer's view (Axis A): the reddened blackbody — a dusty tan, dashed, dipping in the UV to
+// carve the 2175 Å extinction bump (the SED's reddening payoff).
+const COL_REDDEN = "rgba(214,158,110,0.95)";
 
 // ─── Coeval-population overlay (BPASS — the first ENSEMBLE sibling) ────────────
 // Two INTEGRATED SSP spectra at the marker's (Z, age): a single-star population and
@@ -305,6 +309,12 @@ export function createSED(canvas) {
   // The coeval-population overlay data (from /population), or null. Pushed in by main.js
   // via setPopulation(); a pure pushed-data consumer (sed.js owns no fetch, like roche.js).
   let population = null;
+  // Observer's view (Axis A): the interstellar reddening pushed in via setReddening(). redOn &&
+  // redAv>0 → overlay a REDDENED blackbody (client-side CCM89, reddening.js). Because CCM89 is
+  // identity outside ~1250–9091 Å, the reddened curve coincides with the blackbody over most of
+  // the 14 decades and only dips in the UV/optical — carving out the characteristic 2175 Å
+  // extinction BUMP, the SED's payoff. A pure overlay (off/av=0 is a no-op). Living-only.
+  let redOn = false, redAv = 0, redRv = 3.1;
 
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
@@ -382,6 +392,38 @@ export function createSED(canvas) {
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
+
+    // Observer's view (Axis A): the REDDENED blackbody. CCM89 is identity outside ~1250–9091 Å, so
+    // this hugs the intrinsic curve across most of the 14 decades and only dips in the UV/optical —
+    // carving out the 2175 Å extinction BUMP (the b(x) Lorentzian), the SED's reddening payoff.
+    // Same intrinsic-peak normalization (logPeak), so the blackbody curve above is unchanged.
+    if (redOn && redAv > 0 && !endgameMode) {
+      ctx.save();
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const lam = 10 ** (LOG_LO + (i / (N - 1)) * (LOG_HI - LOG_LO));   // nm
+        const b = planck(lam, teff) * extinctionFactor(lam * 10, redAv, redRv);  // Å for CCM89
+        let dec = b > 0 ? Math.log10(b) - logPeak : -FLOOR_DECADES;
+        if (dec < -FLOOR_DECADES) dec = -FLOOR_DECADES;
+        if (dec > 0) dec = 0;
+        const x = xOf(lam), y = yOf(dec);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = COL_REDDEN; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]); ctx.stroke();
+      ctx.setLineDash([]);
+      // Label only when the population legend isn't occupying the top-left. The "2175 Å bump"
+      // clause is gated: the bump is a DIP-then-recovery, only VISUALLY distinct when the star's
+      // Wien peak is in the UV (Teff ≳ 10⁴ K, lamPeak < 300 nm) so the near-UV continuum is flat.
+      // For a cooler star the steep Wien decline masks the recovery — the reddened curve just
+      // slopes down — so naming the bump there would label a non-feature (the project's rule).
+      if (!popActive) {
+        const bumpVisible = lamPeak < 300;
+        ctx.fillStyle = COL_REDDEN; ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "left";
+        ctx.fillText(`reddened (A_V ${redAv.toFixed(2)})${bumpVisible ? " · 2175 Å bump" : ""}`,
+          PAD_L + 4, PAD_T + 12);
+      }
+      ctx.restore();
+    }
 
     // The non-thermal coronal overlay. Living: drawn per regime. WD endgame: faded by
     // the degeneracy gate (the same (4−logg)/3 the 3D corona/granulation use), so the
@@ -1149,6 +1191,17 @@ export function createSED(canvas) {
     renderCaption();   // restore the blackbody/coronal caption
   }
 
-  return { update, resize, setPopulation, clearPopulation,
+  // Observer's view (Axis A): push the interstellar reddening. A pure client-side transform of the
+  // synthesized blackbody — no fetch, no state on the spine. Off (or A_V=0) redraws the intrinsic
+  // blackbody alone (byte-identical to before Observer existed). Living-only (endgameMode gates it
+  // out in draw). Redraw only when the reddening actually changed.
+  function setReddening(on, av, rv) {
+    const on2 = !!on, av2 = av || 0, rv2 = rv || 3.1;
+    if (on2 === redOn && av2 === redAv && rv2 === redRv) return;
+    redOn = on2; redAv = av2; redRv = rv2;
+    draw();
+  }
+
+  return { update, resize, setPopulation, clearPopulation, setReddening,
            rotationAllowed: () => dynamoLineAllowed() };
 }

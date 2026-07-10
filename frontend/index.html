@@ -541,6 +541,44 @@
         <p class="note rot-note" id="isochrone-note"></p>
       </div>
 
+      <!-- Observer's view (Axis A of the outward quartet) — the theory→telescope bridge. An
+           opt-in control that turns the intrinsic star into what a telescope records: dimmed by
+           DISTANCE and reddened by interstellar DUST (extinction A_V, with the reddening law's
+           R_V). It draws a reddened overlay on the Spectrum + SED panels (client-side CCM89 —
+           reddening.js, a verbatim port of photometry.py) and reports the apparent magnitude /
+           observational colour (fetched from /photometry, the tested absolute-flux path). A pure
+           VIEW — it never touches the HR marker or the intrinsic StellarState (apparent quantities
+           are observer-dependent, so they live HERE, not in the State readout's "everything from
+           one StellarState" panel). Living-only (magnitudes need the absolute-flux main spectrum
+           cube; WD/WR/stripped cubes are continuum-normalized), gated on that cube being present. -->
+      <div class="helium-control observer-control" id="observer-control" hidden>
+        <label class="rot-toggle-row" for="observer-toggle">
+          <input id="observer-toggle" type="checkbox" />
+          <span>Observer's view — distance &amp; dust
+            <span class="help" tabindex="0" data-tip="Everything else in this simulator is INTRINSIC — the star as it truly is (its temperature, luminosity, spectrum). A telescope records something else: an APPARENT brightness, dimmed by how far away the star is, and REDDENED by interstellar dust between us and it. Turn this on to become the observer. DISTANCE dims the star (the distance modulus μ = 5·log₁₀(d/10 pc) — every factor of ten in distance adds 5 magnitudes) but does NOT change its colour. DUST does both: interstellar grains scatter blue light more than red, so a reddened star looks fainter AND redder — parameterized by the total visual extinction A_V (magnitudes of dimming in the V band) and the reddening law's R_V = A_V/E(B−V) (≈3.1 in the diffuse interstellar medium, higher toward dense clouds). The reddened spectrum is overlaid on the Spectrum and SED panels (its blue end suppressed, and on the SED the characteristic 2175 Å extinction 'bump' carved out); the apparent magnitude and observed colour are reported below. This is the bridge from theory to the telescope — and its payoff, the observational colour–magnitude diagram, is what you actually fit to a real star cluster. A pure VIEW: it never moves the star on the HR diagram. (Magnitudes are computed from the real model spectrum through real filter curves, so this needs the spectrum cube; it is a living-star view.)">?</span>
+          </span>
+        </label>
+        <div class="observer-body" id="observer-body" hidden>
+          <label for="obs-distance">Distance <span id="obs-distance-val" class="note"></span>
+            <span class="help" tabindex="0" data-tip="How far away the star is, in parsecs (1 pc ≈ 3.26 light-years). Distance dims the star by the distance modulus μ = 5·log₁₀(d/10 pc): at the reference 10 pc the apparent magnitude equals the absolute magnitude (μ = 0); at 100 pc the star is 5 magnitudes fainter, at 1 kpc 10 magnitudes fainter. Distance changes only the brightness, never the colour. Landmarks: ~10 pc (the nearest bright stars), ~100 pc (the Hyades cluster), ~8 kpc (the Galactic centre), ~50 kpc (the Large Magellanic Cloud).">?</span>
+          </label>
+          <div class="slider-wrap"><input id="obs-distance" type="range" min="0" max="1" step="0.001" /></div>
+
+          <label for="obs-av">Extinction A<sub>V</sub> <span id="obs-av-val" class="note"></span>
+            <span class="help" tabindex="0" data-tip="The total dimming from interstellar dust in the V (visual) band, in magnitudes. A_V = 0 is a dust-free line of sight; A_V ≈ 1 is a typical value looking a kiloparsec through the Galactic disk; A_V of several magnitudes occurs toward dense molecular clouds and the Galactic centre. Because dust extinguishes blue light more than red (Cardelli–Clayton–Mathis 1989 law), raising A_V both dims the star and REDDENS it — the reddened spectrum overlaid on the Spectrum/SED panels has its blue end pulled down, and the star's observed colour (B−V) grows by E(B−V) = A_V/R_V.">?</span>
+          </label>
+          <div class="slider-wrap"><input id="obs-av" type="range" min="0" max="5" step="0.05" /></div>
+
+          <label for="obs-rv">Reddening R<sub>V</sub> <span id="obs-rv-val" class="note"></span>
+            <span class="help" tabindex="0" data-tip="The shape parameter of the dust extinction law, R_V = A_V / E(B−V) — the ratio of total to selective extinction. It encodes the dust grain size: R_V ≈ 3.1 is the standard diffuse interstellar medium, lower values (~2) mean smaller grains and a steeper (bluer) reddening curve, higher values (up to ~5.5) mean larger grains found in dense clouds and a flatter, greyer curve. At fixed A_V, a smaller R_V reddens the star MORE (a larger E(B−V)); the strength of the 2175 Å ultraviolet bump also tracks it. 3.1 is the right default for almost every sightline.">?</span>
+          </label>
+          <div class="slider-wrap"><input id="obs-rv" type="range" min="2" max="5.5" step="0.1" /></div>
+
+          <p class="note observer-readout" id="observer-readout"></p>
+        </div>
+        <p class="note rot-note" id="observer-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

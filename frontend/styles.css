@@ -273,6 +273,18 @@ main {
 .iso-cluster-age-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .iso-cluster-age-row .note { color: var(--accent); font-size: 12px; white-space: nowrap; min-width: 4.5em; }
 
+/* Observer's view (Axis A) — distance + dust knobs revealed once the toggle is on. Reuses the
+   .helium-control shell + .slider-wrap; the value labels ride beside each slider's label, and
+   the magnitude/colour readout gets a touch more room than a plain .rot-note. Living-only,
+   JS-gated (main.js updateObserverControl) so no endgame CSS rule is needed. */
+.observer-body { margin: 6px 0 0; }
+.observer-body[hidden] { display: none; }
+.observer-body > label { display: block; margin: 8px 0 2px; font-size: 12px; color: var(--ink); }
+.observer-body > label .note { color: var(--accent); font-weight: 600; margin-left: 4px; }
+.observer-readout { color: var(--ink); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
+.observer-readout .obs-dim { color: var(--muted); }
+.observer-readout sub { font-size: 0.75em; }
+
 /* Ap/Bp chemically-peculiar toggle (atlas Tier C) — an evocative surface what-if for A/B
    main-sequence stars; reuses the .rot-toggle-row / .rot-note idioms, gated to the A/B mass
    regime (hidden otherwise, so it never reads as a dead knob). */

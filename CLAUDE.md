@@ -79,10 +79,13 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
   `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz}.js`.
+  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,reddening}.js`.
   `hz.js` is the Axis-D **habitable-zone** compute (a pure `habitableZone(Teff,L)` helper, Kopparapu
   2014 — the draw half is `scale.js`'s `setHZ`; a helper-to-a-drawing-module like the SED/gravdark
   pattern, unit-checkable in isolation — see [[star-sim-habitable-zone]]).
+  `reddening.js` is the Axis-A (A2) **interstellar-extinction** compute (a pure `ccm89(lamAng,rv)` +
+  `extinctionFactor` helper — the hz.js idiom; a **verbatim port of `photometry.py`'s ccm89**, matched
+  to 10 decimals, feeding the reddened overlays `spectrum.js`/`sed.js` draw — see [[star-sim-observer-cmd]]).
   `roche.js` is the binary path-(b) Chunk-3 **mass-transfer / Roche-lobe** panel (a pushed-data consumer
   drawing the RLOF-moment orbital-plane figure-of-eight from `/binary_pair`'s `roche` block; shown only in
   `body.stripped-mode.companion-on`).
@@ -895,8 +898,9 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `docs/plans/outward-quartet-atlas.md` §Axis B.
 
 ### Observer's view / observational CMD (Axis A of the outward quartet — `photometry.py`; `/photometry` bypasses PROVIDER)
-- **A1 BUILT 2026-07-10 (backend + data, +10 tests, 422 pytest).** A2/A3 (frontend Observer controls +
-  the CMD panel) are next. The theory→telescope bridge: turn the intrinsic star (surface F_λ, R, Teff)
+- **A1 BUILT 2026-07-10 (backend + data, +10 tests, 422 pytest); A2 BUILT 2026-07-10 (frontend-only, NO
+  backend change, 422 pytest unchanged, Playwright 1440+390 zero console errors).** A3 (the CMD panel) is
+  next. The theory→telescope bridge: turn the intrinsic star (surface F_λ, R, Teff)
   into an **apparent** magnitude — reddened by dust, dimmed by distance — and plot the observational
   **(B−V, M_V) CMD**, the observer's HR diagram (composes with the Axis-B isochrone into a cluster CMD;
   the quartet's **capstone**). **Gate 0 measured FIRST (advisor-driven):** the main absorption cube is
@@ -917,7 +921,31 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   (SVO Bessell.B 3908.5 Jy vs lit ~4000–4060) that is **common-mode** across star/track/isochrone so it
   **CANCELS in relative CMD placement** (the star still sits on the cluster locus, the turnoff still
   dates it; color tolerance relaxed to ±0.05). E(B−V)=0.296 (< nominal 0.322) is legit source-dependent
-  band-integrated extinction, not a bug. [[star-sim-observer-cmd]]; plan `docs/plans/outward-quartet-atlas.md` §Axis A.
+  band-integrated extinction, not a bug. **A2 = the frontend Observer control** (opt-in
+  `#observer-control` in the Controls panel, mirroring the population/isochrone toggle idiom): three
+  sliders — **distance (log 10 pc→100 kpc), A_V (0–5), R_V (2–5.5)** — that (1) draw a **reddened overlay**
+  on the Spectrum + SED panels **client-side** and (2) show an **apparent-mag/colour readout** from
+  `/photometry` (debounced, latest-wins). OFF by default → intrinsic view byte-unchanged. **Formula-vs-data
+  split (advisor):** CCM89 is a fixed closed-form → a **verbatim JS port** in the pure `frontend/src/reddening.js`
+  helper (the hz.js idiom; client-side is unavoidable — the SED synthesizes its own Planck curve); magnitudes
+  need filters.json + Vega ZPs + the tested band integration (all server-side) → the READOUT fetches
+  `/photometry`, never reimplemented. **A2 Gate 0 (done BEFORE drawing): JS ccm89 == `photometry.py` to 10
+  decimals** at 5000/2175/1500 Å (both branches; ported the 4a/4b UV form verbatim, no deep-UV F_a/F_b, so the
+  drawn overlay can't drift from the served readout). **Spectrum overlay** = a reddened curve UNDER the
+  intrinsic on the SAME normalization (`fmax` pinned to the intrinsic peak — reddened flux never enters its
+  scan → intrinsic byte-unchanged when on). **SED overlay** = a reddened blackbody (CCM89 identity outside
+  ~1250–9091 Å → hugs the BB, dips only in the UV) carving the **2175 Å bump**; the bump LABEL is **self-gated**
+  (`lamPeak < 300 nm`, Teff ≳ 10⁴ K — the "never label a non-feature" rule: for a cool star the steep Wien
+  decline masks the dip-recovery, so it softens to just "reddened (A_V …)"; measured Sun→no bump, 35,560 K
+  O star→bump with a visible V-notch). **Readout in the Observer group, NOT the State readout** (advisor:
+  apparent mag is observer-dependent, would breach the §3 "everything from one StellarState" contract).
+  **Living-only** (mags need the absolute-flux main cube): `dropObserverForModeSwitch()` in the shared chokepoint
+  hides it in every endgame/stripped mode — one teardown-ordering bug caught+fixed (`observerOff()`'s trailing
+  `updateObserverControl()` re-shows the control if mode hasn't flipped off "live" yet → force-hide the div
+  AFTER it). **Seed A_V=0.5/d=100 pc on enable** so "toggle on" visibly changes something. Toggle gate = a
+  frontend-only init probe of `/photometry` (no `_status` route). The module-scope observer state
+  (obsDistancePc/obsAv/obsRv + `refreshObserver`) is built so A3's CMD panel reuses the same knobs.
+  [[star-sim-observer-cmd]]; plan `docs/plans/outward-quartet-atlas.md` §Axis A.
 
 ### Habitable-zone band (Axis D of the outward quartet — `hz.js`+`scale.js`; frontend-only, no backend)
 - **D1 BUILT 2026-07-10 (frontend-only, NO backend change, 412 pytest unchanged, Playwright 1440+390

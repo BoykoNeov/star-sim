@@ -26,6 +26,7 @@
 
 import { fitCanvas } from "./canvas.js";
 import { wavelengthToCSS } from "./color.js";
+import { extinctionFactor } from "./reddening.js";
 
 const PAD_L = 44, PAD_R = 12, PAD_T = 30, PAD_B = 34;
 
@@ -80,6 +81,10 @@ const LINES = [
 
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
 const COL_GRID = "#283149";
+// Observer's view (Axis A): the reddened flux overlay — a dusty tan, dashed, drawn UNDER the
+// intrinsic curve (same normalization) so the interstellar reddening's blue-end suppression reads
+// as the two curves peeling apart toward the blue.
+const COL_REDDEN = "rgba(214,158,110,0.95)";
 
 // --- rotational (v sin i) line broadening -----------------------------------
 // A cheap client-side post-process on the baked spectrum (whirling-cohort-atlas.md,
@@ -197,6 +202,13 @@ export function createSpectrum({ api }) {
   let alphaOn = false;
   let lastState = null;
   let alphaOffNote = null;
+  // Observer's view (Axis A): the interstellar reddening pushed in by main.js's setReddening.
+  // redOn && redAv>0 → draw a second, reddened curve under the intrinsic one (client-side CCM89,
+  // reddening.js). A pure overlay: the intrinsic curve + its own-peak normalization are untouched
+  // (redAv=0 or redOn=false is a no-op, so "Observer off" is byte-identical). Only the main
+  // absorption cube is reddened — the WD/WR/stripped/α frames are continuum-normalized or off the
+  // absolute-flux path, so reddening there would be meaningless.
+  let redOn = false, redAv = 0, redRv = 3.1;
   // A caller-supplied placeholder message (the WD endgame: log g 7–9 is off the
   // main-sequence atmosphere grid, and the central-star rows would silently return a
   // wrong lower-gravity spectrum, so we draw an honest "no model yet" frame instead of
@@ -676,6 +688,25 @@ export function createSpectrum({ api }) {
     // Zoomed: mark the native 2.5 Å sample points so the grid's real resolution shows.
     if (viewBand) drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(flux[i]), COL_CURVE);
     ctx.restore();
+
+    // 3) Observer's view: the REDDENED flux, on the SAME normalization (fmax is the intrinsic
+    //    peak — the reddened flux never entered its scan, so the intrinsic curve is unchanged).
+    //    factor = 10^(−0.4·A_V·A(λ)/A(V)) ≤ 1, so the reddened curve nests UNDER the intrinsic,
+    //    pulling away most toward the blue — the visible signature of interstellar reddening.
+    if (redOn && redAv > 0) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(PAD_L, PAD_T, plotW, plotH); ctx.clip();
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const yr = yOf(flux[i] * extinctionFactor(lam[i], redAv, redRv));
+        i === 0 ? ctx.moveTo(xOf(lam[i]), yr) : ctx.lineTo(xOf(lam[i]), yr);
+      }
+      ctx.strokeStyle = COL_REDDEN; ctx.lineWidth = 1.4; ctx.setLineDash([5, 3]); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = COL_REDDEN; ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "left";
+      ctx.fillText(`reddened (A_V ${redAv.toFixed(2)})`, PAD_L + 6, PAD_T + 12);
+      ctx.restore();
+    }
 
     drawFrameAndAxes(xOf, lamLo, lamHi);
   }
@@ -1343,5 +1374,16 @@ export function createSpectrum({ api }) {
     if (data && !data.isWD && !data.isWR && !data.isAlpha) { draw(); renderCaption(); }
   }
 
-  return { update, updateWD, updateWR, updateStripped, setInclination, showPlaceholder, resize };
+  // Observer's view (Axis A): push the interstellar reddening. A pure client-side transform of the
+  // already-served spectrum — no refetch — so dragging A_V is smooth. Off (or A_V=0) redraws the
+  // intrinsic curve alone (byte-identical to before Observer existed). Only the main absorption
+  // cube reacts (the endgame/α frames ignore it — they're not on the absolute-flux path).
+  function setReddening(on, av, rv) {
+    const on2 = !!on, av2 = av || 0, rv2 = rv || 3.1;
+    if (on2 === redOn && av2 === redAv && rv2 === redRv) return;   // no change (e.g. an age-scrub) → the
+    redOn = on2; redAv = av2; redRv = rv2;                         // pending /spectrum draw carries redOn
+    if (data && !data.isWD && !data.isWR && !data.isAlpha && !data.isStripped) draw();
+  }
+
+  return { update, updateWD, updateWR, updateStripped, setInclination, setReddening, showPlaceholder, resize };
 }

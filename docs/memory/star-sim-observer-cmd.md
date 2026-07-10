@@ -1,6 +1,6 @@
 ---
 name: star-sim-observer-cmd
-description: "Axis A (the observer's view) — photometry.py + /photometry sibling: distance + extinction + synthetic B/V/BP magnitudes → observational CMD. A1 backend+data BUILT; A2/A3 frontend next."
+description: "Axis A (the observer's view) — photometry.py + /photometry sibling: distance + extinction + synthetic B/V/BP magnitudes → observational CMD. A1 backend+data + A2 frontend Observer control (reddening.js CCM89 overlay on spectrum/SED + mag readout) BUILT; A3 CMD panel next."
 metadata: 
   node_type: memory
   type: project
@@ -14,8 +14,54 @@ Payoff = the observational **colour–magnitude diagram (B−V, M_V)**, the obse
 diagram, which composes with the Axis-B isochrone ([[star-sim-isochrone-cluster]]) into
 a real cluster CMD. The **capstone** of the quartet.
 
-**A1 BUILT 2026-07-10 (backend + data, +10 tests).** A2 (frontend Observer control
-group: distance/A_V/R_V → reddened overlay + mag readout) and A3 (the CMD panel) are next.
+**A1 BUILT 2026-07-10 (backend + data, +10 tests).** A3 (the CMD panel) is next.
+
+**A2 BUILT 2026-07-10 (frontend-only, NO backend change, 422 pytest unchanged,
+Playwright 1440+390 zero console errors).** An opt-in **"Observer's view — distance &
+dust"** control group (in the Controls panel, `#observer-control`, mirroring the
+population/isochrone toggle idiom): three sliders — **distance (log 10 pc→100 kpc),
+A_V (0–5), R_V (2–5.5)** — that (1) draw a **reddened overlay** on the Spectrum + SED
+panels **client-side** and (2) show an **apparent-magnitude / colour readout** fetched
+from `/photometry`. OFF by default → intrinsic view byte-unchanged.
+
+- **The formula-vs-data split (advisor).** Reddening is CCM89, a fixed closed-form, so
+  it's a **verbatim JS port** in a pure `frontend/src/reddening.js` (the hz.js helper
+  idiom — `ccm89(lamAng,rv)` + `extinctionFactor`). Client-side is *unavoidable* anyway:
+  the SED synthesizes its own Planck curve with no served flux to redden. But magnitudes
+  need filters.json + Vega ZeroPoints + the tested band integration — all server-side —
+  so the READOUT fetches `/photometry` (debounced, latest-wins), never reimplemented.
+- **A2's Gate 0 (done BEFORE any drawing): the JS ccm89 port matches `photometry.py`
+  to 10 decimals** at 5000 Å (optical), 2175 Å (bump), 1500 Å (deep UV) — both branches.
+  Ported the 4a/4b UV formula VERBATIM (no deep-UV F_a/F_b correction) so the drawn
+  overlay can't drift from the served readout. (Don't reconstruct E(B−V) in JS — it's
+  band-integrated; trust A1's tests. The direct function-match is the consistency check.)
+- **Spectrum overlay:** a second **reddened curve drawn UNDER the intrinsic** on the SAME
+  normalization — `fmax` stays pinned to the intrinsic peak (reddened flux never enters
+  its scan), so the intrinsic curve is byte-unchanged when Observer is on (advisor
+  constraint). The blue-end suppression IS the visible reddening signature.
+- **SED overlay:** a reddened blackbody; CCM89 is identity outside ~1250–9091 Å so it hugs
+  the BB across most of the 14 decades and only dips in the UV — carving the **2175 Å
+  extinction bump**. **The bump LABEL is self-gated** (advisor "never label a non-feature"):
+  the bump is a dip-THEN-recovery, visually distinct only when the Wien peak is in the UV
+  (`lamPeak < 300 nm`, Teff ≳ 10⁴ K) so the near-UV continuum is flat; for a cool star the
+  steep Wien decline masks the recovery → label softens to just "reddened (A_V …)".
+  Measured through the runtime: Sun → no bump; a 35,560 K O star → the bump with a visible
+  V-notch.
+- **Readout placement = the Observer group, NOT the State readout** (advisor): apparent
+  mag / reddened colour are observer-dependent, which would breach the State readout's
+  "everything from one StellarState" §3 contract. Readout: M_V · apparent V (μ) · (B−V)₀ →
+  reddened, E(B−V); honesty note carries the hot-clamp lower-bound + the standing B-band
+  ZP-offset caveat.
+- **Living-only** (mags need the absolute-flux main cube): hidden in every endgame/stripped
+  mode via `dropObserverForModeSwitch()` in the shared chokepoint. **One teardown-ordering
+  bug caught + fixed:** `observerOff()` ends with `updateObserverControl()` which RE-SHOWS
+  the control if mode hasn't flipped off "live" yet → force-hide the control div AFTER
+  `observerOff()`. **Seed demonstrative A_V=0.5 / d=100 pc on enable** so "toggle on"
+  visibly changes something (a d=10/A_V=0 default looks identical to intrinsic).
+- **Gate for the toggle (frontend-only, no `/photometry_status` route):** probe
+  `/photometry` once at init with the Sun's params — 200 → offer the toggle, 503 → hide it.
+- **Forward:** the module-scope observer state (obsDistancePc/obsAv/obsRv + refreshObserver)
+  is built so A3's CMD panel reuses the same knobs.
 
 ## The load-bearing Gate-0 findings (measured first, advisor-driven)
 
