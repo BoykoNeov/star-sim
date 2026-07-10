@@ -107,17 +107,24 @@ wedge; 405 pytest [+2], Playwright 1440+390 zero console errors):**
 - **Frontend rides the EXISTING `#population-toggle`** (one concept, both panels): `refreshPopulation`
   fetches `/population`+`/population_hrd` in parallel (HRD `.catch(null)` degrades gracefully) →
   `hr.setPopulationHRD`. `hr.js` draws a translucent cell heatmap in the LIVING view only (behind
-  track/marker): MAGENTA where the single pop is ≤20% of the binary count (binary-only — blue
-  stragglers/stripped-He), faint CYAN where in both, + a bottom-left legend. Shared note gains the HRD
-  lesson + the stripped-star excess.
+  track/marker) with two honesty rules (advisor-caught): (a) an absolute MIN_COUNT=0.01 stars cutoff
+  (the raw grid holds ~1e-10-star cells a floor would paint as a flood; a relative-to-peak cut can't be
+  used — payoff cells are ~1e-5 of the peak) + (b) MAGENTA is STRICT binary-only (single pop <0.1% of
+  the binary count — the literal Gate-0 cells single evolution leaves empty: blue stragglers/stripped-He),
+  faint CYAN where singles genuinely share. + a bottom-left legend. Shared note gains the HRD lesson +
+  the stripped-star excess.
 - **Gate 0 (measured, solar 40 Myr):** single hot-region (logTeff>4.4) count = **0**, binary ~**283**
   (139 binary-only cells); stripped-He total ~**33×** more with binaries.
-- **THE BUILD GOTCHA (Playwright caught it, tests didn't — AGAIN, exactly like Chunk 1's dict-key):**
-  the entire magenta payoff was INVISIBLE at first — a too-narrow 4-decade alpha range clamped the
-  sparse hot cells (~1–10 stars, ~5 dex below the ~10⁵ cool-MS peak) to zero alpha. The Gate-0 tests
-  passed the whole time (they assert counts, not pixels). Fixed with an 8-decade range + a per-category
-  alpha FLOOR (the binary-only cells are categorical — "singles can't make these" — not a density
-  claim). **Lesson restated: a passing data-gate test doesn't prove the payoff reached the canvas.**
+- **THE BUILD GOTCHA — TWO passes (Playwright + advisor caught what the tests couldn't):** (1) the
+  entire magenta payoff was INVISIBLE at first — a too-narrow 4-decade alpha range clamped the sparse
+  hot cells (~1–10 stars, ~5 dex below the ~10⁵ cool-MS peak) to zero alpha; the Gate-0 tests passed the
+  whole time (they assert counts, not pixels). (2) The over-correction (wide range + bare floor, no count
+  cutoff) painted ~1e-10-star cells at full alpha — a magenta FLOOD whose "binary-only / leaves empty"
+  label **overstated the data** (196/404 magenta cells held <0.02 stars; the ≤20% threshold admitted
+  cells singles populate — the SAME false-caption class as CO-HeMS "helium-rich" / Götberg "one
+  representative state"). Advisor-final fix = strict `s<1e-3·b` + absolute MIN_COUNT so the picture IS
+  the measured claim. **Lesson twice over: a passing data-gate test doesn't prove the payoff reached the
+  canvas — look at the pixels; and once drawn, the LABEL must match what the data backs.**
 - **Advisor arc (Chunk 2):** pre-build — fetchability is the pivot, test it (CKAN API + gdown +
   range-extract), scope tiny, measure Gate 0 through the parser BEFORE any UI, z-code→[Fe/H] yourself,
   crop the mostly-empty grid, version gap is caption-owned, defer overlay aesthetics until you've seen

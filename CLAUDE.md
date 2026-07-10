@@ -793,12 +793,16 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   100×100 grid to logt(28)×logl(100)); `bpass.py population_hrd()`+`hrd_available()` over a 2nd cube
   (`BAKE_VERSION_HRD`); `/population_hrd` + `/population_status` `has_hrd`. Frontend **rides the EXISTING
   `#population-toggle`** (one concept, both panels): `refreshPopulation` fetches both routes in parallel
-  (HRD degrades via `.catch(null)`) → `hr.setPopulationHRD` draws MAGENTA binary-only cells (single ≤20%
-  of binary — blue stragglers/stripped-He, the payoff) + faint CYAN where in both + a bottom-left legend.
-  **Gate 0 (measured, solar 40 Myr): single hot-region (logTeff>4.4) count 0, binary ~283; ~33× more
-  stripped stars.** **Build gotcha (Playwright caught it, tests didn't — like Chunk 1's dict-key): a
-  too-narrow 4-decade alpha range hid the whole magenta payoff (sparse hot cells ~5 dex below the cool-MS
-  peak clamped to 0 alpha); fixed with an 8-decade range + per-category floor.** HRD hosting (the SED's
+  (HRD degrades via `.catch(null)`) → `hr.setPopulationHRD` draws MAGENTA **strict binary-only** cells
+  (single <0.1% of binary — the literal Gate-0 cells single evolution leaves empty: blue stragglers/
+  stripped-He) + faint CYAN where singles genuinely share + a bottom-left legend, with an absolute
+  **MIN_COUNT=0.01 stars cutoff** so ~1e-10-star cells don't paint a false flood. **Gate 0 (measured,
+  solar 40 Myr): single hot-region (logTeff>4.4) count 0, binary ~283; ~33× more stripped stars.**
+  **Build gotcha, TWO passes (Playwright + advisor, not the tests): (1) a too-narrow 4-decade alpha
+  range hid the whole magenta payoff (sparse hot cells clamped to 0 alpha); (2) the over-correction
+  (wide range + bare floor) painted ~1e-10-star cells as a magenta FLOOD whose "binary-only" label
+  overstated the data — the false-caption class this project keeps catching; fixed with strict
+  `s<1e-3·b` + the count cutoff so the picture IS the measured claim.** HRD hosting (the SED's
   Chunk-3 analogue) is a clean follow-up — the cube's host-baked/gitignored and `has_hrd` hides the cloud
   on a data-less clone. [[star-sim-coeval-ensemble-bpass.md]].
 - **Chunk 1 BUILT 2026-07-10** (`docs/plans/coeval-ensemble-overlay.md`, 403 pytest, Playwright

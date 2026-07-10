@@ -973,14 +973,21 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // negative before abs).
     const dx = Math.abs(xOf(0.05) - xOf(0)) ;
     const dy = Math.abs(yOf(0.05) - yOf(0));
-    // DYN is deliberately WIDE (8 decades): the binary-only hot cells (blue stragglers,
-    // stripped-He stars — the payoff) hold only ~1–10 stars each, ~5+ decades below the dense
-    // cool-MS peak (~10⁵–10⁶). A narrow range would clamp them to zero alpha and hide the very
-    // thing this overlay exists to show. A per-category FLOOR then keeps presence readable:
-    // any binary-only cell is clearly visible (it's categorical — "single stars can't make
-    // these" — not a claim of equal density; the legend + caption own that), cool cells still
-    // grade by density so the MS/giant clump reads as denser.
-    const logMax = Math.log10(maxCount), DYN = 8;
+    // Two honesty rules so the PICTURE IS the measured claim (not a floor-inflated flood):
+    //  (a) MIN_COUNT skips cells with a negligible star count — the raw 100×100 grid has cells
+    //      holding ~1e-10 stars/1e6M☉ that a per-category floor would otherwise paint as solid
+    //      "binary-only stars are here". At solar 40 Myr this drops ~160 near-empty cells while
+    //      keeping 283.3 of 283.5 hot-region stars (measured) — visual noise gone, payoff intact.
+    //      An ABSOLUTE cut (not relative-to-peak): the payoff cells are only ~1e-5 of the dense
+    //      cool-MS peak, so a relative cut would erase the very thing we're showing.
+    //  (b) MAGENTA is STRICT binary-only — the single-star population is <0.1% of the binary count
+    //      here (the literal cells single-star evolution leaves empty — blue stragglers, stripped-
+    //      He stars, exactly the Gate-0 set). Cells singles genuinely share draw cyan, so the label
+    //      "binary-only" can't overstate what's drawn.
+    // Alpha grades by log-count over [MIN_COUNT, maxCount] with a per-category floor so even the
+    // sparse (but real, ≥MIN_COUNT) hot cells read; the floor is presence, not a density claim.
+    const MIN_COUNT = 0.01;
+    const logMin = Math.log10(MIN_COUNT), span = Math.log10(maxCount) - logMin;
     ctx.save();
     ctx.beginPath();
     ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
@@ -990,12 +997,11 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       if (x < PAD_L - dx || x > W - PAD + dx) continue;   // off the (reversed) Teff frame
       for (let li = 0; li < logl.length; li++) {
         const s = sin[ti][li], b = bin[ti][li], c = b > s ? b : s;
-        if (c <= 0) continue;
+        if (c < MIN_COUNT) continue;                      // (a) skip negligible-count cells
         const y = yOf(logl[li]);
         if (y < PAD - dy || y > H - PAD + dy) continue;
-        const norm = Math.max(0, Math.min(1, (Math.log10(c) - (logMax - DYN)) / DYN));
-        // binary-excess: single-star pop empty or ≤20% of the binary count here → magenta.
-        const binaryOnly = b > 0 && s < 0.2 * b;
+        const norm = span > 0 ? Math.max(0, Math.min(1, (Math.log10(c) - logMin) / span)) : 1;
+        const binaryOnly = b > 0 && s < 1e-3 * b;         // (b) singles <0.1% here → binary-only
         const floor = binaryOnly ? 0.24 : 0.08;
         const a = floor + (POP_ALPHA - floor) * norm;
         ctx.fillStyle = binaryOnly

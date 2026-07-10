@@ -43,12 +43,16 @@ clone (exactly how Chunk 1 shipped before Chunk 3). See "Chunk 2 — as built" b
   lights up BOTH panels): `main.js refreshPopulation` fetches `/population` and `/population_hrd` in
   parallel (HRD degrades gracefully via its own `.catch(null)`) and pushes to `hr.setPopulationHRD`.
   `hr.js` draws the density as a translucent cell heatmap in the LIVING view only (behind track/marker),
-  clipped to the frame: alpha ∝ log-count over a WIDE 8-decade range + a per-category floor (the sparse
-  hot binary-only cells are ~5 dex below the cool-MS peak — a narrow range hid them; the floor keeps
-  presence readable, categorical not a density claim), MAGENTA where the single-star pop is ≤20% of the
-  binary count (binary-only), faint CYAN where present in both, + a compact bottom-left legend. Teardown
-  on toggle-off / any mode switch clears it. The shared `#population-note` gains the HRD lesson + the
-  measured stripped-star excess at that age.
+  clipped to the frame, with two honesty rules so the PICTURE IS the measured claim (advisor-caught):
+  (a) an **absolute MIN_COUNT=0.01 stars cutoff** skips negligible cells (the raw grid holds cells with
+  ~1e-10 stars a per-category floor would otherwise paint as a solid "binary-only" flood — dropping ~160
+  such cells at solar 40 Myr keeps 283.3 of 283.5 hot-region stars, measured; a RELATIVE cut can't be
+  used — the payoff cells are ~1e-5 of the cool-MS peak); (b) MAGENTA is **STRICT binary-only** (single
+  pop <0.1% of the binary count here — the literal Gate-0 cells single-star evolution leaves empty),
+  faint CYAN where singles genuinely share the cell, so the "binary-only" label can't overstate. Alpha
+  grades by log-count over [MIN_COUNT, maxCount] + a per-category floor so sparse-but-real hot cells still
+  read. + a compact bottom-left legend. Teardown on toggle-off / any mode switch. The shared
+  `#population-note` gains the HRD lesson + the measured stripped-star excess at that age.
 - **Tests** `test_bpass.py` +2 (gated `requires_bpass_hrd_data`): the Gate-0 hot-cell / stripped-star
   regression through the runtime + the snap/route/selector/422 shape; the ungated `/population_status`
   test now also asserts `has_hrd`. `conftest` `requires_bpass_hrd_data`.
@@ -57,8 +61,14 @@ clone (exactly how Chunk 1 shipped before Chunk 3). See "Chunk 2 — as built" b
 The HRD overlay first drew the cool-MS cloud fine but the ENTIRE magenta binary-only payoff was
 INVISIBLE — a too-narrow 4-decade alpha range clamped the sparse hot cells (~1–10 stars each, ~5 dex
 below the ~10⁵ cool-MS peak) to zero alpha. The Gate-0 tests passed the whole time (they assert the
-counts, not the render). Fixed by widening to 8 decades + a per-category alpha floor. **Lesson (again):
-a passing data-gate test doesn't prove the payoff reached the canvas — look at the pixels.**
+counts, not the render). Then the OPPOSITE over-correction (a wide range + a bare per-category floor with
+no count cutoff) painted ~1e-10-star cells at full floor alpha — a magenta "flood" whose label
+("binary-only / single-star evolution leaves empty") **overstated the data** (196 of 404 magenta cells
+held <0.02 stars, and the ≤20% threshold admitted cells singles genuinely populate — the false-caption
+class this project keeps catching). The **advisor-final** fix: strict `s<1e-3·b` magenta + an absolute
+MIN_COUNT cutoff, so the picture IS the measured claim. **Lesson (twice over): a passing data-gate test
+doesn't prove the payoff reached the canvas — look at the pixels; and once it's on the canvas, make sure
+the LABEL matches what the data backs.**
 
 ## Chunk 1 — what shipped (the build, as built)
 
