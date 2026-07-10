@@ -257,7 +257,14 @@ main {
    [Fe/H], with two regime-gated facets: the vvcrit TOGGLE (massive-star track) and
    the rotation-PERIOD slider (cool-MS activity, moved here from the SED panel). Each
    facet is shown only where it's honest; the whole control hides where neither is. */
-.rot-control { margin: 16px 0 2px; }
+/* Reserve the section's height so the massive↔cool transition (a track TOGGLE vs. the taller
+   period SLIDER — genuinely different widgets, not the same control appearing/disappearing)
+   doesn't shove the age slider below it as the mass slider crosses the Kraft break / dynamo
+   edge (user request). The rare both-facets overlap (~1.3 M☉ — above the Kraft break AND still
+   cool enough for a dynamo) legitimately exceeds this; the single-facet + placeholder cases pad
+   up to it. Sized to the period-slider facet (the taller one), per width. */
+.rot-control { margin: 16px 0 2px; min-height: 130px; }
+@media (max-width: 480px) { .rot-control { min-height: 150px; } }
 .rot-head { font-size: 14px; color: var(--muted); margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
 /* Track facet: the vvcrit toggle. `.disabled` (set by main.js) greys it where rotation
    is a data-derived no-op (below the Kraft break). */
@@ -272,7 +279,11 @@ main {
 .rot-toggle-row > span { color: var(--ink); font-weight: 600; }
 .rot-toggle-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: inherit; }
 .rot-vvcrit { color: var(--muted) !important; font-weight: 400 !important; font-size: 12px; }
-/* Reserve the note height so toggling on/off never resizes the panel + shoves the age slider. */
+/* Reserve the note height so the offer ⇄ gated line swap (as the mass slider crosses a what-if's
+   band) never resizes the panel + shoves the age slider. One line suffices for that swap at
+   desktop (both are one line); at ≤480px they wrap, so reserve two. The longer active captions a
+   toggle reveals (helium's τ_MS, the population caption) are an intentional disclosure, not the
+   mass-drag jump, so they're not reserved to their max. */
 .rot-note { color: var(--accent); font-size: 12px; min-height: 1.4em; margin: 4px 0 0; }
 @media (max-width: 480px) { .rot-note { min-height: 2.8em; } }
 /* The relocated period slider: left-aligned + full-width here (it was centered/narrow
@@ -302,15 +313,23 @@ main {
 .observer-readout sub { font-size: 0.75em; }
 
 /* Ap/Bp chemically-peculiar toggle (atlas Tier C) — an evocative surface what-if for A/B
-   main-sequence stars; reuses the .rot-toggle-row / .rot-note idioms, gated to the A/B mass
-   regime (hidden otherwise, so it never reads as a dead knob). */
+   main-sequence stars; reuses the .rot-toggle-row / .rot-note idioms. Now PRESENT-but-greyed
+   (.rot-toggle-row.disabled) outside the A/B mass band so the Controls panel keeps a constant
+   height as the mass slider crosses it (user request); its "available for…" note teaches when
+   it activates, so a greyed knob isn't a dead one. Only ever hidden in an endgame. */
 .peculiar-control { margin: 12px 0 2px; }
 .peculiar-control[hidden] { display: none; }
 /* Binary-stripped-star what-if toggle (mirrors the Ap/Bp control): a mass-gated reversible
-   MODE toggle, shown only for eligible progenitors (2–18.2 M☉) in live mode and while the
-   mode is active. */
+   MODE toggle. Present-but-greyed outside 2–18.2 M☉ (space reserved); shown checked while the
+   stripped mode is active (its exit), hidden in the other endgames. */
 .stripped-control { margin: 12px 0 2px; }
 .stripped-control[hidden] { display: none; }
+/* The He / α / population / isochrone what-if shells share the .helium-control class. The
+   mass/[Fe/H]-gated ones (He, α) are now present-but-greyed out of their band (space reserved,
+   matching .peculiar-control); the data-only-gated ones (population, isochrone) stay hidden
+   when their grid is absent. A base margin keeps them evenly spaced now that they're persistent. */
+.helium-control { margin: 12px 0 2px; }
+.helium-control[hidden] { display: none; }
 /* Pointer left in the SED panel after the slider moved to Controls. */
 .sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 

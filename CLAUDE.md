@@ -791,7 +791,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   the canvas `#id` background shorthand outranks a class rule), the **polish batch**
   (comp bulk-view boundary dots at the cursor + brighter phase labels; tick-label
   10.5px / SED band-name 11px legibility bumps; header tag → "ZAMS → remnant"
-  — the stale "Phase 5 · spectra" retired). **No JS test harness → the
+  — the stale "Phase 5 · spectra" retired), the **reserved-Controls-height batch**
+  (the five live-mode what-ifs — Ap/Bp, stripped, helium, α, rotation — are
+  **present-but-greyed** out of their mass/[Fe/H] band via a shared `reserveWhatIf`
+  helper + a `.rot-control` min-height instead of removing themselves, so a mass drag
+  no longer shoves the age slider; three-hide-reasons rule — regime→grey,
+  data-absent/endgame→hide — reverses "absent, not a dead knob" for regime-gating only).
+  **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).
   [[star-sim-frontend-ux]], [[star-sim-draggable-responsive-panels]],

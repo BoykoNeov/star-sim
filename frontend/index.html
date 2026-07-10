@@ -415,10 +415,12 @@
            grid to interpolate toward. It selects the rotating evolutionary track (real
            data): main-sequence surface N/He enrichment, a longer life, a shifted HR
            track, and at low metallicity the chemically-homogeneous (CHE) blue
-           divergence. Data-derived honesty gate (`/rotation_status`): it is HIDDEN where
-           rotation is a no-op (below the ~1.2 M☉ Kraft break, where MIST makes the
-           rotating track bit-identical to the non-rotating one) and where no rotating grid
-           is on disk for the current [Fe/H] — absent, never a greyed dead knob. -->
+           divergence. Data-derived honesty gate (`/rotation_status`): the track TOGGLE is
+           hidden where rotation is a no-op (below the ~1.2 M☉ Kraft break, where MIST makes
+           the rotating track bit-identical to the non-rotating one) and where no rotating grid
+           is on disk for the current [Fe/H]. But the SECTION now stays present for every living
+           star (reserving its space so a mass drag doesn't jump the panel — user request); when
+           no facet applies it shows a placeholder note explaining when the controls appear. -->
       <div class="rot-control" id="rot-control" hidden>
         <div class="rot-head">Rotation
           <span class="help" tabindex="0" data-tip="Stellar rotation — ONE control with two honest faces, because rotation matters in two different ways for two different kinds of star. (1) For MASSIVE stars it selects MIST's rotating evolutionary TRACK (v/vcrit = 0.4 — a two-state toggle, as MIST publishes only non-rotating and v/vcrit = 0.4): rotational mixing dredges CNO-processed material to the surface during the main sequence (nitrogen and helium rise — the Hunter-diagram signature), the star lives longer and sits at a shifted HR position, and at low metallicity fast rotation can trigger chemically-homogeneous evolution (it stays compact and blue instead of becoming a red supergiant). (2) For COOL main-sequence stars it sets the magnetic ACTIVITY level — the rotation period fixes the dynamo's strength (Rossby number) and so the coronal X-ray output, collapsing the SED's X-ray band to a line. The two regimes barely overlap (a star is either hot/massive or cool), so the control shows whichever face is honest for the current star and hides the other — a rotation knob never implies the evolutionary track changed where it didn't.">?</span>
@@ -470,8 +472,9 @@
 
       <!-- Chemically peculiar (Ap/Bp) — atlas Tier C, an EVOCATIVE surface what-if (spec §7,
            like the corona). Shown only for A/B main-sequence stars (nowhere in MIST; only
-           ~10% of A/B stars are magnetic chemically-peculiar), hidden elsewhere and in every
-           endgame — absent, not a dead knob. Independent of the Rotation toggle: Ap/Bp is a
+           ~10% of A/B stars are magnetic chemically-peculiar), PRESENT-but-greyed elsewhere in
+           live mode (its space reserved so the panel doesn't jump; a "for A/B stars…" note says
+           when it activates) and hidden in every endgame. Independent of the Rotation toggle: Ap/Bp is a
            magnetic peculiarity, not a rotation-axis effect. It changes ONLY the 3D star's
            look (co-rotating abundance spots), never the HR diagram, spectrum or composition. -->
       <div class="peculiar-control" id="peculiar-control" hidden>
@@ -487,8 +490,8 @@
       <!-- Binary-stripped star (Götberg 2018) — the ~70% binary WR/subdwarf channel. A
            reversible what-if FORK (not an end-of-life endgame): "instead of expanding to a
            red giant, a close companion strips the hydrogen envelope NOW → this hot, He-rich
-           stripped core." Shown only for eligible progenitors (2–18.2 M☉ — the grid range),
-           gated like the Ap/Bp toggle. Checking it enters the reversible stripped-mode (the
+           stripped core." Enabled for eligible progenitors (2–18.2 M☉ — the grid range) and
+           present-but-greyed outside it (space reserved), like the Ap/Bp toggle. Checking it enters the reversible stripped-mode (the
            whole display snaps to the stripped product); unchecking, or the endgame bar's
            "Back", returns to the living star. -->
       <div class="stripped-control" id="stripped-control" hidden>
@@ -504,8 +507,11 @@
       <!-- Initial-helium (Y) what-if overlay — the globular-cluster 2nd-generation effect.
            A LIGHT overlay (not a mode-swap like stripped): the HR panel shows two self-run
            MESA tracks (baseline Y≈0.27 vs. He-enhanced Y≈0.40) at matched mass/[Fe/H], the
-           MIST living track hidden. 3D/spectrum stay on the current star. Gated near solar
-           [Fe/H] (the grid is solar-Z) and within the MESA mass grid (1/2/6 M☉, snapped). -->
+           MIST living track hidden. 3D/spectrum stay on the current star. Enabled near solar
+           [Fe/H] (the grid is solar-Z) and within the MESA mass grid (1/2/6 M☉, snapped),
+           present-but-greyed outside it (space reserved); HIDDEN only when no local MESA grid
+           is on disk (/helium_status — a feature that can't activate here isn't a greyed knob).
+           The α-enhanced control below mirrors this. -->
       <div class="helium-control" id="helium-control" hidden>
         <label class="rot-toggle-row" for="helium-toggle">
           <input id="helium-toggle" type="checkbox" />

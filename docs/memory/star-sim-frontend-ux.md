@@ -145,6 +145,35 @@ small-polish items; frontend-only, commit after c598252):**
   already skipped at 12px wide — covered by Wien-peak/detailed-spectrum labels).
 - **Header tag:** "Phase 5 · spectra" (stale build-phase tag) → **"ZAMS → remnant"**,
   a durable scope statement now the build phases are complete.
+- **Controls-panel height is reserved so a mass/[Fe/H] drag doesn't shove the age
+  slider (user request 2026-07).** The five live-mode what-if controls (Ap/Bp,
+  stripped, helium, α, rotation) used to `hidden`/remove themselves off their
+  eligibility band → the panel jumped ~74px as the mass slider crossed a band. Now
+  they are **present-but-greyed** out of regime: a shared `reserveWhatIf(control,
+  toggle, note, opts)` helper renders the four simple toggles disabled + `.rot-toggle-row
+  .disabled` (opacity 0.5) with a "**Appears for … M☉**" note that teaches when the knob
+  activates. **Three hide-reasons, three treatments (advisor):** out-of-regime → GREY
+  (reserve); **data-absent** (`heliumHasGrid`/`alphaHasGrid`/`rotation_status.has_grid`
+  false — feature not in this deployment) → still **HIDE** (a knob that can never activate
+  is the genuinely-dead knob the honesty gates avoided — this REVERSES the old "absent, not
+  a dead knob" comments for these controls, by user request); **endgame/stripped mode**
+  → still HIDE. Greying must not strand an active HR overlay: `updateHeliumControl`/
+  `updateAlphaControl` tear the overlay down FIRST (`if (!eligible && heliumOn) heliumOff()`)
+  then render greyed. Stripped stays special (visible+checked in stripped-mode as its exit).
+  **Rotation is the hard one** (period-SLIDER vs vvcrit-TOGGLE are different widgets, not the
+  same control appearing) → the SECTION stays present in live mode with a placeholder note
+  when no facet applies, and a **`.rot-control` min-height (130px desktop / 150px mobile)**
+  reserves the taller period-facet height so the massive↔cool transition doesn't jump; the
+  rare ~1.3 M☉ both-facets overlap (above Kraft AND cool) legitimately exceeds it.
+  **Verified (Playwright, the regression gate):** controls-panel height 884–891px across a
+  0.5→200 M☉ sweep at 1440 (was 74px+ jumps), 1033–1036px at 390; helium ON→drag-out tears
+  down + greys (no strand); 390 body-overflow is the pre-existing structure-panel one, not
+  Controls. **Deliberately NOT reserved:** the toggle-ON captions (helium τ_MS, the
+  population caption) are an intentional disclosure, not the mass-drag jump (a 2-line reserve
+  cost ~93px of permanent height for a partial fix — reverted); and the **gateway fate-note**
+  (SN "core collapse…") is bottom-anchored below the age slider — it grows DOWNWARD into empty
+  space and shoves no interactive control, so reserving it would leave a large dead gap for the
+  ~majority of non-SN stars.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the

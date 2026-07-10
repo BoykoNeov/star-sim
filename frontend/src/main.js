@@ -2030,12 +2030,17 @@ function updateRotControl() {
   const c = els.rotControl;
   if (!c) return;
   if (mode !== "live") { c.hidden = true; return; }
+  // The Rotation SECTION stays present for every living star (reserving its space so a mass
+  // drag across the Kraft break / dynamo edge doesn't make the Controls panel jump — user
+  // request; see the index.html note). Its regime-specific FACETS still appear/disappear, and
+  // when NONE applies we show a placeholder note that explains when they would — the advisor's
+  // "reserve the section's outer height with a placeholder row" (greying each ill-defined facet
+  // individually would be worse). This reverses the old "absent, not a dead knob" call here.
+  c.hidden = false;
   // Show the track toggle ONLY where it actually changes the track (above the ~1.2 M☉ Kraft
-  // break, `active`) — NOT greyed below it. A greyed, no-op toggle sitting under the same
-  // "Rotation" header as the live period slider (e.g. at the Sun) read as a confusing dead
-  // knob; hiding it matches this control's own "absent, not a dead knob" philosophy and
-  // leaves just the self-labeled "Rotation period" slider. (`active` is mass/[Fe/H]-derived,
-  // stable across an age scrub, so this never causes a mid-drag reflow above the Age slider.)
+  // break, `active`) — NOT greyed below it. Below the break the section still reserves space
+  // via the period facet or the placeholder note, so this facet can hide without a panel jump.
+  // (`active` is mass/[Fe/H]-derived, stable across an age scrub, so no mid-drag reflow.)
   const showToggle = !!(rotStatus.has_grid && rotStatus.active);
   // VISIBILITY of the period facet = the cool-MS family (also track-stable); sed.js greys it
   // per-age via rot.sync(). Both facets are track-stable, so an age scrub never changes height.
@@ -2048,17 +2053,30 @@ function updateRotControl() {
   // (round disk) while the slider stays put — per-age feedback lives in the note, not the
   // visibility. No need to compute rotationDistortion here.
   const showIncl = showToggle && rotationOn;
-  c.hidden = !(showToggle || showPeriod || showIncl);
+  const anyFacet = showToggle || showPeriod || showIncl;
   // -- track facet --
   els.rotToggleRow.hidden = !showToggle;
-  els.rotNote.hidden = !showToggle;
   if (showToggle) {
     els.rotToggle.checked = rotationOn;
     els.rotToggle.disabled = false;                       // shown ⇒ always live now
     els.rotToggleRow.classList.remove("disabled");        // clear any stale greyed styling
+  }
+  // -- rot-note: the track-facet note when the toggle shows; a PLACEHOLDER (explaining when the
+  //    rotation controls appear) when no facet applies; otherwise hidden (the period/inclination
+  //    facets carry their own notes, and an empty rot-note between the head and the slider would
+  //    just add a gap). --
+  if (showToggle) {
+    els.rotNote.hidden = false;
     els.rotNote.textContent = rotationOn
       ? "Rotating track (v/vcrit 0.4): main-sequence N & He enrichment, longer life, shifted track."
       : "Non-rotating track — toggle to add MIST's v/vcrit = 0.4 rotation.";
+  } else if (!anyFacet) {
+    els.rotNote.hidden = false;
+    els.rotNote.textContent =
+      "Rotation shapes massive stars (a rotating evolutionary track — above ~1.2 M☉) and cool "
+      + "dwarfs (magnetic activity, which sets the X-ray output); its controls appear for those stars.";
+  } else {
+    els.rotNote.hidden = true;
   }
   // -- activity facet -- (sed.js syncs the slider/note internally via rot.sync())
   els.sedRot.hidden = !showPeriod;
@@ -2073,24 +2091,47 @@ function updateRotControl() {
   }
 }
 
-// Ap/Bp chemically-peculiar toggle (atlas Tier C — evocative). A magnetic-chemical what-if
-// for A/B MAIN-SEQUENCE stars: nowhere in MIST, so the control appears only for the A/B mass
-// band (TRACK-STABLE on the ZAMS mass — massValue doesn't change on an age scrub, so it never
-// flickers), and star.js fades the effect per-state outside the A/B-MS Teff window. Hidden
-// below/above the band and in every endgame (mode != live) — absent, not a dead knob (the
-// rot/incl precedent). Gate is INDEPENDENT of the rotation toggle: Ap/Bp is a magnetic
-// peculiarity, not a rotation-axis effect (many Ap stars rotate slowly).
-function updatePeculiarControl() {
-  const c = els.peculiarControl;
-  if (!c) return;
-  const inRegime = mode === "live" && massValue >= 1.6 && massValue <= 5.0;
-  c.hidden = !inRegime;
-  if (inRegime && els.peculiarToggle) {
-    els.peculiarToggle.checked = peculiarOn;
-    if (els.peculiarNote) els.peculiarNote.textContent = peculiarOn
-      ? "Co-rotating abundance spots on the oblique magnetic dipole (the α² CVn look) — evocative."
-      : "";
+// Render a live-mode what-if TOGGLE so its space is RESERVED as the mass/[Fe/H] sliders cross
+// the control's eligibility band — the Controls panel no longer jumps as controls appear and
+// disappear (user request; see the index.html note). The three reasons a control is hidden get
+// three treatments (advisor): (1) out-of-regime → GREY (present + disabled + a "when it
+// activates" note — the whole point); (2) data-absent (no local grid) → still HIDE (a knob that
+// can never activate in this deployment is the genuinely-dead knob the honesty gates avoid);
+// (3) endgame/stripped mode → still HIDE (a deliberate mode switch, not a per-mass jump).
+// `activeNote` may be null when a separate refresh owns the on-state caption (helium/alpha).
+// Returns `eligible` so the caller can tear down a stranded overlay.
+function reserveWhatIf(control, toggle, note, opts) {
+  if (!control) return false;
+  const { dataPresent, eligible, checked, activeNote, offerNote, gatedNote } = opts;
+  if (!dataPresent || mode !== "live") { control.hidden = true; return false; }
+  control.hidden = false;
+  const row = control.querySelector(".rot-toggle-row");
+  if (row) row.classList.toggle("disabled", !eligible);
+  if (toggle) { toggle.disabled = !eligible; toggle.checked = eligible && checked; }
+  if (note) {
+    if (!eligible) note.textContent = gatedNote;
+    else if (checked) { if (activeNote != null) note.textContent = activeNote; }
+    else note.textContent = offerNote;
   }
+  return eligible;
+}
+
+// Ap/Bp chemically-peculiar toggle (atlas Tier C — evocative). A magnetic-chemical what-if
+// for A/B MAIN-SEQUENCE stars: nowhere in MIST, so it is OFFERED only for the A/B mass band
+// (TRACK-STABLE on the ZAMS mass — massValue doesn't change on an age scrub, so it never
+// flickers), and star.js fades the effect per-state outside the A/B-MS Teff window. Now
+// PRESENT-but-greyed outside the band (space reserved) rather than absent; still hidden in
+// every endgame (mode != live). Frontend-only (no grid), so it's never data-absent. Gate is
+// INDEPENDENT of the rotation toggle: Ap/Bp is a magnetic peculiarity, not a rotation-axis
+// effect (many Ap stars rotate slowly).
+function updatePeculiarControl() {
+  const eligible = massValue >= 1.6 && massValue <= 5.0;
+  reserveWhatIf(els.peculiarControl, els.peculiarToggle, els.peculiarNote, {
+    dataPresent: true, eligible, checked: peculiarOn,
+    activeNote: "Co-rotating abundance spots on the oblique magnetic dipole (the α² CVn look) — evocative.",
+    offerNote: "What if this A/B star were magnetic chemically-peculiar? (the α² CVn look — evocative)",
+    gatedNote: "Appears for A/B main-sequence stars, 1.6–5 M☉ (only ~10% are magnetic Ap/Bp).",
+  });
 }
 
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
@@ -2713,15 +2754,23 @@ async function trySNResnap() {
 function updateStrippedControl() {
   const c = els.strippedControl;
   if (!c) return;
-  const offerable = mode === "live" && massValue >= STRIP_MASS_MIN && massValue <= STRIP_MASS_MAX;
-  const show = offerable || mode === "stripped";
-  c.hidden = !show;
-  if (!show) return;
-  if (els.strippedToggle) els.strippedToggle.checked = mode === "stripped";
-  if (els.strippedNote)
-    els.strippedNote.textContent = mode === "stripped"
-      ? "The hot stripped star a close companion would bare by stripping the envelope — untick to return."
-      : "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)";
+  // Special case: inside stripped-mode the toggle stays visible + checked as the exit (mode is
+  // NOT "live" then, so reserveWhatIf would hide it). The Götberg CSV is committed, so this
+  // control is never data-absent — only regime-gated.
+  if (mode === "stripped") {
+    c.hidden = false;
+    c.querySelector(".rot-toggle-row")?.classList.remove("disabled");
+    if (els.strippedToggle) { els.strippedToggle.disabled = false; els.strippedToggle.checked = true; }
+    if (els.strippedNote) els.strippedNote.textContent =
+      "The hot stripped star a close companion would bare by stripping the envelope — untick to return.";
+    return;
+  }
+  const eligible = massValue >= STRIP_MASS_MIN && massValue <= STRIP_MASS_MAX;
+  reserveWhatIf(els.strippedControl, els.strippedToggle, els.strippedNote, {
+    dataPresent: true, eligible, checked: false,
+    offerNote: "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)",
+    gatedNote: `Appears for progenitors that leave a stripped core, ${STRIP_MASS_MIN}–${STRIP_MASS_MAX} M☉ (the Götberg grid).`,
+  });
 }
 
 // --- initial-helium (Y) what-if overlay --------------------------------------
@@ -2734,19 +2783,21 @@ function updateHeliumControl() {
   const c = els.heliumControl;
   if (!c) return;
   const feh = Number(els.feh.value);
-  const eligible = heliumHasGrid    // no local MESA runs → never offer the toggle (honesty gate)
-    && mode === "live"
+  const inRegime = mode === "live"
     && massValue >= HE_MASS_MIN && massValue <= HE_MASS_MAX
     && Math.abs(feh) <= HE_FEH_TOL;
-  c.hidden = !eligible;
-  if (!eligible) {
-    if (heliumOn) heliumOff();   // drifted out of range with the overlay up → restore the live HR
-    return;
-  }
-  if (els.heliumToggle) els.heliumToggle.checked = heliumOn;
-  if (!heliumOn && els.heliumNote)
-    els.heliumNote.textContent =
-      "What if this star were born helium-rich? (a globular-cluster 2nd-generation what-if)";
+  // Tear the overlay down FIRST if the star drifted out of the eligible region with it up —
+  // greying the knob must not strand the HR overlay (advisor). heliumOff() re-invokes us with
+  // heliumOn=false, so return to avoid a double render.
+  if (!(heliumHasGrid && inRegime) && heliumOn) { heliumOff(); return; }
+  // data-absent (no local MESA runs) → HIDE (honesty gate); in-regime → live; out of regime →
+  // greyed placeholder (space reserved). activeNote is null: refreshHelium owns the on-caption
+  // (both ZAMS He fractions + the τ_MS lifetimes — the lesson that has no HR axis).
+  reserveWhatIf(els.heliumControl, els.heliumToggle, els.heliumNote, {
+    dataPresent: heliumHasGrid, eligible: inRegime, checked: heliumOn, activeNote: null,
+    offerNote: "What if this star were born helium-rich? (a globular-cluster 2nd-generation what-if)",
+    gatedNote: `Appears near solar [Fe/H] for ${HE_MASS_MIN}–${HE_MASS_MAX} M☉ (the self-run MESA grid).`,
+  });
 }
 
 // Turn the overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
@@ -3246,19 +3297,18 @@ function updateAlphaControl() {
   const c = els.alphaControl;
   if (!c) return;
   const feh = Number(els.feh.value);
-  const eligible = alphaHasGrid    // no local MESA runs → never offer the toggle (honesty gate)
-    && mode === "live"
+  const inRegime = mode === "live"
     && massValue >= ALPHA_MASS_MIN && massValue <= ALPHA_MASS_MAX
     && Math.abs(feh) <= ALPHA_FEH_TOL;
-  c.hidden = !eligible;
-  if (!eligible) {
-    if (alphaOn) alphaOff();   // drifted out of range with the overlay up → restore the live HR
-    return;
-  }
-  if (els.alphaToggle) els.alphaToggle.checked = alphaOn;
-  if (!alphaOn && els.alphaNote)
-    els.alphaNote.textContent =
-      "What if this star were α-enhanced? (an old-population [α/Fe] what-if, track-level)";
+  // Tear down first if the star drifted out of range with the overlay up (mirrors helium).
+  if (!(alphaHasGrid && inRegime) && alphaOn) { alphaOff(); return; }
+  // data-absent → HIDE; in-regime → live; out of regime → greyed placeholder. activeNote null:
+  // refreshAlpha owns the on-caption (the Coelho-paired "track sees only total Z" lesson).
+  reserveWhatIf(els.alphaControl, els.alphaToggle, els.alphaNote, {
+    dataPresent: alphaHasGrid, eligible: inRegime, checked: alphaOn, activeNote: null,
+    offerNote: "What if this star were α-enhanced? (an old-population [α/Fe] what-if, track-level)",
+    gatedNote: `Appears near solar [Fe/H] for ${ALPHA_MASS_MIN}–${ALPHA_MASS_MAX} M☉ (the self-run MESA grid).`,
+  });
 }
 
 // Turn the α overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
