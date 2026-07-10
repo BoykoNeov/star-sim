@@ -862,9 +862,13 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   (gated on `/isochrone_status`), `hr.js setIsochroneOverlay`/`drawIsochrone` (Teff locus + gold ring
   + on-locus marker), owns the HR panel like the He/α overlays (mutually exclusive), the cluster
   **ages with the age slider** (node-bucketed refetch), living-only. Data gitignored under
-  `data/mist_isochrones/` (`requires_isochrone_data`). **Follow-ups (unbuilt):** B3 decoupled
-  cluster-age slider; hosting the ~18 MB baked npz set as a Release (the 6.7 GB fetch is painful on
-  a fresh clone). [[star-sim-isochrone-cluster]]; plan `docs/plans/outward-quartet-atlas.md` §Axis B.
+  `data/mist_isochrones/` (`requires_isochrone_data`). **Hosting DONE 2026-07-10** (the 10th baked
+  tag `mist-iso-baked-v1`): `fetch_mist_iso_baked.py` pulls the 7 baked cubes (~18 MB) past the
+  6.7 GB raw fetch — mirrors `fetch_bpass_baked.py` (flat `{filename:sha256}` `_ASSETS`, all 7
+  uniquely named), NO `isochrone.py` change (self-contained `np.load`+`bake_version`, the
+  BPASS/Coelho drop-in class, not the EEP-track source-less-fingerprint trick). **Follow-up
+  (unbuilt):** B3 decoupled cluster-age slider. [[star-sim-isochrone-cluster]],
+  [[star-sim-hosted-data-assets]]; plan `docs/plans/outward-quartet-atlas.md` §Axis B.
 
 ### Tests
 - **412 pytest** (gated by data present via `conftest.py` markers; MIST tests skip

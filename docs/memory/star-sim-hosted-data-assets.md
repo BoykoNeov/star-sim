@@ -1,6 +1,6 @@
 ---
 name: star-sim-hosted-data-assets
-description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST, Koester+TMAP, PoWR, Coelho, Gotberg, self-run helium/alpha MESA, + BPASS — 9 tags) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user. "MESA excluded" is ONLY the third-party bearums validation tracks — SELF-RUN MESA output IS hosted.
+description: Pre-baked data hosted via GitHub Releases (POSYDON — now the full 8-bucket metallicity axis, MIST tracks, MIST isochrones, Koester+TMAP, PoWR, Coelho, Gotberg, self-run helium/alpha MESA, + BPASS — 10 tags) so casual users skip raw multi-GB source fetches; the license-audit restriction was explicitly overridden by the user. "MESA excluded" is ONLY the third-party bearums validation tracks — SELF-RUN MESA output IS hosted.
 metadata:
   type: project
   originSessionId: 614a40b0-c4a6-4698-a4c9-e486917bf270
@@ -10,11 +10,30 @@ Star Simulator hosts **pre-baked derived data artifacts as GitHub Release
 assets** on repo `BoykoNeov/star-sim`, one release tag per dataset, so a user can
 run a `python -m star_sim.fetch_<dataset>_baked` command (plain HTTPS + sha256
 verify) instead of running each feature's raw-source recipe (a multi-GB
-tarball/API-scrape fetch, then a host-side bake step). Nine tags exist:
-`posydon-baked-v1`, `mist-baked-v1`, `koester-baked-v1`, `powr-baked-v1`,
-`coelho-baked-v1`, `gotberg-baked-v1`, `mesa-helium-baked-v1`, `mesa-alpha-baked-v1`,
-`bpass-baked-v1`.
+tarball/API-scrape fetch, then a host-side bake step). Ten tags exist:
+`posydon-baked-v1`, `mist-baked-v1`, `mist-iso-baked-v1`, `koester-baked-v1`,
+`powr-baked-v1`, `coelho-baked-v1`, `gotberg-baked-v1`, `mesa-helium-baked-v1`,
+`mesa-alpha-baked-v1`, `bpass-baked-v1`.
 Plans: `docs/plans/lantern-grid-waystation.md` (POSYDON, the original).
+
+**MIST isochrones (`mist-iso-baked-v1`, 2026-07-10) — the 10th tag.** The
+cluster-isochrone HR overlay (Axis B of the outward quartet, see
+[[star-sim-isochrone-cluster]]) reads baked per-metallicity `.iso` cubes. The raw source
+is ONE ~6.7 GB MIST v2.5 isochrone tarball per rotation rate (all metallicities), so a
+fresh clone would otherwise stream 6.7 GB + bake. The tag hosts the **7 baked non-rotating
+cubes** (`iso_feh{-1.00…+0.50}_vvcrit0.0.npz`, ~2.6 MB each, ~18 MB total — only the ~11
+columns the HR overlay reads). `fetch_mist_iso_baked.py` uses the **flat `{filename:
+sha256}` `_ASSETS`** over `_baked_release.fetch_one` (all 7 uniquely named — the BPASS
+model, NOT the helium/alpha 2-tuple mapping), dest = `ISO_DATA_DIR`. **No code change to
+`isochrone.py`** — the cubes are self-contained `np.load` + a `bake_version` check with no
+MIST-track-style raw-source fingerprint (`_IsochroneIndex` just globs `*.npz` and reads
+each file's own `bake_version`/`feh`/`vvcrit`), so this is the BPASS/Coelho/spectra
+drop-in class, NOT the EEP-track source-less-fingerprint trick. License = the SAME MIST
+call the user already authorized for the EEP-track cubes (MIST-derived, "cite on use, no
+explicit grant"). Verified end-to-end into a fresh `STAR_SIM_ISOCHRONE_DIR` (7 `ok` +
+sha256 → `isochrone_available()` True → the 4.6 Gyr solar iso reproduces turnoff
+6239 K/1.21 M☉ from downloaded bytes). Only vvcrit=0.0 baked; add the rotating axis to
+`_ASSETS` if/when baked.
 
 **BPASS (`bpass-baked-v1`, 2026-07-10) — the 9th tag; now hosts BOTH population cubes.**
 The coeval-population overlay (see [[star-sim-coeval-ensemble-bpass]]) backs two panels,

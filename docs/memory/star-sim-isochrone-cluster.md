@@ -61,12 +61,22 @@ overlay, so unlike the BPASS cloud a skipped repaint would freeze it). Suppresse
 `dropIsochroneForModeSwitch` in the mode-switch hook. Playwright-verified: the aging-cluster movie
 works (turnoff 6239K/1.21M☉ at 4.5 Gyr → 5710K/0.95M☉ at 11 Gyr), 0 console errors 1440+390.
 
+## Hosting — DONE 2026-07-10 (the 10th baked-data tag)
+The ~18 MB baked npz set is hosted on GitHub Release **`mist-iso-baked-v1`** (the
+`fetch_*_baked.py` / [[star-sim-hosted-data-assets]] pattern) so a fresh clone skips the 6.7 GB
+`.iso` tarball + bake. `fetch_mist_iso_baked.py` mirrors `fetch_bpass_baked.py` exactly: a **flat
+`{filename: sha256}` `_ASSETS`** over `_baked_release.fetch_one` (the 7 cubes are uniquely named,
+so NOT the helium/alpha 2-tuple mapping), dest = `ISO_DATA_DIR`. **Zero code change to
+`isochrone.py`** — the cubes are self-contained `np.load` + a `bake_version` check with no
+MIST-style raw-source fingerprint (the BPASS/Coelho/spectra precedent, unlike the EEP-track cubes
+which needed the source-less-fingerprint trick). License = the SAME already-authorized MIST call
+(the EEP-track cubes are hosted under it too; the user's override covers all MIST-derived data).
+Verified end-to-end into a fresh `STAR_SIM_ISOCHRONE_DIR` (7 `ok` + sha256, `has_grid` True, the
+4.6 Gyr solar iso reproduces turnoff 6239 K/1.21 M☉ from downloaded bytes). Only vvcrit=0.0 is
+baked/hosted; add the rotating axis to `_ASSETS` if/when baked.
+
 ## Follow-ups (unbuilt)
 - **B3** (plan-optional): a decoupled cluster-age slider (age the cluster independent of the star).
-- **Hosting**: the ~18 MB baked npz set as a GitHub Release (the `fetch_*_baked.py` /
-  [[star-sim-hosted-data-assets]] pattern) — the 6.7 GB fetch is painful on a fresh clone. Would
-  need a Release upload (outward-facing → confirm with the user first). MIST is public-domain-ish
-  (its own license); check before hosting.
 - The **full locus includes the post-AGB→WD sequence** (the blue sweep across the top + the faint
   hot WD tail) — honest (it's the real published isochrone), Teff-coloured + thin/context; clip at
   the AGB if it ever reads as too busy (not done — the turnoff is clearly the focus).
