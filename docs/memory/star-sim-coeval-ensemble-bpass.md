@@ -130,10 +130,17 @@ wedge; 405 pytest [+2], Playwright 1440+390 zero console errors):**
   crop the mostly-empty grid, version gap is caption-owned, defer overlay aesthetics until you've seen
   the data. All followed; Gate 0 lit up decisively so the chunk was real.
 
-**HRD hosting** (the SED's Chunk-3 analogue) is a clean FOLLOW-UP, deliberately not done this session:
-the cube is host-baked/gitignored and the `has_hrd` gate hides the HR cloud on a data-less clone (how
-Chunk 1 shipped before Chunk 3). It also needs the v2.2.1 starter-kit license confirmed CC-BY + a
-`gh release` asset upload (outward-facing). See [[star-sim-hosted-data-assets]], [[star-sim-binary-stripped]]
+**HRD hosting DONE 2026-07-10 (the SED's Chunk-3 analogue):** `fetch_bpass_baked.py` now hosts BOTH
+cubes on `bpass-baked-v1` — its `_ASSETS` maps `{GRID_FILENAME: sha256, GRID_FILENAME_HRD: sha256}`
+(the flat dict grew a second entry, no 2-tuple mapping needed — both files uniquely named). The 1.6 MB
+`bpass_hrd.npz` was uploaded to the existing tag (no new tag) after **confirming the v2.2.1 starter-kit
+Zenodo record 7340797 is CC-BY 4.0** (the one gate on the outward-facing upload — same explicit
+redistribution grant as v2.3). No loader/test change (`_BpassHRD.__init__` is `np.load` + a
+`bake_version` check, no MIST-style fingerprint). Verified end-to-end into a FRESH empty
+`STAR_SIM_BPASS_DIR` under `M:\claud_projects\temp` via a fresh subprocess: both assets `"ok"`
+(sha256-verified), `has_grid` AND `has_hrd` both True, `population_hrd(0.0, 0.04)` reproduced Gate 0
+(single hot count 0.000 vs binary 283.47) from nothing but downloaded bytes. The `has_hrd` gate still
+hides the HR cloud on a genuinely data-less clone. See [[star-sim-hosted-data-assets]], [[star-sim-binary-stripped]]
 (the single-star stripped endpoint), [[star-sim-co-hms-rlo]] (POSYDON co-evolved binary tracks),
 [[star-sim-phase5-spectra]] (the spectra-bake precedent), [[star-sim-nonthermal-sed-plan]] (the
 SED panel Chunk 1 overlays).

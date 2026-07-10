@@ -802,9 +802,12 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   range hid the whole magenta payoff (sparse hot cells clamped to 0 alpha); (2) the over-correction
   (wide range + bare floor) painted ~1e-10-star cells as a magenta FLOOD whose "binary-only" label
   overstated the data — the false-caption class this project keeps catching; fixed with strict
-  `s<1e-3·b` + the count cutoff so the picture IS the measured claim.** HRD hosting (the SED's
-  Chunk-3 analogue) is a clean follow-up — the cube's host-baked/gitignored and `has_hrd` hides the cloud
-  on a data-less clone. [[star-sim-coeval-ensemble-bpass.md]].
+  `s<1e-3·b` + the count cutoff so the picture IS the measured claim.** **HRD hosting DONE 2026-07-10**
+  (the SED's Chunk-3 analogue): `fetch_bpass_baked.py`'s `_ASSETS` grew a second entry so `bpass-baked-v1`
+  now hosts BOTH cubes (SED `bpass_ssp.npz` + HRD `bpass_hrd.npz`); the v2.2.1 starter-kit Zenodo record
+  is CC-BY 4.0 (confirmed before the upload). Verified end-to-end into a fresh `STAR_SIM_BPASS_DIR`
+  (both `"ok"`, `has_hrd` True, Gate 0 reproduced from downloaded bytes); the `has_hrd` gate still hides
+  the cloud on a genuinely data-less clone. [[star-sim-coeval-ensemble-bpass.md]].
 - **Chunk 1 BUILT 2026-07-10** (`docs/plans/coeval-ensemble-overlay.md`, 403 pytest, Playwright
   1440+390 zero console errors). Not a track / one state / one two-body system — a whole **coeval
   stellar population** (10⁶ M☉ born together at the marker's [Fe/H], seen at the marker's age) as an

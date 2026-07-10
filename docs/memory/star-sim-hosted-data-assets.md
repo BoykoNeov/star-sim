@@ -16,20 +16,28 @@ tarball/API-scrape fetch, then a host-side bake step). Nine tags exist:
 `bpass-baked-v1`.
 Plans: `docs/plans/lantern-grid-waystation.md` (POSYDON, the original).
 
-**BPASS (`bpass-baked-v1`, 2026-07-10) — the 9th tag, a clean single-cube drop-in.**
-The coeval-population SED overlay's 4.1 MB `bpass_ssp.npz` (see
-[[star-sim-coeval-ensemble-bpass]]) is hosted so casual users skip the ~1 GB Zenodo
-sin+bin pair + the h5py bake. `fetch_bpass_baked.py` mirrors `fetch_coelho_baked.py`
-**exactly** — the self-contained-spectra-cube path: a flat `{GRID_FILENAME: sha256}`
-over `_baked_release.fetch_one`, NOT the helium/alpha 2-tuple asset-name mapping (that
-only exists because every `history.data` collides; BPASS has one uniquely-named file).
-**No code change beyond `bpass.py`'s `_MISSING_HINT`** — `_Bpass.__init__` is `np.load`
-+ a `bake_version` check with no raw-source fingerprint like MIST, so the downloaded
-npz loads directly. **License is the cleanest case: BPASS v2.3 is CC-BY 4.0** (an
-explicit redistribution grant, same footing as POSYDON — not the "cite on use, no
-grant found" judgment call the MIST/Koester/PoWR/Coelho/Gotberg set needed). Verified
-end-to-end into a fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → `"ok"` → `population_sed`
-serves the Gate-0 ionizing wedge from downloaded bytes).
+**BPASS (`bpass-baked-v1`, 2026-07-10) — the 9th tag; now hosts BOTH population cubes.**
+The coeval-population overlay (see [[star-sim-coeval-ensemble-bpass]]) backs two panels,
+so the tag carries **two** flat drop-in assets, mapped in one `{GRID_FILENAME: sha256,
+GRID_FILENAME_HRD: sha256}` dict over `_baked_release.fetch_one` (NOT the helium/alpha
+2-tuple asset-name mapping — both BPASS files are uniquely named):
+- `bpass_ssp.npz` (4.1 MB) — the SED integrated-spectrum cube (Chunk 1); hosted so
+  users skip the ~1 GB **v2.3** Zenodo sin+bin pair + the h5py bake. **License: BPASS
+  v2.3 is CC-BY 4.0.**
+- `bpass_hrd.npz` (1.6 MB) — the HR-diagram number-density cube (Chunk 2); hosted so
+  users skip the 1.5 GB **v2.2.1** starter-kit Zenodo zip range-extraction + bake.
+  **License: the v2.2.1 starter kit (Zenodo 7340797) is ALSO CC-BY 4.0** — confirmed
+  from the record before the outward-facing upload, the same explicit redistribution
+  grant as v2.3 (both cleaner than the "cite on use, no grant found" MIST/Koester/PoWR/
+  Coelho/Gotberg judgment call).
+
+**No code change beyond `fetch_bpass_baked.py`'s `_ASSETS` + docstring** — `_Bpass`/
+`_BpassHRD.__init__` are both `np.load` + a `bake_version` check with no raw-source
+fingerprint like MIST, so the downloaded npzs load directly. Verified end-to-end into a
+fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → both `"ok"`, sha256 verified → `has_grid`
+AND `has_hrd` both True → `population_hrd(0.0, 0.04)` reproduces Gate 0 from the
+downloaded bytes: single hot-cell count 0.000 vs binary 283.47). The SED cube's earlier
+verify (`population_sed` serves the ionizing wedge) still holds.
 
 **Self-run MESA output IS hosted (the helium/alpha carve-out, 2026-07-09).** When
 the user asked to make the helium + α what-if overlays "easier for casual users,"
