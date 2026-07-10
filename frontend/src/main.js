@@ -13,6 +13,7 @@ import { createStructure } from "./structure.js";
 import { createRoche } from "./roche.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
+import { createCMD } from "./cmd.js";
 import { createClassification } from "./classify.js";
 import { makeSortable } from "./layout.js";
 import { initTooltips } from "./tooltip.js";
@@ -99,9 +100,7 @@ const els = {
   // into what a telescope records. A pure VIEW: reddening.js reddens the Spectrum + SED curves
   // client-side, /photometry supplies the magnitude/colour readout. Living-only, gated on the
   // absolute-flux spectrum cube being present (probed once at init).
-  observerControl: document.getElementById("observer-control"),
-  observerToggle: document.getElementById("observer-toggle"),
-  observerBody: document.getElementById("observer-body"),
+  observerPanel: document.getElementById("observer-panel"),
   obsDistance: document.getElementById("obs-distance"),
   obsDistanceVal: document.getElementById("obs-distance-val"),
   obsAv: document.getElementById("obs-av"),
@@ -274,6 +273,11 @@ const roche = createRoche();
 // zoomed-all-the-way-out companion to the synthetic-spectrum panel.
 const sed = createSED(document.getElementById("sed-canvas"));
 
+// The observational colour–magnitude diagram (Axis A3) — the observer's HR diagram in its
+// own panel. A pushed-data consumer (like sed's population overlay): main.js fetches the
+// intrinsic locus + the marker's exact magnitudes and pushes them in.
+const cmd = createCMD(document.getElementById("cmd-canvas"));
+
 // --- draggable, responsive panel layout --------------------------------------
 // The panels live in a flex-wrap container (styles.css) that auto-stacks them to
 // the viewport width — several columns on a desktop, a single vertical column on a
@@ -307,6 +311,7 @@ const RESPONSIVE = [
   { id: "comp-canvas", mod: comp, maxW: 720, h: 340 },
   { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
+  { id: "cmd-canvas", mod: cmd, maxW: 560, h: 300 },
   { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
   { id: "structure-canvas", mod: structure, maxW: 720, h: 340 },
   { id: "roche-canvas", mod: roche, maxW: 720, h: 320 },
@@ -583,22 +588,26 @@ let isoDecoupled = false;
 let isoClusterLogAge = null;   // log10(age_yr) of the decoupled cluster; null until decoupled
 let isoLogAges = null;         // available_log_ages from the last fetch (slider min/max)
 
-// --- observer's view (Axis A) — distance + interstellar extinction ------------
-// Opt-in "Observer" control: the theory→telescope bridge. OFF → the intrinsic view is
-// byte-unchanged (setReddening(false) is a no-op on both panels). The reddening (av, rv) is
-// applied CLIENT-SIDE (reddening.js CCM89, a verbatim port of photometry.py) to the Spectrum +
-// SED curves — instant, so dragging A_V is smooth; the magnitude/colour READOUT is fetched from
-// /photometry (the tested absolute-flux path — filters/ZeroPoints/band integration stay server-
-// side, never reimplemented). Living-only (magnitudes need the absolute-flux main cube; the
-// WD/WR/stripped cubes are continuum-normalized). The distance/av/rv knobs are held at module
-// scope so Axis A3's observational-CMD panel can reuse the exact same observer state.
-let observerOn = false;
+// --- observer's view (Axis A) — its own panel: the observational CMD -----------
+// The theory→telescope bridge, now a first-class panel (Axis A3). Whenever the panel is
+// eligible (live star + the absolute-flux spectrum cube present) it is shown with the
+// intrinsic CMD locus always drawn. The three knobs then apply DISTANCE (μ) + interstellar
+// DUST (av, rv): the CMD marker/arrow move (client-side, instant, from the exact /photometry
+// readout), and the reddening also reddens the Spectrum + SED curves CLIENT-SIDE (reddening.js
+// CCM89, a verbatim port of photometry.py). The Spectrum/SED reddening is a no-op when av=0
+// (setReddening guards on redAv>0), so the intrinsic view is byte-unchanged until dust is added.
+// The magnitude/colour READOUT is fetched from /photometry (the tested absolute-flux path —
+// filters/ZeroPoints/band integration stay server-side, never reimplemented). Living-only
+// (magnitudes need the absolute-flux main cube; WD/WR/stripped cubes are continuum-normalized).
+let observerOn = false;         // panel eligible & shown (live + cube present)
 let observerToken = 0;          // latest-wins guard for the /photometry readout fetch
-let observerHasData = false;    // /photometry reachable (spectrum cube present)? else hide the toggle
+let observerHasData = false;    // /photometry reachable (spectrum cube present)? else hide the panel
 let observerMarker = null;      // the last painted marker state (for a knob-drag readout refetch)
 let obsDebounce = null;         // debounce for the readout fetch (the overlay itself is instant)
-let obsDistancePc = 100;        // seeded demonstrative distance on enable (μ = 5)
-let obsAv = 0.5;                // seeded demonstrative extinction on enable (a visibly reddened curve)
+let obsTrackKey = null;         // "(mass,feh,vvcrit)" the CMD locus was last fetched for (dedupe)
+let obsTrackToken = 0;          // latest-wins guard for the /photometry_track locus fetch
+let obsDistancePc = 100;        // seeded distance (μ = 5) — a visible vertical arrow on first view
+let obsAv = 0;                  // seeded dust-free (Spectrum/SED byte-unchanged until dust is added)
 let obsRv = 3.1;                // diffuse-ISM reddening law (the near-universal default)
 // The distance slider is log-spaced over 10 pc (absolute-mag reference) → 100 kpc (past the LMC).
 const OBS_D_MIN = 10, OBS_D_MAX = 1e5;
@@ -2823,48 +2832,75 @@ function dropHZForModeSwitch() {
   scale.setHZ(false);
 }
 
-// --- observer's view (Axis A) — distance + interstellar extinction ------------
-// The theory→telescope bridge. Reveal-gate mirrors the population/isochrone controls: the toggle
-// is shown only in live mode and only when the absolute-flux spectrum cube is present (magnitudes
-// are meaningless without it). If it drifts out of the eligible state with the view up, tear it down.
+// --- observer's view (Axis A) — its own panel: the observational CMD ----------
+// Gate mirrors the population/isochrone controls: the panel is shown only in live mode and only
+// when the absolute-flux spectrum cube is present (magnitudes are meaningless without it). Unlike
+// the old opt-in toggle, when eligible the panel is simply ON — the intrinsic CMD is always
+// meaningful, and the sliders default to a dust-free view (av=0) so the Spectrum/SED stay
+// byte-unchanged until the user adds dust.
 function updateObserverControl() {
-  const c = els.observerControl;
+  const c = els.observerPanel;
   if (!c) return;
   const eligible = observerHasData && mode === "live";
-  c.hidden = !eligible;
   if (!eligible) {
     if (observerOn) observerOff();   // e.g. entering an endgame with the view up → restore intrinsic
+    else c.hidden = true;
     return;
   }
-  if (els.observerToggle) els.observerToggle.checked = observerOn;
-  if (!observerOn && els.observerNote)
-    els.observerNote.textContent =
-      "Turn the star into what a telescope sees — dimmed by distance, reddened by dust.";
+  const wasOn = observerOn;
+  observerOn = true;
+  c.hidden = false;
+  // Fetch the CMD locus for the current star (deduped by (mass,[Fe/H],vvcrit) — cheap per scrub).
+  refreshPhotometryTrack();
+  if (!wasOn) {
+    // Just became eligible (first paint / return from an endgame): reflect the knob values and
+    // drive the marker once. On subsequent paints paintState()'s refreshObserver(s) owns the marker.
+    syncObserverKnobs();
+    if (observerMarker) refreshObserver(observerMarker);
+  }
 }
 
-// Turn the observer view OFF: restore the intrinsic (un-reddened) Spectrum + SED, hide the knobs.
-// setReddening(false) is a no-op path on both panels, so this returns them byte-identical.
+// Turn the observer view OFF: hide the panel, restore the intrinsic (un-reddened) Spectrum + SED,
+// clear the CMD. setReddening(false) is a no-op path on both panels, so this is byte-identical.
 function observerOff() {
   observerOn = false;
   observerToken++;               // cancel any in-flight /photometry readout
+  obsTrackToken++;               // cancel any in-flight /photometry_track locus fetch
+  obsTrackKey = null;
   if (obsDebounce) { clearTimeout(obsDebounce); obsDebounce = null; }
-  if (els.observerToggle) els.observerToggle.checked = false;
-  if (els.observerBody) els.observerBody.hidden = true;
   spectrum.setReddening(false, 0, obsRv);
   sed.setReddening(false, 0, obsRv);
-  updateObserverControl();       // reset the invitation note
+  cmd.clear();
+  if (els.observerPanel) els.observerPanel.hidden = true;
 }
 
 // Living-only, like the HZ band: the endgame/stripped spectra come from continuum-normalized or
 // differently-ranged cubes, so a reddened overlay + an absolute magnitude there would be a silent
 // wrong answer. Called from the shared mode-switch chokepoint (dropHeliumForModeSwitch).
 function dropObserverForModeSwitch() {
-  // observerOff() ends by calling updateObserverControl(), which would RE-SHOW the control if mode
-  // hasn't flipped off "live" yet at this point in the entry sequence — so force-hide the whole
-  // control AFTER it. refresh()/updateObserverControl don't run in an endgame, so nothing else
-  // would hide it; updateObserverControl re-shows it on return to live.
   if (observerOn) observerOff();
-  if (els.observerControl) els.observerControl.hidden = true;
+  if (els.observerPanel) els.observerPanel.hidden = true;
+}
+
+// Fetch the intrinsic CMD locus (the whole track as B−V vs M_V) for the current star and push it
+// to the panel. Deduped by (mass,[Fe/H],vvcrit) — the locus is age-independent, so scrubbing age
+// never refetches it. Latest-wins guarded. Reads the current controls (same source as /track).
+async function refreshPhotometryTrack() {
+  if (!observerOn || mode !== "live" || !els.mass) return;
+  const mass = massValue, feh = Number(els.feh.value), vv = effVvcrit();
+  const key = `${mass}|${feh}|${vv}`;
+  if (key === obsTrackKey) return;   // already have this locus
+  obsTrackKey = key;
+  const token = ++obsTrackToken;
+  try {
+    const d = await fetchJSON(`/photometry_track?mass=${mass}&feh=${feh}&vvcrit=${vv}`);
+    if (token !== obsTrackToken || !observerOn || mode !== "live") return;
+    cmd.setLocus(d.points, d.has_bv);
+  } catch (e) {
+    if (token !== obsTrackToken) return;
+    obsTrackKey = null;   // let a later eligible refresh retry
+    cmd.setLocus(null, false);
+  }
 }
 
 // Reflect the current obsDistancePc/obsAv/obsRv onto the sliders + their value labels. Called on
@@ -2888,8 +2924,10 @@ function fmtDistance(pc) {
 // readout for the current marker. Called from paintState (marker moved) and from the knob-drag
 // handlers (av/rv/distance changed). The overlay never waits on the network — only the numbers do.
 function refreshObserver(s) {
+  // Remember the latest live marker even when the panel isn't on yet, so updateObserverControl can
+  // drive the CMD the instant the panel becomes eligible (first paint / return from an endgame).
+  if (mode === "live" && s) observerMarker = s;
   if (!observerOn || mode !== "live" || !s) return;
-  observerMarker = s;
   // The visual overlay is a pure client-side transform of the already-served Spectrum/SED curves.
   spectrum.setReddening(true, obsAv, obsRv);
   sed.setReddening(true, obsAv, obsRv);
@@ -2936,6 +2974,12 @@ function renderObserverReadout(d) {
     parts.push(`(B−V)₀ ${bv0.toFixed(2)} → reddened ${bvObs.toFixed(2)} ` +
       `<span class="obs-dim">E(B−V) = ${ebv.toFixed(2)}</span>`);
   els.observerReadout.innerHTML = parts.join(" · ");
+  // Push the EXACT intrinsic + observed positions to the CMD marker (the tested-path values, so the
+  // arrow tip is never an approximation). observed==intrinsic when dust-free at 10 pc (zero arrow).
+  if (bv0 != null && mvAbs != null) {
+    const obs = (bvObs != null && mvApp != null) ? { bv: bvObs, mv: mvApp } : null;
+    cmd.setMarker({ bv: bv0, mv: mvAbs }, obs);
+  }
   // The honesty note: hot-clamp lower bound (if the spectrum hit the grid ceiling) + the standing
   // B-band ZP-convention caveat that keeps the absolute colour from over-claiming.
   if (els.observerNote) {
@@ -4396,28 +4440,6 @@ async function init() {
   });
 
   // Observer's view (Axis A) — distance + dust. A pure VIEW (never the HR marker), so NOT mutually
-  // exclusive with any HR overlay; the only gate is live mode. On enable we seed demonstrative
-  // values (100 pc, A_V 0.5) so the panels visibly change — a d=10 pc / A_V=0 default would look
-  // identical to intrinsic and read as "nothing happened". The overlay pushes instantly; the
-  // magnitude readout fetches from /photometry.
-  if (els.observerToggle) els.observerToggle.addEventListener("change", () => {
-    if (els.observerToggle.checked) {
-      if (mode !== "live") { els.observerToggle.checked = false; return; }
-      observerOn = true;
-      obsDistancePc = 100; obsAv = 0.5; obsRv = 3.1;   // demonstrative seeds
-      syncObserverKnobs();
-      if (els.observerBody) els.observerBody.hidden = false;
-      if (els.observerReadout) els.observerReadout.textContent = "";
-      // Push the overlay + fetch the readout for the current marker now.
-      if (currentTrack && currentTrack.length) {
-        const i = trackRowFromPos(ageFraction);
-        if (i >= 0) refreshObserver(currentTrack[i]);
-      }
-    } else {
-      observerOff();
-    }
-  });
-
   // The three observer knobs. Each re-pushes the client-side reddening overlay INSTANTLY (so the
   // curve tracks the drag with no lag) and re-fetches the readout (debounced inside refreshObserver)
   // for the last painted marker. Distance is log-spaced; A_V/R_V are linear.

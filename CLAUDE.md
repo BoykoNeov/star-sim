@@ -79,7 +79,12 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
   `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,reddening}.js`.
+  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,reddening,cmd}.js`.
+  `cmd.js` is the Axis-A (A3) **observational colour–magnitude diagram** panel (a pure pushed-data consumer like
+  roche.js: main.js pushes the intrinsic (B−V, M_V) locus from `/photometry_track` + the marker's EXACT intrinsic
+  and observed positions from `/photometry`; it draws the Teff-coloured locus + the distance/dust reddening-vector
+  arrow — see [[star-sim-observer-cmd]]). It lives in its OWN `#observer-panel` alongside the distance/A_V/R_V
+  sliders (moved out of Controls), gated living-only.
   `hz.js` is the Axis-D **habitable-zone** compute (a pure `habitableZone(Teff,L)` helper, Kopparapu
   2014 — the draw half is `scale.js`'s `setHZ`; a helper-to-a-drawing-module like the SED/gravdark
   pattern, unit-checkable in isolation — see [[star-sim-habitable-zone]]).
@@ -898,9 +903,30 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   `docs/plans/outward-quartet-atlas.md` §Axis B.
 
 ### Observer's view / observational CMD (Axis A of the outward quartet — `photometry.py`; `/photometry` bypasses PROVIDER)
-- **A1 BUILT 2026-07-10 (backend + data, +10 tests, 422 pytest); A2 BUILT 2026-07-10 (frontend-only, NO
-  backend change, 422 pytest unchanged, Playwright 1440+390 zero console errors).** A3 (the CMD panel) is
-  next. The theory→telescope bridge: turn the intrinsic star (surface F_λ, R, Teff)
+- **A3 BUILT 2026-07-10 — the observational-CMD panel is now its OWN dedicated panel (backend `/photometry_track`
+  route + frontend `cmd.js` panel + moved the distance/A_V/R_V sliders OUT of Controls; +3 tests, 425 pytest,
+  Playwright 1440+390 zero console errors).** Prompted by user feedback: the A2 observer control (in the Controls
+  panel, behind an opt-in toggle) only visibly changed the READOUT TEXT — the Spectrum/SED reddening overlay is
+  imperceptible for most stars (measured: A_V 0.5→4 moved only ~0.01% of SED pixels, CCM89 being identity outside
+  the UV so the reddened curve hugs the blackbody). The fix (advisor-endorsed): the capstone CMD graph in its own
+  panel where the marker VISIBLY moves. `/photometry_track` composes the whole track's `StellarState`s (via
+  `PROVIDER.track`) → a `spectrum_data` flux STACK → ONE vectorized `band_mags_stack` pass → per-state intrinsic
+  absolute (B−V)₀, M_V (decimated to ~120 points; the locus is age-independent so an age-scrub never refetches).
+  `cmd.js` draws the observational CMD (B−V x, M_V inverted-y as astronomers plot it): the intrinsic Teff-coloured
+  locus + a white intrinsic marker ON it, and — driven by the three sliders — DISTANCE (a uniform μ slide DOWN)
+  + interstellar DUST (the reddening vector, DOWN and RIGHT). **The honesty pin (advisor's load-bearing point):
+  the observed marker + the arrow TIP are the EXACT `/photometry` values** (bv_obs, mv_app — the same tested path
+  the readout prints, so the plotted point can never contradict the number below it); only the faint dashed "as
+  observed" LOCUS applies the marker's vector uniformly (the standard de-reddening assumption, labelled). Default
+  seed d=100/**av=0** → a pure VERTICAL distance arrow on first view (visibly non-inert) while Spectrum/SED stay
+  byte-unchanged (setReddening guards on redAv>0); adding A_V diagonalises the arrow AND reddens Spectrum/SED. No
+  opt-in toggle — the panel is simply ON when eligible (live + absolute-flux cube present, the same
+  `observerHasData` init probe), hidden in every endgame/stripped mode via `dropObserverForModeSwitch` in the
+  shared chokepoint (verified: hidden in stripped + WD, restored on Back). Also fixed the user's Controls-panel
+  vertical-jump complaint for the observer sliders (moving that 3-slider block out; age-scrub Controls height now
+  stable, measured 764==764). A1 BUILT 2026-07-10 (backend + data, +10 tests); A2 BUILT 2026-07-10
+  (frontend Observer control, since superseded by A3's dedicated panel). The theory→telescope bridge: turn the
+  intrinsic star (surface F_λ, R, Teff)
   into an **apparent** magnitude — reddened by dust, dimmed by distance — and plot the observational
   **(B−V, M_V) CMD**, the observer's HR diagram (composes with the Axis-B isochrone into a cluster CMD;
   the quartet's **capstone**). **Gate 0 measured FIRST (advisor-driven):** the main absorption cube is
@@ -978,14 +1004,17 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-habitable-zone]]; plan `docs/plans/outward-quartet-atlas.md` §Axis D.
 
 ### Tests
-- **422 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The observer's-view sibling (`test_photometry.py`, Axis A) adds **10** (7 gated
+- **425 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The observer's-view sibling (`test_photometry.py`, Axis A) adds **13** (10 gated
   `requires_spectra_data` + 3 ungated): the **Gate-0** absolute anchor with teeth — Sun M_V=4.81±0.05 +
   the **exactly-10.000** distance modulus (a color alone would hide a broken absolute pipeline) — the
   B−V=0.65±0.05 shape check (loosened for the known B-band ZP offset), reddening reddens+dims with
   E(B−V)≈0.30 at A_V=1, hotter-is-bluer, the **vectorized==scalar** core check (A3's track+isochrone
-  path), plus the UNGATED CCM89-shape and the AST sibling-imports-no-PROVIDER-**and-no-StellarState**
-  check (a magnitude is a view, not a star), route shape + 422. The isochrone/cluster sibling
+  path), plus **A3's +3**: the `/photometry_track` CMD-locus shape+decimation (solar ZAMS bluer+fainter than
+  the redder+brighter giant tip, through the runtime), the locus↔`photometry_point` consistency at ZAMS (no
+  drift between the backdrop and the exact marker), and the 422-on-bad-mass; plus the UNGATED CCM89-shape and
+  the AST sibling-imports-no-PROVIDER-**and-no-StellarState** check (a magnitude is a view, not a star), route
+  shape + 422. The isochrone/cluster sibling
   (`test_isochrone.py`, Axis B) adds **7** (5 gated
   `requires_isochrone_data` + 2 ungated): the Gate-0 turnoff-monotone-with-age regression through the
   runtime (cooler+fainter+lighter 0.1→12 Gyr), the **MS-only-not-global-hottest** turnoff correctness

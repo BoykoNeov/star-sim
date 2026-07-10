@@ -212,6 +212,22 @@ main {
 .sed-panel .legend { justify-content: center; }
 .sed-panel .legend i { width: 22px; }
 
+/* Observer's-view panel (Axis A3): the observational colour–magnitude diagram + the three
+   distance/dust sliders. The canvas is a normal JS-driven responsive panel canvas; the sliders
+   reuse the controls-panel label/slider-wrap idiom. The readout sits directly under the CMD so
+   the plotted marker and its printed magnitudes read together. */
+#cmd-canvas {
+  display: block; margin: 0 auto; max-width: 100%;
+  background: #0b0f1c; border-radius: 8px;
+}
+.observer-panel label {
+  display: block; margin: 12px 0 0; font-size: 13px; color: var(--ink); font-weight: 600;
+}
+.observer-panel .observer-readout {
+  color: var(--ink); font-size: 12.5px; min-height: 2.8em; margin: 8px 0 2px; text-align: center;
+}
+.obs-dim { color: var(--muted); }
+
 /* Chunk-3 rotation/activity control: supplies the missing rotation dimension so the
    coronal X-ray band can collapse to a line (gyrochronology default + manual pin). A
    compact slider under the SED canvas, disabled + grayed outside the cool main-
@@ -836,7 +852,10 @@ body.co-binary-view .age-co-binary { display: inline; }
 
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
-  display: none; color: var(--accent); font-size: 12.5px; min-height: 1.4em;
+  /* Reserve TWO lines (this caption sits directly under the age slider and its text changes on
+     every endgame scrub — a 1-line reserve lets a 2-line caption reflow the panel mid-drag, shoving
+     the scrubber under the cursor). Only shown in endgames, so it costs nothing in the live view. */
+  display: none; color: var(--accent); font-size: 12.5px; min-height: 2.8em;
 }
 
 /* The age label swaps its live "… Gyr" affordance for an endgame tag (WD cooling

@@ -1,6 +1,6 @@
 ---
 name: star-sim-observer-cmd
-description: "Axis A (the observer's view) — photometry.py + /photometry sibling: distance + extinction + synthetic B/V/BP magnitudes → observational CMD. A1 backend+data + A2 frontend Observer control (reddening.js CCM89 overlay on spectrum/SED + mag readout) BUILT; A3 CMD panel next."
+description: "Axis A (the observer's view) — photometry.py + /photometry + /photometry_track siblings: distance + extinction + synthetic B/V/BP magnitudes → observational CMD. A1 backend+data + A2 reddening.js overlay + A3 dedicated CMD PANEL (cmd.js, its own #observer-panel with the distance/A_V/R_V sliders moved out of Controls) ALL BUILT. The marker visibly moves; observed marker/arrow tip = EXACT /photometry."
 metadata: 
   node_type: memory
   type: project
@@ -14,15 +14,49 @@ Payoff = the observational **colour–magnitude diagram (B−V, M_V)**, the obse
 diagram, which composes with the Axis-B isochrone ([[star-sim-isochrone-cluster]]) into
 a real cluster CMD. The **capstone** of the quartet.
 
-**A1 BUILT 2026-07-10 (backend + data, +10 tests).** A3 (the CMD panel) is next.
+**A1 BUILT 2026-07-10 (backend + data, +10 tests).**
 
-**A2 BUILT 2026-07-10 (frontend-only, NO backend change, 422 pytest unchanged,
-Playwright 1440+390 zero console errors).** An opt-in **"Observer's view — distance &
-dust"** control group (in the Controls panel, `#observer-control`, mirroring the
-population/isochrone toggle idiom): three sliders — **distance (log 10 pc→100 kpc),
-A_V (0–5), R_V (2–5.5)** — that (1) draw a **reddened overlay** on the Spectrum + SED
-panels **client-side** and (2) show an **apparent-magnitude / colour readout** fetched
-from `/photometry`. OFF by default → intrinsic view byte-unchanged.
+**A3 BUILT 2026-07-10 — the CMD is now its OWN dedicated panel (backend `/photometry_track`
+route + frontend `cmd.js` + the distance/A_V/R_V sliders MOVED OUT of Controls into
+`#observer-panel`; +3 tests, 425 pytest, Playwright 1440+390 zero console errors).**
+Prompted by **user feedback**: the A2 control (opt-in toggle in Controls) only visibly
+changed the READOUT TEXT — the Spectrum/SED reddening overlay is imperceptible for most
+stars (**measured: A_V 0.5→4 moved only ~0.01% of SED pixels** — CCM89 is identity outside
+the UV, so the reddened curve hugs the blackbody). The user also disliked that the
+observer control's reveal-body changed the Controls panel's vertical size. Fix
+(advisor-endorsed): ship the capstone CMD graph in its own panel where the marker
+**visibly moves**, and moving the 3-slider block out fixes the Controls jump too.
+
+- **`/photometry_track`** (api.py, bypasses PROVIDER for the compute but calls
+  `PROVIDER.track` for the states — like `/photometry`): composes the whole track's
+  `StellarState`s → a `spectrum_data` flux **STACK** → ONE vectorized `band_mags_stack`
+  pass → per-state intrinsic absolute **(B−V)₀, M_V** + age/eep/phase/teff. **Decimated to
+  ~120 points** (`n_max`, uniform stride; ~0.25 s warm at 606 EEP rows). The locus is
+  **age-independent**, so an age-scrub never refetches (deduped by `(mass,feh,vvcrit)`).
+- **`cmd.js`** (pushed-data consumer like roche.js): draws the observational CMD — B−V x
+  (blue left/red right), **M_V inverted-y** (bright up, as astronomers plot it). Elements:
+  the intrinsic **Teff-coloured locus** + a white **intrinsic marker ON it**; driven by the
+  sliders, an **orange observed marker** + a **reddening/distance vector arrow** + a faint
+  dashed **"as observed" locus**. DISTANCE = a uniform μ slide straight DOWN (dimming, no
+  colour); DUST = the arrow tilts DOWN-and-RIGHT (fainter + redder).
+- **The honesty pin (advisor's load-bearing point): the observed marker + the arrow TIP
+  are the EXACT `/photometry` values** (`bv_obs`, `mv_app` — the same tested path the
+  readout prints, so the plotted point can NEVER contradict the number below it). Only the
+  faint dashed "as observed" LOCUS applies the marker's vector *uniformly* (the standard
+  de-reddening assumption) — labelled as such, never plotted as exact truth.
+- **No opt-in toggle** — the panel is simply ON when eligible (`observerHasData && mode==="live"`,
+  same init probe). Default seed **d=100 / av=0** → a pure VERTICAL distance arrow on first
+  view (visibly non-inert) while **Spectrum/SED stay byte-unchanged** (setReddening guards on
+  `redAv>0`); dragging A_V then diagonalises the arrow AND reddens Spectrum/SED. Hidden in
+  every endgame/stripped mode via `dropObserverForModeSwitch` in the shared chokepoint
+  (verified hidden in stripped + WD, restored on Back). `layout.js` appends the new
+  `data-panel-id="observer"` for users with a saved order.
+
+**A2 BUILT 2026-07-10 (frontend-only)** — the ORIGINAL Observer control in the Controls
+panel (`#observer-control` toggle + reddening overlay on Spectrum/SED via `reddening.js`
+CCM89 + `/photometry` readout). **Superseded by A3's dedicated panel** (the reddening
+overlay + readout survive; the toggle/`#observer-control` were removed, the sliders moved).
+Its findings still hold:
 
 - **The formula-vs-data split (advisor).** Reddening is CCM89, a fixed closed-form, so
   it's a **verbatim JS port** in a pure `frontend/src/reddening.js` (the hz.js helper
@@ -59,9 +93,8 @@ from `/photometry`. OFF by default → intrinsic view byte-unchanged.
   `observerOff()`. **Seed demonstrative A_V=0.5 / d=100 pc on enable** so "toggle on"
   visibly changes something (a d=10/A_V=0 default looks identical to intrinsic).
 - **Gate for the toggle (frontend-only, no `/photometry_status` route):** probe
-  `/photometry` once at init with the Sun's params — 200 → offer the toggle, 503 → hide it.
-- **Forward:** the module-scope observer state (obsDistancePc/obsAv/obsRv + refreshObserver)
-  is built so A3's CMD panel reuses the same knobs.
+  `/photometry` once at init with the Sun's params — 200 → offer it, 503 → hide it (A3 reuses
+  the same `observerHasData` probe to gate the whole panel).
 
 ## The load-bearing Gate-0 findings (measured first, advisor-driven)
 
@@ -106,10 +139,16 @@ from `/photometry`. OFF by default → intrinsic view byte-unchanged.
   teff/logg/feh/**radius_rsun**/distance_pc/av/rv. 503 if cube/filters missing, 422 on
   radius≤0. Echoes teff_requested/teff_max so a hot-clamped star's blue color is flagged
   a lower bound.
-- Tests `test_photometry.py` (+10): Gate-0 M_V=4.81±0.05, B−V=0.65±0.05, exact distance
-  modulus, reddening reddens+dims, hotter-is-bluer, vectorized==scalar, CCM89 shape,
-  route shape+422, AST no-provider/no-StellarState. Gated `requires_spectra_data` (needs
-  the cube); CCM89 + AST tests are ungated.
+- `/photometry_track` (A3, api.py) — `PROVIDER.track(mass,feh,vvcrit)` → flux stack →
+  `band_mags_stack` → intrinsic (B−V)₀/M_V per state, decimated to `n_max` (~120). 503
+  cube-missing, 422 out-of-grid mass. The vectorized-stack loop lives in api.py (which
+  already composes PROVIDER + spectrum_data), so `photometry.py` stays a pure sibling.
+- Tests `test_photometry.py` (**+13** total, +3 for A3): Gate-0 M_V=4.81±0.05, B−V=0.65±0.05,
+  exact distance modulus, reddening reddens+dims, hotter-is-bluer, vectorized==scalar,
+  **the `/photometry_track` locus shape+decimation** (solar ZAMS bluer+fainter than the
+  giant tip), **locus↔`photometry_point` consistency at ZAMS**, **422-on-bad-mass**, CCM89
+  shape, route shape+422, AST no-provider/no-StellarState. Gated `requires_spectra_data`;
+  CCM89 + AST tests ungated.
 
 See [[star-sim-phase5-spectra]] (the cube), [[star-sim-isochrone-cluster]] (Axis B, the
 CMD's cluster partner), [[star-sim-habitable-zone]] (Axis D). Plan

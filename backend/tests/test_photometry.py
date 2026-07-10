@@ -134,6 +134,47 @@ def test_photometry_route_422_on_bad_radius() -> None:
         teff=5772, logg=4.44)).status_code == 422   # radius is required
 
 
+# --- A3: the observational-CMD locus (/photometry_track) ----------------------
+
+@requires_spectra_data
+def test_photometry_track_shape_and_decimation() -> None:
+    """The whole-track locus: (B−V)₀ + M_V per state, decimated to <= n_max. The CMD's
+    whole point — a solar track must span from a bluer, fainter ZAMS to a redder, brighter
+    giant tip (bluer ZAMS, larger M_V number = fainter) — is asserted through the runtime."""
+    r = client.get("/photometry_track", params=dict(mass=1.0, feh=0.0, n_max=60))
+    assert r.status_code == 200
+    j = r.json()
+    assert j["has_bv"] is True
+    assert set(j["bands"]) == {"B", "V", "BP"}
+    pts = j["points"]
+    assert 0 < len(pts) <= 60                       # decimated
+    zams, tip = pts[0], pts[-1]
+    assert zams["bv0"] < tip["bv0"]                 # giant tip is REDDER than the ZAMS
+    assert tip["mv"] < zams["mv"]                    # and BRIGHTER (smaller magnitude number)
+    for p in pts:                                    # every row is a real, finite CMD point
+        assert p["bv0"] == p["bv0"] and p["mv"] == p["mv"]
+
+
+@requires_spectra_data
+def test_photometry_track_matches_point_at_zams() -> None:
+    """The locus and the single-star /photometry share one physics: the ZAMS locus point's
+    colour/magnitude agree with photometry_point on the same state (no drift between the
+    backdrop the panel draws and the exact marker it overlays)."""
+    from star_sim.api import PROVIDER
+    st0 = PROVIDER.track(1.0, 0.0, 0.0)[0]
+    lam, flux = np.asarray(spectrum_data(st0.Teff_K, st0.logg, st0.feh_init)["wavelength"]), \
+        np.asarray(spectrum_data(st0.Teff_K, st0.logg, st0.feh_init)["flux"])
+    p = photometry.photometry_point(lam, flux, st0.R_rsun)
+    j = client.get("/photometry_track", params=dict(mass=1.0, feh=0.0, n_max=606)).json()
+    assert j["points"][0]["mv"] == pytest.approx(p["mv_abs"], abs=1e-6)
+    assert j["points"][0]["bv0"] == pytest.approx(p["bv0"], abs=1e-6)
+
+
+def test_photometry_track_422_on_bad_mass() -> None:
+    """A mass off the provider grid is 422 (routing error), not a silent snap or crash."""
+    assert client.get("/photometry_track", params=dict(mass=99999.0, feh=0.0)).status_code == 422
+
+
 # --- the §3 boundary: the sibling never routes through PROVIDER ----------------
 
 def test_sibling_does_not_import_provider() -> None:

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -40,7 +41,12 @@ from .binary import (
     stripped_star_payload,
 )
 from .structure import StructureDataMissing, interior_structure
-from .photometry import FiltersMissing, photometry_point
+from .photometry import (
+    FiltersMissing,
+    band_mags_stack,
+    band_names,
+    photometry_point,
+)
 from .bpass import (
     BpassDataMissing,
     bpass_available,
@@ -780,6 +786,75 @@ def photometry(
     out["teff_max"] = spec["teff_max"]
     out["grid_name"] = spec["grid_name"]
     return out
+
+
+@app.get("/photometry_track")
+def photometry_track(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
+    n_max: int = Query(120, ge=8, le=606, description="max locus points (uniform decimation)"),
+) -> dict:
+    """Axis A3 — the observational colour–magnitude locus of the whole evolutionary
+    track: the star's (B−V)₀ vs. absolute M_V, the observer's version of the HR diagram.
+
+    Like `/photometry` this is a **view**, not the spine: it goes through `PROVIDER`
+    only to fetch the track's `StellarState`s, then composes each one's served surface
+    spectrum (`spectrum_data`) into a flux stack and convolves the whole stack through
+    the committed B/V/BP filters in ONE vectorized pass (`band_mags_stack`, written for
+    exactly this). The result is the INTRINSIC absolute magnitudes (10 pc, no dust) —
+    the CMD backdrop; the panel draws distance (a uniform μ shift) and reddening (the
+    CMD reddening vector) on top, and the current-age marker's EXACT observed position
+    comes from `/photometry`, so nothing approximate is ever plotted as truth.
+
+    Decimated to `n_max` points (uniform stride) — a smooth locus needs far fewer than
+    the ~600 EEP rows, and each row costs one spectrum interpolation. 503 if the
+    spectrum cube or filter asset is missing; 422 if (mass, [Fe/H]) is out of range."""
+    try:
+        states = PROVIDER.track(mass, feh, vvcrit)
+    except ParameterOutOfRange as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+
+    if len(states) > n_max:
+        idx = np.linspace(0, len(states) - 1, n_max).round().astype(int)
+        idx = np.unique(idx)
+        states = [states[i] for i in idx]
+
+    try:
+        lam = None
+        flux_rows: list = []
+        radii: list[float] = []
+        for st in states:
+            spec = spectrum_data(st.Teff_K, st.logg, st.feh_init)
+            if lam is None:
+                lam = np.asarray(spec["wavelength"], dtype=float)
+            flux_rows.append(spec["flux"])
+            radii.append(st.R_rsun)
+        mags = band_mags_stack(
+            lam, np.asarray(flux_rows, dtype=float), np.asarray(radii, dtype=float),
+            10.0, av=0.0,
+        )
+    except (SpectraDataMissing, FiltersMissing) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    have_bv = "B" in mags and "V" in mags
+    points = []
+    for i, st in enumerate(states):
+        row = {
+            "age_yr": st.age_yr,
+            "eep": st.eep,
+            "phase": st.phase,
+            "teff": st.Teff_K,
+            "mv": float(mags["V"][i]),
+        }
+        if have_bv:
+            row["bv0"] = float(mags["B"][i] - mags["V"][i])
+        if "BP" in mags:
+            row["bp"] = float(mags["BP"][i])
+        points.append(row)
+    return {"bands": band_names(), "points": points, "has_bv": have_bv}
 
 
 @app.get("/alpha_spectrum")
