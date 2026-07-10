@@ -388,6 +388,22 @@ requires_bpass_data = pytest.mark.skipif(
 )
 
 
+def bpass_hrd_available() -> bool:
+    """True if the Chunk-2 HR-diagram number-density cube is on disk (data/bpass/bpass_hrd.npz,
+    gitignored, host-baked from the v2.2.1 hrs files — see scripts/bake_bpass_hrd.py)."""
+    from star_sim.bpass import hrd_available
+
+    return hrd_available()
+
+
+# The /population_hrd (HR-diagram number-density overlay, Chunk 2) tests need the host-baked
+# HRD cube — a DIFFERENT cube from the SED spectra one. See scripts/bake_bpass_hrd.py.
+requires_bpass_hrd_data = pytest.mark.skipif(
+    not bpass_hrd_available(),
+    reason="no baked BPASS HRD cube (data/bpass/bpass_hrd.npz) — see scripts/bake_bpass_hrd.py",
+)
+
+
 def alpha_data_available() -> bool:
     """True if the α-enhanced (equivalent-Z) MESA runs are on disk (gitignored, host-run).
 

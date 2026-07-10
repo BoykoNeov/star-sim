@@ -82,7 +82,12 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   **O·B·A·F·G·K·M spectral-class bands** (letters above the top frame line, living view
   only), and dotted **iso-radius diagonals** (constant-R graph paper from L=4πR²σT⁴,
   living AND endgame views — the WD cooling track slides down one; never the SN light
-  curve — see [[star-sim-frontend-ux]]).
+  curve — see [[star-sim-frontend-ux]]); plus a **coeval-population number-density overlay**
+  (`setPopulationHRD`, BPASS Chunk 2 — a translucent cell heatmap of stars/1e6M☉ per
+  (logTeff, logL) cell in the LIVING view only, behind the track: MAGENTA where binaries
+  populate cells single-star evolution leaves empty (blue stragglers, stripped-He), faint
+  cyan where in both; the HR-panel twin of the SED wedge, driven by the shared
+  `#population-toggle` — see [[star-sim-coeval-ensemble-bpass]]).
   `layout.js` is the draggable/responsive **dashboard** layer (a reorder-in-flow
   sortable over the flex-wrap panel container, see [[star-sim-draggable-responsive-panels]]).
   `comp.js` is the §5.4 composition panel — **three** views via `setMode` (bulk
@@ -774,7 +779,28 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-ux-age-tick-fixes]], [[star-sim-phase2-shaders]],
   [[star-sim-phase3-lane-emden]].
 
-### Coeval-ensemble overlay (BPASS — the **first ENSEMBLE sibling**; `/population` bypasses PROVIDER)
+### Coeval-ensemble overlay (BPASS — the **first ENSEMBLE sibling**; `/population` + `/population_hrd` bypass PROVIDER)
+- **Chunk 2 BUILT 2026-07-10 — the HR-diagram NUMBER-DENSITY overlay (the HR-panel twin of Chunk 1's
+  SED wedge; 405 pytest [+2], Playwright 1440+390 zero console errors).** At the marker's ([Fe/H], age)
+  the coeval population's star count per (logTeff, logL) cell, single vs +binaries, drawn as a
+  translucent cloud on the LIVE HR panel with the user's star as one point in it. **Data is a DIFFERENT
+  release from Chunk 1's v2.3 spectra** (the v2.3 Zenodo record is spectra-ONLY) — the BPASS **v2.2.1**
+  `hrs` files, **RANGE-extracted** from the 1.5 GB starter-kit Zenodo zip (10.5281/zenodo.7340797,
+  pulling only the 26 `hrs-{sin,bin}.z*.dat` members via HTTP ranges + `zipfile`, never the whole zip;
+  DataCentral 500'd on big files, Google-Drive is hard headless). Schema from `hoki.load._hrTL`: TL type,
+  3 surface-H blocks (the low-H = stripped/He stars), z-code→[Fe/H]=log10(Z/0.020) in the FILENAME.
+  `scripts/bake_bpass_hrd.py` → `data/bpass/bpass_hrd.npz` (~1.6 MB, sparse; crops the mostly-empty
+  100×100 grid to logt(28)×logl(100)); `bpass.py population_hrd()`+`hrd_available()` over a 2nd cube
+  (`BAKE_VERSION_HRD`); `/population_hrd` + `/population_status` `has_hrd`. Frontend **rides the EXISTING
+  `#population-toggle`** (one concept, both panels): `refreshPopulation` fetches both routes in parallel
+  (HRD degrades via `.catch(null)`) → `hr.setPopulationHRD` draws MAGENTA binary-only cells (single ≤20%
+  of binary — blue stragglers/stripped-He, the payoff) + faint CYAN where in both + a bottom-left legend.
+  **Gate 0 (measured, solar 40 Myr): single hot-region (logTeff>4.4) count 0, binary ~283; ~33× more
+  stripped stars.** **Build gotcha (Playwright caught it, tests didn't — like Chunk 1's dict-key): a
+  too-narrow 4-decade alpha range hid the whole magenta payoff (sparse hot cells ~5 dex below the cool-MS
+  peak clamped to 0 alpha); fixed with an 8-decade range + per-category floor.** HRD hosting (the SED's
+  Chunk-3 analogue) is a clean follow-up — the cube's host-baked/gitignored and `has_hrd` hides the cloud
+  on a data-less clone. [[star-sim-coeval-ensemble-bpass.md]].
 - **Chunk 1 BUILT 2026-07-10** (`docs/plans/coeval-ensemble-overlay.md`, 403 pytest, Playwright
   1440+390 zero console errors). Not a track / one state / one two-body system — a whole **coeval
   stellar population** (10⁶ M☉ born together at the marker's [Fe/H], seen at the marker's age) as an
@@ -805,12 +831,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   release). [[star-sim-coeval-ensemble-bpass]], [[star-sim-hosted-data-assets]].
 
 ### Tests
-- **403 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The coeval-population overlay sibling (`test_bpass.py`) adds **6** (5 gated
-  `requires_bpass_data` + 1 UNGATED `/population_status`): the Gate-0 UV/ionizing bin>sin regression
-  through the runtime (ionizing bin>3× sin @40 Myr, FUV bin>3× sin @1 Gyr, optical ~unchanged), snap
-  honesty, age-log-snap, route shape+`population` selector+422, and the AST sibling-imports-no-
-  PROVIDER-**and-no-StellarState** check (a population is not a star). The α-enhanced (equivalent-Z)
+- **405 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The coeval-population overlay sibling (`test_bpass.py`) adds **8** (7 gated +
+  1 UNGATED `/population_status`, which now also asserts `has_hrd`): **Chunk 1's** Gate-0 UV/ionizing
+  bin>sin regression through the runtime (ionizing bin>3× sin @40 Myr, FUV bin>3× sin @1 Gyr, optical
+  ~unchanged), snap honesty, age-log-snap, route shape+`population` selector+422, the AST
+  sibling-imports-no-PROVIDER-**and-no-StellarState** check (a population is not a star); **plus
+  Chunk 2's +2** (gated `requires_bpass_hrd_data`): the HRD Gate-0 hot-cell regression through the
+  runtime (single hot-region count 0, binary populated, ≥10 binary-only cells, stripped_bin>5×
+  stripped_sin) and the `/population_hrd` snap/route/selector/422 shape. The α-enhanced (equivalent-Z)
   overlay sibling (`test_alpha.py`) adds **9**
   (gated `requires_alpha_data`, mirroring helium; 1 UNGATED `/alpha_status` test): the per-mass
   Gate-3 asserts (enhanced ZAMS Teff/L **lower**, τ_MS **longer** — the opposite sign from He),

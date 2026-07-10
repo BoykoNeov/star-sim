@@ -1,6 +1,64 @@
 # Plan: The coeval-ensemble overlay — a whole population beside the one star (BPASS)
 
-## Status: CHUNK 1 BUILT (2026-07-10, 403 pytest [+6], Playwright-verified 1440+390 zero console errors). The SED single-vs-binary integrated-population overlay is live — the first ENSEMBLE sibling. Gate 0 MEASURED-AND-PASSED off the raw HDF5 (below) AND visibly satisfied through the runtime (the magenta binary-excess wedge). **Chunk 3 (hosting) BUILT 2026-07-10** — `fetch_bpass_baked.py` + the `bpass-baked-v1` GitHub Release (the 4.1 MB `bpass_ssp.npz`, CC-BY 4.0); verified end-to-end (fresh download → runtime serves the ionizing wedge from downloaded bytes). Chunk 2 (HRD number-density) remains deferred.
+## Status: CHUNKS 1, 2 & 3 ALL BUILT — the coeval-ensemble arc is COMPLETE on both panels.
+**Chunk 1** (2026-07-10, SED single-vs-binary integrated-population overlay). **Chunk 3** (hosting,
+2026-07-10, `fetch_bpass_baked.py` + the `bpass-baked-v1` Release for the 4.1 MB `bpass_ssp.npz`).
+**Chunk 2 BUILT 2026-07-10** (405 pytest [+2], Playwright 1440+390 zero console errors) — the
+HR-diagram NUMBER-DENSITY overlay. At the marker's ([Fe/H], age) the coeval population's star
+count per (logTeff, logL) cell, single-star vs. +binaries, drawn as a translucent cloud on the HR
+panel with the user's star sitting as one point in it. **Gate 0 MEASURED-AND-PASSED off the raw
+hrs files AND through the runtime**: at 40 Myr solar the SINGLE-star population has ZERO hot stars
+(logTeff>4.4) while the binary population has ~283 (blue stragglers / rejuvenated hot stars — 139
+binary-only cells); stripped-He (low surface-H) stars are ~33× more with binaries. Those
+binary-only cells draw MAGENTA (the SED wedge's "binaries" hue) — the HR-panel twin of the SED's
+UV wedge. HRD hosting (the SED's Chunk-3 analogue) remains a clean follow-up: the cube is
+host-baked/gitignored and the `/population_status` `has_hrd` gate hides the HR cloud on a data-less
+clone (exactly how Chunk 1 shipped before Chunk 3). See "Chunk 2 — as built" below.
+
+### Chunk 2 — as built (the HRD number-density overlay)
+- **Data — a DIFFERENT release from Chunk 1's v2.3 SSP spectra** (the v2.3 Zenodo record is
+  spectra-ONLY, confirmed). The HR-diagram "hrs" number-density files live in the BPASS **v2.2.1**
+  fiducial-output release, the `imf135_300` zip on the STARTER-KIT Zenodo record
+  **10.5281/zenodo.7340797** (1.5 GB). DataCentral (v2.1, direct HTTP) 500'd on large files;
+  Google-Drive (v2.2.1) is hard headless — but Zenodo honours **HTTP range requests**, so the bake
+  reads the zip's central directory from the tail and pulls ONLY the 26 `hrs-{sin,bin}-imf135_300.z*.dat`
+  members (~0.3–0.8 MB compressed each), never the 1.5 GB whole. The v2.2.1-HRD vs v2.3-spectra
+  version gap is caption-owned (different panel, no byte-consistency requirement).
+- **hrs schema (from hoki.load._hrTL, MEASURED not recalled):** each file is (45900,100) ASCII =
+  51 ages × 9 blocks × 100 rows; the 9 = 3 HR types {TL,Tg,TTG} × 3 surface-H bins {high,med,low}.
+  We take type **TL** (rows 0:15300), all_H = high+med+low; grid[age, ti, li] with logTeff=0.1+0.1·ti
+  (real stars ti~33..55), logL=−2.9+0.1·li; values = stars per 1e6 Msun per cell at that age bin (the
+  raw per-age count — hoki's dt weighting is only for age-RANGE stacking). Metallicity keyed by
+  **z-code in the FILENAME** (zem5..z040), mapped to [Fe/H]=log10(Z/0.020) ourselves (the plan's
+  gotcha). Ages = log 6.0..11.0 → age_gyr=10^(logage−9), matching the Chunk-1 axis.
+- **Bake** `scripts/bake_bpass_hrd.py` (host; the ranged-zip extraction is built in) → a compact
+  `data/bpass/bpass_hrd.npz` (~1.6 MB — the sparse density compresses hugely): `feh(13)`, `age_gyr(51)`,
+  cropped `logt(28)`/`logl(100)` (the occupied window + margin — the 100×100 grid is mostly empty),
+  `dens_sin`/`dens_bin (13,51,28,100) float32`, `stripped_sin`/`stripped_bin (13,51)` (the ~33× stat).
+- **Runtime** `bpass.py` gains `population_hrd(feh, age_gyr, population)` + `hrd_available()` over a
+  SECOND lazy cube (`_BpassHRD`, `BAKE_VERSION_HRD`), same snap idiom (feh linear, age log10), pure
+  numbers. **Route** `/population_hrd` (bypasses PROVIDER, snap-always, 503 unbaked); `/population_status`
+  now returns `has_hrd` too.
+- **Frontend** rides the EXISTING `#population-toggle` (one concept — "show the coeval population" —
+  lights up BOTH panels): `main.js refreshPopulation` fetches `/population` and `/population_hrd` in
+  parallel (HRD degrades gracefully via its own `.catch(null)`) and pushes to `hr.setPopulationHRD`.
+  `hr.js` draws the density as a translucent cell heatmap in the LIVING view only (behind track/marker),
+  clipped to the frame: alpha ∝ log-count over a WIDE 8-decade range + a per-category floor (the sparse
+  hot binary-only cells are ~5 dex below the cool-MS peak — a narrow range hid them; the floor keeps
+  presence readable, categorical not a density claim), MAGENTA where the single-star pop is ≤20% of the
+  binary count (binary-only), faint CYAN where present in both, + a compact bottom-left legend. Teardown
+  on toggle-off / any mode switch clears it. The shared `#population-note` gains the HRD lesson + the
+  measured stripped-star excess at that age.
+- **Tests** `test_bpass.py` +2 (gated `requires_bpass_hrd_data`): the Gate-0 hot-cell / stripped-star
+  regression through the runtime + the snap/route/selector/422 shape; the ungated `/population_status`
+  test now also asserts `has_hrd`. `conftest` `requires_bpass_hrd_data`.
+
+### The build gotcha (Playwright caught it, the tests didn't)
+The HRD overlay first drew the cool-MS cloud fine but the ENTIRE magenta binary-only payoff was
+INVISIBLE — a too-narrow 4-decade alpha range clamped the sparse hot cells (~1–10 stars each, ~5 dex
+below the ~10⁵ cool-MS peak) to zero alpha. The Gate-0 tests passed the whole time (they assert the
+counts, not the render). Fixed by widening to 8 decades + a per-category alpha floor. **Lesson (again):
+a passing data-gate test doesn't prove the payoff reached the canvas — look at the pixels.**
 
 ## Chunk 1 — what shipped (the build, as built)
 
@@ -158,12 +216,15 @@ real schema, not a recalled guess — the boron-b8 / α-axis discipline):
   intermediate age — the measured payoff); route shape + 422; the AST sibling-imports-no-
   PROVIDER check.
 
-### Chunk 2 (deferred) — HRD number-density overlay on the HR panel
-- Recon the separate BPASS **numbers** release (plain-text census, its own `fetch`/handoff).
-- Overlay a per-cell number-density contour on the existing HR panel at the marker's (Z, age);
-  the user's star sits as one point in the cloud; the single↔binary toggle shows binaries
-  populating the blue-straggler / stripped-He / hot-subdwarf regions single-star tracks leave
-  empty. Gate 0 = those regions light up only in `bin`.
+### Chunk 2 — HRD number-density overlay on the HR panel — BUILT 2026-07-10
+- Data recon settled: NOT the v2.3 spectra record — the **v2.2.1** `hrs` files, range-extracted
+  from the starter-kit Zenodo zip (10.5281/zenodo.7340797). Schema from hoki.load._hrTL (measured).
+- Built as a translucent number-density cloud on the LIVE HR panel at the marker's ([Fe/H], age),
+  the user's star as one point in it. Followed the SED precedent (draw-both + highlight the excess,
+  NO separate single↔binary toggle — the existing `#population-toggle` drives both panels): cells
+  the binary population fills that the single-star pop leaves ~empty draw MAGENTA (blue stragglers,
+  stripped-He stars), cells present in both draw cyan. Gate 0 = those magenta cells (measured: single
+  hot-region count 0, binary ~283 at 40 Myr; ~33× stripped stars). See "Chunk 2 — as built" up top.
 
 ### Chunk 3 (hosting) — BUILT 2026-07-10
 - `fetch_bpass_baked.py` (the `fetch_coelho_baked.py` single-cube precedent — flat

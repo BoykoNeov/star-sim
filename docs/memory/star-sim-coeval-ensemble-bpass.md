@@ -1,8 +1,10 @@
 ---
 name: star-sim-coeval-ensemble-bpass
-description: The BPASS coeval-population SED overlay — the first ENSEMBLE sibling (bpass.py + /population), single-vs-binary integrated spectra. Chunks 1 (overlay) + 3 (hosting) BUILT; Chunk 2 (HRD number-density) deferred.
-metadata:
+description: "The BPASS coeval-population overlays — the first ENSEMBLE sibling (bpass.py + /population + /population_hrd), single-vs-binary. Chunks 1 (SED spectrum), 2 (HRD number-density), 3 (SED hosting) ALL BUILT — the arc is complete on both panels."
+metadata: 
+  node_type: memory
   type: project
+  originSessionId: 58fc9a43-acfe-4fd8-b5b2-818477be0a6a
 ---
 
 The **coeval-ensemble overlay** (plan `docs/plans/coeval-ensemble-overlay.md`) — the
@@ -81,8 +83,50 @@ take), reporting `"ok"` (downloaded, hash-verified), then `population_sed(0.0, 0
 Gate-0 ionizing wedge (bin/sin ≈ 906× summed over all <912 Å bins) from nothing but downloaded
 bytes.
 
-**Next**: Chunk 2 (HRD number-density overlay — needs the SEPARATE BPASS "numbers" plain-text
-release, its own recon). See [[star-sim-binary-stripped]]
+**Chunk 2 BUILT 2026-07-10 (the HR-diagram NUMBER-DENSITY overlay — the HR-panel twin of the SED
+wedge; 405 pytest [+2], Playwright 1440+390 zero console errors):**
+- **Data — a DIFFERENT release from Chunk 1's v2.3 spectra** (the v2.3 Zenodo record is spectra-ONLY,
+  confirmed). The HR-diagram "hrs" number-density files are the BPASS **v2.2.1** fiducial-output
+  release, the `imf135_300` zip on the STARTER-KIT Zenodo record **10.5281/zenodo.7340797** (1.5 GB).
+  Fetch odyssey: DataCentral (v2.1, direct HTTP) 500'd on large files (small files OK — a server
+  large-file bug); Google-Drive (v2.2.1) hard headless. **Win: Zenodo honours HTTP RANGE requests** →
+  a range-backed file object handed to `zipfile` reads the central directory from the tail and pulls
+  ONLY the 26 `hrs-{sin,bin}.z*.dat` members (~0.3–0.8 MB compressed each), never the 1.5 GB whole.
+  The v2.2.1-HRD-vs-v2.3-spectra version gap is caption-owned (different panel).
+- **hrs schema (from hoki.load._hrTL — MEASURED):** each file (45900,100) ASCII = 51 ages × 9 blocks
+  × 100 rows; 9 = 3 HR types {TL,Tg,TTG} × 3 surface-H bins {high,med,LOW}. Type **TL** (rows 0:15300),
+  all_H=hi+med+lo; grid[age,ti,li] logTeff=0.1+0.1·ti (real stars ti~33..55), logL=−2.9+0.1·li; values
+  = stars/1e6Msun per cell per age (RAW per-age count; hoki's dt weighting is only for age-RANGE
+  stacking). **Metallicity keyed by z-code in the FILENAME** (zem5..z040 → [Fe/H]=log10(Z/0.020) — the
+  gotcha the plan flagged; the low-H block = the stripped/He stars).
+- **Bake** `scripts/bake_bpass_hrd.py` (ranged extraction built in) → `data/bpass/bpass_hrd.npz` (~1.6
+  MB — sparse density compresses hugely; crops the mostly-empty 100×100 grid to the occupied logt(28)/
+  logl(100) window). **Runtime** `bpass.py` `population_hrd()`+`hrd_available()` over a 2nd cube
+  (`_BpassHRD`, `BAKE_VERSION_HRD`, same snap idiom). **Route** `/population_hrd` (bypasses PROVIDER,
+  snap-always); `/population_status` gains `has_hrd`.
+- **Frontend rides the EXISTING `#population-toggle`** (one concept, both panels): `refreshPopulation`
+  fetches `/population`+`/population_hrd` in parallel (HRD `.catch(null)` degrades gracefully) →
+  `hr.setPopulationHRD`. `hr.js` draws a translucent cell heatmap in the LIVING view only (behind
+  track/marker): MAGENTA where the single pop is ≤20% of the binary count (binary-only — blue
+  stragglers/stripped-He), faint CYAN where in both, + a bottom-left legend. Shared note gains the HRD
+  lesson + the stripped-star excess.
+- **Gate 0 (measured, solar 40 Myr):** single hot-region (logTeff>4.4) count = **0**, binary ~**283**
+  (139 binary-only cells); stripped-He total ~**33×** more with binaries.
+- **THE BUILD GOTCHA (Playwright caught it, tests didn't — AGAIN, exactly like Chunk 1's dict-key):**
+  the entire magenta payoff was INVISIBLE at first — a too-narrow 4-decade alpha range clamped the
+  sparse hot cells (~1–10 stars, ~5 dex below the ~10⁵ cool-MS peak) to zero alpha. The Gate-0 tests
+  passed the whole time (they assert counts, not pixels). Fixed with an 8-decade range + a per-category
+  alpha FLOOR (the binary-only cells are categorical — "singles can't make these" — not a density
+  claim). **Lesson restated: a passing data-gate test doesn't prove the payoff reached the canvas.**
+- **Advisor arc (Chunk 2):** pre-build — fetchability is the pivot, test it (CKAN API + gdown +
+  range-extract), scope tiny, measure Gate 0 through the parser BEFORE any UI, z-code→[Fe/H] yourself,
+  crop the mostly-empty grid, version gap is caption-owned, defer overlay aesthetics until you've seen
+  the data. All followed; Gate 0 lit up decisively so the chunk was real.
+
+**HRD hosting** (the SED's Chunk-3 analogue) is a clean FOLLOW-UP, deliberately not done this session:
+the cube is host-baked/gitignored and the `has_hrd` gate hides the HR cloud on a data-less clone (how
+Chunk 1 shipped before Chunk 3). It also needs the v2.2.1 starter-kit license confirmed CC-BY + a
+`gh release` asset upload (outward-facing). See [[star-sim-hosted-data-assets]], [[star-sim-binary-stripped]]
 (the single-star stripped endpoint), [[star-sim-co-hms-rlo]] (POSYDON co-evolved binary tracks),
 [[star-sim-phase5-spectra]] (the spectra-bake precedent), [[star-sim-nonthermal-sed-plan]] (the
-SED panel this overlays).
+SED panel Chunk 1 overlays).

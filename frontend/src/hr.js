@@ -222,6 +222,16 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   let heliumBaseline = null;   // array of StellarState (Y≈0.27 track)
   let heliumEnhanced = null;   // array of StellarState (Y≈0.40 track)
   let heliumMeta = null;       // { yBase, yEnh } for the on-plot labels
+  // --- coeval-population HR-diagram number-density overlay (BPASS, Chunk 2) --------------
+  // The HR-panel sibling of the SED population overlay: at the marker's ([Fe/H], age), the
+  // count of stars per (logTeff, logL) cell in a whole coeval population, single vs +binaries
+  // (from /population_hrd). Drawn as a translucent backdrop in the LIVING view only — the
+  // user's star (the marker) sits as one point in the cloud it was born into. The payoff, the
+  // HR-panel analogue of the SED's magenta wedge: cells the BINARY population fills that the
+  // single-star population leaves EMPTY (blue stragglers, stripped-He stars) are drawn MAGENTA
+  // (same "binaries" hue as the SED overlay); cells present in both draw faint cyan. Pushed in
+  // by main.js via setPopulationHRD(); a pure pushed-data consumer (hr.js owns no fetch).
+  let populationHRD = null;    // { logt, logl, sin, bin, maxCount } or null
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -946,6 +956,103 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
+  // The coeval-population HR-diagram number-density backdrop (BPASS, Chunk 2). One soft cell
+  // per occupied (logTeff, logL) bin, clipped to the plot frame; alpha ∝ log-scaled star
+  // count (a 4-decade dynamic range so the sparse hot cells still read). Colour carries the
+  // single-vs-binary story directly: a cell the binary population fills but the single-star
+  // population leaves ~empty (blue stragglers, stripped-He stars — Gate 0) is MAGENTA (the
+  // SED overlay's "binaries" hue); a cell present in both is faint cyan. So the magenta cloud
+  // IS "what binaries add," the HR-panel twin of the SED's magenta wedge. Drawn behind the
+  // track/marker so the live star stays the focus, on top of its own population.
+  const POP_ALPHA = 0.55;   // ceiling alpha for the densest cell
+  function drawPopulationHRD() {
+    const { logt, logl, sin, bin, maxCount } = populationHRD;
+    if (!logt || !logt.length || maxCount <= 0) return;
+    // half a 0.1-dex cell in each axis, in screen px (constant across the frame — the axes
+    // are linear in log). Guard the sign (Teff axis is reversed → dx from a +0.05 step is
+    // negative before abs).
+    const dx = Math.abs(xOf(0.05) - xOf(0)) ;
+    const dy = Math.abs(yOf(0.05) - yOf(0));
+    // DYN is deliberately WIDE (8 decades): the binary-only hot cells (blue stragglers,
+    // stripped-He stars — the payoff) hold only ~1–10 stars each, ~5+ decades below the dense
+    // cool-MS peak (~10⁵–10⁶). A narrow range would clamp them to zero alpha and hide the very
+    // thing this overlay exists to show. A per-category FLOOR then keeps presence readable:
+    // any binary-only cell is clearly visible (it's categorical — "single stars can't make
+    // these" — not a claim of equal density; the legend + caption own that), cool cells still
+    // grade by density so the MS/giant clump reads as denser.
+    const logMax = Math.log10(maxCount), DYN = 8;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+    ctx.clip();
+    for (let ti = 0; ti < logt.length; ti++) {
+      const x = xOf(logt[ti]);
+      if (x < PAD_L - dx || x > W - PAD + dx) continue;   // off the (reversed) Teff frame
+      for (let li = 0; li < logl.length; li++) {
+        const s = sin[ti][li], b = bin[ti][li], c = b > s ? b : s;
+        if (c <= 0) continue;
+        const y = yOf(logl[li]);
+        if (y < PAD - dy || y > H - PAD + dy) continue;
+        const norm = Math.max(0, Math.min(1, (Math.log10(c) - (logMax - DYN)) / DYN));
+        // binary-excess: single-star pop empty or ≤20% of the binary count here → magenta.
+        const binaryOnly = b > 0 && s < 0.2 * b;
+        const floor = binaryOnly ? 0.24 : 0.08;
+        const a = floor + (POP_ALPHA - floor) * norm;
+        ctx.fillStyle = binaryOnly
+          ? `rgba(255,120,205,${a.toFixed(3)})`            // magenta = what binaries add
+          : `rgba(120,180,255,${(a * 0.85).toFixed(3)})`;  // cyan = present in both (dimmer)
+        ctx.fillRect(x - dx, y - dy, dx * 2, dy * 2);
+      }
+    }
+    ctx.restore();
+    drawPopulationHRDLegend();
+  }
+
+  // A compact keyed box (bottom-left, over the cool/faint corner that's usually empty) naming
+  // the two cell colours — so the HR-panel cloud isn't a mystery backdrop. The fuller lesson
+  // (per-1e6-Msun, the version systematic, the stripped-star count) lives in the shared SED
+  // population caption (main.js #population-note).
+  function drawPopulationHRDLegend() {
+    const rows = [
+      ["binary-only", "rgba(255,120,205,0.95)"],
+      ["single & binary", "rgba(120,180,255,0.9)"],
+    ];
+    ctx.save();
+    ctx.font = "10px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    let tw = 0;
+    for (const [t] of rows) tw = Math.max(tw, ctx.measureText(t).width);
+    const sw = 12, gap = 5, rowH = 13, padB = 5;
+    const boxW = padB + sw + gap + tw + padB, boxH = rows.length * rowH + padB;
+    const x0 = PAD_L + 5, y0 = H - PAD - boxH - 5;
+    ctx.fillStyle = "rgba(20,24,38,0.72)";
+    ctx.fillRect(x0, y0, boxW, boxH);
+    ctx.strokeStyle = "#283149"; ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, boxW, boxH);
+    rows.forEach(([t, col], i) => {
+      const y = y0 + padB + i * rowH;
+      ctx.fillStyle = col;
+      ctx.fillRect(x0 + padB, y + 1, sw, sw - 3);
+      ctx.fillStyle = "#cfd6e4";
+      ctx.fillText(t, x0 + padB + sw + gap, y + sw - 4);
+    });
+    ctx.restore();
+  }
+
+  function setPopulationHRD(data) {
+    if (!data || !data.dens_bin || !data.dens_sin) { populationHRD = null; draw(); return; }
+    let maxCount = 0;
+    for (const row of data.dens_bin) for (const v of row) if (v > maxCount) maxCount = v;
+    for (const row of data.dens_sin) for (const v of row) if (v > maxCount) maxCount = v;
+    populationHRD = { logt: data.logt, logl: data.logl, sin: data.dens_sin, bin: data.dens_bin, maxCount };
+    draw();
+  }
+  function clearPopulationHRD() {
+    if (populationHRD == null) return;
+    populationHRD = null;
+    draw();
+  }
+
   function draw() {
     if (pulseMode) { drawThermalPulses(); return; }
     if (snMode) { drawSupernova(); return; }
@@ -956,6 +1063,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     if (endgameMode) {
       drawEndgameTrack();
     } else {
+      if (populationHRD) drawPopulationHRD();  // the coeval-population cloud, behind the track
       drawClassBands();               // the faint O·B·A·F·G·K·M anchor, behind everything
       if (showOverlay) drawOverlay(); // behind the track, so the live star stays on top
       drawPreviewEndgame();           // ghostly "headed for the WD corner" path, clipped
@@ -1083,5 +1191,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack, setHeliumOverlay, clearHeliumOverlay };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack, setHeliumOverlay, clearHeliumOverlay, setPopulationHRD, clearPopulationHRD };
 }

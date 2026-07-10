@@ -40,7 +40,13 @@ from .binary import (
     stripped_star_payload,
 )
 from .structure import StructureDataMissing, interior_structure
-from .bpass import BpassDataMissing, bpass_available, population_sed
+from .bpass import (
+    BpassDataMissing,
+    bpass_available,
+    hrd_available,
+    population_hrd,
+    population_sed,
+)
 from .helium import HeliumDataMissing, helium_available, helium_overlay
 from .alpha import AlphaDataMissing, alpha_available, alpha_overlay
 from .supernova import Progenitor, supernova_model
@@ -414,13 +420,32 @@ def population(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/population_hrd")
+def population_hrd_route(
+    feh: float = Query(..., ge=-5.0, le=2.0, description="initial [Fe/H]"),
+    age_gyr: float = Query(..., gt=0.0, description="population age / Gyr"),
+    population: str = Query("both", pattern="^(both|sin|bin)$",
+                            description="which grids: both (default), sin, or bin"),
+) -> dict:
+    """Chunk 2 — the coeval population's number density over the HR diagram (star count per
+    (logTeff, logL) cell) at the marker's ([Fe/H], age), single-star vs. +binaries. Like
+    `/population` this bypasses `PROVIDER` (a population is a sibling, `bpass.py`). The
+    HR-panel analogue of `/population`'s SED wedge: the binary grid lights up hot / stripped
+    cells the single grid leaves empty (Gate 0, measured). Snap-always; 503 if unbaked."""
+    try:
+        return population_hrd(feh, age_gyr, population)
+    except BpassDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @app.get("/population_status")
 def population_status() -> dict:
-    """Whether the coeval-population overlay has data — the honesty gate the frontend reads
-    to decide if the toggle appears (mirrors `/helium_status`). The BPASS cube is
+    """Whether the coeval-population overlays have data — the honesty gate the frontend reads
+    to decide if the toggle appears (mirrors `/helium_status`). The BPASS cubes are
     gitignored/host-baked (like the MESA runs), so a fresh clone has none; hiding the toggle
-    then beats showing one that can only 503. Cheap (a stat), always 200."""
-    return {"has_grid": bpass_available()}
+    then beats showing one that can only 503. `has_grid` is the SED-spectrum cube (Chunk 1);
+    `has_hrd` the HR-diagram number-density cube (Chunk 2). Cheap (stats), always 200."""
+    return {"has_grid": bpass_available(), "has_hrd": hrd_available()}
 
 
 @app.get("/helium")

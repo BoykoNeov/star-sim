@@ -21,23 +21,26 @@ import pytest
 from fastapi.testclient import TestClient
 
 from star_sim.api import app
-from star_sim.bpass import bpass_available, population_sed
+from star_sim.bpass import bpass_available, hrd_available, population_hrd, population_sed
 
-from .conftest import requires_bpass_data
+from .conftest import requires_bpass_data, requires_bpass_hrd_data
 
 client = TestClient(app)
 
 
 # --- the data-availability honesty gate (UNGATED — must answer even with no data) ---
 def test_population_status_route_always_answers() -> None:
-    """/population_status is the frontend's toggle-visibility gate — a plain 200 with a bool
-    whether or not the BPASS cube is on disk (a fresh clone has none). The one test here that
-    does NOT require the data, so the gate is exercised on every checkout."""
+    """/population_status is the frontend's toggle-visibility gate — a plain 200 with bools
+    whether or not the BPASS cubes are on disk (a fresh clone has none). The one test here that
+    does NOT require the data, so the gate is exercised on every checkout. `has_grid` is the
+    SED-spectrum cube (Chunk 1); `has_hrd` the HR-diagram number cube (Chunk 2)."""
     resp = client.get("/population_status")
     assert resp.status_code == 200
     body = resp.json()
     assert isinstance(body.get("has_grid"), bool)
     assert body["has_grid"] == bpass_available()
+    assert isinstance(body.get("has_hrd"), bool)
+    assert body["has_hrd"] == hrd_available()
 
 
 def _band_flux(lam: np.ndarray, flux: np.ndarray, lo: float, hi: float) -> float:
@@ -125,6 +128,65 @@ def test_route_shape_and_selectors_and_422() -> None:
     assert client.get("/population", params={"feh": 99, "age_gyr": 1.0}).status_code == 422
     assert client.get("/population", params={"feh": 0.0, "age_gyr": 1.0,
                                              "population": "nope"}).status_code == 422
+
+
+# --- Chunk 2: the HR-diagram number-density overlay ---------------------------
+@requires_bpass_hrd_data
+def test_hrd_binaries_fill_hot_cells_singles_leave_empty() -> None:
+    """THE Chunk-2 payoff, through the runtime (the HR-panel twin of the UV wedge): at an
+    intermediate age the BINARY population puts stars in the hot HR-diagram cells (logTeff>4.4
+    — blue stragglers, stripped-He stars) that the SINGLE-star population leaves EMPTY. Measured
+    off the raw hrs files (Gate 0, 2026-07-10, solar 40 Myr): single hot-region count = 0,
+    binary ~283; stripped-He (low surface-H) total ~33x more with binaries. We assert the
+    single-star hot region is empty while the binary one is populated, and that binaries make
+    strictly more stripped stars — a re-bake/units slip that flattens it fails loudly."""
+    d = population_hrd(0.0, 0.04)   # solar, 40 Myr
+    logt = np.asarray(d["logt"])
+    sin = np.asarray(d["dens_sin"])   # (nT, nL)
+    binp = np.asarray(d["dens_bin"])
+    hot = logt > 4.4
+    sin_hot = float(sin[hot].sum())
+    bin_hot = float(binp[hot].sum())
+    assert sin_hot == pytest.approx(0.0, abs=1e-9), "single-star pop has no hot stars at 40 Myr"
+    assert bin_hot > 100.0, "the binary pop must populate the hot region (blue stragglers)"
+    # some cells are literally binary-only (single empty, binary present) — the magenta payoff
+    binary_only = int(((sin[hot] == 0) & (binp[hot] > 0)).sum())
+    assert binary_only > 10
+    # stripped-He (low surface-H) stars are dominantly a binary product
+    assert d["stripped_bin"] > 5.0 * max(d["stripped_sin"], 1e-9)
+
+
+@requires_bpass_hrd_data
+def test_hrd_snap_and_route_and_422() -> None:
+    """/population_hrd snaps ([Fe/H], age) to a true node (flagged in-band, never 422 for an
+    off-grid but structurally valid request — the snap-always contract), serves the axes + the
+    density grid(s), and 422s on structurally invalid input."""
+    # snap honesty: solar on-grid is unflagged; a far [Fe/H] snaps + flags.
+    r = population_hrd(0.0, 1.0)
+    assert r["feh_snapped"] == pytest.approx(0.0, abs=1e-6)
+    assert r["feh_snapped_far"] is False
+    far = population_hrd(1.5, 1.0)
+    assert far["feh_snapped"] <= 0.31 and far["feh_snapped_far"] is True
+
+    resp = client.get("/population_hrd", params={"feh": 0.0, "age_gyr": 0.04})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) >= {"feh_snapped", "age_gyr_snapped", "logt", "logl",
+                         "dens_sin", "dens_bin", "stripped_sin", "stripped_bin", "zsun_bpass"}
+    nT, nL = len(body["logt"]), len(body["logl"])
+    assert len(body["dens_sin"]) == nT and len(body["dens_sin"][0]) == nL
+    assert len(body["dens_bin"]) == nT and len(body["dens_bin"][0]) == nL
+
+    # the selector serves just the requested grid(s)
+    only_bin = client.get("/population_hrd",
+                          params={"feh": 0.0, "age_gyr": 0.04, "population": "bin"}).json()
+    assert "dens_bin" in only_bin and "dens_sin" not in only_bin
+
+    # 422 for structurally invalid input.
+    assert client.get("/population_hrd", params={"feh": 0.0, "age_gyr": 0}).status_code == 422
+    assert client.get("/population_hrd", params={"feh": 99, "age_gyr": 1.0}).status_code == 422
+    assert client.get("/population_hrd", params={"feh": 0.0, "age_gyr": 1.0,
+                                                 "population": "nope"}).status_code == 422
 
 
 # --- the §3 boundary: the sibling never routes through PROVIDER ---------------

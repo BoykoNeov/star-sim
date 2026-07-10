@@ -521,7 +521,8 @@ const ALPHA_MASS_MIN = 0.7, ALPHA_MASS_MAX = 7.0, ALPHA_FEH_TOL = 0.25;
 // age-scrub doesn't refetch (the payload would be identical).
 let populationOn = false;
 let populationToken = 0;        // latest-wins guard for the /population fetch (feh/age move fast)
-let populationHasGrid = false;  // /population_status: is the BPASS cube baked? (else hide the toggle)
+let populationHasGrid = false;  // /population_status: is the BPASS SED cube baked? (else hide the toggle)
+let populationHasHRD = false;   // /population_status has_hrd: is the HR-diagram number cube baked?
 let popNodeKey = "";            // last-fetched ([Fe/H], age-node) bucket — skip refetch if unchanged
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
@@ -2753,6 +2754,7 @@ function populationOff() {
   popNodeKey = "";
   if (els.populationToggle) els.populationToggle.checked = false;
   sed.clearPopulation();
+  hr.clearPopulationHRD();        // remove the HR-panel population cloud too
   updatePopulationControl();     // reset the note text
 }
 
@@ -2767,6 +2769,7 @@ function dropPopulationForModeSwitch() {
   if (els.populationToggle) els.populationToggle.checked = false;
   if (els.populationControl) els.populationControl.hidden = true;
   sed.clearPopulation();
+  hr.clearPopulationHRD();        // the HR-panel cloud is living-only — drop it on any mode switch
 }
 
 // Fetch + push the population spectra for the marker's ([Fe/H], age). Called from paintState;
@@ -2784,9 +2787,16 @@ async function refreshPopulation(s) {
     `${(Math.round(Math.log10(ageGyr) / 0.03) * 0.03).toFixed(2)}`;
   if (key === popNodeKey) return;
   const token = ++populationToken;
-  let data;
+  let data, hrd = null;
   try {
-    data = await fetchJSON(`/population?feh=${feh}&age_gyr=${ageGyr}`);
+    // The SED spectrum (Chunk 1) is required; the HR-diagram number density (Chunk 2) is an
+    // independent cube — fetch both in parallel, but degrade gracefully if only the HRD is
+    // absent (its own .catch → null; hr.setPopulationHRD(null) just clears the HR cloud).
+    const reqs = [fetchJSON(`/population?feh=${feh}&age_gyr=${ageGyr}`)];
+    reqs.push(populationHasHRD
+      ? fetchJSON(`/population_hrd?feh=${feh}&age_gyr=${ageGyr}`).catch(() => null)
+      : Promise.resolve(null));
+    [data, hrd] = await Promise.all(reqs);
   } catch (e) {
     if (token !== populationToken || !populationOn) return;
     popNodeKey = "";
@@ -2798,15 +2808,29 @@ async function refreshPopulation(s) {
   if (token !== populationToken || !populationOn || mode !== "live") return;
   popNodeKey = key;
   sed.setPopulation(data);
+  hr.setPopulationHRD(hrd);   // the coeval-population cloud on the HR panel (null-safe: clears)
   if (els.populationNote) {
     const fehNote = data.feh_snapped_far ? " (off-grid, snapped)" : "";
     const ageNote = data.age_snapped_far ? " (age off-grid)" : "";
+    // When the HR-diagram cube is present, add the number-density lesson (the magenta cells)
+    // and the measured stripped-star excess at this age — the HR-panel counterpart of the wedge.
+    let hrdLine = "";
+    if (hrd) {
+      const rs = hrd.stripped_sin, rb = hrd.stripped_bin;
+      const ratio = rs > 0 ? (rb / rs) : (rb > 0 ? Infinity : 0);
+      const ratioTxt = ratio === Infinity ? "only binaries make them here"
+        : ratio >= 2 ? `~${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}× more with binaries`
+        : "similar in both";
+      hrdLine = ` On the HR diagram, magenta cells mark stars binaries populate that single-star ` +
+        `evolution leaves empty (blue stragglers, stripped-He stars — ${ratioTxt}).`;
+    }
     els.populationNote.textContent =
       `A coeval population at [Fe/H] ${data.feh_snapped.toFixed(2)}${fehNote}, ` +
       `age ${fmtPopAge(data.age_gyr_snapped)}${ageNote}: the magenta WEDGE marks where binaries ` +
       `exceed single-star only (dashed) — dominantly the UV/ionizing light they sustain ` +
-      `(stripped hot stars). Scrub younger for the ionizing extreme, ~1 Gyr for the FUV. ` +
-      `Per 10⁶ M☉; BPASS Z_⊙=0.020.`;
+      `(stripped hot stars). Scrub younger for the ionizing extreme, ~1 Gyr for the FUV.` +
+      hrdLine +
+      ` Per 10⁶ M☉; BPASS Z_⊙=0.020 (HR numbers v2.2.1, spectra v2.3).`;
   }
 }
 
@@ -3726,7 +3750,11 @@ async function init() {
     try { alphaHasGrid = !!(await fetchJSON("/alpha_status")).has_grid; } catch { alphaHasGrid = false; }
     // The coeval-population overlay likewise has data only if the BPASS cube was host-baked
     // (gitignored) — probe once so the toggle is hidden on a fresh clone.
-    try { populationHasGrid = !!(await fetchJSON("/population_status")).has_grid; } catch { populationHasGrid = false; }
+    try {
+      const ps = await fetchJSON("/population_status");
+      populationHasGrid = !!ps.has_grid;    // SED-spectrum cube (Chunk 1) — gates the toggle
+      populationHasHRD = !!ps.has_hrd;      // HR-diagram number cube (Chunk 2) — adds the HR cloud
+    } catch { populationHasGrid = false; populationHasHRD = false; }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
