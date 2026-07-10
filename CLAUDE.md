@@ -56,9 +56,15 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   CSV parser over the *committed* `star_sim/data/gotberg_z014.csv`, snaps (Z,Minit),
   never imports a provider — the ~70% WR channel; also carries path (b): `/binary_pair`
   composes the donor + a PROVIDER companion, and `roche_geometry()` computes the pure
-  RLOF-moment Roche-lobe geometry from the CSV's `P_init` column), `api.py` (FastAPI, the
+  RLOF-moment Roche-lobe geometry from the CSV's `P_init` column),
+  `photometry.py` (the **observer's-view sibling** behind `/photometry` — Axis A of the outward
+  quartet: synthetic Vega photometry + CCM89 reddening turning the intrinsic surface F_λ into an
+  **apparent** magnitude / observational (B−V, M_V) CMD; a pure numpy/stdlib sibling — imports NOT
+  even `StellarState` — over the *committed* `star_sim/data/filters.json` [SVO transmission + Vega
+  ZeroPoint + DetectorType], vectorized over a flux stack for A3's track+isochrone, never a provider),
+  `api.py` (FastAPI, the
   swap point; also hosts `/polytrope`, `/structure`, `/spectrum`, `/binary`,
-  `/binary_pair` and `/isochrone`, the routes that do NOT go through `PROVIDER`).
+  `/binary_pair`, `/isochrone` and `/photometry`, the routes that do NOT go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
@@ -888,6 +894,31 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   errors. [[star-sim-isochrone-cluster]], [[star-sim-hosted-data-assets]]; plan
   `docs/plans/outward-quartet-atlas.md` §Axis B.
 
+### Observer's view / observational CMD (Axis A of the outward quartet — `photometry.py`; `/photometry` bypasses PROVIDER)
+- **A1 BUILT 2026-07-10 (backend + data, +10 tests, 422 pytest).** A2/A3 (frontend Observer controls +
+  the CMD panel) are next. The theory→telescope bridge: turn the intrinsic star (surface F_λ, R, Teff)
+  into an **apparent** magnitude — reddened by dust, dimmed by distance — and plot the observational
+  **(B−V, M_V) CMD**, the observer's HR diagram (composes with the Axis-B isochrone into a cluster CMD;
+  the quartet's **capstone**). **Gate 0 measured FIRST (advisor-driven):** the main absorption cube is
+  **absolute physical surface F_λ** (the served Sun integrates to **98.2%** of the Planck in-band σT⁴),
+  so `observed = surface·(R/d)²` gives real absolute mags. **The advisor's load-bearing catch: the cube
+  stops at 8999 Å** → Gaia G/RP + 2MASS JHK are uncomputable/truncated, so the **anchor swapped M_G→M_V**
+  (flagship CMD = (B−V, M_V), the classic diagram; clean in-cube bands **Bessell B, V + Gaia BP**
+  verification). `fetch_filters.py` → **committed** `star_sim/data/filters.json` (SVO transmission + Vega
+  **ZeroPoint(Jy)** + **DetectorType** — 0 energy B/V, 1 photon BP). `photometry.py` = a **pure sibling**
+  (imports NOT even `StellarState`, AST-tested no-provider): CCM89 reddening A(λ)/A(V) + a **vectorized**
+  synth core over a flux stack (for A3's track+isochrone, no N round-trips) + DetectorType-aware
+  Vega-ZP-ratio mags. `/photometry` **composes** `spectrum_data` (full-res) + synth like `binary_pair`;
+  returns absolute M_X + apparent m_X + (B−V)₀/E(B−V)/distance modulus; 503 if cube/filters absent, 422
+  on radius≤0. **Gate 0 PASSED through the runtime:** Sun M_V=**4.832** (t 4.81±0.05), distance modulus
+  **exactly 10.000** over 10 pc→1 kpc, E(B−V)=0.296 at A_V=1. **Advisor-settled: SVO ZeroPoints, NOT a
+  Vega spectrum** (empirically ruled out — M_V nails it; a Vega SED is a rabbit hole with no astropy) —
+  the synthetic solar B−V=**0.612** is ~0.04 blue of 0.65, a known **B-band ZP-convention** offset
+  (SVO Bessell.B 3908.5 Jy vs lit ~4000–4060) that is **common-mode** across star/track/isochrone so it
+  **CANCELS in relative CMD placement** (the star still sits on the cluster locus, the turnoff still
+  dates it; color tolerance relaxed to ±0.05). E(B−V)=0.296 (< nominal 0.322) is legit source-dependent
+  band-integrated extinction, not a bug. [[star-sim-observer-cmd]]; plan `docs/plans/outward-quartet-atlas.md` §Axis A.
+
 ### Habitable-zone band (Axis D of the outward quartet — `hz.js`+`scale.js`; frontend-only, no backend)
 - **D1 BUILT 2026-07-10 (frontend-only, NO backend change, 412 pytest unchanged, Playwright 1440+390
   zero console errors).** The circumstellar liquid-water zone on the true-size scale bar — a pure VIEW of
@@ -919,8 +950,15 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   [[star-sim-habitable-zone]]; plan `docs/plans/outward-quartet-atlas.md` §Axis D.
 
 ### Tests
-- **412 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The isochrone/cluster sibling (`test_isochrone.py`, Axis B) adds **7** (5 gated
+- **422 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The observer's-view sibling (`test_photometry.py`, Axis A) adds **10** (7 gated
+  `requires_spectra_data` + 3 ungated): the **Gate-0** absolute anchor with teeth — Sun M_V=4.81±0.05 +
+  the **exactly-10.000** distance modulus (a color alone would hide a broken absolute pipeline) — the
+  B−V=0.65±0.05 shape check (loosened for the known B-band ZP offset), reddening reddens+dims with
+  E(B−V)≈0.30 at A_V=1, hotter-is-bluer, the **vectorized==scalar** core check (A3's track+isochrone
+  path), plus the UNGATED CCM89-shape and the AST sibling-imports-no-PROVIDER-**and-no-StellarState**
+  check (a magnitude is a view, not a star), route shape + 422. The isochrone/cluster sibling
+  (`test_isochrone.py`, Axis B) adds **7** (5 gated
   `requires_isochrone_data` + 2 ungated): the Gate-0 turnoff-monotone-with-age regression through the
   runtime (cooler+fainter+lighter 0.1→12 Gyr), the **MS-only-not-global-hottest** turnoff correctness
   check (with teeth — asserts a hotter non-MS star exists that a naive max would grab), the Sun-anchor

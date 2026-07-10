@@ -62,10 +62,18 @@ that, then scope Axis A to the cubes that are absolute.** Photometry on a normal
 wrong answer.
 
 **Chunks.**
-- **A1 (backend + data):** *first* confirm the main absorption cube is absolute F_λ (scope out the
-  normalized WR/stripped cubes); bake filter curves + Vega ZPs; `photometry.py` (reddening + synthetic
-  magnitudes from a served spectrum, scaled by (R/d)²); `/photometry` route. Gate 0 as a regression test
-  — the **absolute** M_G with R/d scaling, not colors alone.
+- **A1 (backend + data): ✅ BUILT 2026-07-10** (+10 tests). Gate 0 measured FIRST: the main absorption
+  cube is **absolute physical surface F_λ** (the Sun integrates to 98.2% of the Planck in-band σT⁴), so
+  ×(R/d)² gives real absolute mags. **The anchor swapped M_G → M_V** because the cube stops at **8999 Å**
+  (advisor catch — Gaia G/RP + 2MASS JHK are uncomputable/truncated); flagship CMD = **(B−V, M_V)**, clean
+  bands **Bessell B, V + Gaia BP** (verification). `fetch_filters.py` → committed `data/filters.json` (SVO
+  transmission + Vega ZeroPoint(Jy) + DetectorType per band). `photometry.py` (pure sibling, AST-tested
+  no-provider/no-StellarState): CCM89 reddening + a **vectorized** synth core (flux stack, for A3's
+  track+isochrone) + DetectorType-aware Vega-ZP mags. `/photometry` composes `spectrum_data` + synth like
+  `binary_pair`. **Gate 0 PASSED through the runtime:** Sun M_V=4.832, distance modulus exactly 10.000,
+  E(B−V)=0.296 at A_V=1. **Advisor-settled: SVO ZeroPoints, not a Vega spectrum** (empirically ruled out —
+  M_V nails it); synthetic B−V=0.612 is a known **common-mode** B-band ZP offset that cancels in relative
+  CMD placement (so the star still sits on the cluster locus, the turnoff still dates it).
 - **A2 (frontend):** an **"Observer" control group** — distance, A_V, R_V — that draws a reddened
   overlay on the SED + spectrum panels and an apparent-magnitude / color readout. Off by default →
   intrinsic view byte-unchanged.
