@@ -44,6 +44,16 @@
         <span class="help" tabindex="0" data-tip="The 3D star above is deliberately NOT to scale — its size is log-compressed so a tiny red dwarf and a vast red giant both stay visible in one frame (the true radius is in the readout). This strip restores the honest size: it plots the star's real radius on a single logarithmic length axis (in solar radii) against fixed solar-system landmarks — the SIZES of Earth, Jupiter and the Sun (warm dots, below the axis) and the ORBITS of the inner planets (blue rings, above). The orbits are the point: a giant's radius is measured not in Suns but in planetary orbits — drag a low-mass star to its red-giant tip and watch the marker sweep right until the star's surface would swallow Mercury's orbit and reach toward Mars. The shaded region left of the marker is everything smaller than this star.">?</span>
       </div>
       <canvas id="scale-canvas"></canvas>
+      <!-- Axis D — the circumstellar habitable zone (Kopparapu 2014), a light band on the scale
+           bar's log-distance axis. A pure VIEW of L + Teff (never touches the HR marker); the band
+           marches outward as the star brightens. Living-only (hidden in every endgame / stripped /
+           binary mode, where the axis is already claimed). -->
+      <label class="rot-toggle-row hz-toggle-row" for="hz-toggle">
+        <input id="hz-toggle" type="checkbox" />
+        <span>Habitable zone
+          <span class="help" tabindex="0" data-tip="Overlays the circumstellar HABITABLE ZONE — the range of orbital distances where a planet could hold liquid surface water — on the true-size axis, in AU. It is computed from just two numbers: the star's luminosity (which sets how far out the zone lies) and its effective temperature (which sets the flux thresholds, because a cooler star's redder light is absorbed and reflected differently by water, CO₂ and ice). The SOLID band is the conservative estimate (from the 'runaway greenhouse' inner edge, where oceans evaporate, to the 'maximum greenhouse' outer edge, where CO₂ can no longer warm the planet); the DASHED lines extend to the optimistic empirical limits ('recent Venus' inside, 'early Mars' outside). Uses the Kopparapu (2014) climate parameterization for a 1 Earth-mass planet — a standard but SIMPLIFIED model, valid for stars of 2600–7200 K (outside that the band is not drawn). Drag a low-mass star up its giant branch and watch the zone sweep outward past Earth's orbit — then the swelling star swallow Earth entirely. Note: this is a liquid-water (energy-balance) zone only; it does NOT account for the star's ultraviolet/X-ray output or flares, which are a separate habitability hazard, especially for active or cool red-dwarf stars.">?</span>
+        </span>
+      </label>
       <p class="note spectrum-caption" id="scale-caption"></p>
     </section>
 

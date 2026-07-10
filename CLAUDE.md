@@ -73,7 +73,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
   `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn}.js`.
+  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz}.js`.
+  `hz.js` is the Axis-D **habitable-zone** compute (a pure `habitableZone(Teff,L)` helper, Kopparapu
+  2014 — the draw half is `scale.js`'s `setHZ`; a helper-to-a-drawing-module like the SED/gravdark
+  pattern, unit-checkable in isolation — see [[star-sim-habitable-zone]]).
   `roche.js` is the binary path-(b) Chunk-3 **mass-transfer / Roche-lobe** panel (a pushed-data consumer
   drawing the RLOF-moment orbital-plane figure-of-eight from `/binary_pair`'s `roche` block; shown only in
   `body.stripped-mode.companion-on`).
@@ -884,6 +887,36 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   age-comparison lesson, printing the star's own age). Playwright-verified 1440+390, zero console
   errors. [[star-sim-isochrone-cluster]], [[star-sim-hosted-data-assets]]; plan
   `docs/plans/outward-quartet-atlas.md` §Axis B.
+
+### Habitable-zone band (Axis D of the outward quartet — `hz.js`+`scale.js`; frontend-only, no backend)
+- **D1 BUILT 2026-07-10 (frontend-only, NO backend change, 412 pytest unchanged, Playwright 1440+390
+  zero console errors).** The circumstellar liquid-water zone on the true-size scale bar — a pure VIEW of
+  L + Teff (never touches the HR marker), marching **outward** as the star brightens (Earth's fate). The
+  compute is a pure helper `hz.js` `habitableZone(Teff,L)` (**Kopparapu 2014**, ApJ 787 L29 — the
+  *corrected* coefficients, 1 M⊕) returning the four edge distances in AU; `scale.js` `setHZ()` draws a
+  solid **conservative band** (runaway greenhouse → maximum greenhouse) with dashed **optimistic** edges
+  (recent Venus → early Mars). **Moist greenhouse dropped** (2014's runaway revision moved inside the 2013
+  moist edge — inconsistent; the 2014 paper omits it) → four internally-consistent nested edges.
+  `#hz-toggle` in the scale panel; a pure L+Teff view on a DIFFERENT panel than the HR overlays, so NOT
+  mutually exclusive with them. **The two load-bearing honesty gates:** (1) **measure-first** — the
+  coefficients were validated against the solar anchor (Sun T*=0 → runaway 0.95 / maxGH 1.68 AU) in a
+  standalone node check BEFORE any drawing (advisor's reorder: a wrong coefficient is a plausible-but-wrong
+  band Playwright can't catch); (2) **the quartic DIVERGES outside Kopparapu's 2600–7200 K range**, so
+  `inRange()` skips the compute AND the band entirely (not just the caption — else NaN/absurd distance
+  breaks the draw), the band honestly blinking off for hot stars with an out-of-range caption. **Axis
+  auto-widens** past R_MAX for a luminous giant (the SN-idiom `logHi` extension) + swaps in outer-planet
+  landmarks (Neptune anchors the tens-of-AU reach — `hzWide`). **Living-only:** `dropHZForModeSwitch()` in
+  the shared mode-switch chokepoint + CSS hides the toggle in every endgame/stripped mode (verified: no
+  leak onto the WD/SN/stripped scale bar, which claim the axis). **Gate 0 PASSED through the runtime:** Sun
+  0.98–1.7 AU straddling Earth's ring; the same 1 M☉ marched to **34–65 AU past Neptune** at old age (Earth
+  "left inside the conservative inner edge"); K/M-dwarf zones correctly **closer in**. **Spectrum enters
+  through Teff** (the near-IR albedo/absorption climate effect IS the Teff-dependence — no `/spectrum`
+  coupling, which would fake precision); **UV/X-ray/flares deliberately OUT of the band**, owned by the
+  caption caveat (a separate habitability hazard, not the liquid-water energy-balance zone). Planet mass
+  fixed at 1 M⊕ (no planetary sandbox). **Advisor caught + fixed a reversed directional clause** (faint
+  star: "the zone lies closer in", not "farther out" — hits most K/M dwarfs). **D2 (HZ history / ghost
+  trail of past positions) NOT built** — the live march on the age scrub already carries the payoff.
+  [[star-sim-habitable-zone]]; plan `docs/plans/outward-quartet-atlas.md` §Axis D.
 
 ### Tests
 - **412 pytest** (gated by data present via `conftest.py` markers; MIST tests skip

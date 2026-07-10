@@ -181,10 +181,30 @@ must move visibly outward over the track, and a 1 AU (Earth) landmark must be se
 (then being swallowed by) the HZ as the star evolves.
 
 **Chunks.**
-- **D1 (frontend):** Kopparapu inner/outer edges from L/Teff; draw the HZ band on the scale bar, Earth/
-  Mars landmarks. Gate 0 (solar HZ).
-- **D2 (frontend):** the HZ **history** — where the band was at ZAMS vs now vs RGB; highlight the moment a
-  landmark orbit enters/exits/is-swallowed (composes with the scale bar's swallowed-orbit rings).
+- **D1 (frontend): ✅ BUILT 2026-07-10** (Playwright 1440+390, zero console errors). Kopparapu **2014**
+  (ApJ 787 L29, the corrected coefficients, 1 M⊕) inner/outer edges from L + Teff → the HZ band on the
+  scale bar. A pure helper `hz.js` (`habitableZone(Teff,L)` → the four edges in AU; `inRange()` gate) +
+  `scale.js` `setHZ()` drawing a solid **conservative band** (runaway greenhouse → maximum greenhouse)
+  with dashed **optimistic** edges (recent Venus → early Mars); `#hz-toggle` in the scale panel. **Moist
+  greenhouse dropped** (the 2014 runaway revision moved inside the 2013 moist edge — mixing them is
+  inconsistent; the 2014 paper itself omits it), leaving four internally-consistent nested edges.
+  **Measure-first (advisor reorder): coefficients validated against the solar anchor BEFORE drawing** —
+  Sun (T*=0) → runaway 0.95 / maxGH 1.68 AU exactly (a wrong coefficient is a plausible-but-wrong band a
+  screenshot can't catch). **The quartic DIVERGES outside 2600–7200 K**, so `inRange()` skips the compute
+  AND the band entirely (not merely the caption — else NaN/absurd distance breaks the draw); the band
+  honestly blinks off for hot stars with an out-of-range caption. **Axis auto-widens** past R_MAX for a
+  luminous giant (the SN-idiom `logHi` extension) + swaps in the outer-planet landmarks (Neptune anchors
+  the tens-of-AU reach). **Living-only:** `dropHZForModeSwitch()` in the shared mode-switch chokepoint +
+  CSS hides the toggle in every endgame/stripped mode (verified: no leak onto the WD/SN/stripped scale
+  bar). Gate 0 PASSED through the runtime: Sun 0.98–1.7 AU straddling Earth's ring; the same 1 M☉ marched
+  to **34–65 AU past Neptune** at old age (Earth "left inside the conservative inner edge"); K/M-dwarf
+  zones correctly **closer in** (advisor caught + fixed a reversed directional clause). Spectrum enters
+  through Teff (the near-IR albedo/absorption effect IS the Teff-dependence); UV/X-ray/flares deliberately
+  OUT of the band, owned by the caption caveat. Planet mass fixed at 1 M⊕ (no planetary sandbox).
+- **D2 (frontend): NOT built** — the HZ **history** (ghost of the band at ZAMS vs now vs RGB; highlight
+  the moment a landmark orbit enters/exits/is-swallowed). Deferred: the live march-outward on the age
+  scrub already carries the payoff (drag the age and the band sweeps outward past Earth in real time).
+  A future add if a static past-position trail proves worth it.
 
 ---
 

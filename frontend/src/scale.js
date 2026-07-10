@@ -19,6 +19,7 @@
 
 import { fitCanvas } from "./canvas.js";
 import { teffToCSS } from "./color.js";
+import { habitableZone } from "./hz.js";
 
 const PAD_L = 14, PAD_R = 14;
 
@@ -70,6 +71,8 @@ const COL_GRID = "#283149";
 const COL_LABEL = "#8a93a6";
 const COL_BODY = "#ffce6b";    // warm — physical bodies
 const COL_ORBIT = "#6fb0ff";   // cool blue — orbits
+const COL_HZ = "#3fbf6f";      // green — the habitable-zone band (Axis D)
+const COL_HZ_EDGE = "#63d98f"; // brighter green — the HZ edge lines / label
 const COL_PANEL = "#141826";   // --panel (pill background)
 const COL_INK = "#e7ecf5";     // --ink
 
@@ -92,7 +95,7 @@ function roundRect(ctx, x, y, w, h, r) {
 }
 
 export function createScale(canvas) {
-  if (!canvas) return { update() {}, resize() {} };
+  if (!canvas) return { update() {}, resize() {}, setHZ() {} };
   const caption = document.getElementById("scale-caption");
   // W/H/plotW are `let` so resize() can re-fit to a new display width; xOf captures
   // plotW/W so it tracks the new size on the next draw().
@@ -100,13 +103,19 @@ export function createScale(canvas) {
   ({ ctx, W, H } = fitCanvas(canvas, 480, 150));
   plotW = W - PAD_L - PAD_R;
 
-  let R = null, css = "#ffffff";
+  let R = null, css = "#ffffff", Teff = null, L = null;
   // SN mode is re-derived from opts on EVERY update() (see update): absence auto-reverts to
   // the normal axis, so returning to a living star needs no manual reset (no stranded SN
   // bounds — the state-leak trap). `logLo`/`logHi` are the ACTIVE axis bounds; SN widens
   // them to fit the AU-scale fireball, the normal star uses the fixed LOG_LO/LOG_HI.
   let sn = false, snFailed = false;
   let logLo = LOG_LO, logHi = LOG_HI;
+  // Habitable-zone overlay (Axis D). `showHZ` is set by setHZ() and retained; `hz` is the computed
+  // edges (AU) or null (out of Kopparapu's 2600–7200 K range, or HZ off / SN). `hzWide` is true when
+  // the outer edge overflows the normal radius axis (a luminous giant's HZ is tens of AU ≈ thousands
+  // of R☉) → widen logHi + swap in outer-planet landmarks, the SN idiom. HZ is LIVING-ONLY: main.js
+  // turns it off (setHZ(false)) on any endgame/stripped mode switch, and sn always wins here.
+  let showHZ = false, hz = null, hzWide = false;
 
   // log position, clamped to the plot so an off-axis star still pins to an edge.
   const xOf = (r) => {
@@ -117,9 +126,14 @@ export function createScale(canvas) {
   function update(state, opts) {
     if (!state || state.R_rsun == null) return;
     R = state.R_rsun;
+    Teff = state.Teff_K;
+    L = state.L_lsun;
     css = teffToCSS(state.Teff_K);
     sn = !!(opts && opts.endgame === "sn");
     snFailed = !!(opts && opts.failed);
+    // HZ is living-only and never composes with the SN fireball axis: compute it only when the
+    // toggle is on AND not in SN mode. main.js already drops showHZ on every other mode switch.
+    hz = (showHZ && !sn) ? habitableZone(Teff, L) : null;
     if (sn) {
       // Fit the axis to the model's PEAK fireball radius (passed once per model via
       // axisMaxRsun) so the marker rides the strip as it expands instead of pinning; keep
@@ -128,9 +142,35 @@ export function createScale(canvas) {
       const maxR = (opts && opts.axisMaxRsun) || R;
       logLo = Math.log10(MERCURY_R / 2);
       logHi = Math.log10(Math.max(maxR, NEPTUNE_R) * 1.25);
+      hzWide = false;
     } else {
+      // Normal axis, UNLESS the HZ pushes past the top: a luminous giant's outer edge sits at tens
+      // of AU ≈ thousands of R☉, far past R_MAX. Widen logHi to fit it (the SN idiom) and flag
+      // hzWide so drawOrbits swaps in the outer-planet landmarks (Neptune anchors the AU scale).
+      // logLo stays at LOG_LO so the star's own (small) radius marker is always still visible.
       logLo = LOG_LO;
-      logHi = LOG_HI;
+      const hzOuterR = hz ? hz.earlyMars * RSUN_PER_AU : 0;
+      hzWide = hzOuterR > R_MAX;
+      logHi = hzWide ? Math.log10(hzOuterR * 1.3) : LOG_HI;
+    }
+    draw();
+    renderCaption();
+  }
+
+  // Toggle the habitable-zone overlay (Axis D). Retained + redrawn from the last state, so the
+  // caller flips it without re-pushing the star (the sed.js setPopulation idiom).
+  function setHZ(on) {
+    showHZ = !!on;
+    if (R != null) redrawFromRetained();
+  }
+  // Recompute hz/axis from the retained Teff/L/R without a new state (used by setHZ).
+  function redrawFromRetained() {
+    hz = (showHZ && !sn) ? habitableZone(Teff, L) : null;
+    if (!sn) {
+      logLo = LOG_LO;
+      const hzOuterR = hz ? hz.earlyMars * RSUN_PER_AU : 0;
+      hzWide = hzOuterR > R_MAX;
+      logHi = hzWide ? Math.log10(hzOuterR * 1.3) : LOG_HI;
     }
     draw();
     renderCaption();
@@ -157,6 +197,10 @@ export function createScale(canvas) {
     ctx.fillRect(PAD_L, ORBIT_TOP, xs - PAD_L, BODY_BOT - ORBIT_TOP);
     ctx.globalAlpha = 1;
 
+    // Habitable-zone band (Axis D) — drawn early so gridlines, orbit rings and the star marker
+    // layer on top of its translucent fill. Only when computable (in-range Teff, HZ on, not SN).
+    if (hz) drawHZ();
+
     // Decade gridlines + value labels.
     ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = "center";
     for (const v of valueTicks()) {
@@ -181,8 +225,41 @@ export function createScale(canvas) {
     ctx.textAlign = "center";
     ctx.fillText(sn
       ? "the expanding fireball — radius in R☉ (log); planet orbits mark the scale"
-      : "true size — radius in solar radii (R☉), log scale", W / 2, H - 4);
+      : hz
+        ? "radius & habitable zone — log R☉; the HZ band and orbits are marked in AU"
+        : "true size — radius in solar radii (R☉), log scale", W / 2, H - 4);
     ctx.textAlign = "left";
+  }
+
+  // The habitable-zone band (Axis D): a translucent green band on the log-distance axis. Two nested
+  // brackets — a stronger CONSERVATIVE band (runaway greenhouse → maximum greenhouse) with solid
+  // edges, inside a fainter OPTIMISTIC band (recent Venus → early Mars) with dashed edges. All four
+  // edges are Kopparapu (2014) distances in AU, converted to R☉ to share the axis.
+  function drawHZ() {
+    const xRV = xOf(hz.recentVenus * RSUN_PER_AU);
+    const xRun = xOf(hz.runaway * RSUN_PER_AU);
+    const xMax = xOf(hz.maxGreenhouse * RSUN_PER_AU);
+    const xMars = xOf(hz.earlyMars * RSUN_PER_AU);
+    const top = ORBIT_TOP - 2, bot = BODY_BOT + 2;
+    ctx.fillStyle = COL_HZ;
+    ctx.globalAlpha = 0.09;                                   // optimistic band (recent Venus → early Mars)
+    ctx.fillRect(xRV, top, Math.max(1, xMars - xRV), bot - top);
+    ctx.globalAlpha = 0.18;                                   // conservative band (runaway → max greenhouse)
+    ctx.fillRect(xRun, top, Math.max(1, xMax - xRun), bot - top);
+    ctx.globalAlpha = 1;
+    const vline = (x) => { ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bot); ctx.stroke(); };
+    ctx.strokeStyle = COL_HZ_EDGE; ctx.lineWidth = 1.4;
+    vline(xRun); vline(xMax);                                 // solid conservative edges
+    ctx.setLineDash([3, 3]); ctx.globalAlpha = 0.85;
+    vline(xRV); vline(xMars);                                 // dashed optimistic edges
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // Label, centred over the conservative band and clamped on-canvas. Placed at mid-band (clear of
+    // the orbit-name labels above the axis) with a dark shadow so it reads over the drop-lines.
+    ctx.font = "9.5px system-ui, sans-serif"; ctx.textAlign = "center";
+    const cx = Math.max(PAD_L + 34, Math.min(W - PAD_R - 34, (xRun + xMax) / 2));
+    const ly = (top + bot) / 2 + 3;
+    ctx.fillStyle = "rgba(9,12,20,0.85)"; ctx.fillText("habitable zone", cx + 0.6, ly + 0.6);
+    ctx.fillStyle = COL_HZ_EDGE; ctx.fillText("habitable zone", cx, ly);
   }
 
   // Decade value labels: every power of 10 inside the current axis span, so the SN-widened
@@ -196,7 +273,10 @@ export function createScale(canvas) {
   // Orbits ABOVE the axis: a faint "planet orbits" bracket over the cluster, open
   // rings on the axis, and staggered (2-row) collision-skipped labels.
   function drawOrbits() {
-    const orbits = sn ? ORBITS_SN : ORBITS;
+    // The widened HZ axis (a luminous giant, tens of AU) needs the outer planets for context, same
+    // as SN mode — Neptune anchors the "beyond Neptune's orbit" reach. The normal axis keeps the
+    // inner-planet detail (Earth at 215 R☉ is the landmark the HZ sweeps past).
+    const orbits = (sn || hzWide) ? ORBITS_SN : ORBITS;
     const xl = xOf(orbits[0].r), xr = xOf(orbits[orbits.length - 1].r);
     // Bracket (the SED "detailed spectrum" idiom): groups the cluster AND tells the
     // reader these are orbits — disambiguating "Earth" (orbit, 215 R☉) above from
@@ -292,7 +372,32 @@ export function createScale(canvas) {
   // labels can't all fit).
   function renderCaption() {
     if (!caption || R == null) return;
+    if (showHZ && !sn) { caption.textContent = describeHZ(); return; }
     caption.textContent = sn ? describeSN(R, snFailed) : describe(R);
+  }
+
+  // The habitable-zone caption (Axis D): the edges in AU, Earth's fate relative to the band, and the
+  // load-bearing honesty caveat (a liquid-water energy-balance zone only — NOT UV/flare habitability).
+  // When Teff is out of Kopparapu's calibration range `hz` is null and no band was drawn; say so.
+  function describeHZ() {
+    if (!hz) {
+      return `Habitable zone — this star (Teff ${Math.round(Teff)} K) falls outside the climate ` +
+        `model's calibrated range (2600–7200 K), so no zone is drawn. It will appear if the star ` +
+        `cools into range. The true-size axis below is unchanged.`;
+    }
+    const cons = `${fmtAU(hz.runaway)}–${fmtAU(hz.maxGreenhouse)} AU`;
+    const opt = `${fmtAU(hz.recentVenus)}–${fmtAU(hz.earlyMars)} AU`;
+    let earth;
+    if (R >= 1.0 * RSUN_PER_AU) earth = "Earth's orbit (1 AU) now lies inside the star itself.";
+    else if (1.0 < hz.runaway) earth = "Earth's orbit (1 AU) has been left inside the conservative inner edge — too hot for surface water now.";
+    else if (1.0 > hz.maxGreenhouse) earth = "Earth's orbit (1 AU) sits beyond the outer edge — too cold; this faint star's zone lies closer in.";
+    else earth = "Earth's orbit (1 AU) lies within the zone.";
+    return `The habitable zone — where a planet could hold liquid surface water — runs ${cons} ` +
+      `(conservative, solid edges) out to ${opt} (optimistic, dashed), set by the star's ` +
+      `luminosity and temperature. ${earth} As the star brightens up the giant branch the band ` +
+      `marches outward. This is a liquid-water (energy-balance) zone only — it does NOT include ` +
+      `the star's UV/X-ray output or flares, a separate habitability hazard, especially for ` +
+      `active or cool red-dwarf stars.`;
   }
 
   // Format an AU value compactly: "0.84", "5.2", "30", "837".
@@ -363,5 +468,5 @@ export function createScale(canvas) {
         : ` — not much larger than Jupiter (${fmtRsun(JUP_R)} R☉); Earth is ${fmtRsun(EARTH_R)} R☉.`);
   }
 
-  return { update, resize };
+  return { update, resize, setHZ };
 }

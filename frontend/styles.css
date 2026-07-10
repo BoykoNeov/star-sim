@@ -837,6 +837,12 @@ body.co-binary-view .age-co-binary { display: inline; }
    nor a wind-driven WR has the cool convective dynamo that control models). */
 body.wd-mode .age-live, body.wr-mode .age-live, body.sn-mode .age-live,
 body.stripped-mode .age-live { display: none; }
+
+/* Habitable-zone toggle (Axis D) is living-only: every endgame/stripped scale bar shows a
+   different axis (WD cooling star, SN fireball, stripped donor), so the HZ control is hidden
+   there. dropHZForModeSwitch also clears the STATE so the band stops drawing. */
+body.wd-mode .hz-toggle-row, body.wr-mode .hz-toggle-row, body.sn-mode .hz-toggle-row,
+body.stripped-mode .hz-toggle-row { display: none; }
 body.wd-mode .age-wd { display: inline; }
 body.wr-mode .age-wr { display: inline; }
 body.sn-mode .age-sn { display: inline; }

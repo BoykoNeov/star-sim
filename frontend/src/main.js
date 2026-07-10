@@ -78,6 +78,10 @@ const els = {
   populationControl: document.getElementById("population-control"),
   populationToggle: document.getElementById("population-toggle"),
   populationNote: document.getElementById("population-note"),
+  // Habitable-zone overlay (Axis D). A pure VIEW on the true-size scale bar — the circumstellar
+  // liquid-water zone from L + Teff (Kopparapu 2014), marching outward as the star brightens.
+  // Living-only (scale.js draws it only when setHZ(true) and not SN; dropped on any mode switch).
+  hzToggle: document.getElementById("hz-toggle"),
   // Isochrone / cluster overlay (MIST .iso — Axis B). A LIGHT HR overlay like He/α (it owns the
   // HR panel while on, MIST track hidden) but a POPULATION view: the coeval-cluster locus at the
   // marker's age, turnoff ringed, the star sitting on it. Gated only on the fetched .iso grid.
@@ -537,6 +541,13 @@ let populationToken = 0;        // latest-wins guard for the /population fetch (
 let populationHasGrid = false;  // /population_status: is the BPASS SED cube baked? (else hide the toggle)
 let populationHasHRD = false;   // /population_status has_hrd: is the HR-diagram number cube baked?
 let popNodeKey = "";            // last-fetched ([Fe/H], age-node) bucket — skip refetch if unchanged
+
+// --- habitable-zone overlay (Axis D) -------------------------------------------
+// A pure VIEW on the scale bar (scale.js), not on the HR panel: the circumstellar liquid-water
+// zone from L + Teff. No fetch, no backend, no gate beyond "living mode" — scale.js self-gates by
+// Kopparapu's Teff range (band absent for hot stars). Dropped on every endgame/stripped/binary
+// switch (dropHZForModeSwitch) so it can't paint on a WD/WR/SN/stripped scale bar.
+let hzOn = false;
 
 // --- isochrone / cluster overlay (MIST .iso — Axis B) --------------------------
 // Like the He/α overlays it OWNS the HR panel while on (MIST track/marker hidden, the locus
@@ -2753,11 +2764,24 @@ function dropHeliumForModeSwitch() {
   dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
   dropPopulationForModeSwitch(); // the SED population overlay is living-only — drop it on any mode switch too
   dropIsochroneForModeSwitch();  // the cluster-isochrone HR overlay is living-only — drop it too
+  dropHZForModeSwitch();         // the habitable-zone scale-bar overlay is living-only — drop it too
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
   if (els.heliumToggle) els.heliumToggle.checked = false;
   if (els.heliumControl) els.heliumControl.hidden = true;   // updateHeliumControl re-shows it on return to live
+}
+
+// Habitable-zone overlay (Axis D) is living-only: the scale bar in every endgame/stripped/binary
+// mode already shows a different axis (the WD cooling star, the SN fireball, the stripped donor),
+// so a stale HZ band there would be meaningless. Called from dropHeliumForModeSwitch (the shared
+// mode-switch chokepoint). CSS also hides the toggle in those modes; this clears the STATE so a
+// return to live starts clean and scale.js stops drawing the band immediately.
+function dropHZForModeSwitch() {
+  if (!hzOn) return;
+  hzOn = false;
+  if (els.hzToggle) els.hzToggle.checked = false;
+  scale.setHZ(false);
 }
 
 // --- coeval-population (BPASS) overlay on the SED panel -----------------------
@@ -4188,6 +4212,16 @@ async function init() {
     } else {
       isochroneOff();
     }
+  });
+
+  // Habitable-zone overlay (Axis D) on the scale bar. A pure L+Teff VIEW on a DIFFERENT panel than
+  // the HR overlays, so it is NOT mutually exclusive with them (no HR-panel ownership). The only
+  // gate is live mode; scale.js self-gates by Kopparapu's 2600–7200 K range (band absent for hot
+  // stars). No fetch — setHZ redraws from the scale bar's retained state.
+  if (els.hzToggle) els.hzToggle.addEventListener("change", () => {
+    if (els.hzToggle.checked && mode !== "live") { els.hzToggle.checked = false; return; }
+    hzOn = els.hzToggle.checked;
+    scale.setHZ(hzOn);
   });
 
   // B3: decouple the cluster's age from the star's age slider. Checking it gives the cluster its
