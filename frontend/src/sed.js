@@ -316,6 +316,19 @@ export function createSED(canvas) {
   // extinction BUMP, the SED's payoff. A pure overlay (off/av=0 is a no-op). Living-only.
   let redOn = false, redAv = 0, redRv = 3.1;
 
+  // Legend-click visibility (mirrors comp.js's per-element toggle): the set of series the user
+  // has hidden by clicking the SED legend. Session-only, not persisted. Keys: "blackbody" ·
+  // "visible" (the rainbow band) · "wien" (the peak line) · "activity" (the coronal X-ray band +
+  // Güdel–Benz radio) · "rotline" (the rotation→X-ray line inside it) · "wind" (the free–free
+  // excess). main.js wires the clicks + the struck-through "off" label state.
+  const hiddenSeries = new Set();
+  const shown = (key) => !hiddenSeries.has(key);
+  function toggleSeries(key) {
+    if (hiddenSeries.has(key)) hiddenSeries.delete(key); else hiddenSeries.add(key);
+    draw();
+    return !hiddenSeries.has(key);
+  }
+
   const xOf = (lamNm) =>
     PAD_L + (Math.log10(lamNm) - LOG_LO) / (LOG_HI - LOG_LO) * plotW;
   // y maps decades-below-peak: 0 dex (peak) at the top, −FLOOR_DECADES at the axis.
@@ -380,24 +393,26 @@ export function createSED(canvas) {
     const lamPeak = HC_OVER_K_NM / (WIEN_X * teff);          // nm
     const logPeak = Math.log10(planck(lamPeak, teff));
     const N = 700;
-    ctx.beginPath();
-    for (let i = 0; i < N; i++) {
-      const logLam = LOG_LO + (i / (N - 1)) * (LOG_HI - LOG_LO);
-      const lam = 10 ** logLam;
-      const b = planck(lam, teff);
-      let dec = b > 0 ? Math.log10(b) - logPeak : -FLOOR_DECADES;
-      if (dec < -FLOOR_DECADES) dec = -FLOOR_DECADES;
-      if (dec > 0) dec = 0;
-      const x = xOf(lam), y = yOf(dec);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    if (shown("blackbody")) {
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const logLam = LOG_LO + (i / (N - 1)) * (LOG_HI - LOG_LO);
+        const lam = 10 ** logLam;
+        const b = planck(lam, teff);
+        let dec = b > 0 ? Math.log10(b) - logPeak : -FLOOR_DECADES;
+        if (dec < -FLOOR_DECADES) dec = -FLOOR_DECADES;
+        if (dec > 0) dec = 0;
+        const x = xOf(lam), y = yOf(dec);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
     }
-    ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
 
     // Observer's view (Axis A): the REDDENED blackbody. CCM89 is identity outside ~1250–9091 Å, so
     // this hugs the intrinsic curve across most of the 14 decades and only dips in the UV/optical —
     // carving out the 2175 Å extinction BUMP (the b(x) Lorentzian), the SED's reddening payoff.
     // Same intrinsic-peak normalization (logPeak), so the blackbody curve above is unchanged.
-    if (redOn && redAv > 0 && !endgameMode) {
+    if (redOn && redAv > 0 && !endgameMode && shown("blackbody")) {
       ctx.save();
       ctx.beginPath();
       for (let i = 0; i < N; i++) {
@@ -430,11 +445,11 @@ export function createSED(canvas) {
     // AGB giant the endgame opens on keeps the band it had as a living star (continuity
     // across the gateway) and it dies with the dynamo as the remnant degenerates.
     if (!endgameMode && !popActive) {
-      drawActivity(lamPeak);
+      if (shown("activity")) drawActivity(lamPeak);
       // The hot-star wind free–free excess (Chunk 2): the data-grounded solid line, drawn
       // for a living hot massive star (gated inside; WR-endgame is out of scope for v1).
-      drawWindFreeFree(lamPeak);
-    } else if (endgameMode && !endgameWR && !endgameSN) {
+      if (shown("wind")) drawWindFreeFree(lamPeak);
+    } else if (endgameMode && !endgameWR && !endgameSN && shown("activity")) {
       const gDeg = Math.max(0, Math.min(1, (4 - (logg ?? 8)) / 3));
       if (gDeg > 0.01) drawActivity(lamPeak, gDeg, true);   // WD endgame: dying-giant band only
     }
@@ -444,7 +459,7 @@ export function createSED(canvas) {
     // endgame object). endgameMode is true for WD/WR/SN, so this is hidden there — and
     // main.js also tears it down on any mode switch (belt-and-suspenders).
     if (population && !endgameMode) drawPopulation();
-    drawWienPeak(lamPeak);
+    if (shown("wien")) drawWienPeak(lamPeak);
     drawFrameAndAxes();
   }
 
@@ -600,7 +615,8 @@ export function createSED(canvas) {
       drawGudelBenzRadio(lamPeak, 1e-3, coolA);
       // (1b) The rotation→X-ray LINE collapsing the band (Chunk 3): cool branch ONLY,
       //      its alpha tied to coolA so it fades WITH the band across the cool→gap morph.
-      const line = activityLine();
+      //      Its own legend toggle ("rotline") hides just the line, keeping the band.
+      const line = shown("rotline") ? activityLine() : null;
       if (line) drawActivityLine(decFromLog, line, coolA, bandHi, bandLo);
     }
 
@@ -947,15 +963,18 @@ export function createSED(canvas) {
       const x0 = xOf(Math.max(band.lo, LAM_MIN));
       const x1 = xOf(Math.min(band.hi, LAM_MAX));
       if (band.rainbow) {
-        // Paint the visible band column-by-column in its per-wavelength colour.
-        ctx.globalAlpha = dim ? 0.18 : 0.6;
-        const step = 1;
-        for (let x = x0; x < x1; x += step) {
-          const lam = 10 ** (LOG_LO + (x - PAD_L) / plotW * (LOG_HI - LOG_LO));
-          ctx.fillStyle = wavelengthToCSS(lam);   // λ already in nm
-          ctx.fillRect(x, PAD_T, step + 0.5, H - PAD_T - PAD_B);
+        // Paint the visible band column-by-column in its per-wavelength colour (unless the
+        // user hid it via the legend — then the column is left dark, like any other band).
+        if (shown("visible")) {
+          ctx.globalAlpha = dim ? 0.18 : 0.6;
+          const step = 1;
+          for (let x = x0; x < x1; x += step) {
+            const lam = 10 ** (LOG_LO + (x - PAD_L) / plotW * (LOG_HI - LOG_LO));
+            ctx.fillStyle = wavelengthToCSS(lam);   // λ already in nm
+            ctx.fillRect(x, PAD_T, step + 0.5, H - PAD_T - PAD_B);
+          }
+          ctx.globalAlpha = 1;
         }
-        ctx.globalAlpha = 1;
       } else {
         ctx.fillStyle = band.col;
         ctx.fillRect(x0, PAD_T, x1 - x0, H - PAD_T - PAD_B);
@@ -1202,6 +1221,6 @@ export function createSED(canvas) {
     draw();
   }
 
-  return { update, resize, setPopulation, clearPopulation, setReddening,
+  return { update, resize, setPopulation, clearPopulation, setReddening, toggleSeries,
            rotationAllowed: () => dynamoLineAllowed() };
 }

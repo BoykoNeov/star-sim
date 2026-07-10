@@ -34,6 +34,11 @@ export function createCMD(canvas) {
 
   // locus: [{bv0, mv, teff}], intrinsic marker {bv, mv}, observed marker {bv, mv}.
   let locus = null, hasBv = false;
+  // Whether a /photometry_track fetch has actually RESOLVED yet. Without this, the initial
+  // `hasBv=false` (nothing fetched) is indistinguishable from a resolved "grid has no B/V" — so
+  // the panel would flash "unavailable" during the pre-load gap even though B/V are fine. We only
+  // ever show that notice once a fetch has returned and genuinely lacks B/V (and no marker colour).
+  let locusLoaded = false;
   let mInt = null, mObs = null;
   // Cached fit bounds (recomputed on setLocus / setMarker).
   let x0 = -0.4, x1 = 1.8, y0 = -8, y1 = 6;
@@ -109,9 +114,15 @@ export function createCMD(canvas) {
     ctx.fillText("M_V  (brighter ↑)", 0, 0);
     ctx.restore();
 
-    if (!hasBv) {
-      ctx.fillStyle = COL_AXIS; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("(B and V bands unavailable for this grid)", PAD_L + plotW / 2, PAD_T + plotH / 2);
+    // Show the "unavailable" notice only for a RESOLVED absence of B/V — and never when a marker
+    // carries a real (B−V), since the readout below the panel prints that colour and the graph must
+    // not contradict it. Before the first locus fetch resolves we just draw the axes (no flash).
+    const markerHasBv = !!(mInt && mInt.bv != null);
+    if (!hasBv && !markerHasBv) {
+      if (locusLoaded) {
+        ctx.fillStyle = COL_AXIS; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("(B and V bands unavailable for this grid)", PAD_L + plotW / 2, PAD_T + plotH / 2);
+      }
       return;
     }
 
@@ -200,6 +211,7 @@ export function createCMD(canvas) {
   function setLocus(points, hasBvFlag) {
     locus = points && points.length ? points : null;
     hasBv = !!hasBvFlag;
+    locusLoaded = true;   // a fetch resolved — "unavailable" may now legitimately show if !hasBv
     fit(); draw();
   }
   // main.js pushes the EXACT intrinsic + observed marker positions from /photometry.
@@ -210,7 +222,7 @@ export function createCMD(canvas) {
     fit(); draw();
   }
   function clear() {
-    locus = null; mInt = null; mObs = null; hasBv = false;
+    locus = null; mInt = null; mObs = null; hasBv = false; locusLoaded = false;
     draw();
   }
   function resize(cssW, cssH) {

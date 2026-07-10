@@ -319,11 +319,16 @@ main {
    it activates, so a greyed knob isn't a dead one. Only ever hidden in an endgame. */
 .peculiar-control { margin: 12px 0 2px; }
 .peculiar-control[hidden] { display: none; }
-/* Binary-stripped-star what-if toggle (mirrors the Ap/Bp control): a mass-gated reversible
-   MODE toggle. Present-but-greyed outside 2–18.2 M☉ (space reserved); shown checked while the
-   stripped mode is active (its exit), hidden in the other endgames. */
+/* Binary-stripped-star what-if — now a BIG gateway-style BUTTON (user request), not a checkbox:
+   a mass-gated MID-LIFE fork. Present-but-greyed (the button goes disabled) outside 2–18.2 M☉ so
+   the panel height is reserved; hidden entirely in stripped-mode + the other endgames (the endgame
+   bar's Back is the exit). The .fork-btn hue is deliberately DISTINCT from the yellow end-of-life
+   gateway — a cyan, because this fork happens mid-life, not at the end. */
 .stripped-control { margin: 12px 0 2px; }
 .stripped-control[hidden] { display: none; }
+.fork-btn-row { display: flex; align-items: center; gap: 8px; }
+.fork-btn { background: #5ad1c9; border-color: #5ad1c9; box-shadow: 0 6px 18px rgba(90, 209, 201, 0.18); }
+.fork-btn:disabled { background: transparent; }   /* fall back to the shared muted-outline disabled look */
 /* The He / α / population / isochrone what-if shells share the .helium-control class. The
    mass/[Fe/H]-gated ones (He, α) are now present-but-greyed out of their band (space reserved,
    matching .peculiar-control); the data-only-gated ones (population, isochrone) stay hidden
@@ -417,6 +422,14 @@ main {
 .legend-cno span { cursor: pointer; user-select: none; -webkit-user-select: none; }
 .legend-cno span.off { opacity: 0.35; }
 .legend-cno span.off i { box-shadow: inset 0 0 0 4px var(--panel); }
+
+/* SED legend entries with a data-series double as on/off toggles (main.js wires the click),
+   the same idiom as the per-element legend above: click one to hide/show that curve on the
+   plot. Only the toggleable entries (data-series) get the pointer cursor; the conceptual
+   "non-thermal edges" entry stays a plain caption. The inner ".tip" keeps its hover tooltip. */
+.sed-legend span[data-series] { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.sed-legend span[data-series].off { opacity: 0.4; text-decoration: line-through; }
+.sed-legend span[data-series].off i { box-shadow: inset 0 0 0 4px var(--panel); }
 
 /* The linear/log scale toggle for the per-element view (the log scale is what makes
    the trace elements — lithium especially — visible). Only meaningful in that view,
@@ -751,6 +764,19 @@ body.binary-view .roche-panel { display: block; }
 body.binary-view .comp-panel, body.binary-view .spectrum-panel,
 body.binary-view .sed-panel, body.binary-view .structure-panel { display: none; }
 
+/* Calm the stripped/binary layout (user request: switching sub-scenarios caused big panel
+   reshuffles). These panels are never wired or honest in ANY stripped sub-scenario — the
+   Lane–Emden polytrope (a decoupled teaching idealization), the real-MESA interior structure
+   (no snapshot for a stripped/binary product), the broadband SED (the stripped star's wind tail
+   is off; the animated views hide it anyway), and the observer CMD (needs the absolute-flux main
+   cube). Hiding them on body.stripped-mode — which every sub-scenario (snapshot, co-evolve
+   binary-view, CO-binary) carries — makes the panel SET identical across all of them, so
+   switching merger ⇄ stripped ⇄ wide ⇄ star+black-hole no longer adds/removes whole panels. The
+   overlay controls (helium/α/population/isochrone) are torn down by their own update/drop
+   functions; these four are pure CSS (auto-revert on exit, the roche-panel precedent). */
+body.stripped-mode .lane-panel, body.stripped-mode .structure-panel,
+body.stripped-mode .sed-panel, body.stripped-mode .observer-panel { display: none; }
+
 /* path (b) Chunk 4b: the "Co-evolve the system" demo-system picker — a deeper reveal
    inside stripped-mode (never a new top-level mode), so it lives right under the
    endgame-bar's top row. Hidden outside stripped-mode; while a demo is live
@@ -848,16 +874,18 @@ body.co-binary-view .sed-panel, body.co-binary-view .structure-panel { display: 
    plain co-binary-view hide above. */
 body.co-binary-view.co-he-kind .comp-panel { display: block; }
 /* The STATE READOUT, the true-size SCALE strip and the MK class line are single-star
-   consumers NOT wired to the per-step CO scrub — left visible they'd show the FROZEN
-   stripped-snapshot's numbers (an unrelated star: a 10 M☉ subdwarf beside the animating
-   27.6 M☉ star + BH), a false-data leak by the project's honesty rule. Hide them, same as
-   comp/spectrum/sed/structure above (the 3D star canvas + its title stay — they DO animate).
-   The accretion power is surfaced in the age-slider caption instead. */
-body.co-binary-view .readout-panel { display: none; }
-body.co-binary-view .scale-title,
-body.co-binary-view #scale-canvas,
-body.co-binary-view #scale-caption,
-body.co-binary-view .star-class { display: none; }
+   consumers NOT wired to the per-step scrub of EITHER two-body view — refreshBinary and the CO
+   scrub both leave them FROZEN on the unrelated stripped-snapshot's numbers (a 10 M☉ subdwarf
+   beside the animating pair), a false-data leak by the project's honesty rule. So both the
+   co-evolving binary (binary-view) AND the compact-object binary (co-binary-view) hide them —
+   the SAME set, so switching merger ⇄ stripped ⇄ star+black-hole never adds/removes these panels
+   (user request: no reshuffle between binary scenarios). The 3D star canvas + its title stay
+   (they DO animate); the accretion / orbit info is in the age-slider caption instead. */
+body.binary-view .readout-panel, body.co-binary-view .readout-panel { display: none; }
+body.binary-view .scale-title, body.co-binary-view .scale-title,
+body.binary-view #scale-canvas, body.co-binary-view #scale-canvas,
+body.binary-view #scale-caption, body.co-binary-view #scale-caption,
+body.binary-view .star-class, body.co-binary-view .star-class { display: none; }
 /* Narration + age-tag swap (more specific than the plain stripped-mode rules so they win
    the tie — both classes sit on <body> at once while the CO movie plays). */
 body.stripped-mode.co-binary-view .endgame-narrate-stripped { display: none; }

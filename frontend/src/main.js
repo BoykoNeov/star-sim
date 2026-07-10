@@ -62,7 +62,7 @@ const els = {
   // Binary-stripped-star what-if toggle (Götberg 2018 — the ~70% WR channel). A mass-gated
   // entry into the reversible `stripped-mode` (a mid-life fork, not an end-of-life endgame).
   strippedControl: document.getElementById("stripped-control"),
-  strippedToggle: document.getElementById("stripped-toggle"),
+  strippedBtn: document.getElementById("stripped-btn"),
   strippedNote: document.getElementById("stripped-note"),
   // Initial-helium (Y) what-if overlay (Phase 2 — the globular-cluster 2nd-generation effect).
   // A LIGHT HR overlay (not a mode-swap): two self-run MESA tracks, MIST spine hidden while on.
@@ -272,6 +272,19 @@ const roche = createRoche();
 // owns no fetch and just redraws from the live state inside refresh(). It is the
 // zoomed-all-the-way-out companion to the synthetic-spectrum panel.
 const sed = createSED(document.getElementById("sed-canvas"));
+// SED legend on/off: click a legend entry (swatch or label) to hide/show that series on the
+// plot — the same idiom as the composition panel's per-element legend. Delegated so it also
+// fires on the inner ".tip" pedagogy label (closest finds data-series). The "non-thermal edges"
+// entry has no data-series (it names the floors, not a drawn curve), so it stays inert.
+{
+  const sedLegend = document.querySelector(".sed-panel .sed-legend");
+  if (sedLegend) sedLegend.addEventListener("click", (e) => {
+    const entry = e.target.closest("span[data-series]");
+    if (!entry) return;
+    const visible = sed.toggleSeries(entry.dataset.series);
+    entry.classList.toggle("off", !visible);
+  });
+}
 
 // The observational colour–magnitude diagram (Axis A3) — the observer's HR diagram in its
 // own panel. A pushed-data consumer (like sed's population overlay): main.js fetches the
@@ -2747,30 +2760,22 @@ async function trySNResnap() {
 }
 
 // --- binary-stripped-star what-if (stripped-mode) ----------------------------
-// The mass-gated entry TOGGLE. Shown when a stripped model is offer-able for the current star:
-// in live mode within the eligible progenitor-mass range, OR while the mode is active (so the
-// checked toggle stays visible as an exit). Mirrors updatePeculiarControl (a track-stable gate
-// on massValue — no age-scrub flicker). The whole control hides in the wd/wr/sn endgames.
+// The mass-gated entry BUTTON — a big gateway-style button (user request), but a MID-LIFE fork,
+// not an end-of-life gateway. Like the WD/WR/SN gateway it is a one-way ENTER: it shows only for a
+// LIVE star (hidden in stripped-mode and every other endgame — the endgame bar's "Back" is the
+// exit), present-but-greyed (disabled) outside the eligible progenitor-mass band so the panel's
+// height is reserved. Track-stable on massValue (no age-scrub flicker). The Götberg CSV is
+// committed, so it's never data-absent — only regime-gated.
 function updateStrippedControl() {
   const c = els.strippedControl;
   if (!c) return;
-  // Special case: inside stripped-mode the toggle stays visible + checked as the exit (mode is
-  // NOT "live" then, so reserveWhatIf would hide it). The Götberg CSV is committed, so this
-  // control is never data-absent — only regime-gated.
-  if (mode === "stripped") {
-    c.hidden = false;
-    c.querySelector(".rot-toggle-row")?.classList.remove("disabled");
-    if (els.strippedToggle) { els.strippedToggle.disabled = false; els.strippedToggle.checked = true; }
-    if (els.strippedNote) els.strippedNote.textContent =
-      "The hot stripped star a close companion would bare by stripping the envelope — untick to return.";
-    return;
-  }
+  if (mode !== "live") { c.hidden = true; return; }   // one-way: no re-click exit (Back handles it)
+  c.hidden = false;
   const eligible = massValue >= STRIP_MASS_MIN && massValue <= STRIP_MASS_MAX;
-  reserveWhatIf(els.strippedControl, els.strippedToggle, els.strippedNote, {
-    dataPresent: true, eligible, checked: false,
-    offerNote: "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)",
-    gatedNote: `Appears for progenitors that leave a stripped core, ${STRIP_MASS_MIN}–${STRIP_MASS_MAX} M☉ (the Götberg grid).`,
-  });
+  if (els.strippedBtn) els.strippedBtn.disabled = !eligible;
+  if (els.strippedNote) els.strippedNote.textContent = eligible
+    ? "What if a close companion stripped the envelope now? (the ~70% binary WR/subdwarf channel)"
+    : `Appears for progenitors that leave a stripped core, ${STRIP_MASS_MIN}–${STRIP_MASS_MAX} M☉ (the Götberg grid).`;
 }
 
 // --- initial-helium (Y) what-if overlay --------------------------------------
@@ -3540,7 +3545,7 @@ async function enterStripped() {
   mode = "stripped";
   updateRotControl();       // hide the rotation control inside the mode (mode != live)
   updatePeculiarControl();
-  updateStrippedControl();  // keep the toggle visible + checked as the exit
+  updateStrippedControl();  // hides the fork button in stripped-mode (exit is the Back bar)
   trackToken++;             // invalidate any in-flight live /track
   document.body.classList.add("stripped-mode");
   companionOn = false;      // path (a) by default — the companion is revealed by the toggle
@@ -4183,7 +4188,25 @@ async function refreshMassRangeThenTrack() {
   await refreshTrack();
 }
 
+// The helium/α-enhanced + cluster-isochrone overlays act on the HR-diagram panel, and the
+// coeval-population overlay acts on the SED panel — so their controls belong UNDER those panels
+// (user request: a click in the Controls column changed a panel that could be scrolled off-screen,
+// reading as "nothing happened"). They are DECLARED in the Controls panel in index.html (grouped
+// with the sliders they conceptually sit near) and relocated here at boot — layout.js's panel drag
+// is the precedent for structural moves in JS. IDs are unchanged, so every update*/toggle handler,
+// and the reserveWhatIf greying that travels with them, keeps working untouched.
+function relocateOverlayControls() {
+  const hr = document.querySelector(".hr-panel");
+  const sed = document.querySelector(".sed-panel");
+  if (hr) for (const id of ["helium-control", "alpha-track-control", "isochrone-control"]) {
+    const el = document.getElementById(id);
+    if (el) hr.appendChild(el);
+  }
+  if (sed) { const p = document.getElementById("population-control"); if (p) sed.appendChild(p); }
+}
+
 async function init() {
+  relocateOverlayControls();   // move the overlay what-ifs onto the panels they drive (see above)
   try {
     const ranges = await fetchJSON("/ranges");
     logMassMin = Math.log10(ranges.mass_msun.min);
@@ -4392,15 +4415,12 @@ async function init() {
     refresh();
   });
 
-  // Binary-stripped-star what-if toggle: checking it enters the reversible stripped-mode (a
-  // mid-life fork — the whole display snaps to the stripped He-star, fetched from /binary);
-  // unchecking calls the SAME exit path as the endgame bar's "Back" (one exit, no divergence).
-  if (els.strippedToggle) els.strippedToggle.addEventListener("change", () => {
-    if (els.strippedToggle.checked) {
-      if (mode === "live") enterStripped();
-    } else if (mode === "stripped") {
-      exitEndgame();
-    }
+  // Binary-stripped-star what-if BUTTON: clicking it enters the reversible stripped-mode (a
+  // mid-life fork — the whole display snaps to the stripped He-star, fetched from /binary). It's a
+  // one-way ENTER like the WD/WR/SN gateway buttons; the endgame bar's "Back" is the single exit
+  // (exitEndgame). Disabled out of the eligible mass band, so the guard is belt-and-suspenders.
+  if (els.strippedBtn) els.strippedBtn.addEventListener("click", () => {
+    if (mode === "live" && !els.strippedBtn.disabled) enterStripped();
   });
 
   // Initial-helium overlay (Phase 2): a light HR overlay, not a mode-swap. Checking it fetches

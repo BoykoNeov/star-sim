@@ -175,7 +175,46 @@ small-polish items; frontend-only, commit after c598252):**
   space and shoves no interactive control, so reserving it would leave a large dead gap for the
   ~majority of non-SN stars.
 
+- **Overlay-controls-relocated + SED-legend-clickable + stripped-button + calm-binary-layout batch
+  (2026-07-11, user-reported):** a batch of "controls act where you can't see the effect" and
+  "panels jump" fixes. (1) **Relocated the overlay what-ifs onto the panels they drive** — the
+  helium-/α-enhanced + cluster-isochrone controls into `.hr-panel`, the coeval-population control
+  into `.sed-panel` — via `relocateOverlayControls()` (a boot-time `appendChild`, IDs unchanged, the
+  layout.js panel-drag precedent; NOT an HTML move — the giant data-tip strings made that error-prone).
+  A `.controls-overlay-pointer` note stays in Controls saying where they went. **Canvas dims verified
+  IDENTICAL before/after (hr 654×320, sed 654×300) — controls added below a JS-width-driven canvas
+  don't resize it; hr/sed panel heights rock-stable across a mass sweep (614/588).** (2) **Observer
+  CMD "B/V unavailable" fix** (`cmd.js`): the notice keyed SOLELY on the locus fetch's `has_bv`, so it
+  could contradict its own readout (which prints a real (B−V)₀) and flash during the pre-load gap.
+  Split "not-yet-loaded" (`locusLoaded`) from "known-absent", and never show it when the marker carries
+  a valid B−V. Backend always returns `has_bv:true` (filters.json has B/V) — this is defensive + the
+  real cause is a stale cached cmd.js on a no-bundler SPA (hard-refresh). (3) **SED legend clickable**
+  (`sed.js` `toggleSeries` + `hiddenSeries` Set, mirroring comp.js's per-element toggle): each
+  legend entry carries `data-series` (blackbody/visible/wien/activity/rotline/wind); main.js wires a
+  delegated click → hide that curve + strike the entry through (`.sed-legend span[data-series].off`).
+  The "non-thermal edges" entry is conceptual (no data-series). SED height stays 588 across toggles.
+  (4) **Stripped what-if is now a BIG gateway-style BUTTON** (`#stripped-btn .gateway-btn.fork-btn`,
+  a distinct CYAN hue because it's a MID-LIFE fork not the yellow end-of-life gateway) — one-way ENTER
+  (exit = the endgame Back bar), disabled+present out of the 2–18.2 M☉ band (reserve). Replaced the
+  checkbox `#stripped-toggle`; `updateStrippedControl` hides it in stripped-mode (was visible+checked).
+  (5) **Calm the stripped/binary layout** (the user's "big jumping" complaint): `body.stripped-mode
+  .lane-panel, .structure-panel, .sed-panel, .observer-panel { display:none }` — hides them across
+  EVERY sub-scenario (snapshot, co-evolve `binary-view`, CO-binary `co-binary-view` all layer on
+  `stripped-mode`), so switching merger⇄stripped⇄wide⇄star+black-hole no longer adds/removes whole
+  panels. **Fixed the explicit "Lane-Emden in stripped binary screens" bug.** Also extended the
+  co-binary readout/scale/star-class hide to `binary-view` (both animated views leave those frozen on
+  the snapshot — `refreshBinary` never updates them, a latent false-data leak) so the two are now
+  panel-IDENTICAL (`DIFF bin vs co: []` verified). (6) **Amplified the Ap/Bp peculiar spots** (star.js:
+  dip 0.4→0.55, caps smoothstep 0.45→0.30/0.85→0.80) — they were wired but near-invisible; now a clear
+  dark abundance patch (evocative, so amplifying costs no honesty). **`*/` inside a CSS comment
+  (`update*/drop*`) prematurely closed it and silently broke the panel-hide rule** — a Playwright
+  "rule present but not applied" symptom; reword to avoid `*/`. **Inclination amplification deferred to
+  a user design decision** (honest oblate-rotator tilt already works but is physically subtle; a
+  round star is rotationally symmetric so a visible cue needs a call). Zero console errors at 1440+390.
+
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the
 track; keep new pedagogy on the `data-tip` tooltip (plain text, escaped); reuse
-`fitCanvas` for any new canvas panel.
+`fitCanvas` for any new canvas panel; relocated controls stay declared in Controls
+HTML and moved at boot (don't "fix" that back into the HTML); never put `*/` inside
+a CSS comment.

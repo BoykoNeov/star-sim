@@ -796,7 +796,18 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   **present-but-greyed** out of their mass/[Fe/H] band via a shared `reserveWhatIf`
   helper + a `.rot-control` min-height instead of removing themselves, so a mass drag
   no longer shoves the age slider; three-hide-reasons rule — regime→grey,
-  data-absent/endgame→hide — reverses "absent, not a dead knob" for regime-gating only).
+  data-absent/endgame→hide — reverses "absent, not a dead knob" for regime-gating only),
+  the **overlay-relocation + SED-legend + stripped-button + calm-binary batch** (user-reported:
+  helium/α/isochrone controls **relocated into `.hr-panel`** and population into `.sed-panel`
+  via a boot-time `relocateOverlayControls()` appendChild [IDs unchanged, canvas dims verified
+  identical] + a Controls pointer note; the **SED legend is now clickable** to hide/show each
+  curve [`sed.js toggleSeries`, `data-series`, mirrors comp.js]; the stripped what-if is now a
+  **big cyan gateway-style `fork-btn`** [one-way enter, exit via Back]; **stripped/binary modes
+  hide lane/structure/sed/observer consistently** across every sub-scenario [fixes "Lane-Emden in
+  the binary screen" + the panel-reshuffle jump — `binary-view`/`co-binary-view` now panel-identical];
+  the observer CMD no longer flashes "B/V unavailable" [split not-loaded from known-absent in
+  `cmd.js`]; Ap/Bp peculiar spots amplified for visibility — **CSS gotcha: never put `*/` inside a
+  comment, it closes it early and silently breaks the rule**).
   **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).

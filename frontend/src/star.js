@@ -206,8 +206,8 @@ float peculiarSpots(vec3 p0, float time) {
   vec3 p = vec3(p0.x * ca - p0.z * sa, p0.y, p0.x * sa + p0.z * ca);
   const vec3 mag = vec3(0.819, 0.574, 0.0);       // normalize(sin55°, cos55°, 0): dipole ~55° off spin
   float md = abs(dot(p, mag));                     // 1 at the two magnetic poles, 0 at the mag. equator
-  float cap = smoothstep(0.45, 0.85, md);          // coherent polar caps
-  float mott = smoothstep(0.15, 0.70, worleyF1(p * 2.3 + 11.0, 0.0)); // broken into big irregular cells
+  float cap = smoothstep(0.30, 0.80, md);          // coherent polar caps (widened for visibility — user ask)
+  float mott = smoothstep(0.12, 0.64, worleyF1(p * 2.3 + 11.0, 0.0)); // broken into big irregular cells
   return cap * mott;                               // 0 (clean) .. ~1 (deepest spot)
 }
 
@@ -271,7 +271,7 @@ void main() {
   // never implies a false temperature map, which is the gravity-darkening gradient's job).
   // uPeculiar = 0 for every non-Ap/Bp star (off, cool, hot-O, giant, endgame) -> spots = 1.0
   // -> this line is byte-identical.
-  float spots = 1.0 - uPeculiar * peculiarSpots(vObjPos, uTime) * 0.4;
+  float spots = 1.0 - uPeculiar * peculiarSpots(vObjPos, uTime) * 0.55;
   vec3 surface = min(gdColor * granule * limb * uExpo * gdBright * spots, 1.0);
   gl_FragColor = vec4(lin2srgb(surface), 1.0);
 }`;
