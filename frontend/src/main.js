@@ -78,6 +78,12 @@ const els = {
   populationControl: document.getElementById("population-control"),
   populationToggle: document.getElementById("population-toggle"),
   populationNote: document.getElementById("population-note"),
+  // Isochrone / cluster overlay (MIST .iso — Axis B). A LIGHT HR overlay like He/α (it owns the
+  // HR panel while on, MIST track hidden) but a POPULATION view: the coeval-cluster locus at the
+  // marker's age, turnoff ringed, the star sitting on it. Gated only on the fetched .iso grid.
+  isochroneControl: document.getElementById("isochrone-control"),
+  isochroneToggle: document.getElementById("isochrone-toggle"),
+  isochroneNote: document.getElementById("isochrone-note"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
   companionToggle: document.getElementById("companion-toggle"),
@@ -524,6 +530,18 @@ let populationToken = 0;        // latest-wins guard for the /population fetch (
 let populationHasGrid = false;  // /population_status: is the BPASS SED cube baked? (else hide the toggle)
 let populationHasHRD = false;   // /population_status has_hrd: is the HR-diagram number cube baked?
 let popNodeKey = "";            // last-fetched ([Fe/H], age-node) bucket — skip refetch if unchanged
+
+// --- isochrone / cluster overlay (MIST .iso — Axis B) --------------------------
+// Like the He/α overlays it OWNS the HR panel while on (MIST track/marker hidden, the locus
+// drawn instead). Not mass-gated (reads only the marker's age + [Fe/H]); the only gate is the
+// fetched .iso grid (/isochrone_status). The cluster ages with the age slider; isoNodeKey
+// buckets so a same-node age-scrub skips the refetch but still repaints the moving marker.
+let isoOn = false;
+let isoToken = 0;               // latest-wins guard for the /isochrone fetch
+let isoHasGrid = false;        // /isochrone_status: is the .iso grid fetched? (else hide the toggle)
+let isoNodeKey = "";           // last-fetched (feh, age-node, vvcrit) bucket
+let isoLastStates = null;      // cached locus states (redraw the marker within a node w/o refetch)
+let isoLastTurnoff = null;     // cached MSTO for the same-node repaint
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -2720,6 +2738,7 @@ function fmtGyr(gyr) {
 function dropHeliumForModeSwitch() {
   dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
   dropPopulationForModeSwitch(); // the SED population overlay is living-only — drop it on any mode switch too
+  dropIsochroneForModeSwitch();  // the cluster-isochrone HR overlay is living-only — drop it too
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
@@ -2839,6 +2858,103 @@ function fmtPopAge(gyr) {
   if (gyr < 0.001) return `${(gyr * 1e6).toPrecision(2)} kyr`;
   if (gyr < 1) return `${Math.round(gyr * 1000)} Myr`;
   return `${gyr.toPrecision(3)} Gyr`;
+}
+
+// --- isochrone / cluster overlay (MIST .iso — Axis B) ------------------------
+// The transpose of the track: all masses at one age, a coeval-cluster locus on the HR panel,
+// the main-sequence turnoff ringed (the age clock), the user's star sitting on it. Owns the HR
+// panel while on (MIST track/marker hidden) like the He/α overlays, and mutually exclusive with
+// them; not mass-gated (reads only the marker's age + [Fe/H]). Living-star only.
+function updateIsochroneControl() {
+  const c = els.isochroneControl;
+  if (!c) return;
+  const eligible = isoHasGrid && mode === "live";
+  c.hidden = !eligible;
+  if (!eligible) {
+    if (isoOn) isochroneOff();   // mode changed under it → tear it down, restore the live HR
+    return;
+  }
+  if (els.isochroneToggle) els.isochroneToggle.checked = isoOn;
+  if (!isoOn && els.isochroneNote)
+    els.isochroneNote.textContent =
+      "See this star's age as a whole cluster — where the main-sequence turnoff dates it.";
+}
+
+// Turn the overlay OFF: restore the live MIST HR track + marker, drop the caption.
+function isochroneOff() {
+  isoOn = false;
+  isoToken++;                    // cancel any in-flight /isochrone apply
+  isoNodeKey = ""; isoLastStates = null; isoLastTurnoff = null;
+  if (els.isochroneToggle) els.isochroneToggle.checked = false;
+  hr.clearIsochroneOverlay();
+  if (currentTrack && currentTrack.length) hr.setTrack(currentTrack);
+  refresh();                     // re-place the marker on the restored track
+  updateIsochroneControl();      // reset the note text
+}
+
+// Drop the overlay when a non-live mode takes over (endgame/stripped/SN/binary), mirroring
+// dropPopulationForModeSwitch — the entry path repaints the HR panel, so just clear state so a
+// return to live never flashes a stale locus. Called from dropHeliumForModeSwitch (the hook).
+function dropIsochroneForModeSwitch() {
+  if (!isoOn) return;
+  isoOn = false;
+  isoToken++;
+  isoNodeKey = ""; isoLastStates = null; isoLastTurnoff = null;
+  if (els.isochroneToggle) els.isochroneToggle.checked = false;
+  if (els.isochroneControl) els.isochroneControl.hidden = true;
+}
+
+// Fetch + push the cluster isochrone for the marker's (age, [Fe/H], vvcrit). Called from
+// paintState. Buckets by the snapped node so a same-node age-scrub skips the refetch — but
+// STILL repaints (the marker moved even if the locus didn't; unlike the population cloud the
+// marker here is drawn INSIDE the overlay, so a skipped repaint would freeze it). Latest-wins.
+async function refreshIsochrone(s) {
+  if (!isoOn || mode !== "live" || !s) return;
+  const feh = s.feh_init ?? 0;
+  const ageYr = s.age_yr ?? 0;
+  if (!(ageYr > 0)) return;
+  const vvcrit = effVvcrit();
+  // Bucket finer than the iso grid (feh nodes ≥0.25 dex apart, age nodes ~0.05 dex in log10).
+  const key = `${(Math.round(feh / 0.1) * 0.1).toFixed(1)}|` +
+    `${(Math.round(Math.log10(ageYr) / 0.025) * 0.025).toFixed(3)}|${vvcrit}`;
+  if (key === isoNodeKey && isoLastStates) {
+    hr.setIsochroneOverlay(isoLastStates, isoLastTurnoff, s);  // same locus, moved marker
+    return;
+  }
+  const token = ++isoToken;
+  let data;
+  try {
+    data = await fetchJSON(`/isochrone?age_yr=${ageYr}&feh=${feh}&vvcrit=${vvcrit}`);
+  } catch (e) {
+    if (token !== isoToken || !isoOn) return;
+    isoNodeKey = "";
+    isochroneOff();
+    if (els.isochroneNote) els.isochroneNote.textContent = "Isochrone grid unavailable (not fetched).";
+    return;
+  }
+  if (token !== isoToken || !isoOn || mode !== "live") return;
+  isoNodeKey = key;
+  isoLastStates = data.states; isoLastTurnoff = data.turnoff;
+  hr.setIsochroneOverlay(data.states, data.turnoff, s);
+  if (els.isochroneNote) {
+    const t = data.turnoff;
+    const fehNote = data.feh_snapped_far ? " (off-grid, snapped)" : "";
+    const ageNote = data.age_snapped_far ? " (age off-grid)" : "";
+    // Only the non-rotating iso grid is baked — a rotating star (vvcrit=0.4) snaps to it. Surface
+    // that so the cluster's rotation isn't silently mismatched with the star's (advisor catch).
+    const rotNote = data.vvcrit_snapped_far
+      ? ` The cluster is shown non-rotating (v/v_crit ${data.vvcrit}) though this star rotates.` : "";
+    const toTxt = t
+      ? `The turnoff (ring) is at ${Math.round(t.Teff_K).toLocaleString()} K, ` +
+        `${t.L_lsun < 100 ? t.L_lsun.toPrecision(2) : Math.round(t.L_lsun)} L☉ ` +
+        `(${t.mass_msun.toFixed(2)} M☉ leaving the main sequence now).`
+      : "";
+    els.isochroneNote.textContent =
+      `A coeval cluster at [Fe/H] ${data.feh.toFixed(2)}${fehNote}, ` +
+      `age ${fmtPopAge(data.age_yr / 1e9)}${ageNote} — all masses at once, your star one point on it. ` +
+      `${toTxt} Scrub the age to age the cluster: the turnoff marches down the main sequence — ` +
+      `that luminosity is how clusters are dated.${rotNote}`;
+  }
 }
 
 // --- α-enhanced (equivalent-Z) what-if overlay (Phase 3) ---------------------
@@ -3564,12 +3680,13 @@ function paintState(s) {
   // A MESA what-if overlay (initial-He or α-enhanced) owns the HR panel while on (two MESA
   // tracks, MIST spine hidden per the honesty rule) — so DON'T draw the live marker/track
   // there; 3D/comp/spectrum/etc. still track the current star as the user scrubs (advisor-scoped).
-  if (!heliumOn && !alphaOn) hr.update(s);
+  if (!heliumOn && !alphaOn && !isoOn) hr.update(s);
   comp.update(s);
   spectrum.update(s);
   structure.update(s);
   sed.update(s);
   refreshPopulation(s);   // the coeval-population SED overlay (no-op unless the toggle is on)
+  refreshIsochrone(s);    // the cluster-isochrone HR overlay (no-op unless the toggle is on)
   renderReadout(s);
   els.status.style.color = teffToCSS(s.Teff_K);
   // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the
@@ -3615,6 +3732,7 @@ function refresh() {
   updateHeliumControl();     // the He overlay is offer-able only near the solar-Z MESA grid
   updateAlphaControl();      // likewise the α-enhanced overlay (same solar-Z MESA grid)
   updatePopulationControl(); // the coeval-population SED overlay (any marker; gated on the baked cube)
+  updateIsochroneControl();  // the cluster-isochrone HR overlay (any marker; gated on the .iso grid)
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -3643,7 +3761,7 @@ async function refreshTrack() {
     // the WD endgame must not overwrite the endgame view.
     if (token !== trackToken || mode !== "live") return;
     currentTrack = t;
-    if (!heliumOn && !alphaOn) hr.setTrack(t);   // a MESA overlay owns the HR panel; its refresh re-asserts it
+    if (!heliumOn && !alphaOn && !isoOn) hr.setTrack(t);   // a MESA/isochrone overlay owns the HR panel; its refresh re-asserts it
     comp.setTrack(t);
     // The star changed, so any cached endgame is stale — drop BOTH caches (the full result
     // and the type-only fast-path one) + clear the gateway's CHILDREN (the buttons/note),
@@ -3755,6 +3873,7 @@ async function init() {
       populationHasGrid = !!ps.has_grid;    // SED-spectrum cube (Chunk 1) — gates the toggle
       populationHasHRD = !!ps.has_hrd;      // HR-diagram number cube (Chunk 2) — adds the HR cloud
     } catch { populationHasGrid = false; populationHasHRD = false; }
+    try { isoHasGrid = !!(await fetchJSON("/isochrone_status")).has_grid; } catch { isoHasGrid = false; }
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun
@@ -3959,6 +4078,7 @@ async function init() {
       // Mutually exclusive with the α overlay (shared HR slot): clear α state first, no repaint
       // (refreshHelium repaints the slot). Reset α's note to its default prompt.
       if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
+      if (isoOn) { isoOn = false; isoToken++; isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
       heliumOn = true;
       if (els.heliumNote) els.heliumNote.textContent = "Loading helium-enhanced tracks…";
       refreshHelium();
@@ -3973,6 +4093,7 @@ async function init() {
     if (els.alphaToggle.checked) {
       if (mode !== "live") { els.alphaToggle.checked = false; return; }
       if (heliumOn) { heliumOn = false; heliumToken++; if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
+      if (isoOn) { isoOn = false; isoToken++; isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
       alphaOn = true;
       if (els.alphaNote) els.alphaNote.textContent = "Loading α-enhanced tracks…";
       refreshAlpha();
@@ -3997,6 +4118,27 @@ async function init() {
       }
     } else {
       populationOff();
+    }
+  });
+
+  // Cluster-isochrone (MIST .iso) overlay on the HR panel. Owns the HR slot like the He/α
+  // overlays, so mutually exclusive with them. Checking it fetches /isochrone for the marker's
+  // (age, [Fe/H]) and draws the coeval-cluster locus; paintState keeps it in sync as the age
+  // scrubs (the cluster ages with the slider).
+  if (els.isochroneToggle) els.isochroneToggle.addEventListener("change", () => {
+    if (els.isochroneToggle.checked) {
+      if (mode !== "live") { els.isochroneToggle.checked = false; return; }
+      if (heliumOn) { heliumOn = false; heliumToken++; if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
+      if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
+      isoOn = true;
+      isoNodeKey = "";     // force the first fetch (no cached node yet)
+      if (els.isochroneNote) els.isochroneNote.textContent = "Loading cluster isochrone…";
+      if (currentTrack && currentTrack.length) {
+        const i = trackRowFromPos(ageFraction);
+        if (i >= 0) refreshIsochrone(currentTrack[i]);
+      }
+    } else {
+      isochroneOff();
     }
   });
 

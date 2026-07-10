@@ -501,6 +501,21 @@
         <p class="note rot-note" id="population-note"></p>
       </div>
 
+      <!-- Isochrone / cluster overlay (MIST .iso) — Axis B of the outward quartet. The
+           TRANSPOSE of the track: all masses at ONE age, a coeval-cluster locus on the HR
+           panel, with the main-sequence turnoff (the age clock) highlighted and the user's
+           star sitting on it. A population VIEW (never moves the HR marker). The cluster's
+           age tracks the age slider. Gated only on the fetched .iso grid (/isochrone_status). -->
+      <div class="helium-control" id="isochrone-control" hidden>
+        <label class="rot-toggle-row" for="isochrone-toggle">
+          <input id="isochrone-toggle" type="checkbox" />
+          <span>Cluster isochrone — on the HR diagram
+            <span class="help" tabindex="0" data-tip="The TRANSPOSE of this star's track: a track is one mass over all ages; an ISOCHRONE is all masses at ONE age — a whole star cluster born together, frozen in a single snapshot, drawn as a locus across the HR diagram. Your star sits on it as one point. The bright ring marks the MAIN-SEQUENCE TURNOFF: the bluest, most luminous point still burning hydrogen in its core. Stars above it have already left the main sequence; stars below are still on it. That turnoff luminosity IS the cluster's age — the single most important clock in stellar astronomy: a young cluster (10–100 Myr) turns off high among luminous blue stars, an ancient one (12 Gyr) turns off low among faint yellow ones. Scrub the age slider to age the whole cluster and watch the turnoff march down the main sequence. This reads the PUBLISHED MIST v2.5 isochrone grid directly (the same models as your star's track, so it lands exactly on the locus — no interpolation-of-interpolation). Distinct from the BPASS coeval-population overlay: that is the population's integrated LIGHT and star counts; this is the individual-star locus you fit to a real cluster's photometry.">?</span>
+          </span>
+        </label>
+        <p class="note rot-note" id="isochrone-note"></p>
+      </div>
+
       <label for="age">Age
         <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
         <span class="age-wd">· cooling time (white-dwarf endgame)</span>

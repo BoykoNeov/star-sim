@@ -404,6 +404,23 @@ requires_bpass_hrd_data = pytest.mark.skipif(
 )
 
 
+def isochrone_data_available() -> bool:
+    """True if the MIST `.iso` isochrone grid is on disk (data/mist_isochrones/, gitignored,
+    fetched once via `python -m star_sim.fetch_mist_iso`). The /isochrone (Axis B cluster
+    overlay) sibling tests skip until the grid is present."""
+    from star_sim.isochrone import isochrone_available
+
+    return isochrone_available()
+
+
+# The /isochrone (coeval-cluster / MST-turnoff overlay, Axis B) tests need the published
+# MIST v2.5 .iso grid — a separate download from the EEP tracks. See fetch_mist_iso.py.
+requires_isochrone_data = pytest.mark.skipif(
+    not isochrone_data_available(),
+    reason="no MIST .iso grid (data/mist_isochrones/) — run python -m star_sim.fetch_mist_iso",
+)
+
+
 def alpha_data_available() -> bool:
     """True if the α-enhanced (equivalent-Z) MESA runs are on disk (gitignored, host-run).
 

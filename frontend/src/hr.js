@@ -232,6 +232,15 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
   // (same "binaries" hue as the SED overlay); cells present in both draw faint cyan. Pushed in
   // by main.js via setPopulationHRD(); a pure pushed-data consumer (hr.js owns no fetch).
   let populationHRD = null;    // { logt, logl, sin, bin, maxCount } or null
+  // --- isochrone / cluster overlay (MIST .iso, Axis B) -----------------------------------
+  // The TRANSPOSE of the track: all masses at one age (a coeval cluster) as a Teff-coloured
+  // locus, the main-sequence turnoff ringed (the age clock), and the user's star drawn as one
+  // point sitting ON it. Auto-fits the frame to the whole locus (like the MESA overlays) so the
+  // turnoff + giants are always in view; a population VIEW — it never moves the live HR marker.
+  let isoMode = false;
+  let isoStates = null;    // the locus (array of StellarState, MS → giants → WDs)
+  let isoTurnoff = null;   // { index, Teff_K, L_lsun, mass_msun } the MSTO
+  let isoCurrent = null;   // the user's current StellarState (drawn as the on-locus marker)
   // --- supernova mode: a DIFFERENT plot (the light curve), not the HR diagram ---------
   // The SN endgame repurposes this panel as the observable: bolometric L (log, erg/s) vs
   // TIME (LINEAR days since explosion). The linear-time x-axis is deliberate and load-
@@ -956,6 +965,60 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
+  // Enter/refresh the isochrone (cluster) overlay: the locus of §3-clean states at one age,
+  // the served turnoff, and the user's current state (drawn ON the locus). Auto-fits BOTH the
+  // locus and the marker (the marker always lies on the locus by construction, but include it
+  // so a snapped-far [Fe/H] can't push it out of frame).
+  function setIsochroneOverlay(states, turnoff, current) {
+    isoMode = true;
+    isoStates = states && states.length ? states : null;
+    isoTurnoff = turnoff || null;
+    isoCurrent = current || null;
+    const b = fitBounds(isoStates, current ? [current] : null);
+    bT0 = b.t0; bT1 = b.t1; bL0 = b.l0; bL1 = b.l1;
+    gridT = genTicks(bT0, bT1, niceStepT(bT1 - bT0));
+    gridL = genTicks(bL0, bL1, niceStepL(bL1 - bL0));
+    draw();
+  }
+  function clearIsochroneOverlay() {
+    if (!isoMode) return;
+    isoMode = false;
+    isoStates = null; isoTurnoff = null; isoCurrent = null;
+    applyLivingBounds();   // restore the living MIST frame
+    draw();
+  }
+
+  function drawIsochrone() {
+    drawAxes();
+    drawIsoRadius();
+    drawClassBands();                         // the O·B·A·F·G·K·M anchor, for context
+    if (!isoStates) return;
+    // the full coeval locus, solid Teff-coloured (splitIdx = length ⇒ all bold).
+    drawBinaryTrail(isoStates, isoStates.length);
+    // ring the main-sequence turnoff — the age clock.
+    if (isoTurnoff) {
+      const x = xOf(Math.log10(isoTurnoff.Teff_K));
+      const y = yOf(Math.log10(isoTurnoff.L_lsun));
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(PAD_L, PAD, W - PAD_L - PAD, H - 2 * PAD);
+      ctx.clip();
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ffd75e"; ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = "11px system-ui, sans-serif";
+      ctx.fillStyle = "#ffd75e"; ctx.textAlign = "left";
+      ctx.fillText("turnoff", x + 12, y - 8);
+      ctx.restore();
+    }
+    // the user's star as one point ON the cluster locus.
+    if (isoCurrent) {
+      drawMarker(xOf(Math.log10(isoCurrent.Teff_K)), yOf(Math.log10(isoCurrent.L_lsun)),
+                 isoCurrent.Teff_K);
+    }
+  }
+
   // The coeval-population HR-diagram number-density backdrop (BPASS, Chunk 2). One soft cell
   // per occupied (logTeff, logL) bin, clipped to the plot frame; alpha ∝ log-scaled star
   // count (a 4-decade dynamic range so the sparse hot cells still read). Colour carries the
@@ -1064,6 +1127,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     if (snMode) { drawSupernova(); return; }
     if (binaryMode) { drawBinary(); return; }
     if (heliumMode) { drawHelium(); return; }
+    if (isoMode) { drawIsochrone(); return; }
     drawAxes();
     drawIsoRadius();                  // constant-R graph paper, under everything
     if (endgameMode) {
@@ -1197,5 +1261,5 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     draw();
   }
 
-  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack, setHeliumOverlay, clearHeliumOverlay, setPopulationHRD, clearPopulationHRD };
+  return { setTrack, update, setOverlay, setEndgamePreview, setEndgame, setCompanion, setSupernova, setThermalPulses, clearThermalPulses, clearEndgame, resize, setBinaryTrack, updateBinaryIndex, clearBinaryTrack, setHeliumOverlay, clearHeliumOverlay, setPopulationHRD, clearPopulationHRD, setIsochroneOverlay, clearIsochroneOverlay };
 }

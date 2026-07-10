@@ -47,6 +47,7 @@ from .bpass import (
     population_hrd,
     population_sed,
 )
+from .isochrone import IsochroneDataMissing, isochrone, isochrone_available
 from .helium import HeliumDataMissing, helium_available, helium_overlay
 from .alpha import AlphaDataMissing, alpha_available, alpha_overlay
 from .supernova import Progenitor, supernova_model
@@ -446,6 +447,42 @@ def population_status() -> dict:
     then beats showing one that can only 503. `has_grid` is the SED-spectrum cube (Chunk 1);
     `has_hrd` the HR-diagram number-density cube (Chunk 2). Cheap (stats), always 200."""
     return {"has_grid": bpass_available(), "has_hrd": hrd_available()}
+
+
+@app.get("/isochrone")
+def isochrone_route(
+    age_yr: float = Query(..., gt=0.0, description="cluster age / yr"),
+    feh: float = Query(..., ge=-5.0, le=2.0, description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, ge=0.0, le=1.0, description="rotation v/v_crit"),
+) -> dict:
+    """(age, [Fe/H], vvcrit) -> the coeval-cluster locus at the nearest published MIST
+    isochrone node (docs/plans/outward-quartet-atlas.md, Axis B).
+
+    Like `/structure`, `/spectrum` and `/population`, this does **not** go through
+    `PROVIDER`. An isochrone is all masses at one age — a population locus, not a single
+    star — so it is a sibling, `isochrone.py`, reading the *published* MIST `.iso` grid
+    with its own parser (Tier-1: no interpolation-of-interpolation). The payoff is the
+    **main-sequence turnoff**: the bluest MS point, whose luminosity IS the cluster's age.
+
+    Snap-always (like `/structure`): [Fe/H] snaps to the nearest grid file, age to the
+    nearest tabulated isochrone in log10, vvcrit to the nearest rotation grid; all snaps
+    are flagged in-band (`*_snapped_far`), never 422'd. 422 is reserved for structurally
+    invalid input (age <= 0); a missing/unfetched `.iso` grid -> 503."""
+    try:
+        return isochrone(age_yr, feh, vvcrit)
+    except IsochroneDataMissing as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/isochrone_status")
+def isochrone_status() -> dict:
+    """Whether the isochrone grid is present — the honesty gate the frontend reads to
+    decide if the cluster-overlay toggle appears (mirrors `/population_status`). The
+    `.iso` files are gitignored/fetched-on-demand, so a fresh clone has none; hiding the
+    toggle beats showing one that can only 503. Cheap, always 200."""
+    return {"has_grid": isochrone_available()}
 
 
 @app.get("/helium")

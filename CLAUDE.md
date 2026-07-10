@@ -44,6 +44,10 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   sibling), `bpass.py` (the **first ENSEMBLE sibling** behind `/population` — a whole
   coeval population's integrated spectrum, single-star vs. +binaries, from a BPASS SSP
   bake; pure numpy/stdlib, imports NOT even `StellarState`, never a provider),
+  `isochrone.py` (the **cluster-isochrone sibling** behind `/isochrone` — Axis B of the outward
+  quartet: all masses at ONE age, the MST-turnoff age clock; reads the *published* MIST v2.5 `.iso`
+  grid baked to per-(feh,vvcrit) `.npz` by `fetch_mist_iso.py`, its own tiny parser, imports only
+  `StellarState`, never a provider),
   `structure.py` (the **real interior-structure** sibling — offline MESA
   radial `profile.data` snapshots behind `/structure`; the honest successor to
   Lane–Emden, its own MESA-profile parser, snaps (mass,[Fe/H],age) to the nearest
@@ -53,8 +57,8 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   never imports a provider — the ~70% WR channel; also carries path (b): `/binary_pair`
   composes the donor + a PROVIDER companion, and `roche_geometry()` computes the pure
   RLOF-moment Roche-lobe geometry from the CSV's `P_init` column), `api.py` (FastAPI, the
-  swap point; also hosts `/polytrope`, `/structure`, `/spectrum`, `/binary` and
-  `/binary_pair`, the routes that do NOT go through `PROVIDER`).
+  swap point; also hosts `/polytrope`, `/structure`, `/spectrum`, `/binary`,
+  `/binary_pair` and `/isochrone`, the routes that do NOT go through `PROVIDER`).
 - `backend/tests/` — §10 sanity checks: `test_mist_provider.py` (Sun anchor,
   ZAMS spread, EEP-between-neighbors, plus the [Fe/H]-axis tests: lies-between
   metallicities, held-out-grid accuracy, dead-corner exclusion),
@@ -837,9 +841,40 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   wedge from downloaded bytes). Next = Chunk 2 (HRD number-density, separate BPASS "numbers"
   release). [[star-sim-coeval-ensemble-bpass]], [[star-sim-hosted-data-assets]].
 
+### Isochrone / cluster overlay (Axis B of the outward quartet — `isochrone.py`; `/isochrone` bypasses PROVIDER)
+- **BUILT 2026-07-10 (B1 backend + B2 frontend; 412 pytest, Playwright 1440+390 zero console
+  errors).** The transpose of a track — **all masses at ONE age**, a coeval-cluster locus on the
+  HR panel, the **main-sequence turnoff RINGED** (the age clock — how clusters are dated), the
+  user's star sitting on it. A **sibling** (imports only `state.StellarState` + numpy/stdlib;
+  AST-tested no-provider) reading the **published MIST v2.5 `.iso` grid**; `/isochrone` (snap-always,
+  503 unbaked, 422 age≤0) + `/isochrone_status` (has_grid gate). **Version-consistent with the live
+  tracks** (both v2.5) so the marker lands EXACTLY on the MS locus — the **Sun-anchor test** (4.6 Gyr
+  solar iso holds a 1 M☉ star at L≈1/Teff≈5772) is the check that justified v2.5 over v1.2. The
+  plan's from-tracks EEP cross-check was **dropped (advisor)** — it reintroduces the
+  interpolation-of-interpolation / EEP hazard the `.iso`-primary choice avoids. **Size surprise →
+  a bake** (measure-first pivot from "read raw"): each `.iso` is ~550 MB of 170-col text and the whole
+  v2.5 iso axis ships as ONE **6.7 GB** tarball per vvcrit (no per-[Fe/H] download), so
+  `fetch_mist_iso.py` streams it once and bakes each solar-scaled (`afe_p0`) node in the track
+  [Fe/H] domain to a compact **per-(feh,vvcrit) `.npz`** (~2.6 MB, ~11 cols, CSR across ~107 ages;
+  `BAKE_VERSION`) — 7 nodes −1.0…+0.5 (**denser** than the tracks' 5). **Turnoff = bluest MS-phase
+  row, NOT global max Teff** (advisor catch, dramatically confirmed: old/metal-poor isochrones carry
+  hot post-AGB/WD stars ~10⁵ K vs an MSTO ~6000 K — a naive max off 20–50×). B2: `#isochrone-toggle`
+  (gated on `/isochrone_status`), `hr.js setIsochroneOverlay`/`drawIsochrone` (Teff locus + gold ring
+  + on-locus marker), owns the HR panel like the He/α overlays (mutually exclusive), the cluster
+  **ages with the age slider** (node-bucketed refetch), living-only. Data gitignored under
+  `data/mist_isochrones/` (`requires_isochrone_data`). **Follow-ups (unbuilt):** B3 decoupled
+  cluster-age slider; hosting the ~18 MB baked npz set as a Release (the 6.7 GB fetch is painful on
+  a fresh clone). [[star-sim-isochrone-cluster]]; plan `docs/plans/outward-quartet-atlas.md` §Axis B.
+
 ### Tests
-- **405 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
-  if grids absent). The coeval-population overlay sibling (`test_bpass.py`) adds **8** (7 gated +
+- **412 pytest** (gated by data present via `conftest.py` markers; MIST tests skip
+  if grids absent). The isochrone/cluster sibling (`test_isochrone.py`, Axis B) adds **7** (5 gated
+  `requires_isochrone_data` + 2 ungated): the Gate-0 turnoff-monotone-with-age regression through the
+  runtime (cooler+fainter+lighter 0.1→12 Gyr), the **MS-only-not-global-hottest** turnoff correctness
+  check (with teeth — asserts a hotter non-MS star exists that a naive max would grab), the Sun-anchor
+  (4.6 Gyr solar iso holds a 1 M☉ star at L≈1/Teff≈5772 — the version-consistency check), snap honesty,
+  route shape+422; plus the UNGATED `/isochrone_status` gate + the AST sibling-imports-no-PROVIDER
+  (but DOES import `state`) check. The coeval-population overlay sibling (`test_bpass.py`) adds **8** (7 gated +
   1 UNGATED `/population_status`, which now also asserts `has_hrd`): **Chunk 1's** Gate-0 UV/ionizing
   bin>sin regression through the runtime (ionizing bin>3× sin @40 Myr, FUV bin>3× sin @1 Gyr, optical
   ~unchanged), snap honesty, age-log-snap, route shape+`population` selector+422, the AST
