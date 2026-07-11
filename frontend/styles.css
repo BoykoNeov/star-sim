@@ -107,6 +107,36 @@ main {
 .panel h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase;
   letter-spacing: .06em; color: var(--muted); }
 
+/* ── Reserved panel heights — "panels never change size on slider/click" (user request,
+   3rd time; this OWNS the anti-jump behaviour, superseding the piecemeal per-block reserves
+   below like .rot-control/.gateway which stay as tidy inner spacing).
+
+   The dashboard is a fluid flex-wrap grid: each panel's CONTENT changes as you drag a slider
+   (rotation facets appear/disappear crossing the Kraft break, the gateway swaps a WD button
+   for the taller SN note, captions reflow) or click a what-if toggle (the inclination slider,
+   the cluster-isochrone decouple row, the coeval-population overlay). Any of those reflowed
+   the panel and shoved everything below it — the reported jump.
+
+   The fix: pin each panel that can vary to a min-height covering its TALLEST reachable state,
+   so no interaction ever grows it past what's already reserved. Because natural height rises
+   as a panel narrows (more text wrapping), the floor is sized to the NARROWEST width of each
+   regime (measured empirically): the default rule covers a ~450px-wide panel (single narrow
+   column / 2-up on a laptop), the ≤480 rule the phone stack. Values are the measured maxima
+   plus a small margin. The trade is intentional whitespace at wide widths in exchange for a
+   panel outline that is rock-steady under every slider and toggle. */
+.controls-panel  { min-height: 985px; }
+.structure-panel { min-height: 855px; }
+.star-panel      { min-height: 815px; }
+.hr-panel        { min-height: 820px; }
+.sed-panel       { min-height: 830px; }
+@media (max-width: 480px) {
+  .controls-panel  { min-height: 1060px; }
+  .structure-panel { min-height: 910px; }
+  .star-panel      { min-height: 830px; }
+  .hr-panel        { min-height: 870px; }
+  .sed-panel       { min-height: 960px; }
+}
+
 /* The 3D star: a modest square that shrinks to fit a narrow (phone) panel. star.js
    resizes its WebGL renderer from the canvas's clientWidth/clientHeight every frame,
    so a responsive CSS box is all it needs — no JS wiring here. */

@@ -220,9 +220,30 @@ small-polish items; frontend-only, commit after c598252):**
   gravity-darkenable star); update()'s `!eg` gate is the mode-switch safety net. Zero console errors
   at 1440+390.
 
+**Panel-height jump — the anti-jump reservation (user request, 3RD time).** The
+piecemeal per-block reserves (`.rot-control` min-height 130, `.gateway` 36, caption
+min-heights) kept UNDERSHOOTING their worst case, so panels still jumped on
+slider/click. Measured the true reachable maxima (Playwright, mass/[Fe/H]/age sweeps +
+every what-if toggle ON, at both the ~450px narrow-default panel width AND ≤480px
+mobile) and pinned a **whole-panel `min-height` floor** per breakpoint on the five
+panels that vary: **controls 985/1060, structure 855/910, star 815/830, hr 820/870,
+sed 830/960** (default / ≤480; `styles.css` right after `.panel h2`). Two load-bearing
+findings: (1) natural height rises as a panel NARROWS (text wraps more), so a floor
+measured at a wide 700px panel undershoots at a 450px one — **size to the narrowest
+width of each regime**; (2) the reveal maxes (rot-track→inclination facet, isochrone→
+decouple slider, population overlay) DON'T co-occur with each other or with the gateway
+SN-note max, so a single whole-panel floor is LESS whitespace than summing per-block
+reserves (which would force them to co-occur). User explicitly overrode the
+"reveals are expected growth, don't reserve them" call — reserve **everything**, gaps
+be damned. Canvases are safe: `RESPONSIVE` in main.js gives each a FIXED height (only
+width is responsive via ResizeObserver), so a panel min-height only adds empty space —
+no canvas distortion.
+
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the
 track; keep new pedagogy on the `data-tip` tooltip (plain text, escaped); reuse
 `fitCanvas` for any new canvas panel; relocated controls stay declared in Controls
 HTML and moved at boot (don't "fix" that back into the HTML); never put `*/` inside
-a CSS comment.
+a CSS comment. When you add a control/note/facet to a reserved panel, RE-MEASURE its
+max at the narrowest width and bump the floor — an undersized reserve is the exact bug
+that recurred three times.
