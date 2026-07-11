@@ -239,6 +239,35 @@ be damned. Canvases are safe: `RESPONSIVE` in main.js gives each a FIXED height 
 width is responsive via ResizeObserver), so a panel min-height only adds empty space —
 no canvas distortion.
 
+**Panel-height jump — the WITHIN-panel reservation (user request, 4TH time; desktop-only).**
+The 3rd fix pinned WHOLE-panel floors, which keeps the *dashboard* steady (neighbouring panels
+don't move) but does NOT stop elements *inside* a panel from shifting: an element appearing
+mid-panel (the inclination facet when you check the rotation toggle; a what-if note growing to
+its active caption) still shoves its own siblings down. The two mechanisms are **additive**
+(advisor): whole-panel floor = dashboard; per-element reserve = within-panel stack. Fixes
+(`styles.css`): (1) **`.rot-control` min-height 130→316** — the rotation section is track-stable
+(mass/[Fe/H]-derived), so pinning it to its tallest reachable live state (**311px** = the
+1.25–1.6 M☉ both-facets band with the rotation toggle CHECKED: track toggle + note + period
+slider + the revealed inclination slider, measured at the narrowest desktop ~512px panel) kills
+BOTH the mass-drag regime reflow AND the toggle→incl reveal in one floor. The old comment called
+that incl reveal an "intentional disclosure" and deliberately left it un-reserved — **this
+reverses that**. (2) **Per-note floors** `#peculiar-note,#stripped-note,#helium-note {42px}`,
+`#alpha-track-note {80px}` — the notes that have a sibling CONTROL beneath them (Controls:
+peculiar→stripped→age; HR after relocation: helium→alpha→isochrone), sized to their tallest
+active caption at ~512px. isochrone/population notes are LAST in their panels → nothing below →
+whole-panel floor absorbs them, no per-note floor. (3) Controls whole-panel floor 985→**992**
+(the incl reserve raised the live max 985→988). **User chose "full reserve — no jump ever" over
+"toggle-reveals only"** when shown the ~180px gap it leaves in the rotation area for a Sun-like
+star (AskUserQuestion) — the gap IS the reserved space, exactly the ask. Removed the ≤480
+`.rot-control`/`.rot-note` overrides (user dropped mobile; the old 150px override would clamp the
+316 floor back down and re-break it). **Two verification gotchas:** (a) the invariance check must
+be **scroll-invariant** — measure each anchor's `top − panel.top` (position WITHIN its panel),
+NOT viewport-relative `top`; on the tall single-column narrow layout a re-render drifts page
+scroll and viewport-top gives phantom 1000px "jumps". (b) Run the Playwright measurements
+**serially** — 3 concurrent browsers + the server sweep left layout unsettled and produced a
+false −118px FAIL that vanished alone. Verified 13/13 Δ=0, 0 console errors at both 1440 and 560
+(rot-toggle check, mass sweep 0.8→15 incl. the both-facets band, helium/alpha overlay toggles).
+
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the
 track; keep new pedagogy on the `data-tip` tooltip (plain text, escaped); reuse

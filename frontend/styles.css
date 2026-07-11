@@ -123,8 +123,15 @@ main {
    regime (measured empirically): the default rule covers a ~450px-wide panel (single narrow
    column / 2-up on a laptop), the ≤480 rule the phone stack. Values are the measured maxima
    plus a small margin. The trade is intentional whitespace at wide widths in exchange for a
-   panel outline that is rock-steady under every slider and toggle. */
-.controls-panel  { min-height: 985px; }
+   panel outline that is rock-steady under every slider and toggle.
+
+   This is the DASHBOARD-level floor (neighbouring panels don't move). The WITHIN-panel stack is
+   held steady by the per-element reserves further down (`.rot-control` min-height, the per-note
+   `#…-note` floors) so an element APPEARING (inclination facet on the rotation toggle, a what-if
+   note growing to its active caption) can't shove its siblings — the two mechanisms are additive.
+   Controls' live max rose 985→988 once the rotation section reserved its incl-reveal state, so
+   the floor follows it up to 992. */
+.controls-panel  { min-height: 992px; }
 .structure-panel { min-height: 855px; }
 .star-panel      { min-height: 815px; }
 .hr-panel        { min-height: 820px; }
@@ -287,14 +294,16 @@ main {
    [Fe/H], with two regime-gated facets: the vvcrit TOGGLE (massive-star track) and
    the rotation-PERIOD slider (cool-MS activity, moved here from the SED panel). Each
    facet is shown only where it's honest; the whole control hides where neither is. */
-/* Reserve the section's height so the massive↔cool transition (a track TOGGLE vs. the taller
-   period SLIDER — genuinely different widgets, not the same control appearing/disappearing)
-   doesn't shove the age slider below it as the mass slider crosses the Kraft break / dynamo
-   edge (user request). The rare both-facets overlap (~1.3 M☉ — above the Kraft break AND still
-   cool enough for a dynamo) legitimately exceeds this; the single-facet + placeholder cases pad
-   up to it. Sized to the period-slider facet (the taller one), per width. */
-.rot-control { margin: 16px 0 2px; min-height: 130px; }
-@media (max-width: 480px) { .rot-control { min-height: 150px; } }
+/* Reserve the section's height so NOTHING inside it ever shoves the age slider (and the gateway)
+   below it — not the massive↔cool mass-drag transition (track TOGGLE vs. the taller period
+   SLIDER vs. the placeholder note), and NOT the user CHECKING the rotating-track toggle, which
+   reveals the inclination facet (the within-panel jump the user now wants gone; the earlier
+   design called that reveal an "intentional disclosure" and deliberately left it un-reserved —
+   this reverses that). Sized to the tallest reachable live state, measured across the mass/[Fe/H]
+   sweep + every facet + the rot-toggle checked: ROT-ON at ~1.3 M☉ (toggle row + note + the
+   revealed inclination slider) = 311px at the narrowest desktop panel (~512px). Desktop-only per
+   the user (no ≤480 override — the old one would clamp this floor back down and re-break it). */
+.rot-control { margin: 16px 0 2px; min-height: 316px; }
 .rot-head { font-size: 14px; color: var(--muted); margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
 /* Track facet: the vvcrit toggle. `.disabled` (set by main.js) greys it where rotation
    is a data-derived no-op (below the Kraft break). */
@@ -309,13 +318,21 @@ main {
 .rot-toggle-row > span { color: var(--ink); font-weight: 600; }
 .rot-toggle-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: inherit; }
 .rot-vvcrit { color: var(--muted) !important; font-weight: 400 !important; font-size: 12px; }
-/* Reserve the note height so the offer ⇄ gated line swap (as the mass slider crosses a what-if's
-   band) never resizes the panel + shoves the age slider. One line suffices for that swap at
-   desktop (both are one line); at ≤480px they wrap, so reserve two. The longer active captions a
-   toggle reveals (helium's τ_MS, the population caption) are an intentional disclosure, not the
-   mass-drag jump, so they're not reserved to their max. */
+/* Shared baseline: reserve the offer ⇄ gated one-line swap so crossing a what-if's mass band
+   doesn't twitch the panel. Per-note floors below reserve the TALLER active-caption states for
+   the notes that have a sibling control beneath them (so toggling a what-if on can't shove it) —
+   the user wants the active reveal reserved too, not just the mass-drag swap (reverses the old
+   "the active caption is an intentional disclosure, don't reserve it" call). Desktop-only per the
+   user: values are the tallest reachable at the narrowest desktop panel (~512px). */
 .rot-note { color: var(--accent); font-size: 12px; min-height: 1.4em; margin: 4px 0 0; }
-@media (max-width: 480px) { .rot-note { min-height: 2.8em; } }
+/* Controls panel: peculiar → stripped → age; stripped → age. Both notes reach 2 lines. */
+#peculiar-note, #stripped-note { min-height: 42px; }
+/* HR panel (helium → alpha → isochrone, appended below the canvas): helium's note (2 lines)
+   pushes alpha + isochrone; alpha's active caption (4 lines @512px) pushes isochrone. The
+   isochrone + population notes are last in their panels — nothing sits below them, so their
+   growth is absorbed by the whole-panel min-height and needs no per-note floor here. */
+#helium-note { min-height: 42px; }
+#alpha-track-note { min-height: 80px; }
 /* The relocated period slider: left-aligned + full-width here (it was centered/narrow
    in the SED panel). Its label/note styling (.sed-rot*) is reused as-is. */
 .rot-control .sed-rot { max-width: none; margin: 8px 0 0; }
