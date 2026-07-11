@@ -2102,6 +2102,10 @@ function updateRotControl() {
       if (els.inclNote && !els.inclNote.textContent) applyInclination(inclinationDeg);
     }
   }
+  // Show the 3D spin-axis indicator exactly when the inclination control is available, so dragging
+  // it visibly reorients the axis relative to the observer (user request) — the cue reads even when
+  // the oblate shape change is physically subtle. star.js's update() also gates it on !endgame.
+  star.setSpinAxis(showIncl);
 }
 
 // Render a live-mode what-if TOGGLE so its space is RESERVED as the mass/[Fe/H] sliders cross

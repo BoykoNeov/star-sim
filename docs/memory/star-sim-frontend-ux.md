@@ -208,9 +208,17 @@ small-polish items; frontend-only, commit after c598252):**
   dip 0.4→0.55, caps smoothstep 0.45→0.30/0.85→0.80) — they were wired but near-invisible; now a clear
   dark abundance patch (evocative, so amplifying costs no honesty). **`*/` inside a CSS comment
   (`update*/drop*`) prematurely closed it and silently broke the panel-hide rule** — a Playwright
-  "rule present but not applied" symptom; reword to avoid `*/`. **Inclination amplification deferred to
-  a user design decision** (honest oblate-rotator tilt already works but is physically subtle; a
-  round star is rotationally symmetric so a visible cue needs a call). Zero console errors at 1440+390.
+  "rule present but not applied" symptom; reword to avoid `*/`. (7) **3D spin-axis inclination cue**
+  (star.js, the user's chosen option): a faint schematic rod + arrowhead caps through the poles
+  (`spinAxis` Group, sibling of `star` so the oblate scale doesn't distort it; `MeshBasicMaterial`
+  `depthTest:false` so it overlays the disk, caps poke ~0.35·R into dark space to read over a blazing
+  O-star) that TILTS with the viewing inclination via a NEW `axisTiltForView()` — ungated on
+  oblateness (unlike the star SHAPE's `tiltForView`), so it reads the pole orientation on EVERY star,
+  even a round one (rotationally symmetric → no other cue). i=0 pole-on → a dot at disk centre; i=90
+  edge-on → a vertical double-arrow; i=60 → a tilted 3/4 view. `star.setSpinAxis(showIncl)` from
+  `updateRotControl` shows it exactly when the inclination control is available (a rotating
+  gravity-darkenable star); update()'s `!eg` gate is the mode-switch safety net. Zero console errors
+  at 1440+390.
 
 **Why:** these are the UX forks (single-source window especially) a future session
 shouldn't silently undo. **How to apply:** keep deriving the age window from the

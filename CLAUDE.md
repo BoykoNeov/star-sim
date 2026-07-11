@@ -806,8 +806,10 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   hide lane/structure/sed/observer consistently** across every sub-scenario [fixes "Lane-Emden in
   the binary screen" + the panel-reshuffle jump — `binary-view`/`co-binary-view` now panel-identical];
   the observer CMD no longer flashes "B/V unavailable" [split not-loaded from known-absent in
-  `cmd.js`]; Ap/Bp peculiar spots amplified for visibility — **CSS gotcha: never put `*/` inside a
-  comment, it closes it early and silently breaks the rule**).
+  `cmd.js`]; Ap/Bp peculiar spots amplified for visibility; and a **3D spin-axis inclination cue**
+  [star.js `spinAxis` rod+caps that tilt with inclination via `axisTiltForView` — ungated on
+  oblateness so it reads on any star; `star.setSpinAxis(showIncl)`] — **CSS gotcha: never put `*/`
+  inside a comment, it closes it early and silently breaks the rule**).
   **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).

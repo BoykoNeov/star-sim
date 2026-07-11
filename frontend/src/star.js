@@ -678,6 +678,30 @@ export function createStar(canvas) {
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
   scene.add(star);
 
+  // Spin-axis indicator (the inclination cue — user request). A faint schematic rod through the
+  // poles with an arrowhead cap at each end, TILTED by the viewing inclination (axisTiltForView),
+  // so the axis orientation relative to the observer is legible on ANY star — including a round
+  // one, which is rotationally symmetric and otherwise shows no inclination cue at all. Purely
+  // EVOCATIVE (a viewing-geometry indicator, not a physical surface feature, like the corona);
+  // drawn on top (depthTest off) so it overlays the bright disk, and the caps poke into dark
+  // space beyond the limb so the tilt reads even over a blazing O-star. Hidden unless the
+  // inclination control is available (a rotating gravity-darkenable star). It shares the star's
+  // origin + tilt but NOT its oblate scale (a sibling, not a child), so it stays a clean rod.
+  const axisMat = new THREE.MeshBasicMaterial({
+    color: 0x8fc4ff, transparent: true, opacity: 0.7, depthTest: false, depthWrite: false,
+  });
+  const spinAxis = new THREE.Group();
+  spinAxis.add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2.7, 10), axisMat));
+  for (const dir of [1, -1]) {
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 14), axisMat);
+    cap.position.y = dir * 1.35;
+    if (dir < 0) cap.rotation.z = Math.PI;   // both cones point OUTWARD from the star
+    spinAxis.add(cap);
+  }
+  spinAxis.renderOrder = 6;                    // after the surface (depthTest off already forces on-top)
+  spinAxis.visible = false;
+  scene.add(spinAxis);
+
   // Binary companion (path (b) Chunk 2 — "the companion drawn in 3D"). The accretor of
   // the Algol system is a REAL modeled single-star StellarState (from PROVIDER, composed
   // in the /binary_pair route), so — unlike the corona/wind/fireball — the SPHERE itself is
@@ -800,6 +824,15 @@ export function createStar(canvas) {
   // camera, but only when the star is actually oblate — a round star stays pole-up.
   const tiltForView = () =>
     lastGd.active ? (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90) : 0;
+  // The SPIN-AXIS indicator's tilt (user request: "show the inclination relative to the
+  // observer"). Unlike the star SHAPE, the axis tilts for EVERY star — a round star is
+  // rotationally symmetric so its disk shows no inclination cue, but the schematic axis does,
+  // reading the pole orientation directly. Same θ=90°−i, ungated on oblateness.
+  const axisTiltForView = () =>
+    (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90);
+  // Whether the spin-axis indicator is shown (main.js setSpinAxis, tied to the inclination
+  // control's visibility — a rotating gravity-darkenable star). Refined by update()'s !eg gate.
+  let showSpinAxis = false;
 
   // Wolf–Rayet wind halo (Chunk 5): a second camera-facing additive quad, hidden except
   // in the WR endgame (it never co-displays with the corona — the WR path zeroes the
@@ -1053,6 +1086,14 @@ export function createStar(canvas) {
     // size on the scale bar is unchanged — it's the same star, just flattened. gd.kEq =
     // gd.kPol = 1 for a round star, so this reduces to setScalar(rad).
     star.scale.set(rad * gd.kEq, rad * gd.kPol, rad * gd.kEq);
+
+    // Spin-axis indicator: scale to the star's radius, tilt to the viewing inclination, and show
+    // it only for a living star while the inclination control is available (showSpinAxis). Not a
+    // child of `star`, so the oblate scale above doesn't distort it; the caps poke ~0.35·R beyond
+    // each pole. Set unconditionally so a mode switch can't strand it (mirrors star.visible above).
+    spinAxis.scale.setScalar(rad);
+    spinAxis.rotation.x = axisTiltForView();
+    spinAxis.visible = showSpinAxis && !eg && !(opts && opts.companion);
 
     // SN mode hides the living-star surface sphere and shows the fireball instead; every
     // other mode restores it. Set unconditionally (not just inside an `if (sn)`) so a mode
@@ -1308,7 +1349,15 @@ export function createStar(canvas) {
   function setInclination(deg) {
     inclinationDeg = deg;
     star.rotation.x = tiltForView();
+    spinAxis.rotation.x = axisTiltForView();   // the axis re-tilts on EVERY star (see axisTiltForView)
   }
 
-  return { update, setInclination, dispose: () => cancelAnimationFrame(raf) };
+  // Show/hide the spin-axis indicator (main.js ties it to the inclination control's visibility —
+  // a rotating gravity-darkenable star). update()'s !eg gate is the safety net across mode swaps.
+  function setSpinAxis(on) {
+    showSpinAxis = !!on;
+    spinAxis.visible = showSpinAxis;
+  }
+
+  return { update, setInclination, setSpinAxis, dispose: () => cancelAnimationFrame(raf) };
 }
