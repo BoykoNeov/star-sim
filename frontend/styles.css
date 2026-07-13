@@ -382,6 +382,17 @@ main {
    when their grid is absent. A base margin keeps them evenly spaced now that they're persistent. */
 .helium-control { margin: 12px 0 2px; }
 .helium-control[hidden] { display: none; }
+/* The three HR-diagram what-ifs (He / α / cluster-isochrone, all .helium-control) were relocated
+   INTO .hr-panel (relocateOverlayControls). They act on the LIVING HR track, which every
+   endgame/stripped/binary view replaces — so hide them there instead of letting them sit
+   greyed-and-unclickable beside the binary/WD/WR/SN track (user report). The SED-population and
+   observer controls get hidden by their own panels' rules; these needed an explicit one once they
+   left the Controls column. Scoped to .hr-panel so it never touches the .sed-panel population shell.
+   (stripped-mode covers the binary-view + co-binary-view sub-screens.) */
+body.wd-mode .hr-panel .helium-control,
+body.wr-mode .hr-panel .helium-control,
+body.sn-mode .hr-panel .helium-control,
+body.stripped-mode .hr-panel .helium-control { display: none; }
 /* Pointer left in the SED panel after the slider moved to Controls. */
 .sed-rot-pointer { color: var(--muted); font-size: 11px; text-align: center; margin: 6px 0 0; }
 
