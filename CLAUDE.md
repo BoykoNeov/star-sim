@@ -806,10 +806,18 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   hide lane/structure/sed/observer consistently** across every sub-scenario [fixes "Lane-Emden in
   the binary screen" + the panel-reshuffle jump — `binary-view`/`co-binary-view` now panel-identical];
   the observer CMD no longer flashes "B/V unavailable" [split not-loaded from known-absent in
-  `cmd.js`]; Ap/Bp peculiar spots amplified for visibility; and a **3D spin-axis inclination cue**
-  [star.js `spinAxis` rod+caps that tilt with inclination via `axisTiltForView` — ungated on
-  oblateness so it reads on any star; `star.setSpinAxis(showIncl)`] — **CSS gotcha: never put `*/`
-  inside a comment, it closes it early and silently breaks the rule**).
+  `cmd.js`]; Ap/Bp peculiar spots amplified for visibility; and a **3D inclination cue — the sphere
+  tilts toward the viewer + an optional orientation grid** (user-reworked, REPLACED the old spin-axis
+  rod: `star.js` now tips the star mesh itself θ=90°−i across the whole 0–90° slider for any rotating
+  star via `tiltForView` ungated onto a new `inclCueActive` flag [`star.setInclActive(showIncl)`], and
+  paints an OCCLUDED lat/long graticule — 6 meridians + equator/±30/±60 parallels, a CHILD of `star` so
+  it inherits the oblate scale + tilt and the opaque surface hides its back hemisphere — so the tilt
+  reads even on a near-round few-percent-oblate star. The grid is a `#axis-grid-toggle`: OFF by default,
+  a ONE-SHOT auto-on the first time a rotating star appears [`gridAutoShown` latch in main.js], then
+  sticky to the user's choice [`star.setAxisGrid`]. `update()` gates BOTH the tilt and the grid on
+  `!eg && !sideBySide` directly — main.js refreshes `inclCueActive` in LIVE mode only, so that render-
+  path gate, not the flag, keeps endgame/two-body stars upright and grid-free] — **CSS gotcha: never put
+  a comment-close sequence inside a CSS comment, it closes it early and silently breaks the rule**).
   **No JS test harness → the
   Playwright screenshot pass IS the regression check** (use Playwright's bundled
   Chromium — `chrome --headless` hijacks the user's running Chrome).

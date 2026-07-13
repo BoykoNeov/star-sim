@@ -467,6 +467,18 @@
             <input id="incl" type="range" min="0" max="90" step="1" />
           </div>
           <p class="note sed-rot-note" id="incl-note"></p>
+          <!-- Orientation grid — the inclination cue on the 3D star. The sphere tilts toward you
+               as i shrinks, but real oblateness is only a few percent, so on a near-round star the
+               tilt is hard to read; this paints a faint lat/long "globe" (front hemisphere only —
+               the opaque star occludes the back) so the orientation is legible. OFF by default;
+               main.js one-shot auto-shows it the first time a rotating star appears, then respects
+               your choice (turning it off is sticky — cycling rotating↔non-rotating won't re-show it). -->
+          <label class="rot-toggle-row" for="axis-grid-toggle">
+            <input id="axis-grid-toggle" type="checkbox" />
+            <span>Show orientation grid
+              <span class="help" tabindex="0" data-tip="Draws a faint latitude/longitude grid on the 3D star — meridians through the poles plus the equator and ±30°/±60° parallels — so you can see how the sphere is tilted toward you as you change the inclination. A fast rotator is only flattened by a few percent, so the tilt is otherwise hard to read on a nearly-round disk. Only the near (front) hemisphere is drawn; the opaque star hides the lines on its far side, like a painted globe. It's a viewing aid, not a physical surface feature — it never touches the HR diagram, spectrum, or composition.">?</span>
+            </span>
+          </label>
         </div>
       </div>
 

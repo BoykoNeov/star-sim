@@ -208,17 +208,28 @@ small-polish items; frontend-only, commit after c598252):**
   dip 0.4→0.55, caps smoothstep 0.45→0.30/0.85→0.80) — they were wired but near-invisible; now a clear
   dark abundance patch (evocative, so amplifying costs no honesty). **`*/` inside a CSS comment
   (`update*/drop*`) prematurely closed it and silently broke the panel-hide rule** — a Playwright
-  "rule present but not applied" symptom; reword to avoid `*/`. (7) **3D spin-axis inclination cue**
-  (star.js, the user's chosen option): a faint schematic rod + arrowhead caps through the poles
-  (`spinAxis` Group, sibling of `star` so the oblate scale doesn't distort it; `MeshBasicMaterial`
-  `depthTest:false` so it overlays the disk, caps poke ~0.35·R into dark space to read over a blazing
-  O-star) that TILTS with the viewing inclination via a NEW `axisTiltForView()` — ungated on
-  oblateness (unlike the star SHAPE's `tiltForView`), so it reads the pole orientation on EVERY star,
-  even a round one (rotationally symmetric → no other cue). i=0 pole-on → a dot at disk centre; i=90
-  edge-on → a vertical double-arrow; i=60 → a tilted 3/4 view. `star.setSpinAxis(showIncl)` from
-  `updateRotControl` shows it exactly when the inclination control is available (a rotating
-  gravity-darkenable star); update()'s `!eg` gate is the mode-switch safety net. Zero console errors
-  at 1440+390.
+  "rule present but not applied" symptom; reword to avoid `*/`. (7) **3D inclination cue: tilt the
+  sphere toward the viewer + an optional orientation grid** (star.js/main.js — the user REWORKED and
+  REPLACED the earlier spin-axis rod, which was redundant: the oblate star already tips via
+  `tiltForView`, and a rod on a near-round star was clutter). Two parts. (a) **Sphere tilt, ungated:**
+  `tiltForView` (θ=90°−i) now keys off a new `inclCueActive` flag instead of `lastGd.active`, so the
+  star mesh tips toward the camera across the WHOLE 0–90° slider for any rotating gravity-darkenable
+  star — not just a visibly-oblate one. `star.setInclActive(showIncl)` from `updateRotControl`. (b)
+  **Occluded lat/long graticule** (the landmark that makes the tilt legible on a few-percent-oblate
+  near-round disk — a symmetric sphere shows no tilt without one): 6 meridian great-circles + equator
+  and ±30°/±60° parallels (equator emphasized), built as `THREE.Line`s at radius 1.004 and added as a
+  **CHILD of `star`** so it inherits the oblate scale (hugs the egg) AND the tilt for free, and — with
+  `LineBasicMaterial depthTest:true` just outside the opaque depth-writing surface — the back hemisphere
+  is OCCLUDED (a painted-on globe, not a see-through wireframe). i=90 edge-on → equator a horizontal
+  line + vertical meridians; i=60 → equator a tilted ellipse; i=0 pole-on → concentric parallels.
+  **Grid toggle state machine (`#axis-grid-toggle`):** OFF by default; a ONE-SHOT auto-on the first time
+  a rotating star appears (`gridAutoShown` latch in main.js — never re-fires), then sticky to the user's
+  choice, so unchecking it survives a rotating↔non-rotating cycle (`star.setAxisGrid`). **The load-
+  bearing gate:** `updateRotControl` returns EARLY in non-live modes, so `inclCueActive` goes stale —
+  therefore `update()` gates BOTH the tilt and the grid visibility on `!eg && !sideBySide` DIRECTLY (the
+  one render path hit in every mode), not on the flag; verified by entering SN from a tilted rotator
+  (upright, grid-free) and widened `!companion`→`!sideBySide` to cover the CO-marker layout too. Zero
+  console errors at 1440+390.
 
 **Panel-height jump — the anti-jump reservation (user request, 3RD time).** The
 piecemeal per-block reserves (`.rot-control` min-height 130, `.gateway` 36, caption

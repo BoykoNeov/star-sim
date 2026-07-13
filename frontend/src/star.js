@@ -678,29 +678,50 @@ export function createStar(canvas) {
   const star = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), surfaceMat);
   scene.add(star);
 
-  // Spin-axis indicator (the inclination cue — user request). A faint schematic rod through the
-  // poles with an arrowhead cap at each end, TILTED by the viewing inclination (axisTiltForView),
-  // so the axis orientation relative to the observer is legible on ANY star — including a round
-  // one, which is rotationally symmetric and otherwise shows no inclination cue at all. Purely
-  // EVOCATIVE (a viewing-geometry indicator, not a physical surface feature, like the corona);
-  // drawn on top (depthTest off) so it overlays the bright disk, and the caps poke into dark
-  // space beyond the limb so the tilt reads even over a blazing O-star. Hidden unless the
-  // inclination control is available (a rotating gravity-darkenable star). It shares the star's
-  // origin + tilt but NOT its oblate scale (a sibling, not a child), so it stays a clean rod.
-  const axisMat = new THREE.MeshBasicMaterial({
-    color: 0x8fc4ff, transparent: true, opacity: 0.7, depthTest: false, depthWrite: false,
+  // Orientation graticule (the inclination cue — user request, replacing the earlier spin-axis
+  // rod). A faint "globe" of meridians + parallels painted just above the surface so the sphere's
+  // TILT toward the observer is legible even on a near-round star — real oblateness is only a few
+  // percent, too weak to read on its own. Purely EVOCATIVE viewing-geometry lines (like the
+  // corona), not a physical surface feature. Built as a CHILD of `star`, so it inherits the oblate
+  // scale (hugs the egg) AND the viewing tilt (star.rotation.x) for free; and — with depthTest ON
+  // at radius 1.004 (just outside the opaque surface, which writes depth) — the back hemisphere is
+  // OCCLUDED, giving a painted-on-globe look rather than a see-through wireframe. Shown only for a
+  // rotating gravity-darkenable star while the inclination control is up (axisGridOn ∧ inclCueActive).
+  const GRID_R = 1.004;
+  const GRID_SEG = 96;
+  const gridMat = new THREE.LineBasicMaterial({
+    color: 0x8fc4ff, transparent: true, opacity: 0.34, depthTest: true, depthWrite: false,
   });
-  const spinAxis = new THREE.Group();
-  spinAxis.add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2.7, 10), axisMat));
-  for (const dir of [1, -1]) {
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 14), axisMat);
-    cap.position.y = dir * 1.35;
-    if (dir < 0) cap.rotation.z = Math.PI;   // both cones point OUTWARD from the star
-    spinAxis.add(cap);
+  const gridEqMat = new THREE.LineBasicMaterial({    // the equator, emphasized
+    color: 0xcbe6ff, transparent: true, opacity: 0.62, depthTest: true, depthWrite: false,
+  });
+  const circlePoints = (fn) => {
+    const pts = [];
+    for (let s = 0; s <= GRID_SEG; s++) fn((s / GRID_SEG) * Math.PI * 2, pts);
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  };
+  const axisGrid = new THREE.Group();
+  // Meridians: a great circle through the poles (XY plane) rotated about the spin (y) axis.
+  for (let m = 0; m < 6; m++) {
+    const line = new THREE.Line(
+      circlePoints((t, pts) => pts.push(new THREE.Vector3(Math.cos(t) * GRID_R, Math.sin(t) * GRID_R, 0))),
+      gridMat,
+    );
+    line.rotation.y = (m / 6) * Math.PI;   // 6 evenly-spaced great circles
+    axisGrid.add(line);
   }
-  spinAxis.renderOrder = 6;                    // after the surface (depthTest off already forces on-top)
-  spinAxis.visible = false;
-  scene.add(spinAxis);
+  // Parallels: constant-latitude circles (equator + ±30° + ±60°); the equator gets the bright mat.
+  for (const latDeg of [0, 30, -30, 60, -60]) {
+    const lat = (latDeg * Math.PI) / 180;
+    const y = Math.sin(lat) * GRID_R;
+    const r = Math.cos(lat) * GRID_R;
+    axisGrid.add(new THREE.Line(
+      circlePoints((t, pts) => pts.push(new THREE.Vector3(Math.cos(t) * r, y, Math.sin(t) * r))),
+      latDeg === 0 ? gridEqMat : gridMat,
+    ));
+  }
+  axisGrid.visible = false;
+  star.add(axisGrid);
 
   // Binary companion (path (b) Chunk 2 — "the companion drawn in 3D"). The accretor of
   // the Algol system is a REAL modeled single-star StellarState (from PROVIDER, composed
@@ -820,19 +841,19 @@ export function createStar(canvas) {
   // full state repaint. `active` false ⇒ a round star (any inclination looks the same, so
   // the tilt stays 0 and dragging the slider is a no-op on the 3D view — correct).
   let lastGd = { active: false, omega: 0 };
-  // Object tilt (rad) for the current (inclination, gd): the pole tips θ=90°−i toward the
-  // camera, but only when the star is actually oblate — a round star stays pole-up.
+  // Whether the inclination cue is active — a rotating gravity-darkenable star with the
+  // inclination control up (main.js setInclActive, = its `showIncl`). This gates BOTH the sphere
+  // tilt below AND the orientation grid. Ungated on oblateness (unlike the old shape-only tilt):
+  // the sphere tips toward the camera across the whole 0–90° slider for any rotating star, and the
+  // grid makes that tilt legible even when the shape change is physically subtle (a few percent).
+  let inclCueActive = false;
+  // Whether the user wants the orientation grid shown. Default off; main.js one-shot auto-enables
+  // it the first time a rotating star appears, then respects the user's choice (setAxisGrid).
+  let axisGridOn = false;
+  // Object tilt (rad) for the current inclination: the pole tips θ=90°−i toward the camera when
+  // the inclination cue is active; a non-rotating star / endgame keeps tilt 0 (byte-identical).
   const tiltForView = () =>
-    lastGd.active ? (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90) : 0;
-  // The SPIN-AXIS indicator's tilt (user request: "show the inclination relative to the
-  // observer"). Unlike the star SHAPE, the axis tilts for EVERY star — a round star is
-  // rotationally symmetric so its disk shows no inclination cue, but the schematic axis does,
-  // reading the pole orientation directly. Same θ=90°−i, ungated on oblateness.
-  const axisTiltForView = () =>
-    (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90);
-  // Whether the spin-axis indicator is shown (main.js setSpinAxis, tied to the inclination
-  // control's visibility — a rotating gravity-darkenable star). Refined by update()'s !eg gate.
-  let showSpinAxis = false;
+    inclCueActive ? (Math.PI / 2) * (1 - Math.min(90, Math.max(0, inclinationDeg)) / 90) : 0;
 
   // Wolf–Rayet wind halo (Chunk 5): a second camera-facing additive quad, hidden except
   // in the WR endgame (it never co-displays with the corona — the WR path zeroes the
@@ -1039,8 +1060,11 @@ export function createStar(canvas) {
     // cool-equator gradient; at i=0° we look straight down the uniformly-hot pole and the
     // disk goes round again. The user drives i; θ=90°−i (tiltForView). No ω ramp — the
     // oblateness itself already scales with ω, so a marginal rotator stays near-round at
-    // any tilt. Round stars / endgames keep tilt 0 (byte-identical).
-    star.rotation.x = tiltForView();
+    // any tilt. Round stars / endgames keep tilt 0 (byte-identical). Force 0 in an endgame or a
+    // two-body/CO layout regardless of a stale inclCueActive: main.js only refreshes the cue in
+    // LIVE mode (updateRotControl returns early otherwise), and update() is the one render path
+    // reached in every mode, so this gate — not the flag — is what keeps those modes upright.
+    star.rotation.x = (!eg && !sideBySide) ? tiltForView() : 0;
     surfaceMat.uniforms.uCells.value = granuleCells(state);
     // Exposure (SURFACE_FRAG uExpo): uColor is chromaticity-only (max-normalized),
     // so this restores a Teff brightness cue — a ~3000 K surface sits at 0.85
@@ -1087,13 +1111,13 @@ export function createStar(canvas) {
     // gd.kPol = 1 for a round star, so this reduces to setScalar(rad).
     star.scale.set(rad * gd.kEq, rad * gd.kPol, rad * gd.kEq);
 
-    // Spin-axis indicator: scale to the star's radius, tilt to the viewing inclination, and show
-    // it only for a living star while the inclination control is available (showSpinAxis). Not a
-    // child of `star`, so the oblate scale above doesn't distort it; the caps poke ~0.35·R beyond
-    // each pole. Set unconditionally so a mode switch can't strand it (mirrors star.visible above).
-    spinAxis.scale.setScalar(rad);
-    spinAxis.rotation.x = axisTiltForView();
-    spinAxis.visible = showSpinAxis && !eg && !(opts && opts.companion);
+    // Orientation grid: a child of `star`, so the oblate scale + viewing tilt above already apply
+    // (it hugs the egg and tips with it) and the opaque surface occludes its back hemisphere; here
+    // we only gate visibility — a living, rotating star with the cue active and the grid enabled.
+    // `!eg && !sideBySide` (not just !companion) also covers the compact-object layout and endgames,
+    // where inclCueActive may be stale-true (main.js refreshes it in live mode only). Set
+    // unconditionally so a mode switch can't strand it (mirrors star.visible below).
+    axisGrid.visible = axisGridOn && inclCueActive && !eg && !sideBySide;
 
     // SN mode hides the living-star surface sphere and shows the fireball instead; every
     // other mode restores it. Set unconditionally (not just inside an `if (sn)`) so a mode
@@ -1349,15 +1373,25 @@ export function createStar(canvas) {
   function setInclination(deg) {
     inclinationDeg = deg;
     star.rotation.x = tiltForView();
-    spinAxis.rotation.x = axisTiltForView();   // the axis re-tilts on EVERY star (see axisTiltForView)
   }
 
-  // Show/hide the spin-axis indicator (main.js ties it to the inclination control's visibility —
-  // a rotating gravity-darkenable star). update()'s !eg gate is the safety net across mode swaps.
-  function setSpinAxis(on) {
-    showSpinAxis = !!on;
-    spinAxis.visible = showSpinAxis;
+  // Activate the inclination cue (main.js ties this to the inclination control's visibility — a
+  // rotating gravity-darkenable star, its `showIncl`). Gates BOTH the sphere tilt and the grid;
+  // re-applies the tilt in place so appearing/disappearing needs no full state repaint. update()'s
+  // !eg / !companion gate is the safety net across mode swaps.
+  function setInclActive(active) {
+    inclCueActive = !!active;
+    star.rotation.x = tiltForView();
+    axisGrid.visible = axisGridOn && inclCueActive;
   }
 
-  return { update, setInclination, setSpinAxis, dispose: () => cancelAnimationFrame(raf) };
+  // Show/hide the orientation grid (main.js #axis-grid-toggle). Only ever called for a living
+  // rotating star (the control is hidden otherwise), so the cue-active guard is enough here;
+  // update() reasserts the full !eg/!companion gate on the next repaint.
+  function setAxisGrid(on) {
+    axisGridOn = !!on;
+    axisGrid.visible = axisGridOn && inclCueActive;
+  }
+
+  return { update, setInclination, setInclActive, setAxisGrid, dispose: () => cancelAnimationFrame(raf) };
 }

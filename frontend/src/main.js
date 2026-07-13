@@ -54,6 +54,7 @@ const els = {
   incl: document.getElementById("incl"),
   inclNum: document.getElementById("incl-num"),
   inclNote: document.getElementById("incl-note"),
+  axisGridToggle: document.getElementById("axis-grid-toggle"),
   // Ap/Bp chemically-peculiar toggle (atlas Tier C): an evocative surface what-if, gated to
   // the A/B main-sequence mass regime. Independent of the Rotation control.
   peculiarControl: document.getElementById("peculiar-control"),
@@ -456,6 +457,12 @@ const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
 // The facet is gated on the rotating-track regime (updateRotControl); a round star ignores
 // it. Pushing it to both consumers keeps them in lockstep with no dual-default drift.
 let inclinationDeg = 60;
+// Orientation-grid intent (the inclination cue on the 3D star). Default OFF; a ONE-SHOT
+// auto-enable turns it on the first time a rotating star appears (gridAutoShown latches so it
+// never re-fires), after which it follows the user's checkbox — turning it off is sticky, and
+// cycling the star rotating↔non-rotating won't re-show it. Owned here, pushed to star.setAxisGrid.
+let axisGridOn = false;
+let gridAutoShown = false;
 function applyInclination(deg) {
   inclinationDeg = Math.min(90, Math.max(0, Math.round(deg)));
   star.setInclination(inclinationDeg);
@@ -2102,10 +2109,19 @@ function updateRotControl() {
       if (els.inclNote && !els.inclNote.textContent) applyInclination(inclinationDeg);
     }
   }
-  // Show the 3D spin-axis indicator exactly when the inclination control is available, so dragging
-  // it visibly reorients the axis relative to the observer (user request) — the cue reads even when
-  // the oblate shape change is physically subtle. star.js's update() also gates it on !endgame.
-  star.setSpinAxis(showIncl);
+  // Inclination cue (user request): when the inclination control is available the 3D sphere tilts
+  // toward the observer across the whole slider, and an optional orientation grid makes that tilt
+  // legible on a near-round star. The grid is OFF by default but AUTO-SHOWS ONCE the first time a
+  // rotating star appears (gridAutoShown latches so it never re-fires); after that it follows the
+  // user's checkbox, so a manual "off" is sticky across rotating↔non-rotating cycles.
+  if (showIncl && !gridAutoShown) {
+    gridAutoShown = true;
+    axisGridOn = true;
+    if (els.axisGridToggle) els.axisGridToggle.checked = true;
+  }
+  if (els.axisGridToggle) els.axisGridToggle.checked = axisGridOn;
+  star.setInclActive(showIncl);
+  star.setAxisGrid(axisGridOn);
 }
 
 // Render a live-mode what-if TOGGLE so its space is RESERVED as the mass/[Fe/H] sliders cross
@@ -4804,6 +4820,13 @@ async function init() {
     els.inclNum.value = String(v);
     if (els.incl) els.incl.value = String(v);
     applyInclination(v);
+  });
+  // Orientation-grid toggle: a pure viewing aid on the 3D star (see axisGridOn). Manual changes
+  // are sticky — the one-shot auto-enable (updateRotControl) is already latched by the time the
+  // user can click, so unchecking here suppresses the grid for good across rotating↔non cycles.
+  if (els.axisGridToggle) els.axisGridToggle.addEventListener("change", () => {
+    axisGridOn = els.axisGridToggle.checked;
+    star.setAxisGrid(axisGridOn);
   });
 
   // The stellar-endgame gateway: enter the WD / WR / SN endgame from the button at the slider
