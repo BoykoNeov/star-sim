@@ -14,6 +14,7 @@ import { createRoche } from "./roche.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
 import { createCMD } from "./cmd.js";
+import { createSeismo } from "./seismo.js";
 import { createHZHist } from "./hzhist.js";
 import { habitableZone } from "./hz.js";
 import { createClassification } from "./classify.js";
@@ -107,6 +108,9 @@ const els = {
   // client-side, /photometry supplies the magnitude/colour readout. Living-only, gated on the
   // absolute-flux spectrum cube being present (probed once at init).
   observerPanel: document.getElementById("observer-panel"),
+  // Asteroseismology (Axis C) — a pure VIEW of the living marker; living-only, gate-to-caption.
+  seismoPanel: document.getElementById("seismo-panel"),
+  seismoCaption: document.getElementById("seismo-caption"),
   obsDistance: document.getElementById("obs-distance"),
   obsDistanceVal: document.getElementById("obs-distance-val"),
   obsAv: document.getElementById("obs-av"),
@@ -296,6 +300,9 @@ const sed = createSED(document.getElementById("sed-canvas"));
 // own panel. A pushed-data consumer (like sed's population overlay): main.js fetches the
 // intrinsic locus + the marker's exact magnitudes and pushes them in.
 const cmd = createCMD(document.getElementById("cmd-canvas"));
+// Asteroseismology (Axis C) — a pure pushed-data consumer of the marker's Teff/log g/R. Fed from
+// paintState (refreshSeismo) in live mode only; dropped in every endgame by the shared chokepoint.
+const seismo = createSeismo(document.getElementById("seismo-canvas"));
 
 // Habitable-zone history (Axis D2a) — the temporal twin of the scale-bar HZ band. A pure
 // pushed-data consumer: main.js maps currentTrack through hz.js and pushes the per-row edges
@@ -336,6 +343,7 @@ const RESPONSIVE = [
   { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
   { id: "cmd-canvas", mod: cmd, maxW: 560, h: 300 },
+  { id: "seismo-canvas", mod: seismo, maxW: 560, h: 380 },
   { id: "hz-history-canvas", mod: hzhist, maxW: 560, h: 300 },
   { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
   { id: "structure-canvas", mod: structure, maxW: 720, h: 340 },
@@ -2900,6 +2908,7 @@ function dropHeliumForModeSwitch() {
   dropIsochroneForModeSwitch();  // the cluster-isochrone HR overlay is living-only — drop it too
   dropHZForModeSwitch();         // the habitable-zone scale-bar overlay is living-only — drop it too
   dropObserverForModeSwitch();   // the observer reddening/mag view is living-only — drop it too
+  dropSeismoForModeSwitch();     // the asteroseismology panel is living-only — drop it too (a WD's log g~8 would slip its Teff gate)
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
@@ -3001,6 +3010,55 @@ function observerOff() {
 function dropObserverForModeSwitch() {
   if (observerOn) observerOff();
   if (els.observerPanel) els.observerPanel.hidden = true;
+}
+
+// --- asteroseismology (Axis C) — the star rings ------------------------------
+// A pure VIEW of the living marker's Teff/log g/R (seismo.js does the scaling-relation compute and
+// the power-spectrum/echelle draw). Living-only: paintState pushes the state in live mode (which
+// un-hides the panel), and dropSeismoForModeSwitch (called from the shared chokepoint) hides it in
+// every endgame/stripped mode. It's meaningful for any cool living star, so it's ON by default —
+// the physics gate (radiative envelope) is handled INSIDE the panel as a caption, not a hide.
+function refreshSeismo(s) {
+  if (mode !== "live" || !s) return;
+  if (els.seismoPanel) els.seismoPanel.hidden = false;
+  const p = seismo.update(s);
+  fillSeismoCaption(p);
+}
+
+// The living-only chokepoint drop: a cooling white dwarf has log g ~8 and a Teff that dips below the
+// 6700 K convective-envelope gate, so a pure Teff gate would let it paint a garbage ~1e7 uHz
+// spectrum — and WD/WR/SN/stripped states aren't solar-like oscillators anyway.
+function dropSeismoForModeSwitch() {
+  seismo.clear();
+  if (els.seismoPanel) els.seismoPanel.hidden = true;
+}
+
+// The readout beneath the panel. For a ringing star: nu_max, Delta-nu, and the seismic M/R —
+// framed as THE PRINCIPLE (the observables invert to M and R, how Kepler/TESS weigh stars), never
+// as "the sim measured this star" (it's an algebraic inverse of the g,R we fed in). For a hot star:
+// the radiative-envelope note pointing at the instability strip.
+function fillSeismoCaption(p) {
+  const el = els.seismoCaption;
+  if (!el) return;
+  if (!p) { el.textContent = ""; return; }
+  if (p.rings === false) {
+    if (p.teff != null && p.teff > 6700) {
+      el.innerHTML = `At <b>${Math.round(p.teff)} K</b> this star has a radiative envelope, so it does ` +
+        `not ring with solar-like p-modes. Hot stars pulsate through the opacity (κ) mechanism instead — ` +
+        `the δ Scuti / β Cephei zones on the <b>instability strip</b> (toggle the variable-star overlay on the HR diagram).`;
+    } else {
+      el.textContent = "";
+    }
+    return;
+  }
+  const fnum = (v) => (v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(1) : v.toFixed(2));
+  el.innerHTML =
+    `Peaks at <b>ν_max ≈ ${fnum(p.numax)} µHz</b>, overtones spaced by <b>Δν ≈ ${fnum(p.dnu)} µHz</b>. ` +
+    `Inverting the two scaling relations recovers <b>M ≈ ${p.mSeismic.toFixed(2)} M☉</b>, ` +
+    `<b>R ≈ ${p.rSeismic.toFixed(2)} R☉</b> — the principle Kepler & TESS use to weigh and age stars ` +
+    `(here it returns the model's own M, R, since the frequencies are computed from them). ` +
+    `Scaling relations are approximate (a few-% systematic; this sim's Sun, not solar-calibrated, ` +
+    `rings ~3% below the real 3090/135 µHz).`;
 }
 
 // Fetch the intrinsic CMD locus (the whole track as B−V vs M_V) for the current star and push it
@@ -4086,6 +4144,7 @@ function paintState(s) {
   refreshPopulation(s);   // the coeval-population SED overlay (no-op unless the toggle is on)
   refreshIsochrone(s);    // the cluster-isochrone HR overlay (no-op unless the toggle is on)
   refreshObserver(s);     // the observer reddening/mag view (no-op unless the toggle is on)
+  refreshSeismo(s);       // the asteroseismology panel (Axis C — pure view of Teff/log g/R)
   renderReadout(s);
   els.status.style.color = teffToCSS(s.Teff_K);
   // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the

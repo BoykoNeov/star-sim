@@ -79,7 +79,14 @@ every phase. This matters the moment `MISTProvider` lands; the stub sidesteps it
   `requires_mesa_data`, `requires_mist_lowz`, `requires_spectra_data`,
   `requires_structure_data`, …).
 - `frontend/` — static SPA (no bundler): `index.html`, `styles.css`,
-  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,reddening,cmd}.js`.
+  `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,reddening,cmd,seismo}.js`.
+  `seismo.js` is the Axis-C **asteroseismology** panel (a pure pushed-data consumer like `cmd.js`/`hzhist.js`: `paintState`
+  pushes the marker's `Teff/logg/R` via `update()`): the seismic scaling relations (ν_max ∝ g/√Teff, Δν ∝ √ρ̄, real IAU
+  anchors) → a schematic power spectrum (Δν comb of ℓ=0/1/2 modes under a ν_max Gaussian envelope) stacked over the
+  **échelle diagram** (frequency mod Δν → ridges). Exports a pure `seismicParams(Teff,logg,R)` helper (the hz.js idiom;
+  the sim-Sun rings 2984/132, ~3% below canonical = honest PASS). Gate-to-caption at Teff≈6700 (radiative→instability
+  strip); living-only via the shared chokepoint (`dropSeismoForModeSwitch` — a WD's log g~8 would paint garbage — see
+  [[star-sim-asteroseismology]]).
   `cmd.js` is the Axis-A (A3) **observational colour–magnitude diagram** panel (a pure pushed-data consumer like
   roche.js: main.js pushes the intrinsic (B−V, M_V) locus from `/photometry_track` + the marker's EXACT intrinsic
   and observed positions from `/photometry`; it draws the Teff-coloured locus + the distance/dust reddening-vector
@@ -884,6 +891,35 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   a fresh `STAR_SIM_BPASS_DIR` (fresh subprocess → `"ok"` → `population_sed` serves the ionizing
   wedge from downloaded bytes). Next = Chunk 2 (HRD number-density, separate BPASS "numbers"
   release). [[star-sim-coeval-ensemble-bpass]], [[star-sim-hosted-data-assets]].
+
+### Asteroseismology (Axis C of the outward quartet — `seismo.js`; frontend-only, no backend)
+- **BUILT 2026-07-13 (C1+C2, frontend-only, NO backend change → 425 pytest unchanged, Playwright
+  1440+390 zero console errors). This COMPLETES the outward quartet (A/B/C/D).** "The star rings
+  like a bell": the marker's `Teff/logg/R` → the two seismic scaling relations (ν_max ∝ g/√Teff,
+  Δν ∝ √ρ̄) → a schematic **power spectrum** (Δν comb of ℓ=0/1/2 modes under a ν_max Gaussian
+  envelope + ν_max marker + Δν bracket) stacked over the **échelle diagram** (frequency mod Δν →
+  vertical ridges; ℓ=0/ℓ=2 pair, ℓ=1 offset ~½Δν). A pure pushed-data consumer (`cmd.js`/`hz.js`
+  precedent) fed from `paintState` via `refreshSeismo(s)`; `seismo.js` exports a unit-checkable pure
+  `seismicParams(Teff,logg,R)` helper. **Load-bearing decisions (all advisor-settled):** (1) **real
+  IAU solar anchors** (3090/135 µHz, log g 4.4377, Teff 5772) NOT the sim-Sun — the sim-Sun (not
+  solar-calibrated) rings **2984/132, ~3% below canonical, and that's the honest PASS** (a puffier/
+  hotter Sun genuinely has a lower ν_max; common-mode, cancels in the Δν-relative échelle — the
+  B-band ZP-offset precedent); (2) **current mass recovered EXACTLY from log g + R** (sidesteps the
+  mass_init vs mass-loss trap — log g already encodes it, no new state field); (3) **the M/R
+  "recovery" is THE PRINCIPLE, not a measurement** — it's the algebraic inverse of the g,R fed in
+  (there's no light curve to FFT), so the caption says "the principle Kepler/TESS use to weigh
+  stars", never "the sim measured this star's mass"; (4) **gate-to-caption at Teff≈6700** (hot →
+  radiative envelope → panel stays VISIBLE but blanks the spectrum and points at the instability
+  strip; floor no lower — Procyon-class F oscillators must stay ON, measured 1.3–1.6 M☉ ~6500 K
+  rings ON first); (5) **living-only via the shared chokepoint** (`dropSeismoForModeSwitch` in
+  `dropHeliumForModeSwitch` + CSS `body.stripped-mode`/`body.binary-view`) is REQUIRED not tidy — a
+  cooling WD's log g~8 would slip a pure Teff gate → a ~10⁷ µHz garbage spectrum (verified hidden in
+  WD, restored on Back). **Gate 0 measured through the REAL served state BEFORE drawing** (the
+  cardinal rule): Sun 2984/132, R≈10 giant 34.2/4.2, RGB-tip 0.54/0.18, 5 M☉ MS (15.7 kK) gates off;
+  échelle ridges verified visually on BOTH the Sun (Δν=132) AND the giant (Δν≪1 — the plan warned
+  the échelle "renders silently wrong"). C3 (rotational mode splitting keyed to vvcrit) noted
+  scope-edge, deferred. [[star-sim-asteroseismology]]; plan `docs/plans/outward-quartet-atlas.md`
+  §Axis C.
 
 ### Isochrone / cluster overlay (Axis B of the outward quartet — `isochrone.py`; `/isochrone` bypasses PROVIDER)
 - **BUILT 2026-07-10 (B1 backend + B2 frontend; 412 pytest, Playwright 1440+390 zero console

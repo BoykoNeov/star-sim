@@ -759,6 +759,20 @@
       </div>
     </section>
 
+    <!-- Asteroseismology (Axis C of the outward quartet) — the star rings like a bell. A pure VIEW
+         of the served Teff/log g/R (frontend-only, the sed.js/hz.js precedent): the two seismic
+         scaling relations turn them into nu_max and Delta-nu, drawn as a schematic power spectrum
+         (Delta-nu comb under a nu_max Gaussian envelope) and the echelle diagram (frequency mod
+         Delta-nu -> vertical l=0/1/2 ridges). Gated to the convective-envelope regime by the physics
+         (hot stars blank with an instability-strip pointer); living-only (main.js drops it in every
+         endgame via the shared mode-switch chokepoint — a cooling WD's log g~8 would otherwise paint
+         a garbage spectrum). Not hidden by default: it's meaningful for any cool living star. -->
+    <section class="panel seismo-panel" id="seismo-panel" data-panel-id="seismo">
+      <h2>Asteroseismology · the star rings <span class="help" tabindex="0" data-tip="A star oscillates like a bell — its convective surface stochastically drives sound waves (p-modes) that resonate through the interior, exactly as the Sun does. Two numbers carry almost all of the information. ν_max is the frequency where the oscillation power peaks (it scales with the surface gravity: ν_max ∝ g/√Teff, so the Sun rings near 3090 µHz while a puffed-up red giant rings hundreds of times slower, at tens of µHz). Δν is the near-even spacing between consecutive overtones (it scales with the square root of the mean density: Δν ∝ √ρ̄). TOP: a schematic power spectrum — a comb of modes (spaced by Δν) under a Gaussian envelope centred on ν_max. BOTTOM: the échelle diagram — the spectrum sliced into Δν-wide strips and stacked, so modes of the same degree line up into near-vertical RIDGES (ℓ=0 radial and ℓ=2 quadrupole pack into one ridge, ℓ=1 dipole sits about half a Δν across). This is exactly how Kepler and TESS weigh and age hundreds of thousands of stars: the two observables invert to give the star's mass and radius. Tier-2, labeled approximate — real scaling relations, not a full pulsation solve, and the relations carry a known few-percent systematic. Only stars with a CONVECTIVE ENVELOPE ring this way (cool dwarfs and red giants); hot stars have radiative envelopes and pulsate differently — those are the instability-strip zones on the HR diagram.">?</span></h2>
+      <canvas id="seismo-canvas"></canvas>
+      <p class="note spectrum-caption" id="seismo-caption"></p>
+    </section>
+
     <section class="panel lane-panel" data-panel-id="lane">
       <h2>Interior structure · Lane–Emden <span class="help" tabindex="0" data-tip="A live-computed STATIC polytrope (spec §8) — not evolution, and deliberately NOT the actual interior of the star above. It solves the dimensionless Lane–Emden equation θ″ + (2/ξ)θ′ = −θⁿ outward from the centre to the first zero ξ₁ (the surface), for a polytrope P = K·ρ^(1+1/n). The density profile ρ/ρc = θⁿ is the payoff: raise the index n and the star becomes far more centrally concentrated. n is yours to set — it is independent of the mass/[Fe/H]/age controls. Closed forms (n=0,1,5) and Chandrasekhar's tabulated ξ₁ validate the integrator in the backend tests.">?</span></h2>
       <p class="hint lane-intro">
