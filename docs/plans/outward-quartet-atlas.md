@@ -219,10 +219,104 @@ must move visibly outward over the track, and a 1 AU (Earth) landmark must be se
   zones correctly **closer in** (advisor caught + fixed a reversed directional clause). Spectrum enters
   through Teff (the near-IR albedo/absorption effect IS the Teff-dependence); UV/X-ray/flares deliberately
   OUT of the band, owned by the caption caveat. Planet mass fixed at 1 M⊕ (no planetary sandbox).
-- **D2 (frontend): NOT built** — the HZ **history** (ghost of the band at ZAMS vs now vs RGB; highlight
-  the moment a landmark orbit enters/exits/is-swallowed). Deferred: the live march-outward on the age
-  scrub already carries the payoff (drag the age and the band sweeps outward past Earth in real time).
-  A future add if a static past-position trail proves worth it.
+- **D2 (frontend): PLANNED (not built)** — the HZ **migration diagram**: a dedicated panel that plots
+  the whole life's HZ history on one static figure (distance vs age), so the story the live scrub can
+  only *animate* becomes *legible at a glance* — and, the piece the scale-bar view structurally cannot
+  show, the **Continuously Habitable Zone** (the annulus that stays habitable for the whole main
+  sequence). D1 is the *spatial, single-age* view (the band on the scale bar at the current age); D2 is
+  the orthogonal *temporal* view (all ages at once). Superscedes the original "ghost trail" sketch — a
+  full time-axis is worth more than a few past-position ghosts and unlocks the CHZ.
+
+  **The two lessons.** (1) The HZ **migrates outward** over the star's life (slowly up the MS as L
+  creeps, then explosively up the giant branch) — Earth enters, then the inner edge sweeps *past* 1 AU,
+  then the swelling giant engulfs it. (2) The **CHZ** — a planet must stay in the HZ *continuously* for
+  ~Gyr for complex life, and that annulus is much **narrower** than any instantaneous HZ. The punchline:
+  **Earth sits in today's HZ but is NOT in the Sun's continuously-habitable annulus** (the inner edge
+  crosses 1 AU well before the Sun leaves the MS) — a result the live single-age band can't express.
+
+  **Honesty tier & data.** Tier-2, and it **reuses D1's already-Gate-0'd physics verbatim** — the pure
+  `hz.js` `habitableZone(Teff, L)` / `inRange(Teff)` (Kopparapu 2014, no new coefficients, no new
+  paper). So D2 introduces **no new physics gate**; its Gates 0 are *shape/consistency* measurements
+  through the runtime, not a coefficient re-derivation.
+
+  **Architecture (the cheapest sibling yet — pure `currentTrack` consumer, NO backend).** `main.js`
+  already holds `currentTrack` (the full `/track` result, one `StellarState` per EEP row carrying
+  `Teff_K`, `L_lsun`, `age_yr`). A new frontend module `hzhist.js` is a **pushed-data consumer** exactly
+  like `cmd.js`/`roche.js`: on a track change `main.js` maps each row through `habitableZone(Teff_K,
+  L_lsun)` → a series `[{age, recentVenus, runaway, maxGreenhouse, earlyMars | null-if-out-of-range}]`
+  and pushes it via `hzhist.setTrack(series)`; on an age-slider change it pushes the current age via
+  `hzhist.setNow(age)`. **No fetch, no route, no `StellarState` touch** (the HZ is a *view*, never on the
+  spine — the D1/A/C-axis rule). Its own dedicated panel `#hz-history-panel` (canvas `#hz-history-canvas`),
+  a sibling panel to `#observer-panel`.
+
+  **The panel.**
+  - **Axes:** age on x (**log yr** — the RGB/AGB payoff is late and would be crushed on a linear axis;
+    matches the age-slider's landmark structure), distance on y (**log AU**, auto-fit to include the
+    giant-branch tens-of-AU excursion — the scale-bar `hzWide` idiom, but here the whole history's max
+    edge sets the top).
+  - **The migrating band:** the solid conservative band (runaway→maxGreenhouse) + dashed optimistic
+    edges (recentVenus→earlyMars) drawn as functions of age. **Teff-out-of-range rows break the band
+    honestly** (`inRange` false → a gap, never an interpolated bridge) — an evolving star legitimately
+    leaves and re-enters the calibration window, and on this diagram those gaps read naturally as "HZ
+    undefined here."
+  - **Planet landmarks:** horizontal reference lines at **Earth 1 AU** (highlighted), Venus 0.72, Mars
+    1.52 — **Solar-System landmarks**, same framing as the scale bar's orbit rings (the caption owns
+    "not this star's own planets; a fixed-orbit reference"). Where Earth's line lies inside the band =
+    the habitable epoch.
+  - **The "now" line:** a vertical marker at the current age, tied to the age slider — keeps the static
+    diagram coupled to the rest of the UI (the age-marker idiom) and lets the user read "the scale-bar
+    band = this vertical slice."
+
+  **Control (no new always-on UI — the population-toggle idiom).** The existing **`#hz-toggle`
+  governs BOTH** the scale-bar band (D1, spatial) and this history panel (D2, temporal) — one concept,
+  two views, like `#population-toggle` driving both the SED wedge and the HRD cloud. So D2 adds *zero*
+  new persistent controls (answers the atlas's "don't multiply always-on UI" caution). Living-only:
+  `dropHZForModeSwitch()` already exists and drops the D1 band on any mode switch — extend it to hide
+  `#hz-history-panel` too (endgame/stripped modes claim the scale bar; the history panel follows).
+
+  **Chunk split (two — D2a a complete shippable panel, D2b isolates the subtle CHZ math).**
+  - **D2a — the migration diagram (frontend-only): ✅ BUILT 2026-07-13** (Playwright 1440+390, zero
+    console errors; no backend change). `hzhist.js` (a pure pushed-data consumer like `cmd.js`) +
+    `#hz-history-panel`; the migrating band + planet lines + the "now" line, wired to `#hz-toggle` (one
+    toggle governs both the scale-bar band and this panel) and the `dropHZForModeSwitch` chokepoint.
+    `main.js` maps `currentTrack` through `hz.js`'s `habitableZone()` into a per-row series
+    (`buildHZSeries` → `{age, …edges}` or `{age, oor:true}`) and pushes via `hzhist.setTrack`; the age
+    scrub pushes `hzhist.setNow`. **The x-axis was RE-DECIDED against a real Sun render (advisor catch):
+    LINEAR age, not the plan's log-yr** — measured on 1 M☉, the giant-branch march (inner edge 1.5→10 AU)
+    happens between log-age fraction 0.985 and 0.998, so log-X crushes the whole payoff into the last
+    ~1.5% against the right frame; linear-X spreads the giant cliff over the last ~8% (the iconic hockey
+    stick) AND keeps the slow MS creep + Earth's ~5 Gyr inner-edge crossing readable mid-axis. **y = log
+    AU** (edges span ~2 decades, 0.8→~70 AU). **Gate 0 PASSED through the runtime:** (i) the Sun's band
+    starts ~0.8–1.5 AU and climbs to ~68 AU up the giant branch; (ii) cross-panel consistency holds by
+    construction — `setNow` uses `currentTrack[i]` at the SAME row index `paintState` picks, and both
+    panels call the same `habitableZone(Teff,L)`, so the now-line intersects the band at the scale-bar's
+    values; (iii) a hot star shows a real no-band gap (an honest "no HZ in the 2600–7200 K range" note,
+    planet lines + now-line still drawn), and a mid-mass star's hot MS is correctly blank until it cools
+    into range as a giant — never an interpolated bridge.
+  - **D2b — the Continuously Habitable Zone + Earth's deadline (frontend-only):** shade the CHZ annulus
+    and call out the exit deadline. **The CHZ is the NUMERICAL intersection over the in-range rows of
+    the window — `max(inner_edge)` and `min(outer_edge)` across the discrete track rows — NOT the
+    endpoint shortcut `[inner(t_end), outer(t_start)]`** (that shortcut assumes both edges increase
+    monotonically with L, which the non-monotone Teff at the TAMS hook violates → a subtly-wrong annulus
+    for heavier masses; the max/min-over-rows form is both correct and *simpler*). **The window is
+    static ZAMS→TAMS** (textbook, unambiguous, doesn't shift as you scrub — the "now" line already
+    carries the dynamic story); remaining-MS `[now→TAMS]` is the noted alternative, not the default.
+    **CHZ is only defined over a contiguous in-range span** — a Teff gap breaks "continuous," so the
+    intersection must never span a gap; a fully-out-of-range MS (a hot star) simply has **no CHZ
+    annulus** (state it; draw nothing, caption owns it). The **Earth-exit deadline is MEASURED off the
+    served track** (the age at which the conservative inner edge crosses 1 AU) — never a hardcoded
+    literature "~1 Gyr"; label it model/edge-definition-dependent. **Gate 0 (measure BEFORE the
+    caption):** for the Sun, (a) the inner edge crosses 1 AU at a sensible age, and (b) **Earth (1 AU) is
+    NOT inside CHZ(ZAMS→TAMS)** — that "Earth isn't in the continuously-habitable annulus" result IS the
+    lesson, so it must be measured through the runtime, not asserted from the literature.
+
+  **Caveats the caption owns (inherited from D1 + new to D2):** the giant-branch HZ at tens of AU lasts
+  only ~Myr ("habitable for a geologic blink" ≠ Gyr — this is precisely *why* the CHZ matters);
+  UV/X-ray/flares are out of the energy-balance band (a separate hazard); planet mass fixed at 1 M⊕
+  (Kopparapu 1 M⊕ coefficients, no planetary sandbox); the planet lines are Solar-System references, not
+  this star's planets. **No JS test harness → the Playwright screenshot pass at 1440 + 390 px is the
+  regression check** (verify the gaps render as gaps, the CHZ annulus is narrower than the instantaneous
+  band, and Earth's line exits it — the things that silently render wrong).
 
 ---
 

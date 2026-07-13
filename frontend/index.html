@@ -114,6 +114,19 @@
       <p class="note rot-note" id="observer-note"></p>
     </section>
 
+    <!-- Habitable-zone history (Axis D2a) — the TEMPORAL twin of the scale-bar HZ band. Plots the
+         whole life's habitable zone as distance (log AU) vs age (LINEAR — the giant-branch march is
+         the last ~8% of the star's linear life; a log-age axis would crush it against the edge), so
+         the outward MARCH is legible on one static figure. A pure VIEW of L + Teff (reuses hz.js,
+         never touches the HR marker). Governed by the SAME #hz-toggle as the scale-bar band (one
+         concept, two views — the population-toggle idiom); shown only when that toggle is on and in
+         live mode. Hidden by default; main.js un-hides it. -->
+    <section class="panel hz-history-panel" id="hz-history-panel" data-panel-id="hz-history" hidden>
+      <h2>Habitable-zone history <span class="help" tabindex="0" data-tip="How the circumstellar HABITABLE ZONE — the range of orbital distances where a planet could hold liquid surface water — moves over the star's whole life. The true-size panel shows this zone at ONE age (a band on the size axis); this shows every age at once, so you can read the story rather than scrub for it. Distance from the star is up the side (in AU, log scale); age runs across the bottom (linear, so the explosive giant-branch march — when the brightening star flings the zone out to tens of AU in the final few percent of its life — stays visible instead of being crushed into the corner). The green band is the zone itself: SOLID conservative (runaway greenhouse inner edge → maximum greenhouse outer), DASHED optimistic (recent Venus → early Mars), from the Kopparapu (2014) climate parameterization for a 1 Earth-mass planet. The blue horizontal lines are the Solar-System orbits (Venus, Earth, Mars) as a FIXED reference — not this star's own planets; watch where Earth's 1 AU line enters and then leaves the band. The amber vertical line is the current age (it tracks the age slider), and it marks the same instant the true-size band shows. A break in the band is an age where the star's temperature leaves the model's calibrated 2600–7200 K range. This is a liquid-water (energy-balance) zone only — it does not account for ultraviolet/X-ray output or flares.">?</span></h2>
+      <canvas id="hz-history-canvas"></canvas>
+      <p class="note spectrum-caption" id="hz-history-caption"></p>
+    </section>
+
     <section class="panel comp-panel" data-panel-id="comp">
       <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Three views: H/He/metals (the bulk make-up); a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals), with a linear/log toggle; and a light-element view (lithium, beryllium, fluorine) on a log scale, where you watch the fragile light elements burn away as the star evolves. (Boron is absent: the only boron isotope in this stellar model is radioactive and present at essentially zero — there is no stable boron to show.)">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">

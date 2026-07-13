@@ -1,6 +1,6 @@
 ---
 name: star-sim-habitable-zone
-description: "Axis D of the outward quartet — the circumstellar habitable-zone band on the true-size scale bar (hz.js + scale.js), a pure L+Teff view from Kopparapu 2014, marching outward as the star brightens. D1 BUILT."
+description: "Axis D of the outward quartet — the circumstellar habitable zone from L+Teff (Kopparapu 2014). D1 = the band on the true-size scale bar (hz.js + scale.js). D2a = the HZ-HISTORY panel (hzhist.js, distance-vs-age hockey stick, LINEAR age not log). Both BUILT; D2b (CHZ annulus) remains."
 metadata: 
   node_type: memory
   type: project
@@ -86,10 +86,37 @@ star's HZ is **closer in** (smaller AU); Earth is too cold *because* the zone is
 Hits most K/M dwarfs. Fixed to "this faint star's zone lies closer in." (I'd truncated the
 K-dwarf screenshot caption, so it slipped my own Gate 0 — read captions in full.)
 
-## Not built
-**D2** (HZ history — a ghost trail of the band at ZAMS vs now vs RGB) is deferred: the
-live march-outward on the age scrub already carries the payoff.
+## D2a — the HZ-history panel. BUILT 2026-07-13 (frontend-only, no backend, Playwright 1440+390, zero console errors)
+The **temporal twin** of the scale-bar band (D1 is spatial/single-age; D2 is all-ages-at-once). A
+dedicated panel `#hz-history-panel` (`frontend/src/hzhist.js`) plotting the whole life's HZ as
+**distance vs age** so the outward march is legible on ONE static figure — the iconic hockey stick
+(slow MS creep, then the giant-branch blow-up to ~68 AU). **A pure pushed-data consumer like
+`cmd.js`/`roche.js`** (NOT a hz.js-importing sibling): `main.js` `buildHZSeries(currentTrack)` maps
+each row through the SHARED `hz.js` `habitableZone()` → `{age, …4 edges}` or `{age, oor:true}`, pushed
+via `hzhist.setTrack`; the age scrub pushes `hzhist.setNow(age)`. No fetch, no backend, no StellarState
+touch. Governed by the **SAME `#hz-toggle`** as the scale-bar band (one concept, two views — the
+population-toggle idiom; `syncHZHistory()` shows/hides + pushes, `dropHZForModeSwitch` tears both down).
 
-Plan: `docs/plans/outward-quartet-atlas.md` §Axis D. Next quartet axis = **C
-asteroseismology** (frontend-only, échelle diagram), then **A the observer's view** (the
-capstone — reddening + SVO photometry + a CMD, composes with Axis B into a Gaia diagram).
+**THE X-AXIS WAS RE-DECIDED against a real Sun render (advisor catch — the plan's "log yr" was
+BACKWARDS).** Log *compresses* late ages: measured on 1 M☉, the giant march (inner edge 1.5→10 AU)
+falls between log-age fraction **0.985 and 0.998** — log-X crushes the entire payoff into the last
+~1.5% against the right frame. **LINEAR age** spreads the giant cliff over the last ~8% AND keeps the
+slow MS creep + Earth's ~5.05 Gyr inner-edge crossing readable mid-axis (serves both D2a and the future
+D2b). **y = log AU** (edges span ~2 decades, 0.8→~70 AU). *Always inspect the real `age_yr` array +
+a marquee render before committing an axis — a screenshot can't catch a wrong axis scale.*
+
+**Honest gaps carry over from D1:** an out-of-range row (`oor:true`) breaks the band (never a bridge);
+a hot star shows a full **no-band note** ("no habitable zone in the 2600–7200 K climate-model range")
+with planet lines + now-line still drawn; a mid-mass star's hot MS is correctly blank until it cools
+into range as a giant. Planet reference lines Venus 0.72 / **Earth 1** (highlighted) / Mars 1.52 are a
+FIXED Solar-System reference (caption owns "not this star's planets"). The now-line draws THROUGH a gap
+(marks the age, not the band — don't index null edges). Cross-panel consistency (Gate 0 ii) is
+guaranteed by construction: `setNow` uses `currentTrack[i]` at the SAME row `paintState` picks.
+
+## Not built
+**D2b** (the Continuously Habitable Zone annulus + Earth's exit deadline) is the remaining chunk —
+shade `max(inner)/min(outer)` over the in-range rows (NOT the endpoint shortcut — non-monotone Teff at
+the TAMS hook), window ZAMS→TAMS, deadline MEASURED off the track. See the plan §Axis D.
+
+Plan: `docs/plans/outward-quartet-atlas.md` §Axis D. The outward quartet (A/B/C/D) is otherwise
+built; A observer's-view CMD = [[star-sim-observer-cmd]], B isochrone = [[star-sim-isochrone-cluster]].

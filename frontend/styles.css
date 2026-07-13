@@ -833,7 +833,8 @@ body.binary-view .sed-panel, body.binary-view .structure-panel { display: none; 
    overlay controls (helium/α/population/isochrone) are torn down by their own update/drop
    functions; these four are pure CSS (auto-revert on exit, the roche-panel precedent). */
 body.stripped-mode .lane-panel, body.stripped-mode .structure-panel,
-body.stripped-mode .sed-panel, body.stripped-mode .observer-panel { display: none; }
+body.stripped-mode .sed-panel, body.stripped-mode .observer-panel,
+body.stripped-mode .hz-history-panel { display: none; }
 
 /* path (b) Chunk 4b: the "Co-evolve the system" demo-system picker — a deeper reveal
    inside stripped-mode (never a new top-level mode), so it lives right under the

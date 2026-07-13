@@ -14,6 +14,8 @@ import { createRoche } from "./roche.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
 import { createCMD } from "./cmd.js";
+import { createHZHist } from "./hzhist.js";
+import { habitableZone } from "./hz.js";
 import { createClassification } from "./classify.js";
 import { makeSortable } from "./layout.js";
 import { initTooltips } from "./tooltip.js";
@@ -84,6 +86,9 @@ const els = {
   // liquid-water zone from L + Teff (Kopparapu 2014), marching outward as the star brightens.
   // Living-only (scale.js draws it only when setHZ(true) and not SN; dropped on any mode switch).
   hzToggle: document.getElementById("hz-toggle"),
+  // Axis D2a — the HZ-history panel (temporal twin of the scale-bar band, governed by the same
+  // #hz-toggle). Hidden unless the toggle is on in live mode; dropped on any mode switch.
+  hzHistoryPanel: document.getElementById("hz-history-panel"),
   // Isochrone / cluster overlay (MIST .iso — Axis B). A LIGHT HR overlay like He/α (it owns the
   // HR panel while on, MIST track hidden) but a POPULATION view: the coeval-cluster locus at the
   // marker's age, turnoff ringed, the star sitting on it. Gated only on the fetched .iso grid.
@@ -292,6 +297,11 @@ const sed = createSED(document.getElementById("sed-canvas"));
 // intrinsic locus + the marker's exact magnitudes and pushes them in.
 const cmd = createCMD(document.getElementById("cmd-canvas"));
 
+// Habitable-zone history (Axis D2a) — the temporal twin of the scale-bar HZ band. A pure
+// pushed-data consumer: main.js maps currentTrack through hz.js and pushes the per-row edges
+// via setTrack(); the age slider pushes the current age via setNow(). Governed by #hz-toggle.
+const hzhist = createHZHist(document.getElementById("hz-history-canvas"));
+
 // --- draggable, responsive panel layout --------------------------------------
 // The panels live in a flex-wrap container (styles.css) that auto-stacks them to
 // the viewport width — several columns on a desktop, a single vertical column on a
@@ -326,6 +336,7 @@ const RESPONSIVE = [
   { id: "spectrum-canvas", mod: spectrum, maxW: 720, h: 280 },
   { id: "sed-canvas", mod: sed, maxW: 720, h: 300 },
   { id: "cmd-canvas", mod: cmd, maxW: 560, h: 300 },
+  { id: "hz-history-canvas", mod: hzhist, maxW: 560, h: 300 },
   { id: "lane-canvas", mod: lane, maxW: 720, h: 340 },
   { id: "structure-canvas", mod: structure, maxW: 720, h: 340 },
   { id: "roche-canvas", mod: roche, maxW: 720, h: 320 },
@@ -2902,10 +2913,40 @@ function dropHeliumForModeSwitch() {
 // mode-switch chokepoint). CSS also hides the toggle in those modes; this clears the STATE so a
 // return to live starts clean and scale.js stops drawing the band immediately.
 function dropHZForModeSwitch() {
+  // The temporal twin (D2a) follows the band: hide + clear it unconditionally (cheap; it's
+  // already hidden when hzOn is false, but a mode switch must never leave it stranded).
+  if (els.hzHistoryPanel) els.hzHistoryPanel.hidden = true;
+  hzhist.clear();
   if (!hzOn) return;
   hzOn = false;
   if (els.hzToggle) els.hzToggle.checked = false;
   scale.setHZ(false);
+}
+
+// Map the current track's StellarStates through the (shared) Kopparapu HZ physics into the
+// per-row series the history panel draws: the four edge distances in AU, or {oor:true} for a
+// row whose Teff is outside the 2600–7200 K calibration range (hz.js returns null → a gap on
+// the diagram, never an interpolated bridge). Same habitableZone() call as the scale bar, so
+// the two panels agree at any age by construction.
+function buildHZSeries(track) {
+  return track.map((s) => {
+    const h = habitableZone(s.Teff_K, s.L_lsun);
+    return h ? { age: s.age_yr, ...h } : { age: s.age_yr, oor: true };
+  });
+}
+
+// Show/hide the HZ-history panel and (re)push its whole-life series + the current "now" line.
+// The series is age-independent (it depends only on the track), so this is the track-change /
+// toggle-on entry point; the per-scrub "now" line is pushed separately from refresh().
+function syncHZHistory() {
+  const panel = els.hzHistoryPanel;
+  if (!panel) return;
+  const on = hzOn && mode === "live" && currentTrack && currentTrack.length > 1;
+  panel.hidden = !on;
+  if (!on) { hzhist.clear(); return; }
+  hzhist.setTrack(buildHZSeries(currentTrack));
+  const i = trackRowFromPos(ageFraction);
+  if (i >= 0) hzhist.setNow(currentTrack[i].age_yr);
 }
 
 // --- observer's view (Axis A) — its own panel: the observational CMD ----------
@@ -4088,6 +4129,7 @@ function refresh() {
   updatePopulationControl(); // the coeval-population SED overlay (any marker; gated on the baked cube)
   updateIsochroneControl();  // the cluster-isochrone HR overlay (any marker; gated on the .iso grid)
   updateObserverControl();   // the observer's-view control (any marker; gated on the spectrum cube)
+  if (hzOn) hzhist.setNow(s.age_yr);   // move the HZ-history "now" line with the age scrub (D2a)
 }
 
 // The evolutionary track depends only on (mass, [Fe/H]), not age — so it's
@@ -4118,6 +4160,7 @@ async function refreshTrack() {
     currentTrack = t;
     if (!heliumOn && !alphaOn && !isoOn) hr.setTrack(t);   // a MESA/isochrone overlay owns the HR panel; its refresh re-asserts it
     comp.setTrack(t);
+    syncHZHistory();   // the HZ-history panel's whole-life series is track-derived — re-push it (no-op unless hzOn)
     // The star changed, so any cached endgame is stale — drop BOTH caches (the full result
     // and the type-only fast-path one) + clear the gateway's CHILDREN (the buttons/note),
     // but leave the block itself in the layout so its reserved height holds while the new
@@ -4527,6 +4570,7 @@ async function init() {
     if (els.hzToggle.checked && mode !== "live") { els.hzToggle.checked = false; return; }
     hzOn = els.hzToggle.checked;
     scale.setHZ(hzOn);
+    syncHZHistory();   // the same toggle governs the temporal twin (D2a) — show/hide + push
   });
 
   // Observer's view (Axis A) — distance + dust. A pure VIEW (never the HR marker), so NOT mutually
