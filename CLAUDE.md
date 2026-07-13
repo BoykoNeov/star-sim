@@ -1000,7 +1000,7 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   (obsDistancePc/obsAv/obsRv + `refreshObserver`) is built so A3's CMD panel reuses the same knobs.
   [[star-sim-observer-cmd]]; plan `docs/plans/outward-quartet-atlas.md` §Axis A.
 
-### Habitable-zone band (Axis D of the outward quartet — `hz.js`+`scale.js`; frontend-only, no backend)
+### Habitable-zone band (Axis D of the outward quartet — `hz.js`+`scale.js`+`hzhist.js`; frontend-only, no backend)
 - **D1 BUILT 2026-07-10 (frontend-only, NO backend change, 412 pytest unchanged, Playwright 1440+390
   zero console errors).** The circumstellar liquid-water zone on the true-size scale bar — a pure VIEW of
   L + Teff (never touches the HR marker), marching **outward** as the star brightens (Earth's fate). The
@@ -1026,9 +1026,20 @@ Phases 1–5 are built; the app is feature-complete for the current scope. This 
   coupling, which would fake precision); **UV/X-ray/flares deliberately OUT of the band**, owned by the
   caption caveat (a separate habitability hazard, not the liquid-water energy-balance zone). Planet mass
   fixed at 1 M⊕ (no planetary sandbox). **Advisor caught + fixed a reversed directional clause** (faint
-  star: "the zone lies closer in", not "farther out" — hits most K/M dwarfs). **D2 (HZ history / ghost
-  trail of past positions) NOT built** — the live march on the age scrub already carries the payoff.
-  [[star-sim-habitable-zone]]; plan `docs/plans/outward-quartet-atlas.md` §Axis D.
+  star: "the zone lies closer in", not "farther out" — hits most K/M dwarfs). **D2a BUILT 2026-07-13**
+  = the HZ-**history** panel (`hzhist.js`, a pushed-data consumer like `cmd.js` on the SAME `#hz-toggle`):
+  the whole life's HZ as **distance-vs-age** — the iconic hockey stick. **x = LINEAR age not the plan's
+  log-yr (advisor):** log crushes the giant-branch march into the last ~1.5%; measure the real track +
+  render before choosing an axis. **D2b BUILT 2026-07-13** = the **Continuously Habitable Zone** annulus
+  (`max(inner)/min(outer)` over the ZAMS→TAMS MS rows — NOT the endpoint shortcut; undefined if any MS
+  row is oor) + the **MEASURED** Earth-exit deadline (age the runaway edge crosses 1 AU, orange dot +
+  absolute-age label). **The measure-first gate reframed the result (advisor): the Sun's conservative
+  CHZ is empty by only ~1% = within model noise → render COLLAPSED (a dashed pinch-line), not a hard
+  "empty"; all 3 render paths — box (0.4 M☉), collapsed (Sun/0.8/0.15), undefined (2 M☉) — confirmed on
+  real MIST tracks BEFORE wiring the canvas.** Gate 0: Sun's runaway crosses 1 AU at 5.06 Gyr, Earth not
+  in the CHZ. `main.js` `buildHZSeries` carries a per-row `ms` flag; all CHZ logic in `hzhist.js`. **The
+  outward quartet (A/B/C/D) is now fully built.** [[star-sim-habitable-zone]]; plan
+  `docs/plans/outward-quartet-atlas.md` §Axis D.
 
 ### Tests
 - **425 pytest** (gated by data present via `conftest.py` markers; MIST tests skip

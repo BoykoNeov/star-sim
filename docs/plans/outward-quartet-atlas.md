@@ -293,22 +293,31 @@ must move visibly outward over the track, and a 1 AU (Earth) landmark must be se
     values; (iii) a hot star shows a real no-band gap (an honest "no HZ in the 2600–7200 K range" note,
     planet lines + now-line still drawn), and a mid-mass star's hot MS is correctly blank until it cools
     into range as a giant — never an interpolated bridge.
-  - **D2b — the Continuously Habitable Zone + Earth's deadline (frontend-only):** shade the CHZ annulus
-    and call out the exit deadline. **The CHZ is the NUMERICAL intersection over the in-range rows of
-    the window — `max(inner_edge)` and `min(outer_edge)` across the discrete track rows — NOT the
-    endpoint shortcut `[inner(t_end), outer(t_start)]`** (that shortcut assumes both edges increase
-    monotonically with L, which the non-monotone Teff at the TAMS hook violates → a subtly-wrong annulus
-    for heavier masses; the max/min-over-rows form is both correct and *simpler*). **The window is
-    static ZAMS→TAMS** (textbook, unambiguous, doesn't shift as you scrub — the "now" line already
-    carries the dynamic story); remaining-MS `[now→TAMS]` is the noted alternative, not the default.
-    **CHZ is only defined over a contiguous in-range span** — a Teff gap breaks "continuous," so the
-    intersection must never span a gap; a fully-out-of-range MS (a hot star) simply has **no CHZ
-    annulus** (state it; draw nothing, caption owns it). The **Earth-exit deadline is MEASURED off the
-    served track** (the age at which the conservative inner edge crosses 1 AU) — never a hardcoded
-    literature "~1 Gyr"; label it model/edge-definition-dependent. **Gate 0 (measure BEFORE the
-    caption):** for the Sun, (a) the inner edge crosses 1 AU at a sensible age, and (b) **Earth (1 AU) is
-    NOT inside CHZ(ZAMS→TAMS)** — that "Earth isn't in the continuously-habitable annulus" result IS the
-    lesson, so it must be measured through the runtime, not asserted from the literature.
+  - **D2b — the Continuously Habitable Zone + Earth's deadline (frontend-only): ✅ BUILT 2026-07-13**
+    (Playwright 1440+390, zero console errors; no backend change). `main.js`'s `buildHZSeries` now carries
+    a per-row `ms: phase==="MS"` flag; all CHZ logic lives in `hzhist.js` (`computeCHZ` + `drawCHZ` +
+    `drawEarthExit` + a dynamic `chzSentence()`). **The CHZ is the NUMERICAL intersection over the in-range
+    MS rows — `max(inner_edge)` / `min(outer_edge)` across the discrete rows — NOT the endpoint shortcut**
+    (the non-monotone Teff at the TAMS hook makes endpoints subtly wrong; max/min-over-rows is correct AND
+    simpler). **Window static ZAMS→TAMS**; **CHZ undefined if ANY MS row is out of Kopparapu's range**
+    (a hot star's MS → no annulus, caption owns it). The **Earth-exit deadline is MEASURED** — the age the
+    conservative inner (runaway) edge crosses 1 AU, interpolated off the track, labelled edge-definition
+    dependent; drawn as an orange dot + absolute-age label on the Earth line (from-now framing stays in the
+    caption, not the drawing — it would couple to the slider's now-line).
+    **The measure-first gate reframed the whole result (advisor):** measured on the real Sun track the
+    conservative CHZ is *empty by only ~1%* ([1.451, 1.436] AU) — **within the model's own noise**, so it's
+    rendered as **COLLAPSED** (a dashed pinch-line at the collapse distance), not a hard "empty." Rendering
+    mirrors the migrating band's nested language: the **optimistic** annulus (outer, faint fill; robustly
+    nonempty → always something to shade) with the **conservative** annulus nested inside — a crisp
+    bordered box when it survives (`width ≥ 4%` of its distance), else the pinch-line. **All three render
+    paths confirmed against real MIST tracks BEFORE wiring the canvas:** (1) nonempty conservative box —
+    **0.4 M☉** ([0.26, 0.27] AU; cool dwarfs brighten little over their >100 Gyr MS); (2) collapsed
+    pinch-line + optimistic box — **Sun / 0.8 / 0.15 M☉** (0.15's 1.9%-wide sliver is < the 4% floor →
+    pinch-line, honestly "vanishingly narrow"); (3) undefined — **2 M☉** (MS 6964–9485 K, all oor).
+    **Gate 0 PASSED (measured, not asserted):** the Sun's runaway edge crosses 1 AU at **5.06 Gyr**
+    (~485 Myr after today's ~4.57 Gyr Sun — consistent with Kopparapu's ~0.95–0.99 AU present-day inner
+    edge), and Earth at 1 AU is NOT inside the CHZ — a *strengthening* of the plan's expectation (the
+    conservative annulus doesn't just exclude Earth, it has collapsed).
 
   **Caveats the caption owns (inherited from D1 + new to D2):** the giant-branch HZ at tens of AU lasts
   only ~Myr ("habitable for a geologic blink" ≠ Gyr — this is precisely *why* the CHZ matters);

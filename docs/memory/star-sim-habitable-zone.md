@@ -1,6 +1,6 @@
 ---
 name: star-sim-habitable-zone
-description: "Axis D of the outward quartet — the circumstellar habitable zone from L+Teff (Kopparapu 2014). D1 = the band on the true-size scale bar (hz.js + scale.js). D2a = the HZ-HISTORY panel (hzhist.js, distance-vs-age hockey stick, LINEAR age not log). Both BUILT; D2b (CHZ annulus) remains."
+description: "Axis D of the outward quartet — the circumstellar habitable zone from L+Teff (Kopparapu 2014). D1 = the band on the true-size scale bar (hz.js + scale.js). D2a = the HZ-HISTORY panel (hzhist.js, distance-vs-age hockey stick, LINEAR age not log). D2b = the Continuously Habitable Zone annulus + measured Earth-exit deadline in hzhist.js. ALL BUILT (D1/D2a/D2b); axis complete."
 metadata: 
   node_type: memory
   type: project
@@ -113,10 +113,45 @@ FIXED Solar-System reference (caption owns "not this star's planets"). The now-l
 (marks the age, not the band — don't index null edges). Cross-panel consistency (Gate 0 ii) is
 guaranteed by construction: `setNow` uses `currentTrack[i]` at the SAME row `paintState` picks.
 
-## Not built
-**D2b** (the Continuously Habitable Zone annulus + Earth's exit deadline) is the remaining chunk —
-shade `max(inner)/min(outer)` over the in-range rows (NOT the endpoint shortcut — non-monotone Teff at
-the TAMS hook), window ZAMS→TAMS, deadline MEASURED off the track. See the plan §Axis D.
+## D2b — the Continuously Habitable Zone + Earth's deadline. BUILT 2026-07-13 (frontend-only, no backend, Playwright 1440+390, zero console errors)
+The piece the single-age scale-bar view structurally cannot show: the annulus that stays habitable for
+the star's **WHOLE main sequence** — far narrower than the zone at any single age. `main.js`'s
+`buildHZSeries` now carries a per-row **`ms: phase==="MS"`** flag; ALL CHZ logic lives in `hzhist.js`
+(`computeCHZ` + `drawCHZ` + `drawEarthExit` + a dynamic `chzSentence()`). No new toggle — rides the
+same `#hz-toggle`.
 
-Plan: `docs/plans/outward-quartet-atlas.md` §Axis D. The outward quartet (A/B/C/D) is otherwise
-built; A observer's-view CMD = [[star-sim-observer-cmd]], B isochrone = [[star-sim-isochrone-cluster]].
+**The math (kept exactly as the plan specified — advisor confirmed not to second-guess):** CHZ =
+NUMERICAL intersection over the in-range MS rows, **`max(inner_edge)` / `min(outer_edge)`** across the
+discrete rows (NOT the endpoint shortcut — the non-monotone Teff at the TAMS hook makes endpoints
+subtly wrong). Window **static ZAMS→TAMS**. **Undefined if ANY MS row is out of Kopparapu's 2600–7200 K
+range** (can't claim continuity across an undefined stretch → a hot star has no annulus, caption owns
+it). Earth-exit deadline = the age the conservative inner (**runaway**) edge crosses 1 AU, **interpolated
+off the track** (never a hardcoded "~1 Gyr").
+
+**THE MEASURE-FIRST GATE REFRAMED THE RESULT (advisor — the load-bearing catch).** On the real Sun
+track the conservative CHZ is **empty by only ~1%** ([1.451, 1.436] AU) — *within the climate model's
+own noise*, so it is treated as **COLLAPSED, not a hard "empty"**: use an epsilon (`width < 4%` of the
+distance → collapsed), and render collapse as a **dashed pinch-line at the collapse distance**, so "the
+always-safe band vanished" is *visible*, not merely absent. Rendering mirrors the migrating band's
+nested language: the **optimistic** annulus (outer, faint fill; robustly nonempty → always something to
+shade) with the **conservative** annulus nested inside — a crisp bordered box when it survives, else the
+pinch-line. **Earth-exit marker = an orange dot + ABSOLUTE-age label on the Earth line** ("Earth exits
+HZ · 5.1 Gyr"); the "from now" framing stays in the CAPTION (a drawn "from now" would couple to the
+slider's now-line and confuse the static figure).
+
+**All three render paths confirmed against real MIST tracks BEFORE wiring the canvas (advisor: two of
+three would otherwise ship on faith).** (1) nonempty conservative BOX — **0.4 M☉** ([0.26, 0.27] AU;
+cool dwarfs brighten little over their >100 Gyr MS, so a real annulus survives — Earth at 1 AU is
+*outside* it, the zone sits close-in); (2) collapsed pinch-line + optimistic box — **Sun / 0.8 / 0.15
+M☉** (0.15's 1.9%-wide sliver is < the 4% floor → pinch-line, honestly "vanishingly narrow"); (3)
+undefined — **2 M☉** (MS 6964–9485 K, all 230 MS rows oor; giant-phase band still draws, no CHZ box, no
+exit marker, caption states it). Playwright pixel-counted the mint CHZ edge + orange exit marker per
+path; captions branch correctly.
+
+**Gate 0 PASSED (measured through the runtime, not asserted from literature):** the Sun's runaway edge
+crosses 1 AU at **5.06 Gyr** (~485 Myr after today's ~4.57 Gyr Sun — consistent with Kopparapu's
+~0.95–0.99 AU present-day inner edge), and Earth at 1 AU is NOT inside the CHZ. This is a *strengthening*
+of the plan's expectation: the conservative annulus doesn't merely exclude Earth, it has collapsed.
+
+Plan: `docs/plans/outward-quartet-atlas.md` §Axis D. **The outward quartet (A/B/C/D) is now fully built.**
+A observer's-view CMD = [[star-sim-observer-cmd]], B isochrone = [[star-sim-isochrone-cluster]].

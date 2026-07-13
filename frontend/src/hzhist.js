@@ -38,6 +38,17 @@ const COL_HZ_EDGE = "#63d98f";   // brighter green — the HZ edge lines / label
 const COL_EARTH = "#6fb0ff";     // cool blue — Earth's orbit line (the highlighted reference)
 const COL_PLANET = "rgba(111,176,255,0.5)"; // fainter blue — Venus / Mars reference lines
 const COL_NOW = "#ffce6b";       // warm — the "now" age marker (matches the scale-bar tint family)
+const COL_CHZ_EDGE = "#eaffef";  // near-white mint — the CHZ core outline (a crisp rectangle, distinct from the migrating band's soft green)
+const COL_EXIT = "#ff8a5c";      // warm orange — the measured "Earth exits the HZ" deadline marker
+
+// The Continuously Habitable Zone (D2b): a conservative annulus thinner than this fraction of
+// its own distance is treated as COLLAPSED — the brightening star's inner edge has (nearly)
+// overtaken its former outer edge, and the ~1% gaps that survive are within the climate model's
+// own noise, so we draw a pinch-line rather than a hairline box. Measured on real MIST tracks:
+// the Sun's conservative CHZ inverts by ~1% over its full MS; a genuine annulus only survives
+// for cool ≲0.4 M☉ dwarfs (which brighten little over their >100 Gyr MS).
+const CHZ_COLLAPSE_FRAC = 0.04;
+const EARTH_AU = 1.0;   // Earth's orbit — a FIXED Solar-System reference (the caption owns "not this star's planet")
 
 // Solar-System orbit references (AU) — a FIXED reference, not this star's own planets (the
 // caption owns that). Earth is highlighted; Venus/Mars bracket it.
@@ -90,11 +101,12 @@ export function createHZHist(canvas) {
   plotW = W - PAD_L - PAD_R;
   plotH = H - PAD_T - PAD_B;
 
-  // series: [{ age, recentVenus, runaway, maxGreenhouse, earlyMars } | { age, oor:true }]
+  // series: [{ age, ms, recentVenus, runaway, maxGreenhouse, earlyMars } | { age, ms, oor:true }]
   let series = null, nowAge = null;
   let x0 = 0, x1 = 1, ly0 = -1, ly1 = 2;   // x in yr; ly in log10(AU)
   let unit = { scale: 1e9, label: "Gyr" };
   let anyHZ = false;
+  let chz = null;   // the Continuously Habitable Zone result (D2b) — see computeCHZ()
 
   function fit() {
     if (!series || !series.length) return;
@@ -117,6 +129,55 @@ export function createHZHist(canvas) {
     const pad = 0.06 * (Math.log10(hi) - Math.log10(lo) || 1);
     ly0 = Math.log10(lo) - pad;
     ly1 = Math.log10(hi) + pad;
+    computeCHZ();
+  }
+
+  // The Continuously Habitable Zone (D2b): the annulus that stays inside the HZ for the star's
+  // WHOLE main sequence (ZAMS→TAMS) — far narrower than the zone at any single age, because the
+  // brightening star drags the zone outward under the planet. Computed as the intersection over
+  // the discrete MS rows — inner = max(inner edge), outer = min(outer edge) — NOT the endpoint
+  // shortcut [inner(TAMS), outer(ZAMS)], which the non-monotone Teff at the TAMS hook would make
+  // subtly wrong for heavier masses. "Continuous" requires an unbroken in-range MS: if any MS row
+  // falls outside Kopparapu's 2600–7200 K range the CHZ is UNDEFINED (we can't claim habitability
+  // across a stretch where the HZ itself is undefined). Both a conservative (runaway→maxGreenhouse)
+  // and an optimistic (recentVenus→earlyMars) annulus are computed, nested like the migrating band.
+  function computeCHZ() {
+    chz = null;
+    if (!series || !series.length) return;
+    const ms = series.filter((p) => p.ms);
+    if (!ms.length) return;                                  // no main sequence in the track
+    const zamsAge = ms[0].age, tamsAge = ms[ms.length - 1].age;
+    if (ms.some((p) => p.oor)) { chz = { defined: false, zamsAge, tamsAge }; return; }
+    const consIn = Math.max(...ms.map((p) => p.runaway));
+    const consOut = Math.min(...ms.map((p) => p.maxGreenhouse));
+    const optIn = Math.max(...ms.map((p) => p.recentVenus));
+    const optOut = Math.min(...ms.map((p) => p.earlyMars));
+    // Collapsed: the conservative annulus is drawn as a pinch-line (rather than a hairline box)
+    // when its width is under a few % of its distance — inside the model's own noise. This covers
+    // TWO physically distinct cases that must NOT share caption wording (a documented false-caption
+    // hazard): genuinely INVERTED (inner ≥ outer — no orbit survives, e.g. the Sun) vs a thin but
+    // real SLIVER (0 < width < the floor — a razor-thin band that does survive, e.g. a ≲0.2 M☉
+    // dwarf). Same pinch-line render; the caption branches on consInverted.
+    const consInverted = consIn >= consOut;
+    const consCollapsed = consOut - consIn < CHZ_COLLAPSE_FRAC * consOut;
+    // Earth-exit deadline: the age at which the conservative inner edge (runaway greenhouse)
+    // sweeps OUTWARD past 1 AU — MEASURED off the track by interpolating the straddling rows,
+    // never a hardcoded literature "~1 Gyr". Null when the zone never reaches 1 AU (e.g. a cool
+    // dwarf whose whole zone stays sub-AU) — then there is no exit to mark.
+    let exitAge = null;
+    for (let i = 1; i < series.length; i++) {
+      const a = series[i - 1], b = series[i];
+      if (a.oor || b.oor) continue;
+      if (a.runaway < EARTH_AU && b.runaway >= EARTH_AU) {
+        const f = (EARTH_AU - a.runaway) / (b.runaway - a.runaway);
+        exitAge = a.age + f * (b.age - a.age);
+        break;
+      }
+    }
+    chz = {
+      defined: true, zamsAge, tamsAge, consIn, consOut, consCollapsed, consInverted, optIn, optOut, exitAge,
+      earthInCons: EARTH_AU > consIn && EARTH_AU < consOut,
+    };
   }
 
   const xOf = (age) => PAD_L + ((age - x0) / (x1 - x0 || 1)) * plotW;
@@ -168,6 +229,9 @@ export function createHZHist(canvas) {
     // --- the migrating HZ band (behind the planet lines so the references read on top) ---
     if (anyHZ) drawBands();
 
+    // --- the Continuously Habitable Zone annulus (D2b), over the migrating band ---
+    drawCHZ();
+
     // --- planet reference lines (dashed horizontals) ---
     for (const pl of PLANETS) {
       const y = yOf(pl.au);
@@ -183,6 +247,9 @@ export function createHZHist(canvas) {
       ctx.textAlign = "left"; ctx.textBaseline = "middle";
       ctx.fillText(`${pl.name} ${fmtAU(pl.au)}`, PAD_L + plotW + 5, y);
     }
+
+    // --- the measured Earth-exit deadline marker, on top of the Earth reference line ---
+    drawEarthExit();
 
     // --- the "now" age marker (drawn even through an out-of-range gap) ---
     if (nowAge != null && nowAge >= x0 && nowAge <= x1) {
@@ -283,6 +350,74 @@ export function createHZHist(canvas) {
     ctx.restore();
   }
 
+  // The CHZ annulus (D2b): a constant-distance band over the ZAMS→TAMS age span — the narrow
+  // core of the migrating band that stays habitable for the WHOLE main sequence. Drawn as the
+  // optimistic annulus (outer, faint fill; robustly nonempty so there's always something to
+  // shade) with the conservative annulus nested inside it — a crisp bordered rectangle when it
+  // survives, or a dashed pinch-line at the collapse distance when the brightening star has
+  // squeezed it to nothing. The rectangle's straight edges read as the FIXED always-safe region
+  // against the migrating band's moving polygon (same green family, distinct geometry).
+  function drawCHZ() {
+    if (!chz || !chz.defined) return;
+    const xa = Math.max(PAD_L, xOf(chz.zamsAge));
+    const xb = Math.min(PAD_L + plotW, xOf(chz.tamsAge));
+    if (xb <= xa) return;
+    const fillBox = (inner, outer, alpha, bordered) => {
+      const yTop = yOf(outer), yBot = yOf(inner);
+      ctx.fillStyle = COL_HZ; ctx.globalAlpha = alpha;
+      ctx.fillRect(xa, yTop, xb - xa, yBot - yTop);
+      ctx.globalAlpha = 1;
+      if (bordered) {
+        ctx.strokeStyle = COL_CHZ_EDGE; ctx.lineWidth = 1.2;
+        ctx.strokeRect(xa + 0.5, yTop + 0.5, xb - xa - 1, yBot - yTop - 1);
+      }
+    };
+    // optimistic CHZ — outer, faint (only when a real annulus survives)
+    if (chz.optIn < chz.optOut) fillBox(chz.optIn, chz.optOut, 0.14, false);
+    // conservative CHZ — inner bordered box, or a collapsed pinch-line
+    const collapseAU = Math.sqrt(chz.consIn * chz.consOut);   // geometric mean = collapse distance
+    if (!chz.consCollapsed) {
+      fillBox(chz.consIn, chz.consOut, 0.26, true);
+    } else {
+      const yc = yOf(collapseAU);
+      ctx.save();
+      ctx.setLineDash([5, 4]); ctx.strokeStyle = COL_CHZ_EDGE; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(xa, yc); ctx.lineTo(xb, yc); ctx.stroke();
+      ctx.restore();
+    }
+    // label, above the conservative box top / pinch-line. The pinch-line label distinguishes a
+    // genuinely-collapsed (inverted) band from a surviving razor-thin sliver — the two share the
+    // drawing but not the physics.
+    const labAU = chz.consCollapsed ? collapseAU : chz.consOut;
+    const labY = yOf(labAU) - 3;
+    const txt = !chz.consCollapsed ? "continuously habitable"
+      : chz.consInverted ? "continuously habitable (collapsed)"
+      : "continuously habitable (a sliver)";
+    ctx.font = "9.5px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.fillStyle = "rgba(9,12,20,0.85)"; ctx.fillText(txt, xa + 4.6, labY + 0.6);
+    ctx.fillStyle = COL_CHZ_EDGE; ctx.fillText(txt, xa + 4, labY);
+  }
+
+  // The measured Earth-exit deadline: a marker where the conservative inner edge crosses Earth's
+  // 1 AU reference line. Labeled by ABSOLUTE age — "from now" is left to the caption because it
+  // would couple to the slider's now-line and confuse the static figure. Only drawn when the
+  // crossing exists and both it and Earth's line are on-axis.
+  function drawEarthExit() {
+    if (!chz || !chz.defined || chz.exitAge == null) return;
+    if (chz.exitAge < x0 || chz.exitAge > x1) return;
+    const x = xOf(chz.exitAge), y = yOf(EARTH_AU);
+    if (y < PAD_T || y > PAD_T + plotH) return;   // Earth line off-axis (a very faint/bright star)
+    ctx.fillStyle = COL_EXIT; ctx.strokeStyle = "#0b0e16"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, 3.6, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    const gyr = chz.exitAge / 1e9;
+    const lab = `Earth exits HZ · ${gyr >= 10 ? gyr.toFixed(0) : gyr.toFixed(1)} Gyr`;
+    const right = x < PAD_L + plotW - 118;
+    ctx.font = "10px system-ui, sans-serif"; ctx.textAlign = right ? "left" : "right"; ctx.textBaseline = "bottom";
+    const tx = x + (right ? 7 : -7), ty = y - 5;
+    ctx.fillStyle = "rgba(9,12,20,0.85)"; ctx.fillText(lab, tx + 0.6, ty + 0.6);
+    ctx.fillStyle = COL_EXIT; ctx.fillText(lab, tx, ty);
+  }
+
   function renderCaption() {
     if (!caption) return;
     if (!series || !series.length) { caption.textContent = ""; return; }
@@ -293,8 +428,49 @@ export function createHZHist(canvas) {
       "outward as the star brightens, exploding up the giant branch in the final few percent of its " +
       "life. The blue lines are the Solar-System orbits as a fixed reference (not this star's own " +
       "planets); the amber line is the current age. Any break in the band is an age outside the " +
-      "climate model's 2600–7200 K range. This is a liquid-water (energy-balance) zone only — it does " +
-      "NOT include the star's UV/X-ray output or flares, a separate habitability hazard.";
+      "climate model's 2600–7200 K range." + chzSentence() +
+      " This is a liquid-water (energy-balance) zone only — it does NOT include the star's UV/X-ray " +
+      "output or flares, a separate habitability hazard.";
+  }
+
+  // The dynamic D2b sentence: describe the Continuously Habitable Zone result for THIS star and
+  // the measured Earth-exit deadline. Branches on the three real render paths (nonempty box /
+  // collapsed pinch-line / undefined) — all confirmed against real MIST tracks — and always
+  // states the numbers are measured off the track and model/edge-definition dependent.
+  function chzSentence() {
+    if (!chz) return "";
+    if (!chz.defined) {
+      return " This star's main sequence is (partly) hotter than the model's 2600–7200 K range, so " +
+        "no continuously-habitable annulus is defined for it.";
+    }
+    const au = (v) => fmtAU(v);
+    const exit = chz.exitAge != null
+      ? ` Earth's 1 AU orbit leaves the conservative zone — its inner (runaway) edge sweeping past — ` +
+        `at ${(chz.exitAge / 1e9).toFixed(1)} Gyr (measured off this track; edge-definition dependent).`
+      : "";
+    if (chz.consCollapsed) {
+      const mid = au(Math.sqrt(chz.consIn * chz.consOut));
+      const lead = " The bright dashed line is the Continuously Habitable Zone — the orbits that would " +
+        "stay habitable for the star's WHOLE main sequence, far narrower than the zone at any single age. ";
+      if (chz.consInverted) {
+        // Genuinely inverted (inner edge overtook the outer): no conservative orbit survives.
+        return lead +
+          `Here the conservative continuously-habitable band has COLLAPSED near ~${mid} AU: the brightening ` +
+          "star's inner edge overtakes its own former outer edge, so no orbit stays conservatively " +
+          `habitable the whole time. Only a thin OPTIMISTIC band (${au(chz.optIn)}–${au(chz.optOut)} AU) survives, ` +
+          "and Earth at 1 AU is outside even that." + exit;
+      }
+      // Thin but real: a razor-thin conservative sliver DID survive — say so, don't claim collapse.
+      return lead +
+        `Here it has narrowed to a razor-thin sliver near ~${mid} AU (only ~${au(chz.consOut - chz.consIn)} AU ` +
+        "wide — within the climate model's own uncertainty); a planet there barely stays conservatively " +
+        "habitable for the whole main sequence." +
+        (chz.earthInCons ? "" : " Earth at 1 AU is outside it.") + exit;
+    }
+    return " The bordered box is the Continuously Habitable Zone — the orbits that stay habitable for " +
+      `the star's WHOLE main sequence (conservative ${au(chz.consIn)}–${au(chz.consOut)} AU, nested inside the ` +
+      `fainter optimistic ${au(chz.optIn)}–${au(chz.optOut)} AU), much narrower than the zone at any single age.` +
+      (chz.earthInCons ? "" : " Earth's 1 AU orbit lies outside it.") + exit;
   }
 
   // main.js pushes the whole-life series (one entry per track row): the four HZ edges in AU,
@@ -310,7 +486,7 @@ export function createHZHist(canvas) {
     draw();
   }
   function clear() {
-    series = null; nowAge = null;
+    series = null; nowAge = null; chz = null;
     draw();
     if (caption) caption.textContent = "";
   }

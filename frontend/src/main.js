@@ -2930,8 +2930,12 @@ function dropHZForModeSwitch() {
 // the two panels agree at any age by construction.
 function buildHZSeries(track) {
   return track.map((s) => {
+    // ms flags the hydrogen-burning main sequence (phase "MS") — the window over which the
+    // Continuously Habitable Zone (D2b) is defined; carried on both in-range and out-of-range
+    // rows so hzhist can find the ZAMS→TAMS span and detect a Teff gap inside it.
+    const ms = s.phase === "MS";
     const h = habitableZone(s.Teff_K, s.L_lsun);
-    return h ? { age: s.age_yr, ...h } : { age: s.age_yr, oor: true };
+    return h ? { age: s.age_yr, ms, ...h } : { age: s.age_yr, ms, oor: true };
   });
 }
 
