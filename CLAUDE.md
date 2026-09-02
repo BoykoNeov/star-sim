@@ -16,6 +16,9 @@ stays small on purpose. Per-feature history, gotchas, measured values and the
   the sink for detail. The wiki-style links below point at them.
 - **`docs/plans/`** — designs. **`docs/plans/ROADMAP.md`** is the canonical index of
   everything proposed-but-unbuilt; update it (not a second list) when scope changes.
+  Shipped rows move to **`docs/plans/SHIPPED.md`** (the build log). Two standing plans:
+  **`science-hurdles.md`** (the tiered ledger of every measured scientific limit + the
+  NEXT list) and **`structure-refactor.md`** (the structural debts, ordered).
 - **git** — dates, "chunk N built", test counts, per-PR narration.
 
 When you finish work: put the durable knowledge in the topic file, and only touch
@@ -94,7 +97,14 @@ must lie *between* its neighbors on the HR diagram at every phase.
 **`backend/tests/`** — §10 sanity checks. Skip markers in `conftest.py` gate by data
 present (`requires_mist_data`, `requires_mesa_data`, `requires_spectra_data`,
 `requires_structure_data`, `requires_posydon_*`, …), so a fresh clone skips rather
-than fails. The Sun anchor is the regression gate.
+than fails. **Two MIST gates:** `requires_mist_data` = a working provider (the hosted
+cache-only `fetch_mist_baked` download qualifies); `requires_mist_raw_tracks` = a test
+that reads a raw `.track.eep` as ground truth. Prefer cache-friendly accuracy tests
+(the grid's own node is the truth). `test_architecture.py` is the §3 boundary as one
+parametrized table — add every new sibling there. The Sun anchor is the regression gate.
+
+**`.github/workflows/ci.yml`** — the data-free contract: `ruff check` (narrow net) +
+`pytest` on a clone with no grids must pass with every data-gated test skipped.
 
 **`frontend/`** — static SPA, no bundler. `index.html`, `styles.css`, and
 `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,hzhist,reddening,cmd,seismo}.js`.
@@ -115,6 +125,8 @@ pip install -e ".[dev]"
 python -m star_sim.fetch_mist                      # one-time: MIST grids (~180 MB) into data/
 uvicorn star_sim.api:app --reload                  # serves API + frontend at :8000
 pytest                                             # sanity tests (skip if grids absent)
+ruff check star_sim tests scripts                  # what CI runs (syntax/undefined/unused only)
+python -m star_sim.fetch_mist_baked                # faster alternative: hosted pre-parsed buckets
 ```
 
 Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.
@@ -126,7 +138,8 @@ follows is a one-line-per-subject map; **the topic file holds the detail.**
 
 ### The spine (§3)
 - **`MISTProvider` is the live `PROVIDER`** — MIST v2.5, EEP-fixed **2D (mass ×
-  [Fe/H])** interpolation, 0.1–300 M☉, window ZAMS → end of early-AGB, non-rectangular
+  [Fe/H])** interpolation (mass weight in **log M** — measured 2026-09-02, see
+  `science-hurdles.md` §1.1), 0.1–300 M☉, window ZAMS → end of early-AGB, non-rectangular
   valid domain, `.npz` parse cache (`CACHE_VERSION`). A third axis — **rotation
   `vvcrit`** — is wired end-to-end and **snaps** between MIST's two buckets {0.0, 0.4}
   while interpolating mass×[Fe/H] within one. [[star-sim-mist-provider]],

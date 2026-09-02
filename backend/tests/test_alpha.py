@@ -133,7 +133,6 @@ def test_route_shape_and_422() -> None:
 
 
 # --- the §3 boundary: the sibling never routes through PROVIDER ---------------
-@requires_alpha_data
 def test_sibling_does_not_import_provider() -> None:
     """alpha.py emits StellarState directly (like helium.py/binary.py) — it must not reach
     the provider, or the honesty rule ("never vs. the MIST spine") is at risk. It reuses

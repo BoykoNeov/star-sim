@@ -154,3 +154,29 @@ see). Marker rides with the past/future split; x-origin honestly labeled "TPAGB 
 
 **Next:** Phase 2 (shader beauty: granulation from H_p, limb darkening, corona from
 `activity`). See [[star-sim-init-scope]] and [[star-sim-composition-panel]].
+
+
+**Log-mass interpolation weight (2026-09-02).** `_grid_window` now blends the two
+bracketing tracks with a weight linear in **log M** (`_log_mass_weight`), not M.
+Measured on the full solar grid with every interior node held out (rebuilt from its
+two neighbours, compared row-by-row at fixed EEP against the real track, 169 nodes):
+mean median |Δlog L| 0.0033 → 0.0021 dex, better on 126/169 nodes; the coarse ends
+win most (0.2 M☉ 0.036 → 0.0095; 25 M☉ 0.025 → 0.0067; 30 M☉ 0.019 → 0.0074).
+Exact grid hits are w=0 so the Sun anchor and every snapped endgame are byte-identical;
+no `CACHE_VERSION` bump (parse unchanged). The 0.35–0.45 M☉ nodes are slightly worse
+(fully-convective transition — grid density, not weighting). Pinned by
+`test_mass_interpolation_held_out_grid_nodes`, a **cache-friendly** held-out test
+(truth = the full provider's own node) whose bounds sit between the two measurements.
+
+**Sun-anchor cause corrected (2026-09-02).** The header docstring used to blame an
+"interpolated request's leftover composition offset". Wrong: (1.0, [Fe/H]=0) is an
+exact grid node, no blend. The 1.067 L☉ / 5834 K / 1.012 R☉ residual at 4.567 Gyr is
+MIST v2.5's own p000 1.00 M☉ track (ZAMS X/Y/Z 0.7135/0.2702/0.0164); the grid puts
+L=1.00 at [Fe/H]≈+0.07 or M≈0.99 M☉. Verdict unchanged: never retune. The
+seismology panel's 3 % low ring is the same root.
+
+**Cache-only clones need a second gate.** The hosted `fetch_mist_baked` buckets are
+`.npz`-only; nine tests that read a raw `.track.eep` as ground truth (`_real_track`)
+were failing, not skipping, there. They now carry `requires_mist_raw_tracks`
+(conftest `mist_raw_tracks_available`). New accuracy tests should use the
+cache-friendly form.

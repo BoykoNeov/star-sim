@@ -92,11 +92,12 @@ clearest example. L_sun and R_sun are *defined* units: the real present-day Sun 
 exactly 1.0 by construction. The anchor values above are MIST's *prediction* for a
 1 M_sun, [Fe/H]=0 star at 4.6 Gyr, and it lands ~7% bright / ~1% large. Two honest
 reasons, neither a bug:
-  1. Calibration residual. MIST tunes its mixing length and initial helium to
-     reproduce the Sun, but only at the grid's exact protosolar composition and at
-     fixed [Fe/H] nodes. An interpolated (mass, [Fe/H], age) request carries a small
-     leftover offset in initial Z/Y, so the rendered "Sun" is a few percent off the
-     defined point.
+  1. The grid's own solar residual. (1.0 M_sun, [Fe/H]=0) is an EXACT grid node —
+     no mass or [Fe/H] interpolation happens at all — so the offset is entirely
+     MIST v2.5's published p000 1.00 M_sun track (ZAMS X/Y/Z = 0.7135/0.2702/0.0164):
+     it reads L=1.067, Teff=5834 K, R=1.012 at 4.567 Gyr (measured 2026-09-02). The
+     same grid puts L=1.00 at [Fe/H]~+0.07 or at M~0.99 M_sun, i.e. the residual is
+     a ~0.07-dex composition / ~1% mass offset in the calibration, not a blend error.
   2. Main-sequence brightening. A star's luminosity climbs as it burns H -> He
      (rising mean molecular weight -> the core contracts and heats): the Sun has
      gained ~30% L since ZAMS and still brightens ~1% per ~100 Myr. So the predicted
@@ -1314,8 +1315,23 @@ class MISTProvider:
         return _blend_windows(win_lo, win_hi, wz)
 
     def _grid_window(self, grid: _Grid, mass: float) -> dict:
-        """Mass-interpolated window for one metallicity grid (fixed-EEP, no age)."""
+        """Mass-interpolated window for one metallicity grid (fixed-EEP, no age).
+
+        The blend weight is taken in **log(mass)**, not mass. Stellar quantities are
+        near power laws in M (L ~ M^3.5 on the MS, lifetimes ~ M^-2.5), so at fixed
+        EEP log L / log Teff / log age are far closer to linear in log M than in M —
+        exactly the assumption a two-point blend makes. Measured on the full solar
+        grid (2026-09-02; every interior node held out, reconstructed from its two
+        neighbours, compared row-by-row against the real track): mean median
+        |Δlog L| 0.0033 → 0.0021 dex, better on 126/169 nodes; the coarse ends win
+        most (0.2 M☉: 0.036 → 0.0095 dex; 25 M☉: 0.025 → 0.007 dex; 30 M☉:
+        0.019 → 0.007). Exact grid hits (w = 0) are untouched, so the Sun anchor and
+        every snapped endgame are byte-identical. See
+        tests/test_mist_provider.py::test_mass_interpolation_held_out_grid_nodes.
+        """
         i_lo, i_hi, w = _bracket(grid.masses, mass)
+        if i_lo != i_hi:
+            w = _log_mass_weight(float(grid.masses[i_lo]), float(grid.masses[i_hi]), mass)
         lo, hi = grid.tracks[i_lo], grid.tracks[i_hi]
 
         r0 = grid.zams_row
@@ -1453,6 +1469,15 @@ def _bracket(values: np.ndarray, x: float) -> tuple[int, int, float]:
     i_lo = i_hi - 1
     w = (x - values[i_lo]) / (values[i_hi] - values[i_lo])
     return i_lo, i_hi, float(w)
+
+
+def _log_mass_weight(m_lo: float, m_hi: float, m: float) -> float:
+    """Blend weight of `m` between the bracketing masses, linear in log(mass).
+
+    0 at `m_lo`, 1 at `m_hi`. Used by `_grid_window` (see its docstring for the
+    measured payoff). The [Fe/H] axis needs no analogue — [Fe/H] is already a log.
+    """
+    return math.log(m / m_lo) / math.log(m_hi / m_lo)
 
 
 def _blend_windows(a: dict, b: dict, w: float) -> dict:

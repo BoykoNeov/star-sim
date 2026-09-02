@@ -12,7 +12,6 @@ aren't fetched (see conftest.requires_mist_data).
 from __future__ import annotations
 
 import math
-import os
 
 import numpy as np
 import pytest
@@ -35,6 +34,7 @@ from star_sim.state import StellarState
 
 from .conftest import (
     requires_mist_data,
+    requires_mist_raw_tracks,
     requires_mist_heldout_feh,
     requires_mist_multifeh,
 )
@@ -390,6 +390,7 @@ def test_full_grid_loaded_by_default(provider):
     assert max(np.diff(sorted(near_2))) <= 0.1 + 1e-9   # 1.9/2.0/2.1 present, not 1.8->2.5
 
 
+@requires_mist_raw_tracks
 def test_parsed_track_cache_roundtrip_fidelity(provider):
     """The cache must reproduce a fresh parse *exactly* — every column, bit-for-bit.
 
@@ -431,6 +432,7 @@ def test_cache_fingerprint_rejects_stale_source(provider):
     assert _read_cache(_cache_path(eep_dir), good + "x") is None     # mismatch -> miss
 
 
+@requires_mist_raw_tracks
 def test_cache_only_grid_directory_loads_and_matches_raw(provider, tmp_path):
     """A distributable "baked-only" grid (no `.track.eep` files at all — what
     `fetch_mist_baked.py` downloads) must be discovered and load *identically* to
@@ -475,6 +477,7 @@ def test_cache_only_grid_directory_loads_and_matches_raw(provider, tmp_path):
         assert len(got_eg.states) == len(want_eg.states)
 
 
+@requires_mist_raw_tracks
 def test_transition_mass_interpolation_reduced_not_eliminated():
     """The honest regression on the ~2 M_sun He-ignition cliff.
 
@@ -512,6 +515,7 @@ def test_transition_mass_interpolation_reduced_not_eliminated():
     assert float(np.median(cheb_err)) < 0.15
 
 
+@requires_mist_raw_tracks
 def test_eep_interpolation_lies_between_neighbors(interp_provider):
     """The direct §6/§10 test: interpolate on EEP, not age.
 
@@ -542,6 +546,7 @@ def test_eep_interpolation_lies_between_neighbors(interp_provider):
     assert float(np.median(rel_errs)) < 0.05
 
 
+@requires_mist_raw_tracks
 def test_cheb_interpolation_sampled_by_eep(interp_provider):
     """The widened CHeB span (EEP 605..706), sampled by *EEP*, not age.
 
@@ -601,6 +606,7 @@ def test_eagb_extends_window_and_tpagb_is_excluded(provider):
     assert end.logg < zams.logg                          # low surface gravity
 
 
+@requires_mist_raw_tracks
 def test_eagb_interpolation_sampled_by_eep(interp_provider):
     """The newly-exposed EAGB span (EEP >= 707), sampled by *EEP*, not age.
 
@@ -630,6 +636,7 @@ def test_eagb_interpolation_sampled_by_eep(interp_provider):
     assert float(np.median(rel_errs)) < 0.06   # measured ~2%
 
 
+@requires_mist_raw_tracks
 def test_eagb_interpolation_across_tpagb_boundary():
     """The honest cross-mass EAGB check at the 6.5->7 M_sun boundary.
 
@@ -667,6 +674,7 @@ def test_parameter_ranges_expose_feh_span(provider):
 
 
 @requires_mist_multifeh
+@requires_mist_raw_tracks
 def test_feh_interpolation_lies_between_metallicities(provider):
     """The rigorous §6/§10 property for the metallicity axis: at a fixed EEP, an
     interpolated [Fe/H] must lie *between* its bracketing grids on the HR diagram.
@@ -730,6 +738,7 @@ def test_iron_validates_the_feh_axis(provider):
 
 
 @requires_mist_heldout_feh
+@requires_mist_raw_tracks
 def test_feh_interpolation_tracks_held_out_grid():
     """Hold the solar grid out: interpolate at [Fe/H]=0 from only the m050/p050
     grids and check it reproduces the *real* p000 run.
@@ -825,3 +834,51 @@ def test_mdot_carried_through_feh_blend(provider):
     for i in range(0, n, max(1, n // 30)):
         a, b, m = lo[i].mdot_msun_yr, hi[i].mdot_msun_yr, mid[i].mdot_msun_yr
         assert min(a, b) - tol <= m <= max(a, b) + tol
+
+
+# --- held-out MASS accuracy on the grid's own nodes (cache-friendly) -----------------
+# Each entry: (held-out grid mass, its two grid neighbours, max median |Δlog L| in dex).
+# Bounds are set between the measured log-mass value and the old linear-in-mass value
+# (2026-09-02, full solar grid), so a regression to linear weighting fails here:
+#   0.2 M☉  linear 0.036 / log 0.0095      25 M☉  linear 0.025 / log 0.0067
+#   0.3 M☉  linear 0.015 / log 0.0069      30 M☉  linear 0.019 / log 0.0074
+#   2.5 M☉  linear 0.0015 / log 0.0003     120 M☉ linear 0.0029 / log 0.0005
+_HELD_OUT_NODES = [
+    (0.2, (0.15, 0.25), 0.02),
+    (0.3, (0.25, 0.35), 0.012),
+    (2.5, (2.4, 2.6), 0.005),
+    (25.0, (20.0, 30.0), 0.015),
+    (30.0, (25.0, 35.0), 0.015),
+    (120.0, (110.0, 130.0), 0.002),
+]
+
+
+@requires_mist_data
+@pytest.mark.parametrize("mass, bracket, max_median_dlogl", _HELD_OUT_NODES)
+def test_mass_interpolation_held_out_grid_nodes(provider, mass, bracket, max_median_dlogl):
+    """Held-out-mass accuracy with the *grid's own* track as ground truth.
+
+    Unlike the `_real_track` tests this needs no raw `.track.eep` files: the full
+    provider at an exact grid mass IS the real track (no blend, w=0), so it runs on
+    the hosted cache-only download too. A provider restricted to the two neighbours
+    reconstructs the held-out node; every EEP row is compared. This pins the
+    log-mass weighting in `_grid_window` — the bounds sit between the measured
+    log-mass and linear-in-mass errors, so the old weighting fails at the coarse
+    ends of the grid (0.2 / 25 / 30 M☉) where the two differ most.
+    """
+    real = provider.track(mass, 0.0)
+    sub = MISTProvider(masses=bracket)
+    got = sub.track(mass, 0.0)
+    n = min(len(real), len(got))
+    # Window lengths differ by regime: a 0.2 M☉ track never leaves the MS inside the
+    # window (253 rows), 120 M☉ ends at CHeB (167) — only the mid-masses run 600+.
+    assert n > 150, n
+    dlogl = np.array([abs(math.log10(got[k].L_lsun) - math.log10(real[k].L_lsun)) for k in range(n)])
+    dlogt = np.array([abs(math.log10(got[k].Teff_K) - math.log10(real[k].Teff_K)) for k in range(n)])
+    assert float(np.median(dlogl)) < max_median_dlogl, float(np.median(dlogl))
+    # Teff and age are NOT the discriminating quantities (both weightings land within a
+    # few 0.01 dex; the 20-30 M☉ Teff medians are ~0.015-0.022 either way, and the 0.3 M☉
+    # age clock is ~0.15 dex off under both) — bound them loosely as sanity only.
+    assert float(np.median(dlogt)) < 0.03, float(np.median(dlogt))
+    dage = np.array([abs(math.log10(got[k].age_yr) - math.log10(real[k].age_yr)) for k in range(n)])
+    assert float(np.median(dage)) < 0.2, float(np.median(dage))

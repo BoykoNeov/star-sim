@@ -190,7 +190,6 @@ def test_hrd_snap_and_route_and_422() -> None:
 
 
 # --- the §3 boundary: the sibling never routes through PROVIDER ---------------
-@requires_bpass_data
 def test_sibling_does_not_import_provider() -> None:
     """bpass.py is a pure numpy/stdlib sibling (a population is not a StellarState) — it must
     not reach the provider, and in fact should not even import StellarState. Asserted at the

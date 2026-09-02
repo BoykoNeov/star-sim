@@ -1,0 +1,31 @@
+name: ci
+
+# The data-free contract: a fresh clone (no MIST grids, no baked cubes) must
+# lint clean and run the sanity suite with every data-gated test SKIPPED, never
+# failing. The §3 architecture tests and the stub/Lane-Emden/supernova/binary
+# physics invariants run for real here (see backend/tests/test_architecture.py).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -e ".[dev]" ruff
+      - name: lint (syntax errors, undefined names, unused imports/locals)
+        run: ruff check star_sim tests scripts
+      - name: sanity tests on a data-free clone (data-gated tests must skip, not fail)
+        run: python -m pytest -q -p no:cacheprovider

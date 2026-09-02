@@ -102,6 +102,8 @@ python -m star_sim.fetch_coelho_baked    # [alpha/Fe] spectrum what-if (#alpha-t
 python -m star_sim.fetch_gotberg_baked   # binary-stripped-star spectra (/stripped_spectrum)
 python -m star_sim.fetch_helium_baked    # initial-helium (Y) HR overlay (/helium, #helium-toggle)
 python -m star_sim.fetch_alpha_baked     # alpha-enhanced (equivalent-Z) HR overlay (/alpha, #alpha-track-toggle)
+python -m star_sim.fetch_bpass_baked     # coeval-population overlay (/population, /population_hrd)
+python -m star_sim.fetch_mist_iso_baked  # cluster-isochrone HR overlay (/isochrone)
 ```
 
 Each is a **derived artifact** — a compact, resampled/re-serialized cube or cache
@@ -128,12 +130,20 @@ on this repo's releases.
 
 ```bash
 cd backend
-pytest
+pytest                              # data-gated tests skip when a grid is absent
+ruff check star_sim tests scripts   # the same narrow lint net CI runs
 ```
 
 The tests encode the spec's §10 sanity checks (the Sun renders at 1 M☉; the
 ZAMS luminosity spread covers ~9 orders of magnitude). Keep them when you swap
 in a real provider — they become the regression test for that swap.
+
+CI (`.github/workflows/ci.yml`) runs exactly that on a clone with **no data**: the
+architecture table, the polytrope/supernova/Roche invariants and the stub anchors
+run for real; everything that needs a grid must *skip*, never fail. Tests that read
+raw MIST `.track.eep` files as ground truth carry `requires_mist_raw_tracks` — the
+hosted `fetch_mist_baked` download is cache-only and skips them. The measured limits
+of the physics live in `docs/plans/science-hurdles.md`.
 
 ## Layout
 

@@ -240,6 +240,7 @@ def test_pair_route_companion_is_a_sane_ms_star():
         assert 1.0e6 < comp["elapsed_age_yr"] < 2.0e10
 
 
+@requires_mist_data
 def test_pair_route_snaps_far_in_band_not_422():
     """Snap-always like /binary: an out-of-grid request snaps + flags in-band; the
     companion is still assembled off the snapped donor node."""

@@ -24,7 +24,7 @@ from star_sim import photometry
 from star_sim.api import app
 from star_sim.spectra import spectrum_data
 
-from .conftest import requires_spectra_data
+from .conftest import requires_mist_data, requires_spectra_data
 
 client = TestClient(app)
 
@@ -170,6 +170,7 @@ def test_photometry_track_matches_point_at_zams() -> None:
     assert j["points"][0]["bv0"] == pytest.approx(p["bv0"], abs=1e-6)
 
 
+@requires_mist_data
 def test_photometry_track_422_on_bad_mass() -> None:
     """A mass off the provider grid is 422 (routing error), not a silent snap or crash."""
     assert client.get("/photometry_track", params=dict(mass=99999.0, feh=0.0)).status_code == 422

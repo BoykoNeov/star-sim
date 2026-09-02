@@ -664,7 +664,6 @@ class _StrippedSpectra:
     def snap(self, minit: float, feh: float) -> int:
         """Index of the nearest node: nearest Z (compared in [Fe/H] space, like binary.py),
         then nearest M_init within that Z. Returns the flat node index."""
-        z_target = _GOTBERG_SOLAR_Z * 10.0 ** feh
         zs = self.nodes_z
         # nearest grid Z in [Fe/H] space
         z_snap = min(

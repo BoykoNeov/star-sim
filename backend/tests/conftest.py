@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import glob
 import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
@@ -34,6 +35,20 @@ from star_sim.structure import PROFILES_DATA_DIR
 
 def mist_data_available() -> bool:
     return _find_eep_dir(DATA_DIR) is not None
+
+
+def mist_raw_tracks_available() -> bool:
+    """True only if raw MIST `.track.eep` files are on disk, not just the parsed `.npz`.
+
+    The hosted download (`python -m star_sim.fetch_mist_baked`) ships cache-only
+    buckets — a fully working provider with NO raw text tracks. Tests that read a raw
+    track as *ground truth* (the `_real_track` helper) must gate on this, not on
+    `requires_mist_data`, or a cache-only clone fails instead of skipping.
+    """
+    return any(
+        glob.glob(str(d / "*.track.eep")) or glob.glob(str(d / "**" / "*.track.eep"), recursive=True)
+        for d in _find_eep_dirs(DATA_DIR)
+    )
 
 
 def mesa_data_available() -> bool:
@@ -71,6 +86,12 @@ def mist_vvcrits_available() -> set[float]:
 requires_mist_data = pytest.mark.skipif(
     not mist_data_available(),
     reason="MIST grids not fetched — run: python -m star_sim.fetch_mist",
+)
+
+requires_mist_raw_tracks = pytest.mark.skipif(
+    not mist_raw_tracks_available(),
+    reason="needs raw MIST `.track.eep` files as ground truth (the hosted cache-only "
+           "download has none) — run: python -m star_sim.fetch_mist",
 )
 
 # The metallicity-axis tests need >=2 grids; the held-out / dead-corner tests need

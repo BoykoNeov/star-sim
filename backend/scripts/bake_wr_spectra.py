@@ -125,7 +125,6 @@ def _read_grid(grid_dir: Path, lam_edges: np.ndarray
     """Read one PoWR grid dir -> (logT*[n], logRt[n], flux[n, n_lam]). Each model dir
     `<T*idx>-<Rtidx>` gives the node coordinates via the convention; the flux is
     resampled onto the bin grid (vac→air)."""
-    lam = 0.5 * (lam_edges[:-1] + lam_edges[1:])
     logT: list[float] = []
     logRt: list[float] = []
     spectra: list[np.ndarray] = []
