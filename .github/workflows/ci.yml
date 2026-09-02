@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: pip install -e ".[dev]" ruff
+      - run: pip install -e ".[dev]"          # ruff is a dev extra — one source of truth
       - name: lint (syntax errors, undefined names, unused imports/locals)
         run: ruff check star_sim tests scripts
       - name: sanity tests on a data-free clone (data-gated tests must skip, not fail)

@@ -12,6 +12,12 @@ names, unused imports/locals; a correctness net, not a style regime), then
 `python -m pytest -q` on ubuntu, Python 3.11 + 3.12, with **no data on disk**.
 Baseline: 140 passed / 305 skipped / 0 failed.
 
+`ruff` is a **dev extra** (`ruff>=0.6` in `[project.optional-dependencies].dev`), not a
+separate CI install — one source of truth, so `pip install -e ".[dev]"` hands a
+contributor exactly the checker CI will judge them with. Corrected 2026-09-02: the
+branch as merged documented `ruff check ...` as a local command while shipping it only
+in the CI step, so the documented command did not exist in a freshly set-up venv.
+
 **Why it exists:** two tests (`test_binary.py::test_pair_route_snaps_far_in_band_not_422`,
 `test_photometry.py::test_photometry_track_422_on_bad_mass`) had been failing on every
 fresh clone (503 from the missing provider, no `requires_mist_data`) and nobody saw it.
