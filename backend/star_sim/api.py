@@ -286,6 +286,37 @@ def he_ignition_status(
         raise _provider_unavailable(exc) from exc
 
 
+@app.get("/fate_boundary_status")
+def fate_boundary_status(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
+) -> dict:
+    """Is the gateway's white-dwarf-or-supernova verdict inside the genuinely uncertain
+    band? — the data-derived honesty gate behind the uncertain-fate caption
+    (docs/plans/science-hurdles.md §2, "SN/WD boundary").
+
+    Goes through `PROVIDER` (a provider with no endgame answers has_data=False, so the
+    route stays §3-clean and the caption simply never appears). Shape:
+        {"has_data": bool,
+         "wd_max_msun": float|None,   # heaviest node that still ends a WD (measured)
+         "sn_min_msun": float|None,   # lightest node that core-collapses (measured)
+         "band_lo_msun": float|None,  # the uncertain band's MEASURED lower edge
+         "band_hi_msun": float|None,  # its CITED upper edge (published, not measured)
+         "in_band": bool,
+         "active": bool}
+
+    The frontend fires the caption on `active` and hedges BOTH sides of the flip there —
+    the "Continue: White Dwarf" button and the core-collapse note — because in this band
+    the grid's single answer is crisper than the physics. The two edges have different
+    provenance and the caption must say so.
+    """
+    try:
+        return PROVIDER.fate_boundary_status(mass, feh, vvcrit)
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+
+
 @app.get("/supernova")
 def supernova(
     mass: float = Query(..., description="initial mass / M_sun"),

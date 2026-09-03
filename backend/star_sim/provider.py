@@ -165,6 +165,37 @@ class StellarStateProvider(Protocol):
         """
         ...
 
+    def fate_boundary_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """Is this star's white-dwarf-or-supernova verdict inside the UNCERTAIN band?
+
+        The third data-derived honesty gate (sibling of `rotation_status` and
+        `he_ignition_status`), behind the uncertain-fate caption — see
+        docs/plans/science-hurdles.md Sec 2, "SN/WD boundary". `endgame()` returns one
+        fate per star because a grid holds one track per mass, and just above the
+        heaviest white-dwarf node that verdict flips to core collapse in a single step.
+        Around there the step is an artefact of the grid, not of the physics: a star
+        that ends its life with a degenerate oxygen-neon core may leave a white dwarf or
+        explode as a faint electron-capture supernova, and which one is genuinely
+        unsettled. This is what lets a consumer say so instead of asserting the flip.
+
+        Shape:
+            {"has_data": bool,           # this provider can answer at all
+             "wd_max_msun": float|None,  # heaviest node that still ends a WD (measured)
+             "sn_min_msun": float|None,  # lightest node that core-collapses (measured)
+             "band_lo_msun": float|None, # the uncertain band, measured lower edge
+             "band_hi_msun": float|None, # its upper edge — a PUBLISHED figure, not
+                                         #   measured: no track grid can be asked how
+                                         #   wide the real uncertainty is
+             "in_band": bool,            # the requested mass lies inside the band
+             "active": bool}             # what a caption may fire on
+
+        A consumer that draws the band must keep the two edges' provenance apart (the
+        one thing this project guards hardest — never paint a caption the data cannot
+        support). A provider with no endgame data, or one whose grid shows no single
+        clean WD -> SN flip, returns has_data=False and every flag False.
+        """
+        ...
+
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         """The one method that matters: (mass, [Fe/H], age) -> StellarState."""
         ...

@@ -678,6 +678,16 @@
         <button id="gateway-wr" class="gateway-btn" type="button" hidden disabled>→ Continue: Wolf–Rayet</button>
         <button id="gateway-sn" class="gateway-btn" type="button" hidden disabled>→ Continue: Supernova</button>
         <p id="gateway-sn-note" class="gateway-note" hidden></p>
+        <!-- The uncertain-fate confession (science-hurdles.md §2, "SN/WD boundary"). Just
+             above the grid's heaviest white-dwarf node the gateway's verdict flips to
+             "supernova" in ONE step, which is far crisper than the physics: a star that
+             ends with a degenerate oxygen–neon core may leave a white dwarf or explode as
+             a faint electron-capture supernova, and which one is an open question. Shown
+             for BOTH verdicts inside the band (hedging only the supernova side would leave
+             the white dwarf asserting its fate exactly as crisply), fired by
+             /fate_boundary_status, whose lower edge is measured off this grid and whose
+             upper edge is a published figure — the note keeps the two apart. -->
+        <p id="gateway-fate-note" class="gateway-note gateway-fate-note" hidden></p>
         <!-- Bridges the brief /endgame-fetch gap after a mass/[Fe/H] change: the fate
              classifier runs server-side, so for ~½ s the reserved slot would otherwise be
              blank (reads as "nothing happened"). This honest placeholder fills it until the

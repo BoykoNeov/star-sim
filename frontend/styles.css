@@ -738,6 +738,14 @@ body.is-dragging-panel { cursor: grabbing; user-select: none; -webkit-user-selec
   border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px;
 }
 .gateway-note b { color: #cbd2e0; }
+/* The uncertain-fate hedge (6.5–8 M☉, science-hurdles.md §2): same dashed frame as the
+   note above it, tinted toward the caution hue so it reads as "the answer above is
+   contested", and spaced so it can sit under EITHER the WD/SN button or the SN note. */
+.gateway-fate-note {
+  margin-top: 8px;
+  border-color: rgba(255, 210, 127, 0.35);
+  background: rgba(255, 210, 127, 0.04);
+}
 /* Transient "computing the star's fate…" placeholder that bridges the /endgame fetch gap
    after a mass/[Fe/H] change — muted + italic so it reads as a working status, not a
    result. Fits within .gateway's reserved min-height (one line), so no jitter. */

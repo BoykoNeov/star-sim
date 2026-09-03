@@ -15,6 +15,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 ## Fates (endgame)
 - [WR/WD endgame](star-sim-wr-wd-endgame-plan.md) — the reversible gateway: `endgame()` + classifier, WD cooling scrub/shader, WR mode + wind shader, Koester/TMAP/PoWR spectra. No new provider — an endgame IS a StellarState.
 - [SN + NS/BH endgame](star-sim-supernova-remnant-endgame.md) — core-collapse: a hybrid (classify on the spine, compute in `supernova.py`). ⁵⁶Ni light curve, fireball→remnant, onion, fallback continuum. Type II only.
+- [Uncertain-fate band (6.5–8 M☉)](star-sim-uncertain-fate-band.md) — the 3rd honesty gate: the WD↔supernova verdict hedged on BOTH sides; measured lower edge (grid's last WD node) + CITED 8 M☉ ceiling.
 
 ## Siblings
 - [Real interior structure (MESA)](star-sim-interior-structure-mesa.md) — `structure.py` + `/structure`: real MESA radial profiles, canonical (not fitted) polytrope overlays, the interior regimes + the partial 2D (mass×[Fe/H]) grid.

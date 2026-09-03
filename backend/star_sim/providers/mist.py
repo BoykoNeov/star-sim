@@ -308,6 +308,34 @@ _HE_NO_DATA = {
     "active": False,
 }
 
+# --- the uncertain-fate band (`_fate_boundary` / `fate_boundary_status`) ------
+# The upper edge of the "white dwarf OR supernova?" band, in M_sun. **Cited, not
+# measured** — and the caption says which half is which. The grid flips in ONE step
+# from its heaviest white-dwarf node to its lightest core-collapse node (measured
+# 2026-09-03 over all ten grids: 6.5 -> 7.0 at solar, 6.0 -> 6.2 at [Fe/H] = -1), so
+# the lower edge IS a measurement; the width of the real uncertainty is not something
+# MIST can be asked about, because it models neither the super-AGB thermal pulses nor
+# electron capture. In that regime the star builds a degenerate O-Ne core and its fate
+# — an O-Ne white dwarf, or a faint electron-capture supernova — turns on convective
+# overshoot, mass loss and the carbon-burning treatment. Published crossover masses
+# (M_up) span ~6.5-8 M_sun at solar metallicity, and some prescriptions push the
+# electron-capture channel to ~9 (Poelarends et al. 2008, ApJ 675, 614; Doherty et al.
+# 2015, MNRAS 446, 2599; Doherty et al. 2017, PASA 34, e56). 8.0 is the NARROW end of
+# that spread, so the band never claims more uncertainty than the literature supports.
+_FATE_UNCERTAIN_CEIL_MSUN = 8.0
+
+# The "no fate boundary here" answer (off-grid [Fe/H], or a grid with no clean
+# WD -> SN flip). Copied per call, like _HE_NO_DATA.
+_FATE_NO_DATA = {
+    "has_data": False,
+    "wd_max_msun": None,
+    "sn_min_msun": None,
+    "band_lo_msun": None,
+    "band_hi_msun": None,
+    "in_band": False,
+    "active": False,
+}
+
 
 @dataclass
 class _Track:
@@ -818,6 +846,8 @@ class MISTProvider:
         self._rot_threshold_cache: dict[float, float | None] = {}
         # (vvcrit, [Fe/H]) -> the He-ignition transition band, or None (see `_he_ignition_band`)
         self._he_band_cache: dict[tuple[float, float], tuple[float, float] | None] = {}
+        # (vvcrit, [Fe/H]) -> (heaviest WD node, lightest SN node), or None (see `_fate_boundary`)
+        self._fate_boundary_cache: dict[tuple[float, float], tuple[float, float] | None] = {}
 
     # -- lazy data load --------------------------------------------------------
     def _ensure_loaded(self) -> None:
@@ -1144,6 +1174,102 @@ class MISTProvider:
             "active": bool(in_band and blended),
         }
 
+    # -- the uncertain-fate band (science-hurdles.md Sec 2, SN/WD boundary) ----
+    def _fate_boundary(self, axis: _Axis, grid: _Grid) -> tuple[float, float] | None:
+        """(wd_max, sn_min) — where this grid flips white dwarf -> core collapse, or None.
+
+        Scanned, never hardcoded: the flip mass moves with metallicity and rotation
+        (measured 2026-09-03: 6.5 -> 7.0 M_sun at solar and at [Fe/H] = +0.5, 6.5 -> 7.0
+        at -0.5 non-rotating, 6.2 -> 6.5 rotating, 6.0 -> 6.2 at -1.0). `wd_max` is the
+        heaviest node whose fate is a white dwarf, `sn_min` the lightest that core-
+        collapses; every grid on disk flips exactly once, with no WD node above `sn_min`.
+
+        Returns None if the grid does NOT show one clean flip (too few masses, or WD and
+        SN nodes interleaved) — the caption then simply never appears rather than
+        pointing at a boundary that isn't there. Classification goes through `_fate_of`,
+        the same predicate `endgame()` answers with, so the band always brackets the
+        exact mass at which the gateway's own verdict changes.
+        """
+        key = (round(float(axis.vvcrit), 3), round(float(grid.feh), 3))
+        if key in self._fate_boundary_cache:
+            return self._fate_boundary_cache[key]
+
+        wd, sn = [], []
+        for t in grid.tracks:                       # ascending by mass
+            fate, _, _ = self._fate_of(t)
+            if fate == "WD":
+                wd.append(float(t.minit))
+            elif fate == "SN":
+                sn.append(float(t.minit))
+
+        band: tuple[float, float] | None = None
+        if wd and sn:
+            wd_max, sn_min = max(wd), min(sn)
+            if wd_max < sn_min:                     # one clean flip, no interleaving
+                band = (wd_max, sn_min)
+
+        self._fate_boundary_cache[key] = band
+        return band
+
+    def fate_boundary_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """Is this star's WD-or-supernova verdict inside the genuinely uncertain band?
+
+        The third data-derived honesty gate (sibling of `rotation_status` and
+        `he_ignition_status`), behind the uncertain-fate caption — see
+        docs/plans/science-hurdles.md Sec 2, "SN/WD boundary". The gateway asserts one
+        fate per star because the grid holds one; around the boundary that crispness
+        overstates what is known, and this is what lets the UI say so.
+
+        The band has one MEASURED edge and one CITED edge, and the caption keeps them
+        apart:
+
+          * `band_lo_msun` = `wd_max_msun`, the heaviest grid node that still ends a
+            white dwarf here — measured, and it moves with [Fe/H] and rotation;
+          * `band_hi_msun` = `_FATE_UNCERTAIN_CEIL_MSUN` (a published figure, see the
+            constant), widened to `sn_min_msun` in the impossible case that the grid
+            flips above it. MIST models neither super-AGB thermal pulses nor electron
+            capture, so there is nothing here to measure the real width from.
+
+        Shape:
+            {"has_data": bool,           # this provider can answer at all
+             "wd_max_msun": float|None,  # heaviest node that ends a WD (measured)
+             "sn_min_msun": float|None,  # lightest node that core-collapses (measured)
+             "band_lo_msun": float|None, # the uncertain band (measured lower edge)
+             "band_hi_msun": float|None, #                    (cited upper edge)
+             "in_band": bool,            # the requested mass lies inside it
+             "active": bool}             # what a caption may fire on
+
+        Unlike `he_ignition_status` there is no `interpolated` flag, and being on an
+        exact grid node changes nothing: the endgame SNAPS (Sec 6), so the crisp verdict
+        is exactly as crisp on a node as between two, and the uncertainty being confessed
+        is the physics', not the interpolation's. The [Fe/H] is likewise snapped, not
+        bracketed, so the band describes the same grid the gateway's verdict came from.
+        Never raises: off-grid or too sparse answers has_data=False and the UI hides the
+        caption.
+        """
+        ax = self._axis(vvcrit)
+        try:
+            j = self._snap_feh_index(ax, feh)
+        except ParameterOutOfRange:
+            return _FATE_NO_DATA.copy()
+        pair = self._fate_boundary(ax, ax.grids[j])
+        if pair is None:
+            return _FATE_NO_DATA.copy()
+
+        wd_max, sn_min = pair
+        lo = wd_max
+        hi = max(sn_min, _FATE_UNCERTAIN_CEIL_MSUN)
+        in_band = lo - 1e-9 <= mass <= hi + 1e-9
+        return {
+            "has_data": True,
+            "wd_max_msun": wd_max,
+            "sn_min_msun": sn_min,
+            "band_lo_msun": lo,
+            "band_hi_msun": hi,
+            "in_band": bool(in_band),
+            "active": bool(in_band),
+        }
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         ax = self._axis(vvcrit)
@@ -1224,20 +1350,9 @@ class MISTProvider:
         track = grid.tracks[int(np.argmin(np.abs(masses - mass)))]
         snapped_mass, snapped_feh = float(track.minit), float(grid.feh)
 
-        phase = track.phase
-        r_last = int(np.where(phase >= 0)[0][-1])   # last real row (drop the -9 sentinel)
         r0 = track.track_end + 1                    # first row past the normal window
-        final_mass = float(track.Mcur[r_last])
         wr_threshold = self._wr_threshold(grid)
-
-        if bool(np.any(phase == 9)):
-            etype = "WR"
-        elif bool(np.any(phase == 6)) or float(track.logg[r_last]) > _WD_LOGG:
-            etype = "WD"
-        elif float(phase[r_last]) >= _CHEB_PHASE and final_mass > _SN_FINAL_MASS_FLOOR:
-            etype = "SN"                            # evolved & massive, no remnant modeled
-        else:                                       # low-mass / still-alive: nothing to expose
-            etype = "none"
+        etype, r_last, final_mass = self._fate_of(track)
 
         states: list[StellarState] = []
         if etype in ("WR", "WD") and r0 <= r_last:
@@ -1263,6 +1378,31 @@ class MISTProvider:
             states=states,
             **sn_scalars,
         )
+
+    @staticmethod
+    def _fate_of(track: _Track) -> tuple[str, int, float]:
+        """(fate, last real row, final mass) for one track — the ONE fate classifier.
+
+        Both `endgame()` (which fate does this star meet?) and `_fate_boundary()`
+        (where does the grid flip from WD to SN?) read it, so the gateway's answer and
+        the uncertain-fate band can never drift apart. The four predicates are spelled
+        out in `endgame`'s docstring; the constants are `_WD_LOGG`, `_CHEB_PHASE` and
+        `_SN_FINAL_MASS_FLOOR`. Cheap: it touches three already-parsed columns and
+        builds nothing, so scanning a whole grid costs milliseconds (materialising the
+        endgame `states` per node, by contrast, costs seconds per grid).
+        """
+        phase = track.phase
+        r_last = int(np.where(phase >= 0)[0][-1])   # last real row (drop the -9 sentinel)
+        final_mass = float(track.Mcur[r_last])
+        if bool(np.any(phase == 9)):
+            fate = "WR"
+        elif bool(np.any(phase == 6)) or float(track.logg[r_last]) > _WD_LOGG:
+            fate = "WD"
+        elif float(phase[r_last]) >= _CHEB_PHASE and final_mass > _SN_FINAL_MASS_FLOOR:
+            fate = "SN"                             # evolved & massive, no remnant modeled
+        else:                                       # low-mass / still-alive: nothing to expose
+            fate = "none"
+        return fate, r_last, final_mass
 
     @staticmethod
     def _sn_progenitor(track: _Track, r_last: int) -> dict:

@@ -169,7 +169,7 @@ This is the honest reason the He/α what-ifs are MESA-vs-MESA only.
 | M_Ni | T3 | Not derivable from MIST; free slider 0.001–0.3 M☉. | GATED. |
 | NS/BH/failed cut | T3 | `smoothstep(CO 7 → 12)`; label flips at remnant 2.5 M☉. Real explodability is non-monotonic (Sukhbold+2016). | ACCEPT — caption says "averaged trend". **NEXT:** optional Ertl+2016 two-parameter (M4, μ4) overlay is *not* possible — MIST ends before the Fe core, so M4/μ4 do not exist. Recorded to stop re-proposing. |
 | Fe core / inner onion | T2 | MIST v2.5 stops before Si-burning; inner shells are canonical, disk is enclosed-mass (radial order inverted). | GATED — caption. |
-| SN/WD boundary | T2 | Solar: WD at 6.5, SN at 7.0 M☉ — inside the super-AGB / ECSN uncertainty. | ACCEPT. **NEXT (cheap):** a caption "6.5–8 M☉: electron-capture SN regime, not modeled" when the marker sits between the last WD and first SN node. |
+| SN/WD boundary | T2 | The grid flips in ONE step at every ([Fe/H], rotation): 6.5 → 7.0 M☉ at solar and +0.5, 6.5 → 7.0 at −0.5 non-rotating but 6.2 → 6.5 rotating, 6.0 → 6.2 at −1.0 (measured over all ten grids 2026-09-03). Inside the super-AGB / ECSN uncertainty. | GATED — **uncertain-fate caption shipped 2026-09-03**. `fate_boundary_status()` + `/fate_boundary_status`: band = the **measured** heaviest-WD node → a **cited** 8.0 M☉ ceiling (Poelarends+2008, Doherty+2015/2017; MIST models neither super-AGB pulses nor electron capture, so its width is not measurable). Hedges **both** verdicts in-band. |
 | WR spectra coverage | T2 | PoWR covers only the cool WNh entry (~10 % of rows); stripped core at T* 150–262 kK is off any observed grid. | GATED — "no model" frame. |
 | WD spectra edges | T2 | DC continuum below ~5 kK; TMAP to 190 kK; Koester DB is non-redistributable. | GATED. |
 | WD cooling scrub | T1 | Real MIST rows; TPAGB compressed to 12 % of the slider; pulse view gated at 0.15 dex. | GATED. |
@@ -227,14 +227,14 @@ surface. The false-caption check is part of every feature's Gate 0.
 ## 6. Prioritised NEXT list (bounded, honest, in order)
 
 1. **Sun-residual tooltip** (§1.2) — frontend-only, one string.
-2. **ECSN-regime caption** between the last WD and first SN node (§2) — frontend-only.
-3. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
+2. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
    the SED gyrochronology period; stays labeled evocative.
-4. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
+3. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
    `BAKE_VERSION` bump; unlocks Gaia G/RP and 2MASS on the CMD panel.
-5. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
+4. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
    measured there; MIST has no finer nodes, so this would mean MESA slices.
 
-(The He-ignition-cliff caption was item 3 and shipped 2026-09-03 — see §1.3.)
+(Two captions have left this list: the He-ignition cliff (§1.3) and the uncertain-fate
+band (§2), both shipped 2026-09-03.)
 
 Everything in **OOS** stays out until the grid approach "hits a real wall" (spec §9).

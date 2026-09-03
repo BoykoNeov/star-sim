@@ -270,3 +270,121 @@ def test_api_endgame_meta_is_type_only():
         # the meta payload is a tiny fraction of the full one for a star with a track
         if want_has:
             assert len(str(meta)) < len(str(full)) / 100
+
+
+# --- the uncertain-fate band (science-hurdles.md §2, "SN/WD boundary") --------
+# Cache-friendly: everything below reads the parsed grid the provider already holds
+# (no raw .track.eep), so it runs on the hosted cache-only download too.
+
+
+@requires_mist_data
+def test_fate_boundary_brackets_the_grids_own_flip(provider):
+    """The measured edges really are the last WD node and the first SN node.
+
+    This is the claim the caption's measured half makes, so it is checked against
+    `endgame()` itself rather than against remembered numbers: `wd_max` must classify
+    WD, `sn_min` must classify SN, and no grid mass may sit between them.
+    """
+    ax = provider._axis(0.0)
+    grid = ax.grids[int(np.argmin(np.abs(ax.fehs - 0.0)))]
+    pair = provider._fate_boundary(ax, grid)
+    assert pair is not None
+    wd_max, sn_min = pair
+    assert (wd_max, sn_min) == (6.5, 7.0)                      # measured, solar, 2026-09-03
+    assert provider.endgame(wd_max, 0.0).type == "WD"
+    assert provider.endgame(sn_min, 0.0).type == "SN"
+    assert not [m for m in grid.masses if wd_max < m < sn_min]  # one step, nothing between
+
+
+@requires_mist_data
+def test_fate_boundary_is_one_clean_flip_on_every_grid(provider):
+    """Every [Fe/H] and rotation bucket on disk flips exactly once, WD -> SN.
+
+    The band's whole premise is that the grid asserts a single crisp boundary. If a
+    grid ever interleaved WD and SN nodes, `_fate_boundary` must answer None (no
+    caption) rather than point at a boundary that isn't there. Measured 2026-09-03:
+    lower edges 6.0-6.5, upper edges 6.2-7.0 over all ten grids.
+    """
+    seen = 0
+    for ax in provider._axes.values():
+        for grid in ax.grids:
+            pair = provider._fate_boundary(ax, grid)
+            assert pair is not None, (ax.vvcrit, grid.feh)
+            wd_max, sn_min = pair
+            assert 5.5 <= wd_max < sn_min <= 7.5, (ax.vvcrit, grid.feh, pair)
+            fates = [provider._fate_of(t)[0] for t in grid.tracks]
+            masses = [float(t.minit) for t in grid.tracks]
+            # no white dwarf above the flip: the boundary is a step, not a scatter
+            assert not [m for m, f in zip(masses, fates) if f == "WD" and m > sn_min]
+            seen += 1
+    assert seen >= 2
+
+
+@requires_mist_data
+def test_fate_boundary_status_covers_both_sides_of_the_flip(provider):
+    """The caption must fire on BOTH verdicts — that is the point of the feature.
+
+    A band that only covered the supernova side would leave the 6.5 M☉ white dwarf
+    asserting its fate just as crisply as before. The upper edge is the cited ceiling
+    (not the grid's flip), so masses the app confidently calls supernovae are inside it
+    too; above the ceiling the verdict is no longer contested and the caption stops.
+    """
+    st = provider.fate_boundary_status(6.5, 0.0)
+    assert st["has_data"] and st["active"]
+    assert (st["band_lo_msun"], st["band_hi_msun"]) == (6.5, 8.0)
+    assert provider.endgame(6.5, 0.0).type == "WD"             # the WD side is in-band
+    for mass, want in ((7.0, "SN"), (7.5, "SN"), (8.0, "SN")):
+        assert provider.fate_boundary_status(mass, 0.0)["active"], mass
+        assert provider.endgame(mass, 0.0).type == want
+    for mass in (6.4, 9.0, 1.0):                               # outside: no contest
+        assert not provider.fate_boundary_status(mass, 0.0)["active"], mass
+
+
+@requires_mist_data
+def test_fate_boundary_lower_edge_tracks_metallicity_and_rotation(provider):
+    """The measured edge MOVES — which is why it is scanned per grid, not hardcoded.
+
+    Measured 2026-09-03: 6.5 M☉ at solar, 6.0 at [Fe/H] = −1, and rotation shifts it
+    down again ([Fe/H] = −0.5: 6.5 non-rotating, 6.2 rotating). A hardcoded 6.5 would
+    paint a metal-poor 6.2 M☉ supernova as settled when this grid's own flip is below it.
+    """
+    assert provider.fate_boundary_status(7.0, 0.0)["wd_max_msun"] == 6.5
+    assert provider.fate_boundary_status(7.0, -1.0)["wd_max_msun"] == 6.0
+    assert provider.fate_boundary_status(7.0, -0.5, 0.0)["wd_max_msun"] == 6.5
+    assert provider.fate_boundary_status(7.0, -0.5, 0.4)["wd_max_msun"] == 6.2
+
+
+@requires_mist_data
+def test_fate_boundary_status_degrades_off_grid(provider):
+    """Off the [Fe/H] axis the gate answers "no data" rather than raising — the caption
+    decorates the gateway and must never 422 the panel that draws it."""
+    off = provider.fate_boundary_status(7.0, 99.0)
+    assert off == {"has_data": False, "wd_max_msun": None, "sn_min_msun": None,
+                   "band_lo_msun": None, "band_hi_msun": None,
+                   "in_band": False, "active": False}
+
+
+@requires_mist_data
+def test_fate_of_is_the_same_predicate_the_endgame_answers_with(provider):
+    """`_fate_of` and `endgame().type` can never drift — they are one classifier.
+
+    The band brackets the mass where the GATEWAY's verdict changes, so a second copy of
+    the four predicates would eventually hedge the wrong masses. Checked across the
+    whole fate sequence at solar, including the WR end.
+    """
+    ax = provider._axis(0.0)
+    grid = ax.grids[int(np.argmin(np.abs(ax.fehs - 0.0)))]
+    for mass in (1.0, 6.5, 7.0, 20.0, 60.0):
+        track = next(t for t in grid.tracks if float(t.minit) == mass)
+        assert provider._fate_of(track)[0] == provider.endgame(mass, 0.0).type, mass
+
+
+def test_api_fate_boundary_status_route():
+    """The route is a thin pass-through of the provider gate (§3: the frontend never
+    learns which provider answered) and stays a 200 for an off-grid [Fe/H]."""
+    client = TestClient(app)
+    st = client.get("/fate_boundary_status", params={"mass": 7.0, "feh": 0.0}).json()
+    assert set(st) == {"has_data", "wd_max_msun", "sn_min_msun",
+                       "band_lo_msun", "band_hi_msun", "in_band", "active"}
+    off = client.get("/fate_boundary_status", params={"mass": 7.0, "feh": 99.0})
+    assert off.status_code == 200 and off.json()["has_data"] is False

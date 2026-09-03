@@ -427,6 +427,12 @@ class MESAProvider:
         return {"has_data": False, "band_lo_msun": None, "band_hi_msun": None,
                 "in_band": False, "interpolated": False, "active": False}
 
+    def fate_boundary_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """The MESA runs stop near the MS — no endgame, so no WD/SN boundary to place."""
+        return {"has_data": False, "wd_max_msun": None, "sn_min_msun": None,
+                "band_lo_msun": None, "band_hi_msun": None,
+                "in_band": False, "active": False}
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._ensure_loaded()

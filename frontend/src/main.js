@@ -162,6 +162,7 @@ const els = {
   gatewayWr: document.getElementById("gateway-wr"),
   gatewaySn: document.getElementById("gateway-sn"),          // now a BUTTON (was the note)
   gatewaySnNote: document.getElementById("gateway-sn-note"), // the foreshadowing note
+  gatewayFateNote: document.getElementById("gateway-fate-note"), // the uncertain-fate hedge
   gatewayLoading: document.getElementById("gateway-loading"),
   endgameBar: document.getElementById("endgame-bar"),
   endgameBack: document.getElementById("endgame-back"),
@@ -477,6 +478,14 @@ const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
 // the confession would be false.
 let heCliff = { has_data: false, band_lo_msun: null, band_hi_msun: null,
                 in_band: false, interpolated: false, active: false };
+// The latest /fate_boundary_status for the current (mass, [Fe/H], vvcrit) — the third
+// data-derived honesty gate (science-hurdles.md §2). Just above the grid's heaviest
+// white-dwarf node the fate flips to "supernova" in one step; in that band the real
+// answer is genuinely unsettled, so the gateway hedges BOTH verdicts instead of
+// asserting either. NOT awaited (it decorates the gateway, it gates nothing).
+const NO_FATE_BAND = { has_data: false, wd_max_msun: null, sn_min_msun: null,
+                       band_lo_msun: null, band_hi_msun: null, in_band: false, active: false };
+let fateBand = { ...NO_FATE_BAND };
 // The last state paintState() drew, so a LATE-arriving /he_ignition_status can repaint
 // just its caption without re-running a whole refresh().
 let lastPainted = null;
@@ -2030,11 +2039,22 @@ function updateGateway() {
   // pointing at the renderable light curve rather than the old "remnant not modeled" dead-end.
   els.gatewaySn.disabled = !atEnd;
   els.gatewaySnNote.hidden = !isSn;
+  // The uncertain-fate hedge (science-hurdles.md §2): inside the measured band the grid's
+  // single verdict is crisper than the physics, so hedge BOTH sides of the flip — the note
+  // below, AND the wording of the assertions above it. Softening only the note while "A 7 M☉
+  // star ENDS ITS LIFE as a supernova" stood right above it would leave the contradiction on
+  // screen. Outside the band (or with no data) every string is exactly as it was.
+  const hedged = fateBand.active && (isWd || isSn);
   if (isSn) {
-    els.gatewaySnNote.innerHTML =
-      `<b>Core collapse.</b> A ${fmt(fMass)} M☉ star ends its life as a supernova. ` +
-      `Scrub to the end, then continue to watch the ⁵⁶Ni-powered light curve.`;
+    els.gatewaySnNote.innerHTML = hedged
+      ? `<b>Core collapse — in this model.</b> A ${fmt(fMass)} M☉ star explodes as a ` +
+        `supernova on this grid. Scrub to the end, then continue to watch the ` +
+        `⁵⁶Ni-powered light curve.`
+      : `<b>Core collapse.</b> A ${fmt(fMass)} M☉ star ends its life as a supernova. ` +
+        `Scrub to the end, then continue to watch the ⁵⁶Ni-powered light curve.`;
   }
+  els.gatewayFateNote.hidden = !hedged;
+  els.gatewayFateNote.innerHTML = hedged ? fateHedgeHTML(fType) : "";
   // The "computing the star's fate…" placeholder shows exactly while a /endgame fetch is
   // IN FLIGHT and we don't yet have a resolved fate (from EITHER cache) for the current
   // (mass, [Fe/H]) — i.e. the brief gap after a mass/[Fe/H] change. Meta now resolves the
@@ -2061,6 +2081,52 @@ async function fetchRotStatus(mass, feh) {
   } catch {
     return { has_grid: false, threshold_msun: null, active: false };
   }
+}
+
+// --- the uncertain-fate gate (science-hurdles.md §2, "SN/WD boundary") -------
+// Fetch /fate_boundary_status for a (mass, [Fe/H], vvcrit). Tiny and NOT awaited by the
+// track fetch — it only hedges the gateway's wording and gates nothing, so a slow or
+// failed answer must never hold up the track. Degrades to "no data" (no hedge, the
+// gateway reads exactly as it did before this feature).
+async function fetchFateBand(mass, feh, vvcrit) {
+  try {
+    return await fetchJSON(`/fate_boundary_status?mass=${mass}&feh=${feh}&vvcrit=${vvcrit}`);
+  } catch {
+    return { ...NO_FATE_BAND };
+  }
+}
+
+// The hedge itself: one note under whichever fate control is showing, naming the verdict
+// this grid picked and saying it is one of two. `fate` is "WD" or "SN" (a Wolf–Rayet is
+// nowhere near this band, and "none" has no control to hedge). The two band edges have
+// DIFFERENT provenance and the tooltip keeps them apart — the lower one is measured off
+// this grid, the upper one is a published figure no track grid can supply.
+function fateHedgeHTML(fate) {
+  const lo = fmt(fateBand.band_lo_msun);
+  const hi = fmt(fateBand.band_hi_msun);
+  const wdMax = fmt(fateBand.wd_max_msun);
+  const snMin = fmt(fateBand.sn_min_msun);
+  const picked = fate === "WD" ? "a white dwarf" : "a supernova";
+  const other = fate === "WD" ? "explode" : "leave a white dwarf instead";
+  return `<b>We genuinely don't know.</b> Between ${lo} and ${hi} M☉ a star may end ` +
+    `either way — this one could just as well ${other}. The model has to answer, and ` +
+    `it answers ${picked}. ` +
+    tipSpan("Why?",
+      "A star this heavy finishes with a burnt-out core of oxygen and neon held up by " +
+      "electron pressure. Whether that core ever ignites — and so whether the star " +
+      "collapses in a faint 'electron-capture' supernova or just cools forever as an " +
+      "oxygen–neon white dwarf — turns on things still argued over: how far convection " +
+      "reaches past the burning core, how much mass the star throws off while it is a " +
+      "pulsing giant, and how carbon burns. The two edges of this band are not the same " +
+      "kind of number. The lower one, " + wdMax + " M☉, is MEASURED from this grid: it " +
+      "is the heaviest star here that still ends as a white dwarf, the next one up (" +
+      snMin + " M☉) is already a supernova, and the flip moves with metallicity and " +
+      "rotation. The upper one, " + hi + " M☉, is NOT something these tracks can " +
+      "measure — they model neither a pulsing super-giant's late thermal pulses nor " +
+      "electron capture — so it is taken from the published spread for the crossover " +
+      "mass (roughly 6.5–8 M☉ at solar metallicity, and higher under some assumptions; " +
+      "Poelarends et al. 2008, Doherty et al. 2015, 2017). Above the band the star " +
+      "certainly explodes and below it certainly does not, so this note disappears.");
 }
 
 // --- the He-ignition-cliff caption (science-hurdles.md §1.3) -----------------
@@ -4302,6 +4368,16 @@ async function refreshTrack() {
     heCliff = hc;
     updateCliffCaption(lastPainted);
   });
+  // The uncertain-fate gate (§2) — same shape: fired, not awaited, token-guarded. It only
+  // hedges the gateway's wording, and updateGateway() runs again when it lands (the button
+  // itself is driven by the /endgame fetches below, which are slower, so in practice the
+  // hedge is in place before there is anything to hedge).
+  fateBand = { ...NO_FATE_BAND };
+  fetchFateBand(mass, feh, effVvcrit()).then((fb) => {
+    if (token !== trackToken || mode !== "live") return;
+    fateBand = fb;
+    updateGateway();
+  });
   try {
     const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // A newer track will drive its own refresh; and a track landing after we entered
@@ -4323,6 +4399,7 @@ async function refreshTrack() {
     endgameMeta = null; endgameMetaKey = null;
     els.gatewayWd.hidden = els.gatewayWr.hidden = els.gatewaySn.hidden = true;
     els.gatewaySnNote.hidden = true;     // the SN foreshadowing note rides the button's reset
+    els.gatewayFateNote.hidden = true;   // ...and so does the uncertain-fate hedge under it
     endgameLoading = true;               // a fetch is about to fire (meta + full)
     els.gatewayLoading.hidden = false;   // show "computing…" now (covers the await refresh()
                                          // window before updateGateway runs), so the slot
