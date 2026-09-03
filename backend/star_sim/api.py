@@ -256,6 +256,36 @@ def rotation_status(
         raise _provider_unavailable(exc) from exc
 
 
+@app.get("/he_ignition_status")
+def he_ignition_status(
+    mass: float = Query(..., description="initial mass / M_sun"),
+    feh: float = Query(..., description="initial [Fe/H]"),
+    vvcrit: float = Query(0.0, description="rotation v/vcrit (snaps to a rotation grid)"),
+) -> dict:
+    """Is the served track blended across the helium-ignition transition? — the
+    data-derived honesty gate behind the He-ignition-cliff caption
+    (docs/plans/science-hurdles.md §1.3).
+
+    Goes through `PROVIDER` (a provider that doesn't interpolate across mass answers
+    has_data=False, so the route stays §3-clean and the caption simply never appears).
+    Shape:
+        {"has_data": bool,             # this provider can answer at all
+         "band_lo_msun": float|None,   # the He-ignition transition band, data-derived
+         "band_hi_msun": float|None,
+         "in_band": bool,              # the requested mass is inside the band
+         "interpolated": bool,         # the window really is a blend, not one real track
+         "active": bool}               # in_band AND interpolated
+
+    The frontend fires the caption on `active` AND the marker being in core-He burning
+    (the phase check is the consumer's — this route has no age). `interpolated` is the
+    load-bearing half: on an exact grid node nothing is smoothed and the confession
+    would be false."""
+    try:
+        return PROVIDER.he_ignition_status(mass, feh, vvcrit)
+    except ProviderDataMissing as exc:
+        raise _provider_unavailable(exc) from exc
+
+
 @app.get("/supernova")
 def supernova(
     mass: float = Query(..., description="initial mass / M_sun"),

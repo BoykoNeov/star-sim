@@ -76,7 +76,7 @@ bugs.
 Sun preset: "MIST v2.5's 1 M☉ model at solar age is 7 % over-luminous; the grid's
 Sun sits near [Fe/H] +0.07." Cheap, and it turns the residual into pedagogy.
 
-### 1.3 The He-ignition cliff (~2.0–2.1 M☉) — **ACCEPT**  · T1
+### 1.3 The He-ignition cliff (~2.0–2.1 M☉) — **GATED (2026-09-03)**  · T1
 
 Cross-mass CHeB interpolation across the degenerate → non-degenerate He-ignition
 boundary: whole-window median < 1 %, CHeB sliver ~8 % median with peaks in the
@@ -85,9 +85,35 @@ density helped, weighting does not (2.0 M☉: 0.0017 → 0.0013 dex median only)
 Convexity (lies-between) still holds so it is *smoothed, not wrong*. Pinned by
 `test_transition_mass_interpolation_reduced_not_eliminated` (needs raw tracks).
 
-**NEXT (optional):** a caption on the HR panel when the marker's mass is within
-±0.15 M☉ of the grid's He-flash boundary and the marker is in CHeB — "interpolated
-across the He-ignition transition; the real loop is sharper." Frontend-only.
+**GATED (2026-09-03) — the confession is now in-band.** The residual is unchanged
+(nothing was retuned); what shipped is the HR-panel caption that says so, plus the
+data-derived gate behind it.
+
+*Not* the ±0.15 M☉ rule this plan originally proposed — two corrections came out of
+building it:
+
+* **It is a band, not a boundary.** The transition is broad and metallicity- and
+  rotation-dependent, so the gate measures it per grid instead of assuming a width:
+  the **He-core mass at helium ignition** (the first FSPS phase-3 row) sits on a flat
+  degenerate plateau ≈0.47 M☉ at low mass and falls off a cliff to ≈0.31 M☉ across the
+  transition. The band runs from the last mass still on the plateau (10 % of the way
+  down the fall) to the mass at the minimum. Measured over all ten grids on disk:
+  **1.65–2.10 M☉ at solar non-rotating**, 1.80–2.10 at [Fe/H] = −1, 1.70–2.20 rotating
+  at [Fe/H] = +0.5 — every one straddling the textbook M_HeF ≈ 2 M☉. Both columns
+  (`HeCore`, `phase`) were already parsed, so no `CACHE_VERSION` bump.
+* **On an exact grid node there is nothing to confess.** A mass that lands on a grid
+  track is a *real* MIST track (blend weight 0), so a caption there would be a false
+  label — this project's most-repeated defect class. The gate therefore ANDs
+  `in_band` with `interpolated` (mass between two grid masses, or [Fe/H] between two
+  grids); the consumer adds the third condition, `phase == "CHeB"`, which is the only
+  phase the smoothing distorts.
+
+Shipped as `MISTProvider.he_ignition_status()` (a `StellarStateProvider` Protocol
+method, sibling of `rotation_status`; stub/MESA answer `has_data: False` because
+neither blends across mass), the `/he_ignition_status` route, and the
+`#hr-cliff-caption` note last in the HR panel — placed last so it can only grow the
+panel downward into the slack `.hr-panel`'s min-height already holds, verified
+non-shifting at 1440 and 390 px. Cleared by the shared mode-switch chokepoint.
 
 ### 1.4 [Fe/H] interpolation — **ACCEPT**  · T1
 
@@ -202,13 +228,13 @@ surface. The false-caption check is part of every feature's Gate 0.
 
 1. **Sun-residual tooltip** (§1.2) — frontend-only, one string.
 2. **ECSN-regime caption** between the last WD and first SN node (§2) — frontend-only.
-3. **He-ignition-cliff caption** (§1.3) — frontend-only; needs the grid's boundary
-   mass served once (`/ranges` or `/endgame?meta=1` is the natural carrier).
-4. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
+3. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
    the SED gyrochronology period; stays labeled evocative.
-5. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
+4. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
    `BAKE_VERSION` bump; unlocks Gaia G/RP and 2MASS on the CMD panel.
-6. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
+5. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
    measured there; MIST has no finer nodes, so this would mean MESA slices.
+
+(The He-ignition-cliff caption was item 3 and shipped 2026-09-03 — see §1.3.)
 
 Everything in **OOS** stays out until the grid approach "hits a real wall" (spec §9).

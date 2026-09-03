@@ -968,6 +968,15 @@ body.co-binary-view.co-he-kind .endgame-narrate-co-hems { display: block; }
 body.stripped-mode.co-binary-view .age-stripped { display: none; }
 body.co-binary-view .age-co-binary { display: inline; }
 
+/* The He-ignition-cliff confession under the HR panel (science-hurdles.md §1.3).
+   NO min-height reserve on purpose: it is the LAST element in the panel, so it can
+   only grow the panel downward into the slack .hr-panel's min-height already holds —
+   nothing above it ever moves. Reserving it instead would cost two blank lines in the
+   live view for a caption that fires on a narrow slice of the mass range. */
+.hr-cliff-caption {
+  color: var(--accent); font-size: 12.5px; margin: 8px 0 0;
+}
+
 /* The WD cooling-time caption under the age slider (shown only in WD mode). */
 .endgame-age-caption {
   /* Reserve TWO lines (this caption sits directly under the age slider and its text changes on

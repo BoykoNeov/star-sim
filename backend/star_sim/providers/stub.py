@@ -114,6 +114,11 @@ class StubProvider:
         """The stub models no rotation, so the toggle is never meaningful."""
         return {"has_grid": False, "threshold_msun": None, "active": False}
 
+    def he_ignition_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """The stub interpolates nothing across a grid — there is no blend to confess."""
+        return {"has_data": False, "band_lo_msun": None, "band_hi_msun": None,
+                "in_band": False, "interpolated": False, "active": False}
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._check_mass_feh(mass, feh)

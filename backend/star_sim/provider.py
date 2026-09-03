@@ -140,6 +140,31 @@ class StellarStateProvider(Protocol):
         """
         ...
 
+    def he_ignition_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """Is the served track BLENDED across the helium-ignition transition?
+
+        The second data-derived honesty gate (sibling of `rotation_status`), behind the
+        He-ignition-cliff caption — see docs/plans/science-hurdles.md Sec 1.3. Around
+        ~2 M_sun helium ignition switches from a degenerate flash to quiet burning and
+        the core-He-burning morphology changes so sharply that blending two neighbouring
+        tracks across it visibly smooths the loop. Shape:
+
+            {"has_data": bool,             # this provider can answer at all
+             "band_lo_msun": float|None,   # the transition band, data-derived
+             "band_hi_msun": float|None,
+             "in_band": bool,              # the requested mass is inside the band
+             "interpolated": bool,         # the window really is a blend (not a grid node)
+             "active": bool}               # in_band AND interpolated
+
+        `active` is what a caption may fire on (the consumer adds "and the star is
+        currently in core-He burning" from `StellarState.phase` — this method has no
+        age). `interpolated` is load-bearing: on an exact grid node the drawn track is
+        one real track and nothing is smoothed, so a caption there would be a false
+        confession. A provider that does not interpolate across mass, or has no data,
+        returns has_data=False and every flag False.
+        """
+        ...
+
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         """The one method that matters: (mass, [Fe/H], age) -> StellarState."""
         ...

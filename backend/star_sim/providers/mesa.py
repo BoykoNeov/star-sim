@@ -422,6 +422,11 @@ class MESAProvider:
         """The offline MESA runs are non-rotating, so the toggle is never meaningful."""
         return {"has_grid": False, "threshold_msun": None, "active": False}
 
+    def he_ignition_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """MESA snaps to one real track (never blends across mass), so nothing is smoothed."""
+        return {"has_data": False, "band_lo_msun": None, "band_hi_msun": None,
+                "in_band": False, "interpolated": False, "active": False}
+
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:
         self._ensure_loaded()

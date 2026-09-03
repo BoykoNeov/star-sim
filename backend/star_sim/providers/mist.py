@@ -287,6 +287,27 @@ _SN_FINAL_MASS_FLOOR = 1.4   # M_sun ~ the Chandrasekhar mass (max white-dwarf m
 # not SN), so 0.1 is a wide floor that cleanly reads "retains H" for every SN track.
 _SN_H_RETAINED = 0.1     # surface_h1 fraction threshold for "still has an H envelope"
 
+# --- the He-ignition transition band (`_he_ignition_band`) --------------------
+# How far the He-core mass at ignition must have fallen from its degenerate plateau
+# toward its minimum before a mass counts as "into the transition" (the band's lower
+# edge; the upper edge is the minimum itself and needs no constant). Measured on the
+# ten grids on disk: inside the plateau the node-to-node wiggle is well under 1 % of
+# the total fall, so 10 % is far outside the noise while still catching the start of
+# the steepening — it puts the solar band at 1.65-2.10 M_sun, straddling the textbook
+# M_HeF ~ 2 M_sun. A grid too sparse to show the shape at all yields no band.
+_HE_BAND_LEVEL = 0.10
+_HE_BAND_MIN_TRACKS = 5
+# The "no He-ignition band here" answer (off-grid [Fe/H], or a grid too sparse). Copied
+# per call so a consumer can never mutate the shared dict.
+_HE_NO_DATA = {
+    "has_data": False,
+    "band_lo_msun": None,
+    "band_hi_msun": None,
+    "in_band": False,
+    "interpolated": False,
+    "active": False,
+}
+
 
 @dataclass
 class _Track:
@@ -795,6 +816,8 @@ class MISTProvider:
         # break): the lowest grid mass where the rotating track actually diverges
         # from the non-rotating one. Keyed by the snapped rotating-grid [Fe/H].
         self._rot_threshold_cache: dict[float, float | None] = {}
+        # (vvcrit, [Fe/H]) -> the He-ignition transition band, or None (see `_he_ignition_band`)
+        self._he_band_cache: dict[tuple[float, float], tuple[float, float] | None] = {}
 
     # -- lazy data load --------------------------------------------------------
     def _ensure_loaded(self) -> None:
@@ -1006,6 +1029,120 @@ class MISTProvider:
         thr = self._rotation_threshold(feh)
         active = thr is not None and mass >= thr - 1e-9
         return {"has_grid": True, "threshold_msun": thr, "active": bool(active)}
+
+    # -- He-ignition honesty gate: is this track BLENDED across the He flash? ---
+    @staticmethod
+    def _he_core_at_ignition(t: _Track) -> float:
+        """Helium-core mass at the first core-He-burning row (FSPS phase 3), or NaN.
+
+        The cleanest data signature of *how* helium ignites. Below the transition mass
+        the core is electron-degenerate, so it cannot burn until it has grown to a
+        near-universal ~0.47 M_sun — a flat plateau across every low mass. Above it the
+        core is non-degenerate and ignites as soon as it is hot enough, at a core mass
+        that falls steeply with initial mass and then climbs again. `HeCore` and `phase`
+        are already parsed columns, so this costs no CACHE_VERSION bump.
+        """
+        sl = slice(t.zams_row, t.track_end + 1)
+        i = np.where(t.phase[sl] == _CHEB_PHASE)[0]
+        return float(t.HeCore[sl][i[0]]) if i.size else float("nan")
+
+    def _he_ignition_band(self, axis: _Axis, grid: _Grid) -> tuple[float, float] | None:
+        """(m_lo, m_hi) — the mass band over which He ignition changes character, or None.
+
+        Derived by scanning the grid, never hardcoded (the transition mass shifts with
+        metallicity and with rotation): read `_he_core_at_ignition` along the mass
+        sequence, then
+
+          * `m_hi` = the mass at the MINIMUM ignition core mass — the first fully
+            non-degenerate ignition (searched only over the descent, i.e. before the
+            core mass climbs back through the plateau, which it does forever above the
+            transition);
+          * `m_lo` = the last mass still on the degenerate plateau, taken as the node
+            before the core mass has fallen `_HE_BAND_LEVEL` of the way from the plateau
+            to that minimum.
+
+        It is a BAND, not a mass, because the change is not a step: measured over the
+        whole grid (2026-09-03) the fall spans ~0.3-0.5 M_sun, e.g. 1.65-2.10 M_sun at
+        solar [Fe/H] non-rotating, 1.80-2.10 at [Fe/H] = -1, 1.70-2.20 rotating at
+        [Fe/H] = +0.5 — all straddling the textbook M_HeF ~= 2 M_sun. Interpolating
+        across it is what smooths the core-He-burning loop (see the CHeB residual in
+        docs/plans/science-hurdles.md Sec 1.3); the band is what the UI confesses.
+        """
+        key = (round(float(axis.vvcrit), 3), round(float(grid.feh), 3))
+        if key in self._he_band_cache:
+            return self._he_band_cache[key]
+
+        masses, cores = [], []
+        for t in grid.tracks:                       # ascending by mass
+            v = self._he_core_at_ignition(t)
+            if math.isfinite(v):                    # skip tracks that never ignite He
+                masses.append(float(t.minit))
+                cores.append(v)
+
+        band: tuple[float, float] | None = None
+        if len(masses) >= _HE_BAND_MIN_TRACKS:
+            m = np.asarray(masses)
+            c = np.asarray(cores)
+            plateau = float(c[0])                   # the lowest mass that ignites He at all
+            coarse = int(np.argmin(c[: max(2, c.size // 2)]))
+            back = np.where(c >= plateau)[0]
+            back = back[back > coarse]
+            stop = int(back[0]) if back.size else c.size - 1
+            i_hi = int(np.argmin(c[: stop + 1]))
+            thr = plateau - _HE_BAND_LEVEL * (plateau - float(c[i_hi]))
+            below = np.where(c[: i_hi + 1] < thr)[0]
+            i_lo = int(below[0]) - 1 if below.size and below[0] > 0 else 0
+            if i_lo < i_hi:
+                band = (float(m[i_lo]), float(m[i_hi]))
+
+        self._he_band_cache[key] = band
+        return band
+
+    def he_ignition_status(self, mass: float, feh: float, vvcrit: float = 0.0) -> dict:
+        """Is the drawn track BLENDED across the helium-ignition transition?
+
+        The data-derived honesty gate behind the He-ignition-cliff caption
+        (docs/plans/science-hurdles.md Sec 1.3). Two conditions, and the caption needs
+        both — plus core-He burning, which the consumer adds from `StellarState.phase`
+        (this method has no age):
+
+          * `in_band`      — the requested mass lies inside the transition band, where
+                             the core-He-burning morphology changes fastest;
+          * `interpolated` — the window really is a blend: the mass falls BETWEEN two
+                             grid masses, or the [Fe/H] falls between two grids (whose
+                             bands sit at different masses). On an exact node the drawn
+                             track is one real MIST track, nothing is smoothed, and the
+                             caption would be a false confession — the defect this
+                             project guards against hardest.
+
+        `active` is the AND of the two. The band is the union over the bracketing
+        [Fe/H] grids (the honest widest statement when the metallicity is itself a
+        blend). Never raises: off-grid or data-free answers has_data=False and the UI
+        hides the caption.
+        """
+        ax = self._axis(vvcrit)
+        if not (float(ax.fehs[0]) - _FEH_TOL <= feh <= float(ax.fehs[-1]) + _FEH_TOL):
+            return _HE_NO_DATA.copy()
+        j_lo, j_hi, _ = self._bracket_feh(ax, feh)
+        bands = [b for b in (self._he_ignition_band(ax, ax.grids[j]) for j in {j_lo, j_hi}) if b]
+        if not bands:
+            return _HE_NO_DATA.copy()
+
+        lo = min(b[0] for b in bands)
+        hi = max(b[1] for b in bands)
+        in_band = lo - 1e-9 <= mass <= hi + 1e-9
+        blended = j_lo != j_hi or any(
+            _bracket(ax.grids[j].masses, mass)[0] != _bracket(ax.grids[j].masses, mass)[1]
+            for j in {j_lo, j_hi}
+        )
+        return {
+            "has_data": True,
+            "band_lo_msun": lo,
+            "band_hi_msun": hi,
+            "in_band": bool(in_band),
+            "interpolated": bool(blended),
+            "active": bool(in_band and blended),
+        }
 
     # -- the one method that matters ------------------------------------------
     def state_at(self, mass: float, feh: float, age_yr: float, vvcrit: float = 0.0) -> StellarState:

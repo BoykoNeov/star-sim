@@ -882,3 +882,95 @@ def test_mass_interpolation_held_out_grid_nodes(provider, mass, bracket, max_med
     assert float(np.median(dlogt)) < 0.03, float(np.median(dlogt))
     dage = np.array([abs(math.log10(got[k].age_yr) - math.log10(real[k].age_yr)) for k in range(n)])
     assert float(np.median(dage)) < 0.2, float(np.median(dage))
+
+
+# --- the He-ignition honesty gate (science-hurdles.md §1.3) -------------------
+# Cache-friendly: everything below reads the parsed grid the provider already holds
+# (no raw .track.eep), so it runs on the hosted cache-only download too.
+
+
+@requires_mist_data
+def test_he_ignition_band_brackets_the_core_mass_cliff(provider):
+    """The reported band really does span the change in how helium ignites.
+
+    Below it the He core is degenerate and cannot burn until it reaches a
+    near-universal mass (~0.47 M☉ — the flat plateau); above it the core ignites
+    non-degenerately at a much smaller mass. Measured on the solar grid (2026-09-03):
+    band 1.65–2.10 M☉, plateau spread 0.015 M☉ over the 61 masses below it, 0.464 M☉
+    at the lower edge falling to 0.314 M☉ at the upper — i.e. the band's edges sit on
+    opposite sides of the cliff, which is the whole claim the caption makes.
+    """
+    ax = provider._axis(0.0)
+    grid = ax.grids[int(np.argmin(np.abs(ax.fehs - 0.0)))]
+    band = provider._he_ignition_band(ax, grid)
+    assert band is not None
+    lo, hi = band
+    assert 1.5 < lo < hi < 2.4, band
+
+    cores = [(float(t.minit), provider._he_core_at_ignition(t)) for t in grid.tracks]
+    cores = [(m, c) for m, c in cores if math.isfinite(c)]
+    below = [c for m, c in cores if m <= lo]
+    assert len(below) > 20
+    assert max(below) - min(below) < 0.03, max(below) - min(below)   # the degenerate plateau is flat
+    at_lo = next(c for m, c in cores if math.isclose(m, lo))
+    at_hi = next(c for m, c in cores if math.isclose(m, hi))
+    assert at_lo > 0.44, at_lo          # still on the plateau
+    assert at_hi < 0.38, at_hi          # fully off it
+    assert at_lo - at_hi > 0.08, (at_lo, at_hi)
+
+
+@requires_mist_data
+def test_he_ignition_band_is_stable_across_every_grid(provider):
+    """Every [Fe/H] and rotation bucket on disk yields a band around M_HeF ≈ 2 M☉.
+
+    A criterion that latched onto something else (the RGB-tip drop is noisier, the WR
+    onset is elsewhere entirely) would scatter or vanish on some grid. Measured
+    2026-09-03: lower edges 1.60–1.80, upper edges 1.90–2.20 over all ten grids.
+    """
+    seen = 0
+    for ax in provider._axes.values():
+        for grid in ax.grids:
+            band = provider._he_ignition_band(ax, grid)
+            assert band is not None, (ax.vvcrit, grid.feh)
+            lo, hi = band
+            assert 1.4 <= lo < hi <= 2.5, (ax.vvcrit, grid.feh, band)
+            seen += 1
+    assert seen >= 2
+
+
+@requires_mist_data
+def test_he_ignition_status_never_confesses_on_an_exact_grid_node(provider):
+    """The caption's load-bearing half: a grid node is a REAL track, not a blend.
+
+    At an exact (mass, [Fe/H]) node the window is one MIST track with w = 0 — nothing
+    is smoothed across the transition, so `active` must be False even though the mass
+    is squarely inside the band. Nudge the mass off the node and the same star is a
+    blend, so it must confess. (An exact node inside the band exists by construction:
+    the band's own edges ARE grid masses.)
+    """
+    ax = provider._axis(0.0)
+    grid = ax.grids[int(np.argmin(np.abs(ax.fehs - 0.0)))]
+    lo, hi = provider._he_ignition_band(ax, grid)
+    node = next(float(m) for m in grid.masses if lo < m < hi)      # a node strictly inside
+
+    on_node = provider.he_ignition_status(node, 0.0)
+    assert on_node["has_data"] and on_node["in_band"]
+    assert not on_node["interpolated"]
+    assert not on_node["active"]
+
+    lower = max(m for m in grid.masses if m < node)
+    between = provider.he_ignition_status(0.5 * (node + float(lower)), 0.0)
+    assert between["in_band"] and between["interpolated"] and between["active"]
+
+    # Outside the band, a blend is fine — nothing to confess.
+    outside = provider.he_ignition_status(1.0 + 1e-3, 0.0)
+    assert not outside["in_band"] and not outside["active"]
+
+
+@requires_mist_data
+def test_he_ignition_status_degrades_off_grid(provider):
+    """Off the [Fe/H] axis the gate answers "no data" rather than raising — the
+    caption is a decoration and must never 422 the panel that draws it."""
+    off = provider.he_ignition_status(2.0, 99.0)
+    assert off == {"has_data": False, "band_lo_msun": None, "band_hi_msun": None,
+                   "in_band": False, "interpolated": False, "active": False}

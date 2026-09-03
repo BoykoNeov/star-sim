@@ -10,6 +10,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Composition panel](star-sim-composition-panel.md) — §5.4 panel + `/track`: EEP-axis stacked areas, `_state_from_row`.
 - [Phase 4 CNO](star-sim-phase4-cno.md) — per-element composition via `metals_surf`/`metals_core` dicts; element gotchas (Fe diffusion, boron, Cr/Mn/Ni absent).
 - [Rotation & subpopulation atlas](star-sim-rotation-subpop-atlas.md) — the `vvcrit` axis: provider keys by `(feh,vvcrit)` + snaps buckets, `rotation_status` gate, real `v_rot_kms`, v sin i broadening, the Coelho [α/Fe] spectral axis.
+- [He-ignition cliff caption](star-sim-he-ignition-cliff.md) — the 2nd honesty gate: the measured He-flash transition BAND (1.65–2.10 M☉ solar) + why an exact grid node must never confess.
 
 ## Fates (endgame)
 - [WR/WD endgame](star-sim-wr-wd-endgame-plan.md) — the reversible gateway: `endgame()` + classifier, WD cooling scrub/shader, WR mode + wind shader, Koester/TMAP/PoWR spectra. No new provider — an endgame IS a StellarState.

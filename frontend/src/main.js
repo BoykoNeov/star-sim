@@ -51,6 +51,7 @@ const els = {
   rotToggleRow: document.getElementById("rot-toggle-row"),
   rotToggle: document.getElementById("rot-toggle"),
   rotNote: document.getElementById("rot-note"),
+  hrCliffCaption: document.getElementById("hr-cliff-caption"),
   sedRot: document.getElementById("sed-rot"),
   // Inclination facet (gravity darkening Chunk 2): the viewing-angle slider, main.js-owned.
   inclControl: document.getElementById("incl-control"),
@@ -467,6 +468,18 @@ let rotationOn = false;
 // fetch on a mass/[Fe/H] change, so the effective vvcrit below is always current.
 let rotStatus = { has_grid: false, threshold_msun: null, active: false };
 const effVvcrit = () => (rotationOn && rotStatus.has_grid ? ROT_VVCRIT : 0.0);
+
+// The latest /he_ignition_status for the current (mass, [Fe/H], vvcrit) — the second
+// data-derived honesty gate (science-hurdles.md §1.3). Around ~2 M☉ helium ignition
+// flips from a degenerate flash to quiet burning; interpolating a track across that
+// smooths the core-helium-burning loop. NOT awaited (it decorates, it gates nothing),
+// and never fires on an exact grid node — there the track is one real MIST track and
+// the confession would be false.
+let heCliff = { has_data: false, band_lo_msun: null, band_hi_msun: null,
+                in_band: false, interpolated: false, active: false };
+// The last state paintState() drew, so a LATE-arriving /he_ignition_status can repaint
+// just its caption without re-running a whole refresh().
+let lastPainted = null;
 
 // Viewing inclination (gravity darkening Chunk 2), a persisted VIEWING choice shared by the
 // 3D star (tilt) and the spectrum (v sin i). 0° = pole-on, 90° = edge-on; 60° is the
@@ -2050,6 +2063,52 @@ async function fetchRotStatus(mass, feh) {
   }
 }
 
+// --- the He-ignition-cliff caption (science-hurdles.md §1.3) -----------------
+const NO_HE_CLIFF = { has_data: false, band_lo_msun: null, band_hi_msun: null,
+                      in_band: false, interpolated: false, active: false };
+
+// Fetch /he_ignition_status for a (mass, [Fe/H], vvcrit). Tiny and NOT awaited by the
+// track fetch — the caption decorates the HR panel and gates nothing, so a slow or
+// failed answer must never hold up the track. Degrades to "no data" (caption hidden).
+async function fetchHeCliff(mass, feh, vvcrit) {
+  try {
+    return await fetchJSON(`/he_ignition_status?mass=${mass}&feh=${feh}&vvcrit=${vvcrit}`);
+  } catch {
+    return { ...NO_HE_CLIFF };
+  }
+}
+
+// Show the confession only when all three hold: the provider says this window is a
+// blend across the measured transition band (`active` — the mass is inside it AND the
+// track is not an exact grid node), we're in the live view, and the marker is actually
+// in core-helium burning, which is the only phase the smoothing distorts. The state's
+// own `phase` is the third gate (§3: a plain StellarState field, not a provider
+// internal). Everything else hides it.
+function updateCliffCaption(s) {
+  const el = els.hrCliffCaption;
+  if (!el) return;
+  const on = mode === "live" && heCliff.active && s && s.phase === "CHeB";
+  el.hidden = !on;
+  if (!on) { el.textContent = ""; return; }
+  const lo = Number(heCliff.band_lo_msun).toFixed(2);
+  const hi = Number(heCliff.band_hi_msun).toFixed(2);
+  el.innerHTML =
+    "Blended across the helium-ignition transition (" + lo + "–" + hi + " M☉ here) — " +
+    "the real loop is sharper than this one. " +
+    tipSpan("Why?",
+      "Between roughly " + lo + " and " + hi + " M☉ (measured from this grid, and it " +
+      "shifts with metallicity and rotation) helium ignition changes character: below " +
+      "the band the helium core is electron-degenerate and cannot burn until it has " +
+      "grown to a near-universal ~0.47 M☉, so it lights in a runaway HELIUM FLASH; " +
+      "above the band the core is not degenerate and lights quietly, at a core mass " +
+      "that falls steeply across the band. The shape of the core-helium-burning loop " +
+      "on this diagram changes just as sharply. Your star's mass is not on a grid " +
+      "track, so this loop is a BLEND of the two nearest tracks — which straddle that " +
+      "change, and so smooth it. Everything else on the track is unaffected; the " +
+      "caption appears only while the star is in core-helium burning. Land the mass " +
+      "exactly on a grid value and the blend (and this caption) goes away.");
+}
+
 // Render the UNIFIED rotation control (rotation Chunk 3 unify) — one control, two
 // regime-gated facets, each shown only where it's honest:
 //
@@ -2902,6 +2961,15 @@ function fmtGyr(gyr) {
 // live track (the hr.setEndgame/setBinaryTrack/… entries already clear heliumMode). Both the
 // helium and the target toggle can be visible at once in their overlapping mass band, so this is
 // reachable; call it at the top of every mode-entry that isn't "live".
+// The He-ignition-cliff caption describes the living track's core-helium-burning loop —
+// meaningless in any endgame (a WD is past it, a WR/SN never had the degenerate kind), so
+// the shared chokepoint clears it rather than letting a stale confession sit under an
+// endgame HR panel.
+function dropCliffCaptionForModeSwitch() {
+  heCliff = { ...NO_HE_CLIFF };
+  if (els.hrCliffCaption) { els.hrCliffCaption.hidden = true; els.hrCliffCaption.textContent = ""; }
+}
+
 function dropHeliumForModeSwitch() {
   dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
   dropPopulationForModeSwitch(); // the SED population overlay is living-only — drop it on any mode switch too
@@ -2909,6 +2977,7 @@ function dropHeliumForModeSwitch() {
   dropHZForModeSwitch();         // the habitable-zone scale-bar overlay is living-only — drop it too
   dropObserverForModeSwitch();   // the observer reddening/mag view is living-only — drop it too
   dropSeismoForModeSwitch();     // the asteroseismology panel is living-only — drop it too (a WD's log g~8 would slip its Teff gate)
+  dropCliffCaptionForModeSwitch(); // the He-ignition confession is about the LIVING track — drop it too
   if (!heliumOn) return;
   heliumOn = false;
   heliumToken++;
@@ -4127,6 +4196,7 @@ function endFirstLoad() {
 // place. (The WD/WR endgame modes have their own render paths — refreshWD/refreshWR.)
 function paintState(s) {
   endFirstLoad();   // first real paint — retire the first-load skeleton sheen
+  lastPainted = s;
   // {peculiar} is the Ap/Bp evocative what-if (star.js regime-gates it per-state, and it's a
   // no-op unless the toggle is on) — living path only; the endgame refreshers paint the star
   // directly with their own {endgame:…} opts, so they're untouched.
@@ -4146,6 +4216,7 @@ function paintState(s) {
   refreshObserver(s);     // the observer reddening/mag view (no-op unless the toggle is on)
   refreshSeismo(s);       // the asteroseismology panel (Axis C — pure view of Teff/log g/R)
   renderReadout(s);
+  updateCliffCaption(s);   // the He-ignition-cliff confession (§1.3); hidden unless all three gates hold
   els.status.style.color = teffToCSS(s.Teff_K);
   // Tokenize so each part carries its own hover pedagogy (no "?" glyph — the
   // text itself is the hover target). innerHTML, not textContent, for the spans.
@@ -4215,6 +4286,16 @@ async function refreshTrack() {
   rotStatus = rs;
   updateRotControl();
   updatePeculiarControl();
+  // The He-ignition gate (§1.3) — fired, NOT awaited: it only decorates the HR panel, so
+  // it must never delay the track fetch below. Token-guarded like every other late
+  // arrival; when it lands it repaints its own caption against the last drawn state.
+  heCliff = { ...NO_HE_CLIFF };
+  updateCliffCaption(lastPainted);
+  fetchHeCliff(mass, feh, effVvcrit()).then((hc) => {
+    if (token !== trackToken || mode !== "live") return;
+    heCliff = hc;
+    updateCliffCaption(lastPainted);
+  });
   try {
     const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // A newer track will drive its own refresh; and a track landing after we entered
