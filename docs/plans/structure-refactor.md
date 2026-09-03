@@ -129,7 +129,58 @@ import `api`).
 > a warm cube: removing the `_LOADED` swap makes both "not baked" tests fail (200
 > instead of 503, and DID NOT RAISE).
 
-### 1.4 `providers/mist.py` (1,478 lines)  · **low priority**
+### 1.4 `providers/mist.py` (1,780 lines)  · **SHIPPED 2026-09-03**
+
+> Done as three seams plus the package `__init__`, and the file was 1,780 lines by
+> the time it was split (the header text above was measured before the rotation axis
+> and the fate/He-ignition gates landed). Now:
+> `mist/__init__.py` 141 (the 115-line physics docstring + the re-export block) ·
+> `mist/parsing.py` 521 (`_Track`, the cache constants, discovery, parse, fingerprint,
+> `.npz` read/write) · `mist/interp.py` 189 (`_Grid`/`_Axis`, `_load_grid`,
+> `_build_axis`, `_bracket`/`_log_mass_weight`/`_blend_windows`) · `mist/provider.py`
+> 1,029 (the class and nothing else). Total 1,880: the +100 is four module docstrings
+> and four import blocks. **The 1,029-line provider module is the intended outcome of
+> a seam-only split** — the class was not sub-split to make the numbers prettier
+> (§2.2's "the size is the size of the drawing" reasoning).
+>
+> **Acceptance was the warm-cache check, not just the suite.** The MIST analog of
+> §1.1's byte-identical OpenAPI is that the `.npz` parse caches on disk must still
+> *validate*: shift `_TRACK_COLS`' order or the fingerprint and every grid silently
+> re-parses (~20 s each) with the tests still green. All **10** grids on disk report a
+> cache HIT after the split, and `CACHE_VERSION` was not touched. 468 passed / 0
+> skipped before and after (the same zero-skip run §1.2 used), ruff clean.
+>
+> **Three deviations, all forced by dependencies the plan text didn't have:**
+>
+> - **`_Track` went with parsing, not with `_Grid`/`_Axis`.** The plan grouped all
+>   three dataclasses in the grid module, but `_load_grid` calls `_load_all_tracks`,
+>   so grid→parse is a real dependency; putting the parse *output* type in the grid
+>   module would have made it circular. `_Track` is what the parser produces, so it
+>   lives there and the dependency stays one-directional (`interp` → `parsing`).
+> - **The module is `interp.py`, not `_grid.py`.** `star_sim/_grid.py` already exists
+>   as the §1.2 shared leaf; a `providers/mist/_grid.py` beside it would make
+>   `from ..._grid import` vs `from .interp import` load-bearing and one typo from
+>   importing the wrong thing.
+> - **`_build_axis` moved off the class** (it was a `@staticmethod`) and is now a free
+>   function in `interp.py` — it assembles `_Axis` out of `_Grid`s and touches no
+>   `self`. Nothing outside the class referenced it (grepped).
+>
+> **The hazard this split did NOT hit, recorded so the next one knows why:**
+> `test_architecture.py`'s `_package_modules()` **excludes `providers/` by name**, so
+> the new submodules are never fed to the `startswith("providers.mist")` matcher in
+> `test_only_the_swap_point_and_fetchers_import_the_live_provider`. That exclusion is
+> correct and must stay — `providers/mesa.py` legitimately does `from .mist import
+> DATA_DIR`, so enumerating the provider package would flag it — but it means the
+> architecture table neither gained nor lost coverage here. Unlike the sibling case,
+> there is no `_modules_of()` analog to write: the check is about who reaches *into*
+> the provider layer, and the provider layer is not outside itself.
+>
+> The other §1.3 hazard was checked and is absent: **nothing monkeypatches
+> `mist.DATA_DIR`** (grepped — the 8 patch sites are all `spectra.SPECTRA_DATA_DIR`),
+> so the package-attribute problem that deferred the spectra directory split does not
+> arise here. That is why this split was tractable and that one wasn't.
+
+The original text, for the record:
 
 Split only along seams that already exist: `_parse` (track parsing + `.npz`
 cache + fingerprint), `_grid` (`_Track/_Grid/_Axis`, bracketing, blending), and
@@ -310,7 +361,8 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
 5. ~~§1.2 shared grid helpers; §1.3 spectra loader collapse~~ — **shipped 2026-09-03**
    (two of §1.2's four helpers measured and rejected; §1.3's directory split deferred —
    see the notes under each).
-6. §1.4–1.6 opportunistically.
+6. ~~§1.4 the `providers/mist/` package split~~ — **shipped 2026-09-03**;
+   §1.5–1.6 opportunistically.
 
 Each step is independently shippable and leaves the app byte-identical for the
 user; the measure of success is that the *next* feature (say, the near-IR bake
