@@ -48,7 +48,7 @@ parametrized aftermath — and omit the early shock-breakout / shock-cooling pha
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
@@ -392,3 +392,53 @@ def supernova_model(
         states=states,
         tiers=tiers,
     )
+
+
+def supernova_payload(
+    *,
+    fate: str,
+    mass_init_msun: float,
+    feh_init: float,
+    final_mass_msun: float | None = None,
+    he_core_msun: float | None = None,
+    co_core_msun: float | None = None,
+    pre_sn_radius_rsun: float | None = None,
+    h_retained: bool | None = None,
+    m_ni: float | None = None,
+    e_kin: float = 1.0e51,
+) -> dict:
+    """The `/supernova` payload for BOTH branches, from plain progenitor scalars.
+
+    Deliberately takes scalars and not the provider's `EndgameResult`: this module
+    may never import the provider layer (§3), so the route reads the fate + the
+    progenitor numbers off `PROVIDER.endgame()` and passes them through. That keeps
+    the *shape* of the answer — including the honest non-SN one — here, beside the
+    model that defines it, instead of spread across a route.
+
+    A non-SN progenitor (WD / WR / none, or any provider with no endgame data) is not
+    an error: it comes back `is_supernova=False` with the real fate echoed and no
+    curve, and the gateway shows the matching renderer instead.
+    """
+    if fate != "SN" or co_core_msun is None:
+        return {
+            "type": fate,
+            "is_supernova": False,
+            "mass_init_msun": mass_init_msun,
+            "feh_init": feh_init,
+            "light_curve": None,
+            "states": [],
+            "reason": f"{fate} progenitor — no core-collapse supernova at this (mass, [Fe/H]).",
+        }
+
+    prog = Progenitor(
+        mass_init_msun=mass_init_msun,
+        final_mass_msun=final_mass_msun,
+        he_core_msun=he_core_msun,
+        co_core_msun=co_core_msun,
+        pre_sn_radius_rsun=pre_sn_radius_rsun,
+        h_retained=h_retained,
+        feh_init=feh_init,
+    )
+    d = asdict(supernova_model(prog, m_ni=m_ni, e_kin=e_kin))
+    d["is_supernova"] = True     # `states` already recursed to the §3 StellarState shape
+    return d

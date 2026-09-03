@@ -45,6 +45,7 @@ from pathlib import Path
 import numpy as np
 
 from .errors import DataMissing
+from .spectra import spectrum_data
 
 # star_sim/data/filters.json — the committed filter asset (fetch_filters.py).
 _DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -238,3 +239,64 @@ def photometry_point(
         out["mv_abs"] = absolute["V"]                              # the CMD ordinate
         out["mv_app"] = apparent["V"]
     return out
+
+
+# --- the two composed payloads (spectrum -> magnitudes) -----------------------
+# `band_mags_stack` above needs a flux stack; getting one means asking `spectra.py`
+# for each star's served surface F_λ. That composition used to live in the routes,
+# which meant the only way to test it was over HTTP. It belongs here — but note what
+# does NOT: nothing below takes a `StellarState`. A magnitude is not a star (§3), so
+# the router pulls plain arrays off the track and hands those over.
+
+_SPECTRUM_PROVENANCE = ("teff", "logg", "feh", "teff_requested", "teff_max", "grid_name")
+
+
+def photometry_payload(
+    teff: float,
+    logg: float,
+    feh: float,
+    radius_rsun: float,
+    distance_pc: float = 10.0,
+    av: float = 0.0,
+    rv: float = 3.1,
+) -> dict:
+    """The `/photometry` payload: one star's served surface spectrum, scaled by (R/d)²,
+    reddened, and convolved through the committed filters — plus the provenance the
+    panel needs to be honest about it (which spectrum answered, and whether a very hot
+    star was clamped to the grid's ceiling, in which case its blue colour is a lower
+    bound)."""
+    spec = spectrum_data(teff, logg, feh)          # full-res absolute surface F_λ
+    out = photometry_point(
+        spec["wavelength"], spec["flux"], radius_rsun,
+        distance_pc=distance_pc, av=av, rv=rv,
+    )
+    for key in _SPECTRUM_PROVENANCE:
+        out[key] = spec[key]
+    return out
+
+
+def track_band_mags(
+    teffs: list[float],
+    loggs: list[float],
+    fehs: list[float],
+    radii: list[float],
+) -> dict[str, np.ndarray]:
+    """INTRINSIC absolute magnitudes (10 pc, no dust) for a whole track in ONE
+    vectorized pass — the CMD backdrop of Axis A3.
+
+    Each star costs one spectrum interpolation; the filter convolution then happens
+    once per band over the entire stack (that is what `band_mags_stack` was written
+    for). Distance and reddening are deliberately NOT applied: on a CMD they are a
+    uniform μ shift and a single reddening vector, which the panel draws on top.
+    """
+    lam: np.ndarray | None = None
+    flux_rows: list = []
+    for teff, logg, feh in zip(teffs, loggs, fehs, strict=True):
+        spec = spectrum_data(teff, logg, feh)
+        if lam is None:
+            lam = np.asarray(spec["wavelength"], dtype=float)
+        flux_rows.append(spec["flux"])
+    return band_mags_stack(
+        lam, np.asarray(flux_rows, dtype=float), np.asarray(radii, dtype=float),
+        10.0, av=0.0,
+    )

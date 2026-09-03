@@ -56,6 +56,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Roadmap (future-work index)](../plans/ROADMAP.md) — the canonical index of everything proposed-but-unbuilt. Update this, not a second list; shipped rows go to [SHIPPED.md](../plans/SHIPPED.md).
 - [Science hurdles ledger](../plans/science-hurdles.md) — every measured scientific limit, tiered T1–T4/OOS with a verdict; the prioritised NEXT list.
 - [Structure refactor plan](../plans/structure-refactor.md) — the structural debts with measured sizes (api routers, main.js chokepoint, shared grid helpers, JS harness) in payoff order.
+- [api/ router package](star-sim-api-routers.md) — the shipped api.py split: the swap point via `_deps.provider()`, the app-wide 422/503 handlers, and the two hazards the next file→package split will hit.
 - [CI data-free contract](star-sim-ci-data-free-contract.md) — ruff + data-free pytest in CI; the two MIST gates (working provider vs raw tracks); the §3 architecture table test.
 - [GitHub repo](star-sim-github-repo.md) — public repo location + how it was created.
 - [Always commit and push](always-commit-push.md) — standing preference: finish substantive changes by committing AND pushing unprompted.

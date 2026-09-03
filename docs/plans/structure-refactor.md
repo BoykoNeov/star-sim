@@ -29,7 +29,15 @@ test suite (and the new architecture table) as the safety net.
 
 ## 1. Backend (`backend/star_sim`, 11.1 kLOC)
 
-### 1.1 `api.py` → an `api/` package of routers  · **high payoff, low risk**
+### 1.1 `api.py` → an `api/` package of routers  · **SHIPPED 2026-09-03**
+
+> Done. Acceptance was the full OpenAPI schema byte-identical before/after (all 35
+> paths, every query bound, every docstring), 456 pytest, ruff clean. Three
+> deviations from the text below, all recorded in `SHIPPED.md` §6: the `DataMissing`
+> base went to its own `star_sim/errors.py` (not `provider.py` — see (b)); the
+> mapping became two app-wide exception handlers rather than a decorator, and
+> deliberately does **not** cover bare `ValueError`; and `_donor_ms_lifetime` stayed
+> in the router (see (c) — it needs `provider()`, which `binary.py` may not import).
 
 971 lines, 33 `@app.get` routes, ~30 copies of the same
 `try/except ParameterOutOfRange → 422 / *DataMissing → 503` ladder over eleven

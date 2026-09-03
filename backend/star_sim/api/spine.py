@@ -15,7 +15,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, Query
 
 from ..provider import ProviderDataMissing
-from ..supernova import Progenitor, supernova_model
+from ..supernova import supernova_payload
 from ._deps import provider
 
 router = APIRouter()
@@ -245,31 +245,15 @@ def supernova(
     explosion scalars (M_ej, M_Ni default+range, E_K, v_phot, remnant), and the honesty
     `tiers`. `m_ni` is the only free input (Tier-3); the plateau peak carries no M_Ni term."""
     eg = provider().endgame(mass, feh, vvcrit)
-
-    # Only the SN branch has a supernova to compute. WD / WR / none -> an honest empty
-    # payload echoing the real fate (the §3 boundary: a non-SN progenitor, or a provider
-    # with no endgame data, simply has no light curve here).
-    if eg.type != "SN" or eg.co_core_msun is None:
-        return {
-            "type": eg.type,
-            "is_supernova": False,
-            "mass_init_msun": eg.mass_init_msun,
-            "feh_init": eg.feh_init,
-            "light_curve": None,
-            "states": [],
-            "reason": f"{eg.type} progenitor — no core-collapse supernova at this (mass, [Fe/H]).",
-        }
-
-    prog = Progenitor(
+    return supernova_payload(          # the shape (incl. the honest non-SN one) is the sibling's
+        fate=eg.type,
         mass_init_msun=eg.mass_init_msun,
+        feh_init=eg.feh_init,
         final_mass_msun=eg.final_mass_msun,
         he_core_msun=eg.he_core_msun,
         co_core_msun=eg.co_core_msun,
         pre_sn_radius_rsun=eg.pre_sn_radius_rsun,
         h_retained=eg.h_retained,
-        feh_init=eg.feh_init,
+        m_ni=m_ni,
+        e_kin=e_kin,
     )
-    model = supernova_model(prog, m_ni=m_ni, e_kin=e_kin)
-    d = asdict(model)            # recurses `states` into the §3 StellarState shape
-    d["is_supernova"] = True
-    return d

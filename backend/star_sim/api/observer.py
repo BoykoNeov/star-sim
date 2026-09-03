@@ -13,8 +13,7 @@ from __future__ import annotations
 import numpy as np
 from fastapi import APIRouter, Query
 
-from ..photometry import band_mags_stack, band_names, photometry_point
-from ..spectra import spectrum_data
+from ..photometry import band_names, photometry_payload, track_band_mags
 from ._deps import provider
 
 router = APIRouter()
@@ -47,19 +46,9 @@ def photometry(
     edge — out of scope). `teff_requested`/`teff_max` from the spectrum echo whether a
     very hot star's spectrum was clamped to the grid ceiling (its blue colour is then a
     lower bound). 503 if the spectrum cube or filter asset is missing."""
-    spec = spectrum_data(teff, logg, feh)  # full-res absolute surface F_λ
-    out = photometry_point(
-        spec["wavelength"], spec["flux"], radius_rsun,
-        distance_pc=distance_pc, av=av, rv=rv,
+    return photometry_payload(
+        teff, logg, feh, radius_rsun, distance_pc=distance_pc, av=av, rv=rv,
     )
-    # Provenance / honesty: which star's spectrum, and whether it was hot-clamped.
-    out["teff"] = spec["teff"]
-    out["logg"] = spec["logg"]
-    out["feh"] = spec["feh"]
-    out["teff_requested"] = spec["teff_requested"]
-    out["teff_max"] = spec["teff_max"]
-    out["grid_name"] = spec["grid_name"]
-    return out
 
 
 @router.get("/photometry_track")
@@ -91,18 +80,13 @@ def photometry_track(
         idx = np.unique(idx)
         states = [states[i] for i in idx]
 
-    lam = None
-    flux_rows: list = []
-    radii: list[float] = []
-    for st in states:
-        spec = spectrum_data(st.Teff_K, st.logg, st.feh_init)
-        if lam is None:
-            lam = np.asarray(spec["wavelength"], dtype=float)
-        flux_rows.append(spec["flux"])
-        radii.append(st.R_rsun)
-    mags = band_mags_stack(
-        lam, np.asarray(flux_rows, dtype=float), np.asarray(radii, dtype=float),
-        10.0, av=0.0,
+    # Plain arrays, not the states themselves: a magnitude is not a star, so
+    # `photometry.py` never sees a StellarState (§3).
+    mags = track_band_mags(
+        [st.Teff_K for st in states],
+        [st.logg for st in states],
+        [st.feh_init for st in states],
+        [st.R_rsun for st in states],
     )
 
     have_bv = "B" in mags and "V" in mags

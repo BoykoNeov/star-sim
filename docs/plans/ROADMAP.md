@@ -46,11 +46,12 @@ list. CLAUDE.md's "what's next" points at this file.
 
 ## Structure (from `structure-refactor.md` §4, in order)
 
-1. `api.py` → `api/` routers + one error decorator.
-2. `main.js`: `fetchLatest` token helper; chokepoint registry (+ call it from `exitEndgame`).
-3. `node --test` harness for the pure frontend helpers, wired into CI.
-4. Shared grid helpers (`snap`, `load_npz`, missing-data hints); `spectra/` package.
-5. `init` → per-panel `wire*()`.
+*Step 1 (`api.py` → routers) shipped 2026-09-03 — see `SHIPPED.md`.*
+
+1. `main.js`: `fetchLatest` token helper; chokepoint registry (+ call it from `exitEndgame`).
+2. `node --test` harness for the pure frontend helpers, wired into CI.
+3. Shared grid helpers (`snap`, `load_npz`, missing-data hints); `spectra/` package.
+4. `init` → per-panel `wire*()`.
 
 ## Cross-cutting cautions (unchanged)
 
