@@ -72,9 +72,27 @@ cause. Downstream, the same ~3 % common-mode offset is what makes the seismology
 panel ring 2984/132 µHz vs 3090/135 (memory: asteroseismology) — one root, not two
 bugs.
 
-**NEXT (small, honest):** surface it once in the UI — a readout tooltip on the
-Sun preset: "MIST v2.5's 1 M☉ model at solar age is 7 % over-luminous; the grid's
-Sun sits near [Fe/H] +0.07." Cheap, and it turns the residual into pedagogy.
+**SURFACED (2026-09-03)** — the NEXT is spent; the residual is now pedagogy in-band,
+split so each fact has exactly one home:
+
+* **The live figure → the readout's L row.** `sunResidualNote(s)` in `main.js` appends a
+  confession to the luminosity row's `?` when the star on screen *is* the model's Sun.
+  It is **computed from the served `StellarState`**, never hardcoded — the stub and MESA
+  each have their own, different Sun, so a literal "7 %" would go false on a `PROVIDER`
+  swap. Default state fires it (L = 1.07, "about 7 % high", Teff 5835 K vs the defined
+  5772, R 1.01 vs 1).
+* **Where the model's Sun sits → the `MISTProvider` status token.** Measured through the
+  provider on this branch: **[Fe/H] = +0.07 gives L = 0.9999 and Teff = 5770.0 K** — the
+  Sun to four figures (the old note's "near +0.07" understated how exact it is). That
+  fact is MIST-specific, so it stays in the already-provider-gated tooltip, which no
+  longer restates the numeric residual.
+
+**The gate is deliberately tight** (mass within ±0.005 M☉, |[Fe/H]| ≤ 0.01, phase MS, age
+within ±0.15 Gyr of 4.567). Solar-MS luminosity climbs ~9 % per Gyr, so the *same* track
+reads +13 % at 5.2 Gyr and −3 % at 3.5 Gyr — real evolution, not a residual — and mass is
+sharper still (1.02 M☉ is already +21 %). Outside that shell the sentence would be false,
+so it disappears rather than being relabeled. Nothing was retuned; the Sun anchor test is
+untouched.
 
 ### 1.3 The He-ignition cliff (~2.0–2.1 M☉) — **GATED (2026-09-03)**  · T1
 

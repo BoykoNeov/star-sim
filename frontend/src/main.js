@@ -1474,9 +1474,13 @@ const STATUS_OK_TIP =
 const providerTip = (name) =>
   name === "MISTProvider"
     ? "Data source (spec §3) — real MIST v2.5 stellar-evolution tracks, " +
-      "EEP-interpolated in mass and [Fe/H]. A faithful model, but an approximation: " +
-      "L☉ and R☉ are *defined* as 1, yet MIST predicts L≈1.07, R≈1.01 for the Sun " +
-      "at 4.6 Gyr — a few-percent residual."
+      "EEP-interpolated in mass and [Fe/H]. A faithful model, but an approximation — " +
+      "and it says so out loud: MIST's own 1 M☉ track sits a few percent above the " +
+      "*defined* L☉ = R☉ = 1 at the Sun's age (hover the readout's L row on the " +
+      "default star for the live figures). WHERE ITS SUN ACTUALLY SITS: the same grid " +
+      "reaches L = 1.000 and Teff = 5770 K — the Sun to four figures — at " +
+      "[Fe/H] ≈ +0.07, so this model's Sun is very slightly metal-rich. Nothing is " +
+      "retuned to hide the offset."
     : "The StellarStateProvider feeding every panel (spec §3). It is " +
       "interchangeable behind one interface — nothing downstream knows or cares " +
       "which provider is active.";
@@ -1651,6 +1655,43 @@ async function fetchJSON(path) {
   return res.json();
 }
 
+// The Sun residual (science-hurdles.md §1.2), said where the user is looking at it.
+// The app's DEFAULT star IS the model's Sun, and its readout shows L = 1.07, not the
+// defined 1. That is MIST v2.5's own few-percent offset and it is deliberately NOT
+// retuned — a forced L = R = 1 would be the stub's fake green check — so the honest
+// move is to confess it in-band rather than only in a plan doc.
+//
+// COMPUTED from the served state, never hardcoded: the sentence has to stay true if
+// PROVIDER swaps (the stub and MESA each have their own, different Sun).
+//
+// Gated tight on purpose. Solar-main-sequence L climbs ~9 % per Gyr, so the SAME track
+// reads +13 % at 5.2 Gyr and −3 % at 3.5 Gyr — real evolution, not a residual — and
+// mass is sharper still (1.02 M☉ is already +21 %). Outside a thin shell around the
+// Sun's true age, mass and metallicity the sentence would be false, so it disappears
+// rather than being relabeled.
+const SUN_AGE_YR = 4.567e9;
+const SUN_TEFF_K = 5772;        // IAU-defined nominal solar effective temperature
+
+function sunResidualNote(s) {
+  if (s.phase !== "MS") return "";
+  if (Math.abs(s.mass_init_msun - 1) > 0.005) return "";
+  if (Math.abs(s.feh_init) > 0.01) return "";
+  if (Math.abs(s.age_yr - SUN_AGE_YR) > 0.15e9) return "";
+  const dL = (s.L_lsun - 1) * 100;
+  if (!(Math.abs(dL) > 1)) return "";   // nothing to confess if it lands on 1
+  const sign = dL > 0 ? "high" : "low";
+  return " — AND THIS STAR IS THE MODEL'S OWN SUN, so the number is worth reading " +
+    `twice: 1 L☉ is *defined* as the Sun's luminosity, yet the track reads ${fmt(s.L_lsun)} ` +
+    `— about ${Math.abs(dL).toFixed(0)} % ${sign} (alongside Teff ${fmt(s.Teff_K, 4)} K against ` +
+    `the defined ${SUN_TEFF_K} K, and R ${fmt(s.R_rsun)} against 1). That gap is the ` +
+    "stellar-evolution model's own residual at the Sun's age — not a bug in this " +
+    "simulator, and not something it corrects: forcing L = R = 1 here would be a fake " +
+    "green check that quietly hid the same few-percent offset in every other star (it " +
+    "is also why the asteroseismology panel rings a few percent below the Sun's " +
+    "measured 3090 µHz). Hover the data-source token in the status line for where " +
+    "this model's Sun actually sits.";
+}
+
 // Each row is [term, description, value]. Mass and [Fe/H] come from the state
 // itself (s.mass_init_msun / s.feh_init), NOT the slider DOM — so the whole
 // readout stays a pure function of one StellarState (spec §3). The descriptions
@@ -1673,7 +1714,8 @@ function renderReadout(s) {
       "time elapsed since birth on the zero-age main sequence",
       gyr(s.age_yr)],
     ["L",
-      "luminosity — total power the star radiates, in Suns (1 L☉ = 3.83×10²⁶ W)",
+      "luminosity — total power the star radiates, in Suns (1 L☉ = 3.83×10²⁶ W)" +
+      sunResidualNote(s),
       `${fmt(s.L_lsun)} L☉`],
     ["Teff",
       "effective temperature — the surface temperature that sets the star's color",
