@@ -68,6 +68,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .._grid import snap_index, snap_value
 from ..provider import EndgameResult, ParameterOutOfRange, ProviderDataMissing
 from ..state import StellarState
 from .mist import DATA_DIR
@@ -473,8 +474,7 @@ class MESAProvider:
             raise ParameterOutOfRange(
                 f"mass {mass} M_sun outside the MESA grid [{lo}, {hi}] at [Fe/H]={key:.2f}"
             )
-        i = int(np.argmin(np.abs(masses - mass)))
-        return self._tracks_by_feh[key][i]
+        return self._tracks_by_feh[key][snap_index(masses, mass)]
 
     def _state_from_track(self, t: _MesaTrack, frac: float) -> StellarState:
         """Read a StellarState off one run's arrays at fractional row `frac`.
@@ -497,5 +497,4 @@ class MESAProvider:
             raise ParameterOutOfRange(
                 f"[Fe/H] {feh} outside the MESA grid [{lo:.2f}, {hi:.2f}]"
             )
-        i = int(np.argmin(np.abs(self._fehs - feh)))
-        return float(self._fehs[i])
+        return snap_value(self._fehs, feh)

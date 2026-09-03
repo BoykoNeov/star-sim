@@ -24,10 +24,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TypeVar
 
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
+from ._grid import load_npz, snap_index
 from .errors import DataMissing
 
 # Must match scripts/bake_spectra.py's BAKE_VERSION; a stale cube is rejected.
@@ -83,13 +85,45 @@ STRIPPED_GRID_FILENAME = "stripped_spectra_grid.npz"
 # on the host by scripts/bake_alpha_spectra.py (no pymsg). See the atlas plan Tier B.
 ALPHA_GRID_FILENAME = "alpha_spectra_grid.npz"
 
-_BAKE_HINT = (
-    "Spectrum grid not baked. Build it once in the MSG container and copy it to "
-    "{path}:\n"
-    "    (in msg_spike) python scripts/bake_spectra.py --out /tmp/spectra_grid.npz\n"
-    "    docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz\n"
-    "(see backend/docs/msg_spectra_build_recipe.md)."
-)
+# The five baked cubes as one table: name -> (filename, the "not baked yet" recipe).
+# The recipes stay hand-written per cube (they fetch from five different places), but
+# the *plumbing* around them is written once in `_cube()` below. Adding a sixth cube is
+# a row here plus one `_cube(...)` call — never another cache global beside another
+# near-identical `_load_*`, which is how this file grew five of each.
+_CUBE_FILES: dict[str, tuple[str, str]] = {
+    "main": (GRID_FILENAME, (
+        "Spectrum grid not baked. Build it once in the MSG container and copy it to "
+        "{path}:\n"
+        "    (in msg_spike) python scripts/bake_spectra.py --out /tmp/spectra_grid.npz\n"
+        "    docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz\n"
+        "(see backend/docs/msg_spectra_build_recipe.md).")),
+    "wd": (WD_GRID_FILENAME, (
+        "White-dwarf spectrum grid not baked. Fetch + bake it once:\n"
+        "    python -m star_sim.fetch_koester\n"
+        "    python scripts/bake_wd_spectra.py   # -> {path}\n"
+        "(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 6).")),
+    "alpha": (ALPHA_GRID_FILENAME, (
+        "[alpha/Fe] spectrum grid not baked. Fetch + bake it once:\n"
+        "    python -m star_sim.fetch_coelho\n"
+        "    python scripts/bake_alpha_spectra.py   # -> {path}\n"
+        "(see docs/plans/whirling-cohort-atlas.md, atlas Tier B).")),
+    "wr": (WR_GRID_FILENAME, (
+        "Wolf-Rayet spectrum grid not baked. Fetch + bake it once:\n"
+        "    python -m star_sim.fetch_powr\n"
+        "    python scripts/bake_wr_spectra.py   # -> {path}\n"
+        "(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 7).")),
+    "stripped": (STRIPPED_GRID_FILENAME, (
+        "Binary-stripped-star spectrum grid not baked. Fetch the Götberg "
+        "spectra tree + bake it once:\n"
+        "    python -m star_sim.fetch_gotberg   # recipe to get data/gotberg_stripped/\n"
+        "    python scripts/bake_stripped_spectra.py   # -> {path}\n"
+        "(see docs/plans/stripped-consort-unveiling.md, Chunk 3).")),
+}
+
+# One cache for all five, keyed by the same name. A test that wants a fresh load swaps
+# the whole dict (`monkeypatch.setattr(spectra, "_LOADED", {})`) instead of knowing
+# which of five globals to `None` out.
+_LOADED: dict[str, object] = {}
 
 
 class SpectraDataMissing(DataMissing):
@@ -106,14 +140,8 @@ class _Spectra:
 
     def __init__(self, path: Path):
         self.path = path
-        npz = np.load(path, allow_pickle=False)
-
-        ver = int(npz["bake_version"])
-        if ver != BAKE_VERSION:
-            raise SpectraDataMissing(
-                f"baked grid {path} is BAKE_VERSION {ver}, runtime wants "
-                f"{BAKE_VERSION}; re-bake with scripts/bake_spectra.py"
-            )
+        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+                       rebake_cmd="scripts/bake_spectra.py")
 
         self.grid_name = str(npz["grid_name"])
         self.flux_unit = str(npz["flux_unit"])
@@ -154,51 +182,26 @@ class _Spectra:
         return flux, used
 
 
-_CACHE: _Spectra | None = None
-_WD_CACHE: _Spectra | None = None
-_ALPHA_CACHE: _Spectra | None = None
+_C = TypeVar("_C")
 
 
-def _load() -> _Spectra:
-    global _CACHE
-    if _CACHE is None:
-        path = SPECTRA_DATA_DIR / GRID_FILENAME
+def _cube(name: str, cls: type[_C]) -> _C:
+    """The named cube from `_CUBE_FILES`, built once by `cls(path)` and kept.
+
+    Lazy on purpose (the `_Spectra` precedent every sibling copied): importing this
+    module — and so the whole package — never touches disk, and a checkout with no
+    baked cubes raises `SpectraDataMissing` (→ a 503 carrying that cube's own recipe)
+    only when a spectrum is actually requested. `SPECTRA_DATA_DIR` is read *here*, per
+    call, so a test can point it at an empty directory.
+    """
+    hit = _LOADED.get(name)
+    if hit is None:
+        filename, hint = _CUBE_FILES[name]
+        path = SPECTRA_DATA_DIR / filename
         if not path.is_file():
-            raise SpectraDataMissing(_BAKE_HINT.format(path=path))
-        _CACHE = _Spectra(path)
-    return _CACHE
-
-
-def _load_wd() -> _Spectra:
-    """The white-dwarf cube, loaded once (separate cache from the main cube)."""
-    global _WD_CACHE
-    if _WD_CACHE is None:
-        path = SPECTRA_DATA_DIR / WD_GRID_FILENAME
-        if not path.is_file():
-            raise SpectraDataMissing(
-                f"White-dwarf spectrum grid not baked. Fetch + bake it once:\n"
-                f"    python -m star_sim.fetch_koester\n"
-                f"    python scripts/bake_wd_spectra.py   # -> {path}\n"
-                f"(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 6)."
-            )
-        _WD_CACHE = _Spectra(path)
-    return _WD_CACHE
-
-
-def _load_alpha() -> _Spectra:
-    """The [alpha/Fe] cube, loaded once (separate cache from the main + WD cubes)."""
-    global _ALPHA_CACHE
-    if _ALPHA_CACHE is None:
-        path = SPECTRA_DATA_DIR / ALPHA_GRID_FILENAME
-        if not path.is_file():
-            raise SpectraDataMissing(
-                f"[alpha/Fe] spectrum grid not baked. Fetch + bake it once:\n"
-                f"    python -m star_sim.fetch_coelho\n"
-                f"    python scripts/bake_alpha_spectra.py   # -> {path}\n"
-                f"(see docs/plans/whirling-cohort-atlas.md, atlas Tier B)."
-            )
-        _ALPHA_CACHE = _Spectra(path)
-    return _ALPHA_CACHE
+            raise SpectraDataMissing(hint.format(path=path))
+        hit = _LOADED[name] = cls(path)
+    return hit  # type: ignore[return-value]
 
 
 def alpha_spectrum_data(
@@ -228,7 +231,7 @@ def alpha_spectrum_data(
     to `teff_max` here, but the panel routes it to the main `/spectrum` cube instead
     (alpha is dead there — Gate 1), so the clamp is not normally hit.
     """
-    s = _load_alpha()
+    s = _cube("alpha", _Spectra)
     flux, used = s.evaluate({"teff": teff, "logg": logg, "feh": feh, "afe": afe})
     lam = s.lam
     ti = s.axis_keys.index("teff")
@@ -287,7 +290,7 @@ def spectrum_data(
       feh_varies : bool — false for a solar-only grid (panel labels it honestly)
       flux_unit, grid_name : provenance
     """
-    s = _load()
+    s = _cube("main", _Spectra)
     flux, used = s.evaluate({"teff": teff, "logg": logg, "feh": feh})
     lam = s.lam
 
@@ -354,7 +357,7 @@ def wd_spectrum_data(teff: float, logg: float, *, n_display: int | None = None) 
     draw path) plus `regime` ∈ {"DA", "DC", "CSPN"}. `feh_varies` is always false (a
     DA / hot H-atmosphere is pure hydrogen — [Fe/H] is meaningless, not merely "solar").
     """
-    s = _load_wd()
+    s = _cube("wd", _Spectra)
     ti = s.axis_keys.index("teff")
     gi = s.axis_keys.index("logg")
     teff_min, teff_max = s.bounds[ti]
@@ -456,13 +459,8 @@ class _WRSpectra:
 
     def __init__(self, path: Path):
         self.path = path
-        npz = np.load(path, allow_pickle=False)
-        ver = int(npz["bake_version"])
-        if ver != BAKE_VERSION:
-            raise SpectraDataMissing(
-                f"baked WR grid {path} is BAKE_VERSION {ver}, runtime wants "
-                f"{BAKE_VERSION}; re-bake with scripts/bake_wr_spectra.py"
-            )
+        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+                       rebake_cmd="scripts/bake_wr_spectra.py", what="WR grid")
         self.grid_name = str(npz["grid_name"])
         self.flux_unit = str(npz["flux_unit"])
         self.lam = np.asarray(npz["lam"], dtype=float)
@@ -492,24 +490,6 @@ class _WRSpectra:
         if not cands:                      # subtype not baked → any subtype, same Z snap
             cands = list(self.grids.values())
         return min(cands, key=lambda g: abs(g["z"] - z_target))
-
-
-_WR_CACHE: _WRSpectra | None = None
-
-
-def _load_wr() -> _WRSpectra:
-    global _WR_CACHE
-    if _WR_CACHE is None:
-        path = SPECTRA_DATA_DIR / WR_GRID_FILENAME
-        if not path.is_file():
-            raise SpectraDataMissing(
-                f"Wolf-Rayet spectrum grid not baked. Fetch + bake it once:\n"
-                f"    python -m star_sim.fetch_powr\n"
-                f"    python scripts/bake_wr_spectra.py   # -> {path}\n"
-                f"(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 7)."
-            )
-        _WR_CACHE = _WRSpectra(path)
-    return _WR_CACHE
 
 
 def _wr_continuum(flux: np.ndarray, n_chunks: int = 24, pct: float = 25.0) -> np.ndarray:
@@ -551,7 +531,7 @@ def wr_spectrum_data(
       teff (the snapped node T*), teff_requested, teff_max (the grid's hottest node, for
       the no-model frame), rt (snapped node Rt), off_grid, off_reason, grid_name.
     """
-    s = _load_wr()
+    s = _cube("wr", _WRSpectra)
     lam = s.lam
     subtype = _wr_subtype(x_surf, y_surf, z_surf)
     g = s.select_grid(subtype, feh)
@@ -649,13 +629,8 @@ class _StrippedSpectra:
 
     def __init__(self, path: Path):
         self.path = path
-        npz = np.load(path, allow_pickle=False)
-        ver = int(npz["bake_version"])
-        if ver != BAKE_VERSION:
-            raise SpectraDataMissing(
-                f"baked stripped grid {path} is BAKE_VERSION {ver}, runtime wants "
-                f"{BAKE_VERSION}; re-bake with scripts/bake_stripped_spectra.py"
-            )
+        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+                       rebake_cmd="scripts/bake_stripped_spectra.py", what="stripped grid")
         self.grid_name = str(npz["grid_name"])
         self.flux_unit = str(npz["flux_unit"])
         self.lam = np.asarray(npz["lam"], dtype=float)
@@ -673,27 +648,8 @@ class _StrippedSpectra:
             key=lambda z: abs(np.log10(z / _GOTBERG_SOLAR_Z) - feh),
         )
         at_z = np.where(np.isclose(zs, z_snap))[0]
-        j = at_z[int(np.argmin(np.abs(self.nodes_minit[at_z] - minit)))]
+        j = at_z[snap_index(self.nodes_minit[at_z], minit)]
         return int(j)
-
-
-_STRIPPED_CACHE: _StrippedSpectra | None = None
-
-
-def _load_stripped() -> _StrippedSpectra:
-    global _STRIPPED_CACHE
-    if _STRIPPED_CACHE is None:
-        path = SPECTRA_DATA_DIR / STRIPPED_GRID_FILENAME
-        if not path.is_file():
-            raise SpectraDataMissing(
-                f"Binary-stripped-star spectrum grid not baked. Fetch the Götberg "
-                f"spectra tree + bake it once:\n"
-                f"    python -m star_sim.fetch_gotberg   # recipe to get data/gotberg_stripped/\n"
-                f"    python scripts/bake_stripped_spectra.py   # -> {path}\n"
-                f"(see docs/plans/stripped-consort-unveiling.md, Chunk 3)."
-            )
-        _STRIPPED_CACHE = _StrippedSpectra(path)
-    return _STRIPPED_CACHE
 
 
 def stripped_spectrum_data(
@@ -717,7 +673,7 @@ def stripped_spectrum_data(
     `feh_varies` is false (the cube is solar-only, matching binary.py's committed table);
     a non-solar request snaps to solar with that flag, honestly.
     """
-    s = _load_stripped()
+    s = _cube("stripped", _StrippedSpectra)
     j = s.snap(minit, feh)
     lam = s.lam
     flux = s.flux[j].copy()

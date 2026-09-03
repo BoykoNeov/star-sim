@@ -125,6 +125,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from .binary import track_roche_geometry
+from ._grid import require_bake_version
 from .errors import DataMissing
 from .posydon import mt_state_label, state_from_row
 from .state import StellarState
@@ -295,12 +296,10 @@ _CACHE: dict[Path, _BakedCoGrid] = {}
 def _load_baked(path: Path) -> _BakedCoGrid:
     if path in _CACHE:
         return _CACHE[path]
-    with np.load(path) as npz:
-        if int(npz["bake_version_co"]) != BAKE_VERSION_CO:
-            raise PosydonCoDataMissing(
-                f"{path} was baked with an old BAKE_VERSION_CO — rebake with "
-                f"scripts/bake_posydon.py --grid-type co-hms-rlo"
-            )
+    with np.load(path, allow_pickle=False) as npz:
+        require_bake_version(
+            npz, path, expected=BAKE_VERSION_CO, exc=PosydonCoDataMissing, key="bake_version_co",
+            rebake_cmd="scripts/bake_posydon.py --grid-type co-hms-rlo", what="POSYDON CO grid")
         rows = {k[len("row_"):]: npz[k] for k in npz.files if k.startswith("row_")}
         # SN-model scalars are read OPTIONALLY (Chunk 2a additive fields) — an old
         # CO-HMS_RLO npz predates them, so all SN fields stay None and `dco` is never

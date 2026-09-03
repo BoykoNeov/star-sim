@@ -77,7 +77,7 @@ def test_alpha_spectrum_not_baked_is_503(tmp_path, monkeypatch):
     """If the alpha cube hasn't been baked, /alpha_spectrum returns a clean 503
     (actionable), not a 500 — the app stays up; only the alpha panel is unavailable."""
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)  # empty dir
-    monkeypatch.setattr(spectra, "_ALPHA_CACHE", None)          # force a reload
+    monkeypatch.setattr(spectra, "_LOADED", {})          # force a reload
     r = client.get("/alpha_spectrum", params={"teff": 5000, "logg": 4.5})
     assert r.status_code == 503
     assert "bake" in r.json()["detail"].lower()
@@ -85,7 +85,7 @@ def test_alpha_spectrum_not_baked_is_503(tmp_path, monkeypatch):
 
 def test_alpha_spectrum_data_raises_when_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)
-    monkeypatch.setattr(spectra, "_ALPHA_CACHE", None)
+    monkeypatch.setattr(spectra, "_LOADED", {})
     with pytest.raises(SpectraDataMissing):
         alpha_spectrum_data(5000, 4.5, 0.0, 0.0)
 

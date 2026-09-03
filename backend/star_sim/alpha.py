@@ -45,6 +45,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ._grid import snap_value
 from .errors import DataMissing
 from .providers.mesa import _MesaTrack, _build_track, _state_from_track
 
@@ -190,8 +191,7 @@ def _snap_mass(mass: float) -> float:
     nearest node and are flagged in-band by the route, never 422'd. The route's Query
     bound reserves 422 for structurally invalid mass <= 0."""
     assert _mass_grid is not None
-    i = int(np.argmin(np.abs(_mass_grid - mass)))
-    return float(_mass_grid[i])
+    return snap_value(_mass_grid, mass)
 
 
 def _track_block(t: _MesaTrack) -> dict:

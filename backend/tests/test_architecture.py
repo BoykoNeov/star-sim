@@ -28,6 +28,9 @@ NOT_EVEN_STATE = {"bpass", "photometry"}
 # CLAUDE.md: "imports only state.StellarState + the MESA parser's free helpers —
 # never the live MIST spine"). Only `providers.mesa` is allowed for them.
 MESA_PARSER_EXEMPT = {"helium", "alpha"}
+# Shared leaves: not siblings (they hold no physics and build no state), but every
+# sibling imports them, so anything they can reach a sibling can reach too.
+SHARED_LEAVES = ["_grid", "errors"]
 
 
 def _source(module: str) -> tuple[pathlib.Path, list[str]]:
@@ -69,21 +72,62 @@ def _imports(module: str) -> set[str]:
     return {m.removeprefix("star_sim.") for m in out}
 
 
-@pytest.mark.parametrize("module", SIBLINGS)
+def _modules_of(sibling: str) -> list[str]:
+    """Every module a sibling is made of: just itself while it is one file, and the
+    package plus all of its modules once it has been split into a directory.
+
+    Without this the boundary check goes quietly vacuous the moment a sibling is
+    split — `_source()` would resolve the name to `__init__.py` alone and stop
+    seeing where the physics actually moved to. That is exactly how `api.py` ->
+    `api/` nearly lost its checks, and `spectra.py` -> `spectra/` is queued next
+    (`docs/plans/structure-refactor.md` §1.3)."""
+    pkg_dir = PKG / sibling
+    if not (pkg_dir / "__init__.py").exists():
+        return [sibling]
+    return [sibling] + [f"{sibling}.{p.stem}" for p in sorted(pkg_dir.glob("*.py"))
+                        if p.stem != "__init__"]
+
+
+def _sibling_module_ids() -> list[str]:
+    return [m for s in SIBLINGS for m in _modules_of(s)]
+
+
+@pytest.mark.parametrize("module", _sibling_module_ids())
 def test_sibling_never_imports_the_provider_layer(module: str) -> None:
+    root = module.split(".")[0]
     imported = _imports(module)
     forbidden = {"api", "provider", "providers", "providers.mist", "providers.stub",
                  "providers.mist.MISTProvider", "providers.stub.StubProvider"}
     hit = {m for m in imported if m in forbidden or m.startswith("api.") or m.startswith("provider.")}
-    assert not hit, f"{module}.py reaches the provider layer: {sorted(hit)}"
+    assert not hit, f"{module} reaches the provider layer: {sorted(hit)}"
     mesa = {m for m in imported if m.startswith("providers.mesa")}
-    if module in MESA_PARSER_EXEMPT:
-        assert mesa, f"{module}.py is expected to reuse the MESA parser helpers"
-    else:
-        assert not mesa, f"{module}.py must not import the MESA provider: {sorted(mesa)}"
-    if module in NOT_EVEN_STATE:
+    if root not in MESA_PARSER_EXEMPT:
+        assert not mesa, f"{module} must not import the MESA provider: {sorted(mesa)}"
+    if root in NOT_EVEN_STATE:
         assert not any(m == "state" or m.startswith("state.") for m in imported), (
-            f"{module}.py is not a star — it must not import StellarState")
+            f"{module} is not a star — it must not import StellarState")
+
+
+@pytest.mark.parametrize("sibling", sorted(MESA_PARSER_EXEMPT))
+def test_the_what_if_overlays_do_reuse_the_mesa_parser(sibling: str) -> None:
+    """The other direction of the exemption: helium/alpha are *expected* to import
+    the MESA parser's free helpers (they are MESA-vs-MESA overlays). Asserted over
+    the sibling as a whole, so it survives one of them becoming a package."""
+    imported = set().union(*(_imports(m) for m in _modules_of(sibling)))
+    assert any(m.startswith("providers.mesa") for m in imported), (
+        f"{sibling} is expected to reuse the MESA parser helpers")
+
+
+@pytest.mark.parametrize("leaf", SHARED_LEAVES)
+def test_shared_leaves_stay_leaves(leaf: str) -> None:
+    """`_grid` and `errors` are imported by nearly every sibling, so whatever they
+    can reach, a sibling can reach. They are allowed numpy and the stdlib and
+    nothing from `star_sim` — no provider, no api, not even `state`."""
+    local = {m for m in _imports(leaf) if not m.startswith(("numpy", "np", "__future__"))}
+    intra = {m for m in local
+             if (PKG / m.split(".")[0]).with_suffix(".py").exists()
+             or (PKG / m.split(".")[0] / "__init__.py").exists()}
+    assert not intra, f"{leaf}.py must stay a leaf — it imports {sorted(intra)}"
 
 
 def _package_modules() -> list[str]:

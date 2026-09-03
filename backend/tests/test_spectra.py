@@ -96,7 +96,7 @@ def test_spectrum_not_baked_is_503(tmp_path, monkeypatch):
     """If the grid hasn't been baked, /spectrum returns a clean 503 (actionable),
     not a 500 — the app stays up; only the spectrum panel is unavailable."""
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)  # empty dir
-    monkeypatch.setattr(spectra, "_CACHE", None)                # force a reload
+    monkeypatch.setattr(spectra, "_LOADED", {})                # force a reload
     r = client.get("/spectrum", params={"teff": 5772, "logg": 4.44})
     assert r.status_code == 503
     assert "bake" in r.json()["detail"].lower()
@@ -104,7 +104,7 @@ def test_spectrum_not_baked_is_503(tmp_path, monkeypatch):
 
 def test_spectrum_data_raises_when_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)
-    monkeypatch.setattr(spectra, "_CACHE", None)
+    monkeypatch.setattr(spectra, "_LOADED", {})
     with pytest.raises(SpectraDataMissing):
         spectrum_data(5772, 4.44, 0.0)
 

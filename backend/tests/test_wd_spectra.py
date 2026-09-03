@@ -84,7 +84,7 @@ def test_wd_spectrum_not_baked_is_503(tmp_path, monkeypatch):
     """If the WD cube hasn't been baked, /wd_spectrum returns a clean 503 (actionable),
     not a 500 — the app stays up; only the WD spectrum panel is unavailable."""
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)  # empty dir
-    monkeypatch.setattr(spectra, "_WD_CACHE", None)             # force a reload
+    monkeypatch.setattr(spectra, "_LOADED", {})             # force a reload
     r = client.get("/wd_spectrum", params={"teff": 13000, "logg": 8.0})
     assert r.status_code == 503
     assert "bake" in r.json()["detail"].lower()
@@ -92,7 +92,7 @@ def test_wd_spectrum_not_baked_is_503(tmp_path, monkeypatch):
 
 def test_wd_spectrum_data_raises_when_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(spectra, "SPECTRA_DATA_DIR", tmp_path)
-    monkeypatch.setattr(spectra, "_WD_CACHE", None)
+    monkeypatch.setattr(spectra, "_LOADED", {})
     with pytest.raises(SpectraDataMissing):
         wd_spectrum_data(13000, 8.0)
 

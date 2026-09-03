@@ -56,6 +56,7 @@ from pathlib import Path
 import numpy as np
 
 from .binary import track_roche_geometry
+from ._grid import require_bake_version
 from .errors import DataMissing
 from .state import StellarState
 
@@ -165,12 +166,9 @@ _CACHE: dict[Path, _BakedGrid] = {}
 def _load_baked(path: Path) -> _BakedGrid:
     if path in _CACHE:
         return _CACHE[path]
-    with np.load(path) as npz:
-        if int(npz["bake_version"]) != BAKE_VERSION:
-            raise PosydonDataMissing(
-                f"{path} was baked with an old BAKE_VERSION — rebake with "
-                f"scripts/bake_posydon.py"
-            )
+    with np.load(path, allow_pickle=False) as npz:
+        require_bake_version(npz, path, expected=BAKE_VERSION, exc=PosydonDataMissing,
+                             rebake_cmd="scripts/bake_posydon.py", what="POSYDON grid")
         rows = {k[len("row_"):]: npz[k] for k in npz.files if k.startswith("row_")}
         grid = _BakedGrid(
             feh=float(npz["feh"]),

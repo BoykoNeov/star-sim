@@ -115,6 +115,12 @@ must lie *between* its neighbors on the HR diagram at every phase.
 - Siblings (each bypasses `PROVIDER`): `lane_emden.py` · `structure.py` · `spectra.py` ·
   `supernova.py` · `binary.py` · `posydon.py` · `posydon_co.py` · `helium.py` ·
   `alpha.py` · `bpass.py` · `isochrone.py` · `photometry.py`.
+- **Shared leaves** — `errors.py` (the `DataMissing` base the 422/503 ladder maps) and
+  `_grid.py` (nearest-node `snap_index`/`snap_value`, `load_npz`/`require_bake_version`).
+  Nearly every sibling imports them, so they are **numpy + stdlib only** — no provider,
+  no api, not even `state`; a test pins it. A helper joins them only when it is the same
+  shape everywhere: the missing-data hints and the `*_snapped_far` predicates were
+  measured and are deliberately NOT shared ([[star-sim-shared-grid-leaf]]).
 - `fetch_*.py` — build-time grid fetches; `scripts/bake_*.py` — host-side bakes.
 
 **`backend/tests/`** — §10 sanity checks. Skip markers in `conftest.py` gate by data

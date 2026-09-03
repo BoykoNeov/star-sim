@@ -45,6 +45,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ._grid import snap_index, snap_value
 from .errors import DataMissing
 from .lane_emden import solve_lane_emden
 
@@ -188,16 +189,13 @@ class _ProfileIndex:
         within that mass, then age within that (mass,[Fe/H]) track. Honest — reports
         the true saved values downstream, never an interpolation across snapshots."""
         metas = self._ensure_loaded()
-        masses = np.array([m.mass_init for m in metas])
-        m_snap = float(masses[int(np.argmin(np.abs(masses - mass)))])
+        m_snap = snap_value([m.mass_init for m in metas], mass)
         at_mass = [m for m in metas if m.mass_init == m_snap]
 
-        fehs = np.array([m.feh for m in at_mass])
-        f_snap = float(fehs[int(np.argmin(np.abs(fehs - feh)))])
+        f_snap = snap_value([m.feh for m in at_mass], feh)
         at_feh = [m for m in at_mass if m.feh == f_snap]
 
-        ages = np.array([m.age_yr for m in at_feh])
-        return at_feh[int(np.argmin(np.abs(ages - age_yr)))]
+        return at_feh[snap_index([m.age_yr for m in at_feh], age_yr)]
 
     def available(self) -> list[_ProfileMeta]:
         return list(self._ensure_loaded())

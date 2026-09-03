@@ -68,22 +68,66 @@ function — the route becomes ≤ 10 lines. Test: the existing route tests plus
 `test_architecture.py` (routers may import siblings; siblings still may not
 import `api`).
 
-### 1.2 One `snap()` and one missing-data hint  · **medium payoff, low risk**
+### 1.2 One `snap()` and one missing-data hint  · **SHIPPED 2026-09-03 (two of four helpers)**
 
-`int(np.argmin(np.abs(grid - x)))` appears 22× across 8 files; the
-`_MISSING_HINT.format(data_dir=…)` template 8×; the `bake_version` mismatch check
-8×; `np.load(..., allow_pickle=False)` is inconsistent (5 of 10 sites). Add
-`star_sim/_grid.py` with `snap_index(values, x)`, `snap_far(values, x, tol)`,
-`load_npz(path, expected_bake_version, tag)` and a `missing_hint(dataset, path,
-fetch_cmd)` builder. Replace call sites one sibling per commit; behaviour is
-bit-identical, so the data-gated tests are the check.
+> Done. `star_sim/_grid.py` holds `snap_index` / `snap_value` (13 call sites across
+> `alpha` `helium` `bpass` `isochrone` `structure` `spectra` `providers/mesa`) and
+> `load_npz` / `require_bake_version` (7 sites across `bpass` `posydon` `posydon_co`
+> `spectra`). It is stdlib+numpy only and `test_architecture.py` now pins that as a
+> *shared leaf* rule — every sibling imports it, so anything it can reach a sibling
+> can reach. Acceptance was the full suite before/after with the real grids on disk
+> (not skips): **464 passed / 0 skipped before, 468 passed / 0 skipped after** — the
+> four extra are this step's own new architecture assertions. The zero-skip half is
+> the load-bearing one: every sibling's grid is on the dev machine, so "the data-gated
+> tests are the check" is true here rather than a suite of skips.
+>
+> **Two of the four planned helpers were measured and rejected — do not re-propose:**
+>
+> - **`missing_hint(dataset, path, fetch_cmd)`** — the eight `_MISSING_HINT`
+>   templates are hand-written *recipes*, not a shape: different format keys
+>   (`data_dir` / `baked_dir` / `kind` / none), and genuinely different instructions
+>   (a Docker MESA batch · a 1 GB Zenodo download with a pre-baked shortcut · "restore
+>   these from version control"). A builder could only take a free-text blob (no
+>   reduction) or flatten a user-facing 503 hint (a regression).
+> - **`snap_far(values, x, tol)`** — `*_snapped_far` has *three incompatible
+>   meanings* in the code: absolute (`isochrone._FEH_SNAP_FAR`), relative-to-the-node
+>   (`alpha`/`helium`, `> 0.25 * snapped`), and log-dex (`posydon._M1_FAR_DEX`,
+>   `bpass` on `log_age`). One `tol` parameter would silently change one of them, and
+>   `abs(a - b) > tol` is not worth a function.
+>
+> Two further corrections to the counts above: the "22× `argmin`" is **13** genuine
+> nearest-node snaps — the rest are `argmin` over a *precomputed distance* array
+> (`posydon`, `posydon_co`, the WR (log T*, log Rt) snap) or over a cost curve
+> (`providers/mist`, left alone: that is §1.4 and its interpolation core just
+> changed). And `allow_pickle=False` was never an inconsistency: it is numpy's own
+> default, so the five bare `np.load` calls behaved identically — it is now passed
+> explicitly in one place for documentation only.
 
-### 1.3 `spectra.py` (761 lines) → a `spectra/` package  · **medium**
+### 1.3 `spectra.py` → one cube loader  · **SHIPPED 2026-09-03; the directory split DEFERRED**
 
-Five parallel `*_spectrum_data` loaders, five cache globals, three
-`BAKE_VERSION` checks. One `_Cube` class (axes, flux, bake version, snap rules)
-and one `@functools.cache` loader per cube file; the five public functions stay
-as the API. Removes the "add a sixth cube by copy-paste" path.
+> Done, the half that carried the payoff. `spectra.py` had five cache globals and
+> five near-identical `_load_*()` functions (find the path, `is_file()`, raise with
+> this cube's recipe, construct, memoise). They are now one `_CUBE_FILES` table
+> (name → filename + recipe) and one `_cube(name, cls)` — 762 → 718 lines, and
+> adding a sixth cube is a table row plus one call instead of a sixth copy of the
+> plumbing. The three `BAKE_VERSION` checks went to `_grid.load_npz` in §1.2. The
+> five public `*_spectrum_data` functions, their signatures and their returned dict
+> keys are untouched.
+>
+> **The directory split is deferred, and the reason is a THIRD hazard** — one the
+> `api.py` → `api/` split did not hit and so did not record in
+> [[star-sim-api-routers]]: `api.py` had no module-level mutable state that tests
+> reached into, but the spectra tests monkeypatch `spectra.SPECTRA_DATA_DIR` and the
+> cache from **8 sites across 4 files** to prove "no baked cube → 503 with the
+> recipe". Patching a name on a package `__init__.py` does **not** reach a submodule
+> that read that name into its own namespace at import time, so the split forces
+> either a `_paths` indirection read at call time or a rewrite of all 8 sites — for a
+> payoff that, after the loader collapse, is cosmetic. Revisit only if a fifth or
+> sixth cube makes the file genuinely hard to navigate.
+>
+> The cache-reset sites were verified to still test what they tested, not to pass off
+> a warm cube: removing the `_LOADED` swap makes both "not baked" tests fail (200
+> instead of 503, and DID NOT RAISE).
 
 ### 1.4 `providers/mist.py` (1,478 lines)  · **low priority**
 
@@ -263,7 +307,9 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
    `exitEndgame`)~~ — **shipped 2026-09-03**.
 3. ~~§2.3 `node --test` for the pure helpers; add to CI~~ — **shipped 2026-09-03**.
 4. ~~§2.1 move 3 (`init` → `wire*`, + `controls.js`)~~ — **shipped 2026-09-03**.
-5. §1.2 shared grid helpers; §1.3 spectra package.
+5. ~~§1.2 shared grid helpers; §1.3 spectra loader collapse~~ — **shipped 2026-09-03**
+   (two of §1.2's four helpers measured and rejected; §1.3's directory split deferred —
+   see the notes under each).
 6. §1.4–1.6 opportunistically.
 
 Each step is independently shippable and leaves the app byte-identical for the

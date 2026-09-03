@@ -36,6 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ._grid import load_npz, snap_index
 from .errors import DataMissing
 
 # Must match scripts/bake_bpass_spectra.py's BAKE_VERSION; a stale cube is rejected.
@@ -76,13 +77,8 @@ class _Bpass:
 
     def __init__(self, path: Path):
         self.path = path
-        npz = np.load(path, allow_pickle=False)
-        ver = int(npz["bake_version"])
-        if ver != BAKE_VERSION_BPASS:
-            raise BpassDataMissing(
-                f"baked BPASS cube {path} is bake_version {ver}, runtime wants "
-                f"{BAKE_VERSION_BPASS}; re-bake with scripts/bake_bpass_spectra.py"
-            )
+        npz = load_npz(path, expected=BAKE_VERSION_BPASS, exc=BpassDataMissing,
+                       rebake_cmd="scripts/bake_bpass_spectra.py", what="BPASS cube")
         self.feh = np.asarray(npz["feh"], dtype=float)                # (13,) already [Fe/H]
         self.age_gyr = np.asarray(npz["age_gyr"], dtype=float)        # (51,) linear Gyr
         self.lam_ang = np.asarray(npz["lam_ang"], dtype=float)        # (Nlam,) bin centres
@@ -95,8 +91,8 @@ class _Bpass:
 
     def snap(self, feh: float, age_gyr: float) -> tuple[int, int]:
         """Nearest ([Fe/H] linearly, age in log10) grid indices — never interpolate (§6)."""
-        zi = int(np.argmin(np.abs(self.feh - feh)))
-        ai = int(np.argmin(np.abs(self.log_age - np.log10(max(age_gyr, 1e-12)))))
+        zi = snap_index(self.feh, feh)
+        ai = snap_index(self.log_age, np.log10(max(age_gyr, 1e-12)))
         return zi, ai
 
 
@@ -186,13 +182,8 @@ class _BpassHRD:
 
     def __init__(self, path: Path):
         self.path = path
-        npz = np.load(path, allow_pickle=False)
-        ver = int(npz["bake_version"])
-        if ver != BAKE_VERSION_HRD:
-            raise BpassDataMissing(
-                f"baked BPASS HRD cube {path} is bake_version {ver}, runtime wants "
-                f"{BAKE_VERSION_HRD}; re-bake with scripts/bake_bpass_hrd.py"
-            )
+        npz = load_npz(path, expected=BAKE_VERSION_HRD, exc=BpassDataMissing,
+                       rebake_cmd="scripts/bake_bpass_hrd.py", what="BPASS HRD cube")
         self.feh = np.asarray(npz["feh"], dtype=float)              # (13,) [Fe/H]
         self.age_gyr = np.asarray(npz["age_gyr"], dtype=float)      # (51,) linear Gyr
         self.logt = np.asarray(npz["logt"], dtype=float)            # (nT,) logTeff bin centres
@@ -207,8 +198,8 @@ class _BpassHRD:
 
     def snap(self, feh: float, age_gyr: float) -> tuple[int, int]:
         """Nearest ([Fe/H] linearly, age in log10) — the same idiom as _Bpass.snap."""
-        zi = int(np.argmin(np.abs(self.feh - feh)))
-        ai = int(np.argmin(np.abs(self.log_age - np.log10(max(age_gyr, 1e-12)))))
+        zi = snap_index(self.feh, feh)
+        ai = snap_index(self.log_age, np.log10(max(age_gyr, 1e-12)))
         return zi, ai
 
 

@@ -45,10 +45,12 @@ the plan row is [[structure-refactor]] §1.1.
    never sees an `EndgameResult`, and `photometry.track_band_mags(teffs, loggs,
    fehs, radii)` never sees a `StellarState` (a magnitude is not a star).
 
-## Two hazards the next file→package split will hit again
+## Three hazards the next file→package split will hit
 
-`spectra.py` → `spectra/` and `providers/mist.py` are the queued splits
-([[structure-refactor]] §1.3, §1.4). Both will re-run into:
+`providers/mist.py` is the remaining queued split ([[structure-refactor]] §1.4).
+`spectra.py` → `spectra/` was **abandoned** on hazard 3 below — see
+[[star-sim-shared-grid-leaf]]; its loader duplication was solved inside the one file
+instead. Any future split re-runs into:
 
 - **`test_architecture.py` goes quietly vacuous.** Its checks globbed
   `star_sim/*.py`, which stops seeing a module the moment that module becomes a
@@ -58,6 +60,14 @@ the plan row is [[structure-refactor]] §1.1.
   import to `star_sim.{mod}`, which is only right at top level. Inside a
   subpackage a `from ..spectra import …` is level 2 and must resolve against the
   importing module's own package, or the AST boundary test reads the wrong name.
+- **Module-level state that tests reach into — the one `api.py` did NOT hit, and
+  the reason the spectra split was dropped.** `api.py` had none; `spectra.py` has a
+  data-dir constant and (then) five cache globals, monkeypatched from **8 sites
+  across 4 test files** to prove "no baked cube → 503 with the recipe". Patching a
+  name on a package `__init__.py` does **not** reach a submodule that read that name
+  into its own namespace at import time, so a split forces either a `_paths`
+  indirection read at call time or a rewrite of every patch site. Count those sites
+  *before* deciding a split is cheap.
 
 ## What made a 1,000-line move safe to believe
 

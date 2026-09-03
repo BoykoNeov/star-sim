@@ -39,6 +39,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ._grid import snap_index
 from .errors import DataMissing
 from .state import StellarState
 
@@ -118,6 +119,10 @@ class _IsochroneIndex:
         for path in sorted(self._data_dir.glob("*.npz")):
             try:
                 with np.load(path) as npz:
+                    # Deliberately NOT `_grid.require_bake_version`: this arm *skips* a
+                    # stale cube and keeps globbing, so a half-re-baked directory still
+                    # serves the metallicities that are current. Every other baked grid
+                    # is a single file, where the only honest answer is to raise.
                     if int(npz["bake_version"]) != BAKE_VERSION:
                         continue
                     feh = float(npz["feh"])
@@ -243,7 +248,7 @@ def isochrone(age_yr: float, feh: float, vvcrit: float = 0.0) -> dict:
     offsets = cube["offsets"]
 
     req_log = math.log10(age_yr)
-    ai = int(np.argmin(np.abs(log_ages - req_log)))
+    ai = snap_index(log_ages, req_log)
     log_age_snap = float(log_ages[ai])
     lo, hi = int(offsets[ai]), int(offsets[ai + 1])
 
