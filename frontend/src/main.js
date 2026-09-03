@@ -2967,6 +2967,12 @@ function fmtGyr(gyr) {
 // endgame HR panel.
 function dropCliffCaptionForModeSwitch() {
   heCliff = { ...NO_HE_CLIFF };
+  // Drop the remembered state too: on the way back out of an endgame a late
+  // /he_ignition_status could otherwise repaint the caption against a PRE-endgame
+  // phase (the mode + token guards would usually catch it, but the cost of being
+  // sure is one assignment, and a caption keyed on a stale phase is exactly the
+  // false-label class this whole gate exists to avoid).
+  lastPainted = null;
   if (els.hrCliffCaption) { els.hrCliffCaption.hidden = true; els.hrCliffCaption.textContent = ""; }
 }
 
