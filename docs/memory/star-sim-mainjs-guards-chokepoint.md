@@ -68,8 +68,20 @@ script drives the real runtime (fast mass drag through five values → HZ + isoc
 population overlays on → WD enter/back → 20 M☉ SN enter/back → 390 px) and prints a
 JSON panel-state row at each step. Run it against `git show HEAD:…/main.js` and against
 the working tree: the two logs are identical, zero console errors on both. That is what
-makes a 340-line mechanical diff safe to believe when there are no unit tests.
-Script kept at `M:\claud_projects\temp\star-sim-check.py`.
+makes a 340-line mechanical diff safe to believe when there are no unit tests. The
+script itself was a throwaway (a scratch file, not committed — a real harness is plan
+§2.3); the reusable part is the *shape*: drive the served app, print a small JSON state
+row per step, and diff the log against `git show HEAD:<file>`.
+
+**One follow-up this pass nearly missed**, worth knowing before touching the chokepoint
+again: `dropCliffCaptionForModeSwitch` nulls `lastPainted`, and calling it from
+`exitEndgame` therefore nulls it on the way back to live too. That is safe *only*
+because `paintState` repaints the He-ignition caption from its own `s`, not from
+`lastPainted` — the two `updateCliffCaption(lastPainted)` calls in `refreshTrack` would
+otherwise have left the second honesty gate silently off after a WD → Back in the
+1.65–2.10 M☉ band. Verified in the real app: visible at 1.83 M☉ in core-helium burning →
+hidden in the WD endgame → hidden at the end-of-life age the exit pins to (correct: the
+phase gate) → visible again on scrubbing back into CHeB. See [[star-sim-he-ignition-cliff]].
 
 Related: [[star-sim-api-routers]] (the backend half of the same track),
 [[star-sim-frontend-ux]] (what the panels actually draw).
