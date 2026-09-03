@@ -153,8 +153,10 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
   size is tolerable — but each should open with a ≤ 10-line "current state"
   block so a recall doesn't require reading the history. Do it when next touching
   each file, not as a sweep.
-- **Spec §11** still lists `activity` and "rotation data" as open. Rotation is
-  answered (the vvcrit axis); `activity` is tracked in `science-hurdles.md` §1.6.
+- **Spec §11** lists `activity` and "rotation data" as open; **both are now answered**
+  and the spec text is simply stale. Rotation = the vvcrit axis; `activity` = the
+  Rossby-flavoured proxy shipped 2026-09-03 (`science-hurdles.md` §1.6). The ledger, not
+  the spec, carries the verdicts — leave the spec as the historical design document.
 
 ---
 

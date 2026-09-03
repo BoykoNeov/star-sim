@@ -62,8 +62,14 @@ function granuleCells(state) {
 }
 
 // 0..1 activity proxy (spec §7) drives the corona; null (unmodeled) -> 0.
-const activityOf = (state) =>
-  state.activity == null ? 0 : Math.max(0, Math.min(1, state.activity));
+// `ov` is an optional caller-supplied override ({value}) — the SED panel's Rossby-flavoured
+// level, so the corona and that panel's coronal X-ray line come from ONE rotation (see
+// sed.js activityLevel / science-hurdles §1.6). It is read per update() call and never
+// stored, so an endgame (which passes no override) can't inherit a stale living value.
+const activityOf = (state, ov) => {
+  const v = (ov && ov.value != null) ? ov.value : state.activity;
+  return v == null ? 0 : Math.max(0, Math.min(1, v));
+};
 
 // --- shared GLSL --------------------------------------------------------------
 // linear sRGB -> display sRGB (the gamma transfer applied ONCE, at the end of
@@ -1138,7 +1144,7 @@ export function createStar(canvas) {
     // gateway — it persists on the AGB giant and dies with the dynamo as the
     // remnant degenerates (a cold white dwarf has no steady corona; this is also
     // why the SED drops its coronal X-ray overlay over the same range). gDeg=1 living.
-    const act = activityOf(state);
+    const act = activityOf(state, eg ? null : (opts && opts.activity));
     const extent = 1.12 + 1.4 * act * gDeg;
     corona.scale.setScalar(rad * extent);
     coronaMat.uniforms.uInnerFrac.value = 1.0 / extent;

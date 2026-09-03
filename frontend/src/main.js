@@ -283,7 +283,11 @@ const roche = createRoche();
 // spectrum, driven by Teff alone (a blackbody ignores log g and [Fe/H]), so it
 // owns no fetch and just redraws from the live state inside refresh(). It is the
 // zoomed-all-the-way-out companion to the synthetic-spectrum panel.
-const sed = createSED(document.getElementById("sed-canvas"));
+// onRotation: the period slider drives the SED's X-ray line AND (science-hurdles §1.6)
+// the 3D corona, so a slider move has to repaint the star too — the slider does not go
+// through sed.update(), so nothing else would.
+const sed = createSED(document.getElementById("sed-canvas"),
+                      { onRotation: () => refreshCoronaActivity() });
 // SED legend on/off: click a legend entry (swatch or label) to hide/show that series on the
 // plot — the same idiom as the composition panel's per-element legend. Delegated so it also
 // fires on the inner ".tip" pedagogy label (closest finds data-series). The "non-thermal edges"
@@ -1698,6 +1702,40 @@ function sunResidualNote(s) {
       : "");
 }
 
+// The `activity` row (science-hurdles §1.6). The number the readout prints must be the
+// number the CORONA is drawn from, or the panel and the picture would disagree — so both
+// read sed.activityLevel(), which is null everywhere the rotation→activity chain isn't
+// honest and lets the provider's own ramp stand there. Still T4/evocative either way: it
+// drives a glow, not an L_X, and the tooltip says so in both branches.
+function activityValue(s) {
+  const lv = sed.activityLevel();
+  if (lv) return fmt(lv.value, 2);
+  return s.activity === null ? "n/a" : fmt(s.activity, 2);
+}
+
+function activityTip() {
+  const base =
+    "a 0–1 proxy for magnetic activity — the dynamo-driven surface magnetism " +
+    "behind starspots, flares and chromospheric/coronal heating. Cool stars " +
+    "with deep convective envelopes and fast rotation are the most active, and " +
+    "activity fades as a star spins down with age. It drives the look of the " +
+    "corona on the 3D star; it is not a predicted X-ray output.";
+  const lv = sed.activityLevel();
+  if (!lv) {
+    return base + " Here it is a hand-built, evocative stand-in (spec §7): a pure " +
+      "temperature ramp, flavored by the star's state, not solved from a real dynamo. " +
+      "On a cool main-sequence star it is instead scaled by the star's rotation — set " +
+      "the rotation period under Rotation to drive it.";
+  }
+  return base + " On this star it is scaled by rotation: the rotation–activity relation " +
+    "(Wright 2011) turns the period " +
+    (lv.src === "set" ? "you pinned" : "derived from its age (gyrochronology)") +
+    " into a Rossby number, and that is mapped across the same X-ray span the SED " +
+    "panel's coronal line spans — so the glow and that line move together when you drag " +
+    "the rotation period. Still evocative (spec §7), not a solved dynamo: it sets how far " +
+    "the corona reaches, not a measured emission level.";
+}
+
 // Each row is [term, description, value]. Mass and [Fe/H] come from the state
 // itself (s.mass_init_msun / s.feh_init), NOT the slider DOM — so the whole
 // readout stays a pure function of one StellarState (spec §3). The descriptions
@@ -1745,15 +1783,7 @@ function renderReadout(s) {
       "fast on the zero-age main sequence, then falling as the star expands and its winds " +
       "carry off angular momentum. Toggle Rotation (below [Fe/H]) to switch grids.",
       s.v_rot_kms === null ? "n/a" : `${fmt(s.v_rot_kms)} km/s`],
-    ["activity",
-      "a 0–1 proxy for magnetic activity — the dynamo-driven surface magnetism " +
-      "behind starspots, flares and chromospheric/coronal heating. Cool stars " +
-      "with deep convective envelopes and fast rotation are the most active, and " +
-      "activity fades as a star spins down with age. Here it is a hand-built, " +
-      "evocative stand-in (spec §7): flavored by the star's state, not solved " +
-      "from a real dynamo — it exists to drive the look of the corona in a later " +
-      "phase, not to predict a star's true activity level.",
-      s.activity === null ? "n/a" : fmt(s.activity, 2)],
+    ["activity", activityTip(), activityValue(s)],
   ];
   // The per-quantity pedagogy now lives behind a "?" (hover/focus to read it),
   // so the readout is a compact term → value table instead of a wall of prose.
@@ -4320,7 +4350,11 @@ function paintState(s) {
   // {peculiar} is the Ap/Bp evocative what-if (star.js regime-gates it per-state, and it's a
   // no-op unless the toggle is on) — living path only; the endgame refreshers paint the star
   // directly with their own {endgame:…} opts, so they're untouched.
-  star.update(s, { peculiar: peculiarOn });
+  // sed.update() FIRST: the 3D corona's activity level now comes from this panel's
+  // rotation→activity chain (science-hurdles §1.6), so it must be current before
+  // star.update() reads it — otherwise the glow lags the marker by one paint.
+  sed.update(s);
+  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel() });
   classification.update(s);
   scale.update(s);
   // A MESA what-if overlay (initial-He or α-enhanced) owns the HR panel while on (two MESA
@@ -4330,7 +4364,6 @@ function paintState(s) {
   comp.update(s);
   spectrum.update(s);
   structure.update(s);
-  sed.update(s);
   refreshPopulation(s);   // the coeval-population SED overlay (no-op unless the toggle is on)
   refreshIsochrone(s);    // the cluster-isochrone HR overlay (no-op unless the toggle is on)
   refreshObserver(s);     // the observer reddening/mag view (no-op unless the toggle is on)
@@ -4344,6 +4377,19 @@ function paintState(s) {
     tipSpan("OK", STATUS_OK_TIP) +
     " · " + tipSpan(s.phase, phaseTip(s.phase)) +
     (providerName ? " · " + tipSpan(providerName, providerTip(providerName)) : "");
+}
+
+// Repaint just what the rotation period drives: the 3D corona's reach/brightness and the
+// readout's activity row. Called from sed.js when the user moves/pins/resets the period —
+// that path never goes through refresh(), so nothing else would notice. Living mode only;
+// an endgame paints the star through its own refresher with no activity override.
+function refreshCoronaActivity() {
+  if (mode !== "live" || !currentTrack || !currentTrack.length) return;
+  const i = trackRowFromPos(ageFraction);
+  if (i < 0) return;
+  const s = currentTrack[i];
+  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel() });
+  renderReadout(s);
 }
 
 function refresh() {

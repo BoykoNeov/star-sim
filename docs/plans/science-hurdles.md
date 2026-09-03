@@ -152,14 +152,68 @@ held-out 1-dex figure. No action.
 - Super-solar low-mass dead corner: `mass_range(feh)` floors at ~0.5 M☉ for
   [Fe/H] > 0.
 
-### 1.6 `activity` proxy — **ACCEPT, still a spec §11 open question**  · T4
+### 1.6 `activity` proxy — **SHIPPED (2026-09-03), closes the spec §11 question**  · T4
 
 A pure Teff ramp `clamp((6500−Teff)/3500)`. It is honest as a *visual* knob but is
-the one place spec §11 is still unanswered. **NEXT (bounded):** replace with a
-Rossby-flavoured proxy once rotation is on: `activity = f(Teff) · g(P_rot/τ_conv)`
-using the served `v_rot_kms` and R (P_rot = 2πR/v) and a Cranmer–Saar style
-τ_conv(Teff) fit. The SED panel already derives a gyrochronology period; reuse
-that. Keep it labeled evocative — it drives a glow, not an L_X.
+the one place spec §11 is still unanswered.
+
+**The proposed formula is dead — measured 2026-09-03 (recorded so nobody re-proposes it).**
+This plan's NEXT said to build `activity = f(Teff) · g(P_rot/τ_conv)` with
+`P_rot = 2πR/v` from the served `v_rot_kms`. Gate 0 through the provider says that input
+does not exist where the feature needs it. **MIST spins up only stars above the Kraft
+break**, so `v_rot_kms` is exactly `0.000` for every cool star on *both* rotation buckets:
+
+| M☉ | v_rot @ vvcrit 0.0 | v_rot @ vvcrit 0.4 |
+|---|---|---|
+| 0.3 / 0.5 / 0.8 / 1.0 / 1.2 | 0.000 | **0.000** |
+| 1.5 | 0.000 | 103.2 km/s |
+| 5.0 | 0.000 | 218.5 km/s |
+| 15.0 | 0.000 | 251.5 km/s |
+
+The irony is exact: rotation exists in the grid **only for radiative-envelope stars,
+which have no convective dynamo**, and is absent for every star the Rossby number is
+about. `P_rot = 2πR/v` is not "small" at the default Sun — it is a divide by zero.
+
+**SHIPPED — driven from the SED panel's existing chain instead.** `sed.js` already owned
+a real, self-consistent rotation–activity path for exactly the cool main-sequence regime:
+Teff→(B−V) (Ballesteros 2012) → gyrochronology `P_rot` (Mamajek–Hillenbrand 2008) *or*
+the user's pinned period slider, over Wright (2011) `τ_conv(M)`, gated by
+`dynamoLineAllowed()`. `sed.activityLevel()` now maps that same Rossby number to the 0–1
+`activity` the 3D corona is drawn from. **One dynamo, two views** — the corona and the
+coronal X-ray line can no longer disagree, because they are the same number.
+
+Four things the build had to get right, each measured through the served runtime:
+
+* **No second Rossby path, and no new free parameter.** The 0–1 mapping is Wright's own
+  span normalized: the saturated ceiling 10⁻³·¹³ → 1, the panel's quiet floor 10⁻⁷ → 0.
+  The gate is exactly `activityLine() != null` — the corona changes only where the blue
+  X-ray line is actually drawn.
+* **The backend `activity` field was left alone** and is still the fallback everywhere
+  the chain isn't honest (hot stars, giants, off-MS, spin-unconverged young stars). No
+  provider, no `StellarState` field and no test changed; this is frontend-only.
+* **`activity` drives corona GEOMETRY, not just brightness** (`extent = 1.12 + 1.4·act`),
+  so a range shift would silently resize the glow on load. Measured before wiring: at the
+  default Sun the derived value is **0.212 against the ramp's 0.190** — an unforced
+  agreement, so nothing resizes. Elsewhere it now says something the ramp could not: the
+  Sun at 1 Gyr reads 0.46 and at 8 Gyr 0.12 (the ramp was flat at ~0.19 across both),
+  and an old 0.3 M☉ M dwarf drops 0.89 → 0.44, which is the honest direction.
+* **The handoff back to the ramp is continuous.** MH08's (B−V − 0.495)^0·³²⁵ is steeply
+  sensitive just redward of its singularity, so the derived value is faded in over the
+  first 0.15 mag past the cutoff — a stability measure, not a cosmetic one. Measured on a
+  fixed-MS mass sweep: 0.60 → 0.60 → 0.51 → 0.38 → 0.23 → 0.17 (derived) → 0.048 → 0.032
+  → 0 (ramp) across 0.8 → 1.3 M☉. No step.
+
+**The payoff, measured on the actual pixels** (Playwright, both 1440 and 390 px, zero
+console errors): dragging the period 70 d → 1 d moves activity 0.083 → 0.65 and the lit
+fraction of the 3D frame **0.31 → 0.73** (the glow's area more than doubles); dragging
+back returns to 0.3072 exactly, no drift. The radial profile stays monotone (limb 171,
+then 66 vs 26 just outside at fast vs slow). The WD endgame enters and exits clean — the
+override is read per `update()` call and never stored, so an endgame (which passes none)
+cannot inherit a living value; after Back the star reads 0.82, which is the *ramp's*
+answer for a 3600 K AGB giant, not a stale one.
+
+Still **T4/evocative** — it sets how far the corona reaches, not a predicted L_X, and the
+readout tooltip says so in both branches.
 
 ### 1.7 Composition — **GATED**  · T2
 
@@ -244,14 +298,14 @@ surface. The false-caption check is part of every feature's Gate 0.
 
 ## 6. Prioritised NEXT list (bounded, honest, in order)
 
-1. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
-   the SED gyrochronology period; stays labeled evocative.
-2. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
+1. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
    `BAKE_VERSION` bump; unlocks Gaia G/RP and 2MASS on the CMD panel.
-3. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
+2. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
    measured there; MIST has no finer nodes, so this would mean MESA slices.
 
-(Three items have left this list, all shipped 2026-09-03: the He-ignition cliff (§1.3),
-the uncertain-fate band (§2) and the Sun-residual tooltip (§1.2).)
+(Four items have left this list, all shipped 2026-09-03: the He-ignition cliff (§1.3),
+the uncertain-fate band (§2), the Sun-residual tooltip (§1.2) and the Rossby-flavoured
+`activity` proxy (§1.6). With the last of those, **spec §11's `activity` question is
+answered** — the remaining NEXT items are both data-gated or conditional.)
 
 Everything in **OOS** stays out until the grid approach "hits a real wall" (spec §9).

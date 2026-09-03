@@ -12,6 +12,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Rotation & subpopulation atlas](star-sim-rotation-subpop-atlas.md) — the `vvcrit` axis: provider keys by `(feh,vvcrit)` + snaps buckets, `rotation_status` gate, real `v_rot_kms`, v sin i broadening, the Coelho [α/Fe] spectral axis.
 - [He-ignition cliff caption](star-sim-he-ignition-cliff.md) — the 2nd honesty gate: the measured He-flash transition BAND (1.65–2.10 M☉ solar) + why an exact grid node must never confess.
 - [Sun-residual note](star-sim-sun-residual-note.md) — the 4th honesty gate: the readout's L row confesses the model's ~7 % over-luminous Sun from the LIVE state (never hardcoded); [Fe/H] +0.07 hits the Sun to four figures.
+- [Rossby `activity` proxy](star-sim-rossby-activity.md) — the corona is now driven by the SED panel's Rossby number (one dynamo, two views); the measured reason `P_rot = 2πR/v` is dead (MIST zeroes v_rot below the Kraft break).
 
 ## Fates (endgame)
 - [WR/WD endgame](star-sim-wr-wd-endgame-plan.md) — the reversible gateway: `endgame()` + classifier, WD cooling scrub/shader, WR mode + wind shader, Koester/TMAP/PoWR spectra. No new provider — an endgame IS a StellarState.
