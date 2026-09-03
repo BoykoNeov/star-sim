@@ -45,6 +45,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
 from .lane_emden import solve_lane_emden
 
 # data/mesa_profiles/ sits at the repo root: star_sim/structure.py -> parents
@@ -69,7 +70,7 @@ _N_CONVECTIVE = 1.5   # fully convective / adiabatic
 _N_RADIATIVE = 3.0    # radiative, Eddington standard model
 
 
-class StructureDataMissing(RuntimeError):
+class StructureDataMissing(DataMissing):
     """No MESA `profile.data` snapshots are present under `PROFILES_DATA_DIR`.
 
     The API maps this to a 503 with an actionable hint, exactly like a missing baked

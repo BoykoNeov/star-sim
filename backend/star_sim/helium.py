@@ -37,6 +37,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
 from .providers.mesa import _MesaTrack, _build_track, _state_from_track
 
 # data/mesa_helium/ sits at the repo root: star_sim/helium.py -> parents
@@ -47,7 +48,7 @@ HELIUM_DATA_DIR = Path(
 )
 
 
-class HeliumDataMissing(RuntimeError):
+class HeliumDataMissing(DataMissing):
     """No He-enhanced MESA runs are present under `HELIUM_DATA_DIR`.
 
     The API maps this to a 503 with an actionable hint, exactly like a missing MESA

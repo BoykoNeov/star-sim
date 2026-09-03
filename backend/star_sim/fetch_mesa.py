@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  WARNING: provider did not load cleanly: {exc}")
         return 1
 
-    print("Done. Run: pytest  (or swap MESAProvider into api.py to view it).")
+    print("Done. Run: pytest  (or swap MESAProvider into api/__init__.py to view it).")
     return 0
 
 

@@ -56,6 +56,7 @@ from pathlib import Path
 import numpy as np
 
 from .binary import track_roche_geometry
+from .errors import DataMissing
 from .state import StellarState
 
 # Must match scripts/bake_posydon.py's BAKE_VERSION — a stale npz (baked by an older
@@ -86,7 +87,7 @@ _Q_FAR = 0.10
 _FEH_FAR_DEX = 0.25
 
 
-class PosydonDataMissing(RuntimeError):
+class PosydonDataMissing(DataMissing):
     """No baked POSYDON grid found under `BAKED_DIR`.
 
     Never committed (multi-GB source, like the MIST/MESA grids) — the API maps this to

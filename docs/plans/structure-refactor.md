@@ -50,9 +50,11 @@ star_sim/api/observer.py      # /photometry /photometry_track
 ```
 
 Rules: (a) `PROVIDER` stays a module attribute of `star_sim.api` so tests that
-monkeypatch it keep working; (b) a shared `DataMissing` base under
-`provider.py` (all eleven sibling exceptions subclass it) lets the decorator map
-once; (c) the composition now inline in `/photometry_track`, `/binary_pair`
+monkeypatch it keep working; (b) a shared `DataMissing` base (all eleven sibling
+exceptions subclass it) lets the mapping be written once — **not** under
+`provider.py` as first drafted: the §3 sibling denylist contains `provider`
+literally, so a base living there could not be subclassed by any sibling. It gets
+its own stdlib-only `star_sim/errors.py`; (c) the composition now inline in `/photometry_track`, `/binary_pair`
 (`_donor_ms_lifetime`) and `/supernova` moves into the owning sibling as a pure
 function — the route becomes ≤ 10 lines. Test: the existing route tests plus
 `test_architecture.py` (routers may import siblings; siblings still may not

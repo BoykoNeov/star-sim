@@ -36,6 +36,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
+
 # Must match scripts/bake_bpass_spectra.py's BAKE_VERSION; a stale cube is rejected.
 BAKE_VERSION_BPASS = 1
 # Chunk 2's HR-diagram number-density cube (scripts/bake_bpass_hrd.py). Independent version.
@@ -52,7 +54,7 @@ GRID_FILENAME_HRD = "bpass_hrd.npz"   # Chunk 2 — the HR-diagram number-densit
 _C_ANG_S = 2.99792458e18
 
 
-class BpassDataMissing(RuntimeError):
+class BpassDataMissing(DataMissing):
     """The baked BPASS cube isn't present (analogue of SpectraDataMissing / a missing
     MIST grid). The API maps this to a 503 with an actionable hint; the app stays up and
     only /population is unavailable until the bake lands."""

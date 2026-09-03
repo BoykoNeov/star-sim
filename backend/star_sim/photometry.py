@@ -44,6 +44,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
+
 # star_sim/data/filters.json — the committed filter asset (fetch_filters.py).
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 FILTERS_JSON = Path(os.environ.get("STAR_SIM_FILTERS", _DATA_DIR / "filters.json"))
@@ -55,7 +57,7 @@ _PC_CM = 3.0856775815e18       # parsec, cm
 _JY_CGS = 1e-23                # 1 Jy = 1e-23 erg/s/cm²/Hz
 
 
-class FiltersMissing(RuntimeError):
+class FiltersMissing(DataMissing):
     """The committed filter asset is absent (should never happen in a real checkout).
 
     The API maps this to a 503 with an actionable hint, exactly like a missing baked

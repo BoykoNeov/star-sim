@@ -28,6 +28,8 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
+from .errors import DataMissing
+
 # Must match scripts/bake_spectra.py's BAKE_VERSION; a stale cube is rejected.
 BAKE_VERSION = 1
 
@@ -90,7 +92,7 @@ _BAKE_HINT = (
 )
 
 
-class SpectraDataMissing(RuntimeError):
+class SpectraDataMissing(DataMissing):
     """The baked spectrum grid isn't present (analogue of ProviderDataMissing).
 
     The API maps this to a 503 with an actionable hint, exactly like a missing

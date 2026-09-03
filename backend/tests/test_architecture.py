@@ -30,16 +30,39 @@ NOT_EVEN_STATE = {"bpass", "photometry"}
 MESA_PARSER_EXEMPT = {"helium", "alpha"}
 
 
+def _source(module: str) -> tuple[pathlib.Path, list[str]]:
+    """(file, owning package parts) for a package-relative dotted module name.
+    "spectra" -> spectra.py in `star_sim`; "api" -> api/__init__.py, whose own
+    package IS `api`; "api.spine" -> api/spine.py, package `api`."""
+    parts = module.split(".")
+    path = PKG.joinpath(*parts).with_suffix(".py")
+    if path.exists():
+        return path, parts[:-1]
+    return PKG.joinpath(*parts, "__init__.py"), parts
+
+
 def _imports(module: str) -> set[str]:
-    """Dotted import targets of a star_sim module (relative imports normalised)."""
-    tree = ast.parse((PKG / f"{module}.py").read_text(encoding="utf-8"))
+    """Dotted import targets of a `star_sim` module, package-relative.
+
+    `module` is dotted and rooted at the package: "spectra", "api.spine". Relative
+    imports are normalised against the importing module's OWN package, so a
+    `from ..spectra import …` inside `api/` resolves to "spectra" and not to
+    "api.spectra" — the depth matters now that `api` is a subpackage.
+    """
+    path, pkg = _source(module)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     out: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            mod = node.module or ""
-            out.add(mod if node.level == 0 else f"star_sim.{mod}" if mod else "star_sim")
+            if node.level == 0:
+                base = node.module or ""
+            else:                              # level 1 = own package, 2 = its parent, …
+                anchor = pkg[: len(pkg) - (node.level - 1)]
+                base = ".".join([*anchor, node.module] if node.module else anchor)
+            if base:
+                out.add(base)
             for alias in node.names:
-                out.add(f"{mod}.{alias.name}" if mod else alias.name)
+                out.add(f"{base}.{alias.name}" if base else alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 out.add(alias.name)
@@ -63,15 +86,59 @@ def test_sibling_never_imports_the_provider_layer(module: str) -> None:
             f"{module}.py is not a star — it must not import StellarState")
 
 
-def test_only_the_api_and_fetchers_import_the_live_provider() -> None:
-    """`PROVIDER` in api.py is the one swap point (spec §3). The only other modules
-    allowed to name the live MIST provider are its own fetch/bake entry points."""
+def _package_modules() -> list[str]:
+    """Every module in `star_sim`, dotted and package-relative — including the `api/`
+    subpackage, so splitting a file into a package can never quietly drop it from the
+    checks below (`api.py` -> `api/` is exactly how that happens)."""
+    mods = [p.stem for p in PKG.glob("*.py") if p.stem != "__init__"]
+    for sub in sorted(d for d in PKG.iterdir() if d.is_dir() and (d / "__init__.py").exists()):
+        if sub.name in {"_vendor", "providers", "data", "__pycache__"}:
+            continue
+        mods.append(sub.name)                                   # the subpackage itself
+        mods += [f"{sub.name}.{p.stem}" for p in sorted(sub.glob("*.py"))
+                 if p.stem != "__init__"]
+    return mods
+
+
+def test_only_the_swap_point_and_fetchers_import_the_live_provider() -> None:
+    """`PROVIDER` in `api/__init__.py` is the one swap point (spec §3). Not even the
+    routers may name the live MIST provider — they reach it through `_deps.provider()`,
+    which is what keeps a provider swap a one-line change. The only other modules
+    allowed to name it are its own fetch/bake entry points."""
     allowed = {"api", "fetch_mist", "fetch_mist_baked"}
     offenders = sorted(
-        p.stem for p in PKG.glob("*.py")
-        if p.stem not in allowed and any(m.startswith("providers.mist") for m in _imports(p.stem))
+        m for m in _package_modules()
+        if m not in allowed and any(x.startswith("providers.mist") for x in _imports(m))
     )
     assert not offenders, offenders
+
+
+API_ROUTERS = ["spine", "interiors", "spectra", "binaries", "ensembles", "observer"]
+
+
+@pytest.mark.parametrize("router", API_ROUTERS)
+def test_router_never_names_a_concrete_provider(router: str) -> None:
+    """A router may import the provider *boundary* (`provider.ParameterOutOfRange`,
+    the Protocol) and any sibling, but never a concrete provider class — that is the
+    other half of the §3 rule, seen from the API's side."""
+    imported = _imports(f"api.{router}")
+    hit = {m for m in imported if m.startswith("providers")}
+    assert not hit, f"api/{router}.py names a concrete provider: {sorted(hit)}"
+
+
+def test_the_swap_point_is_the_package_init() -> None:
+    """Belt and braces on the sentence CLAUDE.md promises: `PROVIDER` is assigned in
+    exactly one place, and that place is `api/__init__.py`."""
+    def assigns_provider(module: str) -> bool:
+        path, _ = _source(module)
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            targets = ([node.target] if isinstance(node, ast.AnnAssign)
+                       else node.targets if isinstance(node, ast.Assign) else [])
+            if any(getattr(t, "id", None) == "PROVIDER" for t in targets):
+                return True
+        return False
+
+    assert sorted(m for m in _package_modules() if assigns_provider(m)) == ["api"]
 
 
 def test_state_is_a_plain_dataclass_with_no_web_or_data_concepts() -> None:

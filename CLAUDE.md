@@ -36,7 +36,7 @@ came from.**
 - The HR diagram, 3D star, and composition panel consume `StellarState` only. A
   consumer (or the API) that imports a provider's internals — MIST columns, file
   formats, interpolation guts — **is a bug**, not a shortcut.
-- Provider swaps happen in exactly one place: `PROVIDER` in `api.py`. Going deeper
+- Provider swaps happen in exactly one place: `PROVIDER` in `api/__init__.py`. Going deeper
   (Stub → MIST → live solver) must change nothing downstream.
 
 ## The gotcha that bites everyone (spec §6): interpolate on EEP, not age
@@ -88,7 +88,12 @@ must lie *between* its neighbors on the HR diagram at every phase.
 - `providers/` — `mist.py` (the live provider), `mesa.py` (second real provider,
   offline `history.data`, used to **validate MIST**), `stub.py` (data-free fallback),
   `_vendor/read_mist_models.py` (MIST's own parser).
-- `api.py` — FastAPI; `PROVIDER` is the swap point. Also hosts every sibling route.
+- `api/` — FastAPI, one router per *reason* a group of routes exists: `spine.py`
+  (everything that goes through `PROVIDER`) · `interiors.py` · `spectra.py` ·
+  `binaries.py` · `ensembles.py` · `observer.py`. `PROVIDER` is declared in
+  `api/__init__.py` (the swap point) and routers reach it via `_deps.provider()`, never
+  by import. The 422/503 ladder is app-wide in `_errors.py`, not per route: a router
+  body is the sibling call and nothing else.
 - Siblings (each bypasses `PROVIDER`): `lane_emden.py` · `structure.py` · `spectra.py` ·
   `supernova.py` · `binary.py` · `posydon.py` · `posydon_co.py` · `helium.py` ·
   `alpha.py` · `bpass.py` · `isochrone.py` · `photometry.py`.

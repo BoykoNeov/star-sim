@@ -45,6 +45,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
 from .providers.mesa import _MesaTrack, _build_track, _state_from_track
 
 # data/mesa_alpha/ sits at the repo root: star_sim/alpha.py -> parents
@@ -79,7 +80,7 @@ def _alpha_fe_from_z_ratio(z_enh: float, z_base: float) -> float:
     return float(math.log10(inner)) if inner > 0 else 0.0
 
 
-class AlphaDataMissing(RuntimeError):
+class AlphaDataMissing(DataMissing):
     """No α-enhanced MESA runs are present under `ALPHA_DATA_DIR`.
 
     The API maps this to a 503 with an actionable hint, exactly like the initial-He

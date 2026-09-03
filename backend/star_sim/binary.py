@@ -47,6 +47,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+from .errors import DataMissing
 from .state import StellarState
 
 # Götberg 2018's reference solar metallicity. The grid's four Z buckets map to [Fe/H]
@@ -81,7 +82,7 @@ _GRID_TABLES: list[tuple[str, float]] = [
 ]
 
 
-class BinaryDataMissing(RuntimeError):
+class BinaryDataMissing(DataMissing):
     """The committed Götberg parameter table(s) could not be read.
 
     Committed data, so this should never fire in a normal checkout — it guards the

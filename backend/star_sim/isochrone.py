@@ -39,6 +39,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import DataMissing
 from .state import StellarState
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -70,7 +71,7 @@ _FEH_SNAP_FAR = 0.15
 _LOGAGE_SNAP_FAR = 0.10
 
 
-class IsochroneDataMissing(RuntimeError):
+class IsochroneDataMissing(DataMissing):
     """No baked MIST isochrone `.npz` files are present under `ISO_DATA_DIR`.
 
     The API maps this to a 503 with an actionable hint, exactly like a missing baked

@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from .errors import DataMissing
 from .state import StellarState
 
 
@@ -87,7 +88,7 @@ class ParameterOutOfRange(ValueError):
     """
 
 
-class ProviderDataMissing(RuntimeError):
+class ProviderDataMissing(DataMissing):
     """Raised when a provider's backing data (e.g. MIST grids) isn't present.
 
     Kept on the boundary, not inside any one provider, because "the data layer

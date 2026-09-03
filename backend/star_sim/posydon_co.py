@@ -125,6 +125,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from .binary import track_roche_geometry
+from .errors import DataMissing
 from .posydon import mt_state_label, state_from_row
 from .state import StellarState
 
@@ -180,7 +181,7 @@ _P_FAR_DEX = 0.30
 _FEH_FAR_DEX = 0.25
 
 
-class PosydonCoDataMissing(RuntimeError):
+class PosydonCoDataMissing(DataMissing):
     """No baked grid found for the requested CO grid kind under its baked dir.
 
     Never committed (multi-GB source, like the HMS-HMS grid) — the API maps this to a 503
