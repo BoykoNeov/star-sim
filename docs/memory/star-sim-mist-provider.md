@@ -7,6 +7,27 @@ metadata:
   originSessionId: 8d890850-1473-43b3-adb1-c7ca0e98ecf7
 ---
 
+**Split into a package 2026-09-03** (`docs/plans/structure-refactor.md` §1.4). One
+1,780-line `providers/mist.py` is now `providers/mist/`: `parsing.py` (521 — file
+discovery, the `.track.eep` parse, the fingerprint, the `.npz` cache, and `_Track`)
+· `interp.py` (189 — `_Grid`/`_Axis`, `_load_grid`, `_build_axis`, `_bracket` /
+`_log_mass_weight` / `_blend_windows`) · `provider.py` (1,029 — the class alone) ·
+`__init__.py` (141 — the 115-line physics docstring plus a re-export block that keeps
+every `from star_sim.providers.mist import …` working unchanged). Three things a
+future edit needs to know:
+
+- **`_Track` is in `parsing.py`, not with the other two dataclasses.** `_load_grid`
+  calls `_load_all_tracks`, so `interp` → `parsing` is a real one-way dependency;
+  putting the parse *output* type in `interp` would make it circular.
+- **The grid module is `interp.py` on purpose.** `star_sim/_grid.py` already exists as
+  the shared leaf one package up ([[star-sim-shared-grid-leaf]]), and two `_grid`s in
+  scope is one typo away from importing the wrong one.
+- **The acceptance check is the warm cache, not the test suite.** `_TRACK_COLS`' order
+  and `_grid_fingerprint` are the `.npz` cache's identity: change either and every grid
+  silently re-parses (~20 s each) with the tests still green. After the split all 10
+  grids on disk reported a cache HIT. `CACHE_VERSION` is the *deliberate* way to
+  invalidate; nothing else may.
+
 Star Simulator (M:\claud_projects\star-sim): `MISTProvider` is now the live
 provider (`PROVIDER` in `backend/star_sim/api.py`), replacing the stub as the
 default. Landed 2026-06-20. Follows [[star-sim-init-scope]]; §3 boundary held —

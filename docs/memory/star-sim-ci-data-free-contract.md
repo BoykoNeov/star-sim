@@ -38,3 +38,27 @@ with no data; three previously data-gated per-file AST tests were ungated. **Add
 new sibling to the table.**
 
 See `docs/plans/structure-refactor.md` §0 for the rest of what that branch changed.
+
+**The gates are one table (2026-09-03, `structure-refactor.md` §1.6).** `conftest.py`
+holds `_DATASETS`: 33 rows of `name -> (predicate, reason)`, and `requires(name)` turns
+a row into a skip marker, so each `requires_*` the tests import is a one-line alias.
+Adding a gate is a table row plus that alias — never a new predicate + `skipif` pair.
+581 → 422 lines.
+
+Four things about it that are easy to get wrong later:
+
+- **It buys no laziness.** `pytest.mark.skipif` takes a bool, not a callable, so every
+  predicate still runs at import exactly as before. The wins are line count, one place
+  per dataset, and the header.
+- **`pytest_report_header` prints `data present (N/33)` / `gated off (…)`** at the top
+  of every run, `--collect-only` included. This is how you see at a glance that a run
+  is testing less than it looks like it is.
+- **The sibling imports inside the predicates stay deferred** (`helium`, `alpha`,
+  `bpass`, `isochrone`, `structure`, `posydon*` — now in named lookup helpers the
+  table's lambdas call). Hoisting them to module scope makes *collecting the suite at
+  all* depend on every sibling importing cleanly.
+- **Check gating changes in BOTH directions.** The dev machine runs at zero skips, so a
+  local green run only proves no gate collapsed into always-skip. The opposite failure —
+  a gate that can no longer close — is invisible there. Reproduce it by moving the whole
+  `data/` directory aside and diffing per-test outcomes old vs new (the §1.6 rewrite:
+  identical, 152 passed / 316 skipped / 0 failed).

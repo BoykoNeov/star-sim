@@ -103,7 +103,10 @@ must lie *between* its neighbors on the HR diagram at every phase.
 
 **`backend/star_sim/`**
 - `state.py`, `provider.py` — the §3 boundary.
-- `providers/` — `mist.py` (the live provider), `mesa.py` (second real provider,
+- `providers/` — `mist/` (the live provider, a package: `parsing.py` = files, `.npz`
+  cache and `_Track` · `interp.py` = `_Grid`/`_Axis` and the blend · `provider.py` = the
+  class · `__init__.py` = the physics docstring and the re-exports, so
+  `from ...providers.mist import X` is unchanged), `mesa.py` (second real provider,
   offline `history.data`, used to **validate MIST**), `stub.py` (data-free fallback),
   `_vendor/read_mist_models.py` (MIST's own parser).
 - `api/` — FastAPI, one router per *reason* a group of routes exists: `spine.py`
@@ -126,7 +129,9 @@ must lie *between* its neighbors on the HR diagram at every phase.
 **`backend/tests/`** — §10 sanity checks. Skip markers in `conftest.py` gate by data
 present (`requires_mist_data`, `requires_mesa_data`, `requires_spectra_data`,
 `requires_structure_data`, `requires_posydon_*`, …), so a fresh clone skips rather
-than fails. **Two MIST gates:** `requires_mist_data` = a working provider (the hosted
+than fails. They come from **one `_DATASETS` table** (`name -> (predicate, reason)`)
+via `requires(name)`; a new gate is a table row plus a one-line alias, never a fresh
+predicate + `skipif` pair. A run's header prints which datasets are present. **Two MIST gates:** `requires_mist_data` = a working provider (the hosted
 cache-only `fetch_mist_baked` download qualifies); `requires_mist_raw_tracks` = a test
 that reads a raw `.track.eep` as ground truth. Prefer cache-friendly accuracy tests
 (the grid's own node is the truth). `test_architecture.py` is the §3 boundary as one

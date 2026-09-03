@@ -4,7 +4,7 @@ One line per memory — enough to decide relevance. **Detail belongs in the topi
 file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADMAP.
 
 ## The spine (§3) & providers
-- [MISTProvider](star-sim-mist-provider.md) — the live provider: MIST v2.5, 2D (mass×[Fe/H]) EEP interpolation, blend-then-invert, non-rectangular domain, `.npz` parse cache.
+- [MISTProvider](star-sim-mist-provider.md) — the live provider: MIST v2.5, 2D (mass×[Fe/H]) EEP interpolation, blend-then-invert, non-rectangular domain, `.npz` parse cache; now a `mist/` package (parsing · interp · provider).
 - [Phase 4 MESAProvider](star-sim-phase4-mesa.md) — the second real provider (MESA `history.data`), snap-to-nearest, opt-in; the measured MESA-vs-MIST cross-validation.
 - [Init scope](star-sim-init-scope.md) — what init delivered: the §3 provider spine, stub limits (historical).
 - [Composition panel](star-sim-composition-panel.md) — §5.4 panel + `/track`: EEP-axis stacked areas, `_state_from_row`.
@@ -55,12 +55,12 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Hosted data assets](star-sim-hosted-data-assets.md) — the pre-baked GitHub Release tags and what each holds; which MESA output is hosted vs excluded; the adding-buckets test hazard.
 - [Roadmap (future-work index)](../plans/ROADMAP.md) — the canonical index of everything proposed-but-unbuilt. Update this, not a second list; shipped rows go to [SHIPPED.md](../plans/SHIPPED.md).
 - [Science hurdles ledger](../plans/science-hurdles.md) — every measured scientific limit, tiered T1–T4/OOS with a verdict; the prioritised NEXT list.
-- [Structure refactor plan](../plans/structure-refactor.md) — the structural debts with measured sizes (api routers, main.js chokepoint, shared grid helpers, JS harness) in payoff order.
+- [Structure refactor plan](../plans/structure-refactor.md) — the structural debts with measured sizes, in payoff order; all shipped except §1.5 (the fetch/bake framework).
 - [api/ router package](star-sim-api-routers.md) — the shipped api.py split: the swap point via `_deps.provider()`, the app-wide 422/503 handlers, and the two hazards the next file→package split will hit.
 - [Shared grid leaf (`_grid.py`)](star-sim-shared-grid-leaf.md) — the one snap/bake-version helper + the spectra cube-loader collapse; the four abstractions measured and REJECTED, and the verify-the-safety-net-first rule.
 - [main.js guards, chokepoint + wiring split](star-sim-mainjs-guards-chokepoint.md) — the shipped frontend half: `makeLatest()` guards, the registered `dropLivingOnlyPanels()`, the 23 `wire*()` functions + `controls.js` (and why wiring did NOT move into the panel modules).
 - [JS test harness](star-sim-js-test-harness.md) — `frontend/tests` under `node --test`: the seven pure helpers, the extract-don't-shim rule, invariants-before-pinned-values, and the CCM89 parity pinned in both languages.
-- [CI data-free contract](star-sim-ci-data-free-contract.md) — ruff + data-free pytest in CI; the two MIST gates (working provider vs raw tracks); the §3 architecture table test.
+- [CI data-free contract](star-sim-ci-data-free-contract.md) — ruff + data-free pytest in CI; the two MIST gates (working provider vs raw tracks); the §3 architecture table test; the one `_DATASETS` gate table and why gating changes need checking in both directions.
 - [GitHub repo](star-sim-github-repo.md) — public repo location + how it was created.
 - [Always commit and push](always-commit-push.md) — standing preference: finish substantive changes by committing AND pushing unprompted.
 - [Session-end ritual](session-end-ritual.md) — at batch/session end: update memory + docs, commit, push.
