@@ -207,10 +207,14 @@ Four things the build had to get right, each measured through the served runtime
 console errors): dragging the period 70 d → 1 d moves activity 0.083 → 0.65 and the lit
 fraction of the 3D frame **0.31 → 0.73** (the glow's area more than doubles); dragging
 back returns to 0.3072 exactly, no drift. The radial profile stays monotone (limb 171,
-then 66 vs 26 just outside at fast vs slow). The WD endgame enters and exits clean — the
-override is read per `update()` call and never stored, so an endgame (which passes none)
-cannot inherit a living value; after Back the star reads 0.82, which is the *ramp's*
-answer for a 3600 K AGB giant, not a stale one.
+then 66 vs 26 just outside at fast vs slow). The WD endgame enters and exits clean —
+**nothing is cached on either side**: `star.js` reads the override per `update()` call,
+and `sed.activityLevel(servedActivity)` takes the provider's ramp as an argument from the
+caller's own state rather than storing a copy (the stored form was a real bug — the slider
+never goes through `sed.update()`, so a cached base still held the giant's 0.82 on the
+first slider move after Back). After Back the star reads 0.82, the *ramp's* answer for a
+3600 K AGB giant; scrubbing to the MS and moving the slider immediately gives 0.089 →
+0.60, uncontaminated.
 
 Still **T4/evocative** — it sets how far the corona reaches, not a predicted L_X, and the
 readout tooltip says so in both branches.

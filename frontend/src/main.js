@@ -1708,19 +1708,19 @@ function sunResidualNote(s) {
 // honest and lets the provider's own ramp stand there. Still T4/evocative either way: it
 // drives a glow, not an L_X, and the tooltip says so in both branches.
 function activityValue(s) {
-  const lv = sed.activityLevel();
+  const lv = sed.activityLevel(s.activity);
   if (lv) return fmt(lv.value, 2);
   return s.activity === null ? "n/a" : fmt(s.activity, 2);
 }
 
-function activityTip() {
+function activityTip(s) {
   const base =
     "a 0–1 proxy for magnetic activity — the dynamo-driven surface magnetism " +
     "behind starspots, flares and chromospheric/coronal heating. Cool stars " +
     "with deep convective envelopes and fast rotation are the most active, and " +
     "activity fades as a star spins down with age. It drives the look of the " +
     "corona on the 3D star; it is not a predicted X-ray output.";
-  const lv = sed.activityLevel();
+  const lv = sed.activityLevel(s.activity);
   if (!lv) {
     return base + " Here it is a hand-built, evocative stand-in (spec §7): a pure " +
       "temperature ramp, flavored by the star's state, not solved from a real dynamo. " +
@@ -1783,7 +1783,7 @@ function renderReadout(s) {
       "fast on the zero-age main sequence, then falling as the star expands and its winds " +
       "carry off angular momentum. Toggle Rotation (below [Fe/H]) to switch grids.",
       s.v_rot_kms === null ? "n/a" : `${fmt(s.v_rot_kms)} km/s`],
-    ["activity", activityTip(), activityValue(s)],
+    ["activity", activityTip(s), activityValue(s)],
   ];
   // The per-quantity pedagogy now lives behind a "?" (hover/focus to read it),
   // so the readout is a compact term → value table instead of a wall of prose.
@@ -4354,7 +4354,7 @@ function paintState(s) {
   // rotation→activity chain (science-hurdles §1.6), so it must be current before
   // star.update() reads it — otherwise the glow lags the marker by one paint.
   sed.update(s);
-  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel() });
+  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel(s.activity) });
   classification.update(s);
   scale.update(s);
   // A MESA what-if overlay (initial-He or α-enhanced) owns the HR panel while on (two MESA
@@ -4388,7 +4388,7 @@ function refreshCoronaActivity() {
   const i = trackRowFromPos(ageFraction);
   if (i < 0) return;
   const s = currentTrack[i];
-  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel() });
+  star.update(s, { peculiar: peculiarOn, activity: sed.activityLevel(s.activity) });
   renderReadout(s);
 }
 

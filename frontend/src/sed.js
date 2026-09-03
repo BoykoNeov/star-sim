@@ -319,10 +319,6 @@ export function createSED(canvas, opts) {
   // the 14 decades and only dips in the UV/optical — carving out the characteristic 2175 Å
   // extinction BUMP, the SED's payoff. A pure overlay (off/av=0 is a no-op). Living-only.
   let redOn = false, redAv = 0, redRv = 3.1;
-  // The provider's own `activity` ramp for the current state — the fallback the
-  // Rossby value blends out of near the F/G edge (see activityLevel below). Stored,
-  // not re-derived, so a PROVIDER swap changes it here too.
-  let srvAct = null;
 
   // Legend-click visibility (mirrors comp.js's per-element toggle): the set of series the user
   // has hidden by clicking the SED legend. Session-only, not persisted. Keys: "blackbody" ·
@@ -357,8 +353,6 @@ export function createSED(canvas, opts) {
     const fe = state.feh_init ?? null;
     const rr = state.R_rsun ?? null;
     const md = state.mdot_msun_yr ?? null;   // signed <= 0 (mass loss); |·| used below
-    // Kept BEFORE the no-change early-return: it is a stored value, not a redraw input.
-    srvAct = state.activity ?? null;
     if (eg === endgameMode && state.Teff_K === teff && g === logg && a === age &&
         ph === phase && m === mass && fe === feh && rr === rRsun && md === mdot) return;
     endgameMode = eg;
@@ -871,14 +865,19 @@ export function createSED(canvas, opts) {
   // first 0.15 mag past the cutoff makes that crossing continuous.
   const ACT_BLEND_BV_HI = 0.70;      // fully derived redward of here (≈ 5560 K, early K)
 
-  function activityLevel() {
+  // `servedActivity` is the provider's own ramp for the state the CALLER is painting —
+  // passed in, never stored. The rotation slider does not go through update(), so a
+  // cached copy would blend against whatever state update() last saw (a giant's ~0.82
+  // after Back from an endgame, say) on the first slider move. Reading it from the
+  // caller's own state closes that window by construction.
+  function activityLevel(servedActivity) {
     const line = activityLine();
     if (line == null) return null;
     const bv = teffToBV(teff);
     if (bv == null) return null;
     const rossby = Math.max(0, Math.min(1,
       (line.lxlbLog - LXLB_FLOOR_LOG) / (LXLB_SAT_LOG - LXLB_FLOOR_LOG)));
-    const base = srvAct == null ? rossby : srvAct;
+    const base = servedActivity == null ? rossby : servedActivity;
     const w = Math.max(0, Math.min(1,
       (bv - GYRO_BV_MIN) / (ACT_BLEND_BV_HI - GYRO_BV_MIN)));
     return { value: base + (rossby - base) * w, src: line.src };

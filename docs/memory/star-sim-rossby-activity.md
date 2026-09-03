@@ -70,9 +70,15 @@ about. At the default Sun the formula is a divide by zero, not a small number. S
    cosmetic one. Fixed-MS sweep 0.8 → 1.3 M☉: 0.60 · 0.60 · 0.51 · 0.38 · 0.23 · 0.17
    (derived) → 0.048 · 0.032 · 0 (ramp). No step.
 3. **Endgame teardown** — solved by construction rather than by a `drop*ForModeSwitch`
-   hook: the override is read per `update()` call and never stored, so an endgame (which
-   passes none) cannot inherit a living value. After Back from a WD the readout shows
-   0.82, which is the *ramp's* answer for a 3600 K AGB giant.
+   hook: **nothing is cached on either side.** `star.js` reads the override per `update()`
+   call, so an endgame (which passes none) cannot inherit a living value; and
+   `sed.activityLevel(servedActivity)` takes the provider's ramp **as an argument from the
+   state the caller is painting** rather than storing a copy. The stored form was a real
+   bug (advisor catch): the rotation slider never goes through `sed.update()`, so a cached
+   base would still hold the giant's ~0.82 on the first slider move after Back from an
+   endgame. Verified in the runtime — after Back the readout shows 0.82 (the *ramp's*
+   answer for a 3600 K AGB giant), and scrubbing to the MS then moving the slider
+   immediately gives 0.089 → 0.60, uncontaminated.
 
 ## The payoff, measured on the pixels
 
