@@ -1,17 +1,33 @@
-"""Shared test fixtures / markers.
+"""Shared test fixtures / markers — one table of datasets, one gate per dataset.
 
-The default `PROVIDER` is now `MISTProvider`, which needs the MIST grids on disk
-(fetched via `python -m star_sim.fetch_mist`, never committed — see spec §6).
-A fresh checkout won't have them, so MIST-dependent tests must *skip*, not fail.
-`requires_mist_data` is that guard; use it on any test that touches real grids
-(directly, or through the API now that PROVIDER routes to MIST).
+Almost every grid this project reads is fetched or baked on the host and never
+committed (MIST, MESA, the spectrum cubes, POSYDON, BPASS…). A fresh checkout has
+none of them, so a test that touches real data must **skip, not fail** — that is
+what the `requires_*` markers below are for, and what CI's data-free job checks.
+
+The shape: `_DATASETS` maps a short dataset name to `(predicate, reason)`, and
+`requires(name)` turns one row into a skip marker. Every marker is then a single
+line, so adding a dataset is one table row plus one alias rather than a docstring'd
+predicate, a four-line `pytest.mark.skipif`, and a comment repeating the docstring.
+`pytest_report_header` prints the table at the top of a run, so `pytest
+--collect-only` says which data is present and which gates are therefore closed.
+
+Two things that look like sloppiness and are not:
+
+  * **The sibling imports inside the predicates stay deferred.** Hoisting them to
+    module scope would make *collecting the suite at all* depend on every sibling
+    importing cleanly — the opposite of the point.
+  * **A registry buys no laziness.** `pytest.mark.skipif` takes a bool, not a
+    callable, so every predicate still runs at import. The wins are line count, one
+    place per dataset, and the report header — not deferred evaluation.
 """
 
 from __future__ import annotations
 
+import glob
+from collections.abc import Callable
 from pathlib import Path
 
-import glob
 import pytest
 
 from star_sim.providers.mesa import MESA_DATA_DIR, MESAProvider, _find_history_files
@@ -30,36 +46,70 @@ from star_sim.spectra import (
     WD_GRID_FILENAME,
     WR_GRID_FILENAME,
 )
-from star_sim.structure import PROFILES_DATA_DIR
+
+# --- shapes several datasets share -------------------------------------------
 
 
-def mist_data_available() -> bool:
-    return _find_eep_dir(DATA_DIR) is not None
+def _has_npz(baked_dir: Path, n: int = 1) -> bool:
+    """`n` or more baked `.npz` buckets under `baked_dir` — the POSYDON gates' shape.
+
+    `n=1` is "this grid was baked at all"; `n=2` is "there is a metallicity *axis*
+    to snap along", which is what the multi-[Fe/H] tests need."""
+    return baked_dir.is_dir() and len(list(baked_dir.glob("*.npz"))) >= n
 
 
-def mist_raw_tracks_available() -> bool:
-    """True only if raw MIST `.track.eep` files are on disk, not just the parsed `.npz`.
-
-    The hosted download (`python -m star_sim.fetch_mist_baked`) ships cache-only
-    buckets — a fully working provider with NO raw text tracks. Tests that read a raw
-    track as *ground truth* (the `_real_track` helper) must gate on this, not on
-    `requires_mist_data`, or a cache-only clone fails instead of skipping.
-    """
-    return any(
-        glob.glob(str(d / "*.track.eep")) or glob.glob(str(d / "**" / "*.track.eep"), recursive=True)
-        for d in _find_eep_dirs(DATA_DIR)
-    )
+_MIST_GRIDS: set[tuple[float | None, float | None]] | None = None
 
 
-def mesa_data_available() -> bool:
-    return len(_find_history_files(MESA_DATA_DIR)) > 0
+def _mist_grids() -> set[tuple[float | None, float | None]]:
+    """Every ([Fe/H], v/vcrit) MIST grid on disk, read once from the directory names.
+
+    All ten MIST gates below are a question about this one set: how many
+    metallicities, how many rotation rates, does a specific trio bracket a held-out
+    value, is the low-Z *rotating* grid here. Either coordinate is None when the
+    directory name doesn't carry it."""
+    global _MIST_GRIDS
+    if _MIST_GRIDS is None:
+        _MIST_GRIDS = {(_feh_from_path(d), _vvcrit_from_path(d)) for d in _find_eep_dirs(DATA_DIR)}
+    return _MIST_GRIDS
 
 
-def mesa_solar_available() -> bool:
-    """True if the MESA data includes a near-solar [Fe/H] bucket. The fetched
-    bearums grid is metal-poor only ([Fe/H]~-0.84); the solar bucket is a manual
-    drop-in (see backend/docs/mesa_solar_recipe.md), so this skips until it's added."""
-    if not mesa_data_available():
+def _mist_fehs(rotating: bool = False) -> set[float]:
+    """The metallicities on disk — all of them, or only those with a rotating grid."""
+    return {feh for feh, vc in _mist_grids()
+            if feh is not None and (not rotating or (vc is not None and vc > 0.0))}
+
+
+def _mist_vvcrits() -> set[float]:
+    return {vc for _, vc in _mist_grids() if vc is not None}
+
+
+_PROFILES: list | None = None
+
+
+def _profiles() -> list:
+    """The MESA interior-structure snapshots on disk, indexed ONCE.
+
+    The four `structure_*` slice gates each ask a different question of the same
+    index — is there a massive (convective-core) slice, a fully-convective low-mass
+    one, a non-solar-Z one, a transitional one — and each used to build its own
+    `_ProfileIndex()`. Empty when no profiles are present."""
+    global _PROFILES
+    if _PROFILES is None:
+        from star_sim.structure import StructureDataMissing, _ProfileIndex
+
+        try:
+            _PROFILES = list(_ProfileIndex().available())
+        except StructureDataMissing:
+            _PROFILES = []
+    return _PROFILES
+
+
+def _mesa_solar() -> bool:
+    """True if the MESA data includes a near-solar [Fe/H] bucket. The fetched bearums
+    grid is metal-poor only ([Fe/H]~-0.84); the solar bucket is a manual drop-in (see
+    backend/docs/mesa_solar_recipe.md), so this stays closed until it's added."""
+    if not _find_history_files(MESA_DATA_DIR):
         return False
     try:
         return MESAProvider().parameter_ranges()["feh"]["max"] >= -0.2
@@ -67,515 +117,306 @@ def mesa_solar_available() -> bool:
         return False
 
 
-def mist_fehs_available() -> set[float]:
-    """[Fe/H] values whose grids are present on disk (from the dir names)."""
-    return {
-        fh for d in _find_eep_dirs(DATA_DIR)
-        if (fh := _feh_from_path(d)) is not None
-    }
-
-
-def mist_vvcrits_available() -> set[float]:
-    """v/vcrit rotation rates whose grids are present on disk (from the dir names)."""
-    return {
-        vc for d in _find_eep_dirs(DATA_DIR)
-        if (vc := _vvcrit_from_path(d)) is not None
-    }
-
-
-requires_mist_data = pytest.mark.skipif(
-    not mist_data_available(),
-    reason="MIST grids not fetched — run: python -m star_sim.fetch_mist",
-)
-
-requires_mist_raw_tracks = pytest.mark.skipif(
-    not mist_raw_tracks_available(),
-    reason="needs raw MIST `.track.eep` files as ground truth (the hosted cache-only "
-           "download has none) — run: python -m star_sim.fetch_mist",
-)
-
-# The metallicity-axis tests need >=2 grids; the held-out / dead-corner tests need
-# the specific m050/p000/p050 trio (p000 is the ground truth the others bracket).
-requires_mist_multifeh = pytest.mark.skipif(
-    len(mist_fehs_available()) < 2,
-    reason="needs >=2 MIST metallicity grids — e.g. `python -m star_sim.fetch_mist --feh m050`",
-)
-
-# The rotation-axis tests need both a non-rotating and a rotating grid at the same
-# [Fe/H] (the bucket the contamination check compares). Fetch the rotating solar
-# grid with `python -m star_sim.fetch_mist --vvcrit 0.4`.
-requires_mist_rotation = pytest.mark.skipif(
-    len(mist_vvcrits_available()) < 2,
-    reason="needs a rotating MIST grid — run `python -m star_sim.fetch_mist --vvcrit 0.4`",
-)
-
-
-def mist_rotation_fehs_available() -> set[float]:
-    """[Fe/H] values that have a *rotating* (vvcrit>0) grid on disk — the metallicity
-    span of the rotating axis, which the within-bucket [Fe/H] interpolation tests
-    need (≥2 to bracket, the m050/p000/p050 trio to hold one out)."""
-    return {
-        fh for d in _find_eep_dirs(DATA_DIR)
-        if (vc := _vvcrit_from_path(d)) is not None and vc > 0.0
-        and (fh := _feh_from_path(d)) is not None
-    }
-
-
-def mist_rotation_lowz_available() -> bool:
-    """True if a *low-Z* rotating grid (m100, [Fe/H]=-1.0) is on disk — the grid
-    that carries the CHE / low-metallicity rotation payoff."""
-    return any(
-        _vvcrit_from_path(d) and _vvcrit_from_path(d) > 0.0 and _feh_from_path(d) == -1.0
-        for d in _find_eep_dirs(DATA_DIR)
-    )
-
-
-# The within-bucket [Fe/H] interpolation tests on the *rotating* axis need >=2
-# rotating metallicity grids to bracket (mirrors requires_mist_multifeh, but for the
-# vvcrit=0.4 axis). Fetch e.g. `python -m star_sim.fetch_mist --vvcrit 0.4 --feh m075`.
-requires_mist_rotation_multifeh = pytest.mark.skipif(
-    len(mist_rotation_fehs_available()) < 2,
-    reason="needs >=2 rotating MIST metallicity grids — e.g. `--vvcrit 0.4 --feh m075`",
-)
-
-
-# The low-Z rotation tests need the rotating m100 grid (CHE lives at low Z).
-requires_mist_rotation_lowz = pytest.mark.skipif(
-    not mist_rotation_lowz_available(),
-    reason="needs the low-Z rotating grid — run `python -m star_sim.fetch_mist --vvcrit 0.4 --feh m100`",
-)
-
+# The [Fe/H] trio the held-out accuracy tests need: p000 is the ground truth, m050
+# and p050 are the bracket that must reproduce it without seeing it.
 _HELDOUT_FEHS = {-0.5, 0.0, 0.5}
-requires_mist_heldout_feh = pytest.mark.skipif(
-    not _HELDOUT_FEHS.issubset(mist_fehs_available()),
-    reason="needs the m050/p000/p050 grids — fetch with `--feh m050` and `--feh p050`",
-)
-
-# The held-out [Fe/H] accuracy test on the rotating axis needs the rotating
-# m050/p000/p050 trio (p000 rotating is the ground truth the others bracket) — the
-# vvcrit=0.4 analog of requires_mist_heldout_feh.
-requires_mist_rotation_heldout_feh = pytest.mark.skipif(
-    not _HELDOUT_FEHS.issubset(mist_rotation_fehs_available()),
-    reason="needs the rotating m050/p000/p050 grids — fetch with `--vvcrit 0.4 --feh m050,p050`",
-)
 
-# MESAProvider needs offline MESA history.data runs (fetched via
-# `python -m star_sim.fetch_mesa`, never committed — see fetch_mesa.py provenance).
-requires_mesa_data = pytest.mark.skipif(
-    not mesa_data_available(),
-    reason="MESA runs not fetched — run: python -m star_sim.fetch_mesa",
-)
 
-# The MESA-vs-MIST cross-validation needs the two MIST grids that bracket the
-# sample MESA grid's Z=0.00218 ([Fe/H]~-0.84): m100 (-1.0) and m075 (-0.75).
-_MESA_BRACKET_FEHS = {-1.0, -0.75}
-requires_mist_lowz = pytest.mark.skipif(
-    not _MESA_BRACKET_FEHS.issubset(mist_fehs_available()),
-    reason="needs the m100/m075 MIST grids — fetch with `--feh m075,m100`",
-)
-
-# The solar MESA-vs-MIST cross-validation needs the near-solar MESA bucket and
-# the two MIST grids that bracket its ZAMS Z=0.01523: m050 (Z~0.005) and p000
-# (Z~0.0164). p000 alone is *above* the MESA Z, so it cannot bracket it.
-requires_mesa_solar = pytest.mark.skipif(
-    not mesa_solar_available(),
-    reason="no near-solar MESA bucket — see backend/docs/mesa_solar_recipe.md",
-)
-
-_SOLAR_BRACKET_FEHS = {-0.5, 0.0}
-requires_mist_solar_bracket = pytest.mark.skipif(
-    not _SOLAR_BRACKET_FEHS.issubset(mist_fehs_available()),
-    reason="needs the m050/p000 MIST grids to bracket the solar MESA Z — fetch with `--feh m050`",
-)
-
-
-def spectra_data_available() -> bool:
-    return (SPECTRA_DATA_DIR / GRID_FILENAME).is_file()
-
-
-# The /spectrum line-physics tests need the baked spectrum grid (built once in the
-# MSG container, never committed — see backend/docs/msg_spectra_build_recipe.md).
-requires_spectra_data = pytest.mark.skipif(
-    not spectra_data_available(),
-    reason="spectrum grid not baked — see backend/docs/msg_spectra_build_recipe.md",
-)
-
-
-def wd_spectra_data_available() -> bool:
-    return (SPECTRA_DATA_DIR / WD_GRID_FILENAME).is_file()
-
-
-# The /wd_spectrum (Koester DA) tests need the baked white-dwarf cube — fetched +
-# baked on the host (never committed): `python -m star_sim.fetch_koester` then
-# `python scripts/bake_wd_spectra.py` (endgame Chunk 6).
-requires_wd_spectra_data = pytest.mark.skipif(
-    not wd_spectra_data_available(),
-    reason="WD spectrum grid not baked — run fetch_koester + scripts/bake_wd_spectra.py",
-)
-
-
-def wr_spectra_data_available() -> bool:
-    return (SPECTRA_DATA_DIR / WR_GRID_FILENAME).is_file()
-
-
-# The /wr_spectrum (PoWR Wolf-Rayet) tests need the baked WR cube — fetched + baked on
-# the host (never committed): `python -m star_sim.fetch_powr` then
-# `python scripts/bake_wr_spectra.py` (endgame Chunk 7).
-requires_wr_spectra_data = pytest.mark.skipif(
-    not wr_spectra_data_available(),
-    reason="WR spectrum grid not baked — run fetch_powr + scripts/bake_wr_spectra.py",
-)
-
-
-def alpha_spectra_data_available() -> bool:
-    return (SPECTRA_DATA_DIR / ALPHA_GRID_FILENAME).is_file()
-
-
-# The /alpha_spectrum ([alpha/Fe] Coelho cube) tests need the baked alpha cube —
-# fetched + baked on the host (never committed): `python -m star_sim.fetch_coelho`
-# then `python scripts/bake_alpha_spectra.py` (atlas Tier B).
-requires_alpha_spectra_data = pytest.mark.skipif(
-    not alpha_spectra_data_available(),
-    reason="alpha spectrum grid not baked — run fetch_coelho + scripts/bake_alpha_spectra.py",
-)
-
-
-def stripped_spectra_data_available() -> bool:
-    return (SPECTRA_DATA_DIR / STRIPPED_GRID_FILENAME).is_file()
-
-
-# The /stripped_spectrum (Götberg binary-stripped-star cube, Chunk 3) tests need the
-# baked stripped cube — baked on the host from the gitignored Götberg spectra tree
-# (never committed): `python scripts/bake_stripped_spectra.py` (needs the tree from
-# `python -m star_sim.fetch_gotberg`'s recipe under data/gotberg_stripped/).
-requires_stripped_spectra_data = pytest.mark.skipif(
-    not stripped_spectra_data_available(),
-    reason="stripped-star spectrum grid not baked — run scripts/bake_stripped_spectra.py "
-    "(needs the Götberg spectra tree; see docs/plans/stripped-consort-unveiling.md)",
-)
-
-
-def structure_data_available() -> bool:
-    """True if any MESA interior-structure profile*.data snapshots are present.
-
-    Generated offline by running MESA with profile snapshots enabled (never
-    committed — see backend/docs/mesa_structure_recipe.md), so the /structure tests
-    skip until they're dropped under data/mesa_profiles/."""
-    import glob
-
-    return len(glob.glob(str(PROFILES_DATA_DIR / "**" / "profile*.data"), recursive=True)) > 0
-
-
-def structure_massive_available() -> bool:
-    """True if a *massive* (convective-core) interior-structure slice is present.
-
-    The 1 M☉ solar slice alone satisfies `structure_data_available()`, but the
-    convective-core ↔ radiative-envelope flip test needs an intermediate-mass run
-    (the 2/6 M☉ slice — see the recipe §6). Detect it by a snapshot whose initial
-    mass is well above the solar slice, so the flip test *skips* (not fails) on a
-    checkout that only has the 1 M☉ data."""
-    from star_sim.structure import _ProfileIndex, StructureDataMissing
-
-    try:
-        return any(m.mass_init >= 4.0 for m in _ProfileIndex().available())
-    except StructureDataMissing:
-        return False
-
-
-def structure_transitional_available() -> bool:
-    """True if a *transitional* (double-convective) interior-structure slice is present.
-
-    The 1 M☉ Sun and the 6/15/25 M☉ massive slices satisfy `structure_data_available()`,
-    but the double-convective test — a ~1.3 M☉ star with a convective core AND a
-    convective envelope at once — needs the transitional slice (recipe §13). It falls in
-    the gating gap between `requires_structure_massive` (≥4 M☉) and
-    `requires_structure_lowmass` (≤0.5 M☉), so without its own marker the test would
-    *fail* (not skip) on a checkout without the 1.3 M☉ data. Detect it by a snapshot in
-    the narrow transitional band (1.1 ≤ mass ≤ 1.5) — this excludes both the 1.0 M☉ Sun
-    and the 2.0 M☉ convective-core slice, either of which is otherwise on disk."""
-    from star_sim.structure import _ProfileIndex, StructureDataMissing
-
-    try:
-        return any(1.1 <= m.mass_init <= 1.5 for m in _ProfileIndex().available())
-    except StructureDataMissing:
-        return False
-
-
-def structure_multifeh_available() -> bool:
-    """True if a *non-solar-metallicity* interior-structure slice is present.
-
-    The solar-Z slices (all at [Fe/H]=0) satisfy `structure_data_available()`, but the
-    metallicity-axis test — the convective envelope shallows as [Fe/H] drops — needs at
-    least one non-solar-Z 1 M☉ run (the [Fe/H]=−1 / +0.5 slices, see the recipe §10).
-    Detect it by a snapshot whose [Fe/H] is well off solar, so that test *skips* (not
-    fails) on a checkout with only the solar-Z data."""
-    from star_sim.structure import _ProfileIndex, StructureDataMissing
-
-    try:
-        return any(abs(m.feh) > 0.3 for m in _ProfileIndex().available())
-    except StructureDataMissing:
-        return False
-
-
-def structure_lowmass_available() -> bool:
-    """True if a *low-mass, fully-convective* interior-structure slice is present.
-
-    The 1 M☉ (or 2/6 M☉) slices satisfy `structure_data_available()`, but the
-    fully-convective M-dwarf test needs a run below the ~0.35 M☉ fully-convective
-    boundary (the 0.25 M☉ slice — see the recipe §9). Detect it by a snapshot whose
-    initial mass is well below the solar slice, so that test *skips* (not fails) on a
-    checkout without the low-mass data."""
-    from star_sim.structure import _ProfileIndex, StructureDataMissing
-
-    try:
-        return any(m.mass_init <= 0.5 for m in _ProfileIndex().available())
-    except StructureDataMissing:
-        return False
-
-
-# The /structure (real MESA interior-structure) tests need offline MESA profile
-# snapshots — generated on the host, never committed (endgame's Lane-Emden successor).
-requires_structure_data = pytest.mark.skipif(
-    not structure_data_available(),
-    reason="no MESA profiles — see backend/docs/mesa_structure_recipe.md",
-)
-
-# The convective-core flip test additionally needs the massive (2/6 M☉) slice — the
-# 1 M☉ solar data alone would make it FAIL, not skip. See mesa_structure_recipe.md §6.
-requires_structure_massive = pytest.mark.skipif(
-    not structure_massive_available(),
-    reason="no massive MESA profile slice (2/6 M☉) — see backend/docs/mesa_structure_recipe.md §6",
-)
-
-# The fully-convective M-dwarf test needs the low-mass (0.25 M☉) slice — the solar/
-# massive data alone would make it FAIL, not skip. See mesa_structure_recipe.md §9.
-requires_structure_lowmass = pytest.mark.skipif(
-    not structure_lowmass_available(),
-    reason="no low-mass MESA profile slice (0.25 M☉) — see backend/docs/mesa_structure_recipe.md §9",
-)
-
-# The metallicity-axis test needs a non-solar-Z 1 M☉ slice ([Fe/H]=−1 / +0.5) — the
-# solar-Z data alone would make it FAIL, not skip. See mesa_structure_recipe.md §10.
-requires_structure_multifeh = pytest.mark.skipif(
-    not structure_multifeh_available(),
-    reason="no non-solar-Z MESA profile slice ([Fe/H]=−1/+0.5) — see backend/docs/mesa_structure_recipe.md §10",
-)
-
-# The double-convective test needs the transitional (~1.3 M☉) slice — a mass with a
-# convective core AND a convective envelope at once. The 1 M☉ / massive data alone would
-# make it FAIL, not skip. See mesa_structure_recipe.md §13.
-requires_structure_transitional = pytest.mark.skipif(
-    not structure_transitional_available(),
-    reason="no transitional MESA profile slice (~1.3 M☉) — see backend/docs/mesa_structure_recipe.md §13",
-)
-
-
-def helium_data_available() -> bool:
-    """True if the initial-helium (Y) MESA runs are on disk (gitignored, host-run).
-
-    Phase 2's baseline+enhanced MESA pairs live under data/mesa_helium/ — self-run in
-    Docker MESA, never committed (see backend/docs/mesa_helium_recipe.md). The /helium
-    sibling tests skip until at least one complete pair is present."""
-    from star_sim.helium import _find_history_files
-
-    return len(_find_history_files()) > 0
-
-
-# The /helium (initial-helium what-if overlay) tests need the self-run baseline+enhanced
-# MESA pairs — generated on the host, never committed. See backend/docs/mesa_helium_recipe.md.
-requires_helium_data = pytest.mark.skipif(
-    not helium_data_available(),
-    reason="no initial-helium MESA runs — see backend/docs/mesa_helium_recipe.md",
-)
-
-
-def bpass_data_available() -> bool:
-    """True if the baked BPASS coeval-population cube is on disk (gitignored, host-baked).
-
-    Chunk 1's SSP-spectrum cube lives at data/bpass/bpass_ssp.npz — baked once on the host
-    from the ~1 GB Zenodo pair (see backend/star_sim/fetch_bpass.py +
-    scripts/bake_bpass_spectra.py), never committed. The /population sibling tests skip
-    until the cube is present."""
-    from star_sim.bpass import bpass_available
-
-    return bpass_available()
-
-
-# The /population (coeval-population overlay) tests need the host-baked BPASS cube — never
-# committed. See backend/star_sim/fetch_bpass.py + scripts/bake_bpass_spectra.py.
-requires_bpass_data = pytest.mark.skipif(
-    not bpass_data_available(),
-    reason="no baked BPASS cube (data/bpass/bpass_ssp.npz) — see scripts/bake_bpass_spectra.py",
-)
-
-
-def bpass_hrd_available() -> bool:
-    """True if the Chunk-2 HR-diagram number-density cube is on disk (data/bpass/bpass_hrd.npz,
-    gitignored, host-baked from the v2.2.1 hrs files — see scripts/bake_bpass_hrd.py)."""
-    from star_sim.bpass import hrd_available
-
-    return hrd_available()
-
-
-# The /population_hrd (HR-diagram number-density overlay, Chunk 2) tests need the host-baked
-# HRD cube — a DIFFERENT cube from the SED spectra one. See scripts/bake_bpass_hrd.py.
-requires_bpass_hrd_data = pytest.mark.skipif(
-    not bpass_hrd_available(),
-    reason="no baked BPASS HRD cube (data/bpass/bpass_hrd.npz) — see scripts/bake_bpass_hrd.py",
-)
-
-
-def isochrone_data_available() -> bool:
-    """True if the MIST `.iso` isochrone grid is on disk (data/mist_isochrones/, gitignored,
-    fetched once via `python -m star_sim.fetch_mist_iso`). The /isochrone (Axis B cluster
-    overlay) sibling tests skip until the grid is present."""
-    from star_sim.isochrone import isochrone_available
-
-    return isochrone_available()
-
-
-# The /isochrone (coeval-cluster / MST-turnoff overlay, Axis B) tests need the published
-# MIST v2.5 .iso grid — a separate download from the EEP tracks. See fetch_mist_iso.py.
-requires_isochrone_data = pytest.mark.skipif(
-    not isochrone_data_available(),
-    reason="no MIST .iso grid (data/mist_isochrones/) — run python -m star_sim.fetch_mist_iso",
-)
-
-
-def alpha_data_available() -> bool:
-    """True if the α-enhanced (equivalent-Z) MESA runs are on disk (gitignored, host-run).
-
-    Phase 3's baseline+enhanced MESA pairs live under data/mesa_alpha/ — self-run in
-    Docker MESA, never committed (see backend/docs/mesa_alpha_recipe.md). The /alpha
-    sibling tests skip until at least one complete pair is present."""
-    from star_sim.alpha import _find_history_files
-
-    return len(_find_history_files()) > 0
-
-
-# The /alpha (α-enhanced what-if overlay) tests need the self-run baseline+enhanced MESA
-# pairs — generated on the host, never committed. See backend/docs/mesa_alpha_recipe.md.
-requires_alpha_data = pytest.mark.skipif(
-    not alpha_data_available(),
-    reason="no α-enhanced MESA runs — see backend/docs/mesa_alpha_recipe.md",
-)
-
-
-def gotberg_seds_available() -> bool:
-    """True if the Götberg stripped-star SEDs (VizieR, gitignored) are on disk.
-
-    The *parameter table* is committed to the repo (star_sim/data/gotberg_z014.csv), so
-    the binary sibling's parse/snap/validity tests always run. Only the SED-consistency
-    regression — the check that the LLM-transcribed table matches the ground-truth SEDs
-    to ≤0.07 dex — reads the gitignored spectra tree, so it skips until those are fetched
-    (browser-past-Anubis VizieR tarball → data/gotberg_stripped/, see
-    docs/plans/stripped-consort-unveiling.md)."""
-    import glob
-
-    from star_sim.binary import GOTBERG_SOLAR_Z  # noqa: F401 (import-guard the package)
-
-    _REPO_ROOT = Path(__file__).resolve().parents[2]
-    grid = _REPO_ROOT / "data" / "gotberg_stripped" / "grid_014"
-    return len(glob.glob(str(grid / "**" / "SED.txt"), recursive=True)) > 0
-
-
-requires_gotberg_data = pytest.mark.skipif(
-    not gotberg_seds_available(),
-    reason="Götberg stripped-star SEDs not present — host-fetch the VizieR tarball "
-    "into data/gotberg_stripped/ (see docs/plans/stripped-consort-unveiling.md)",
-)
-
-
-def posydon_data_available() -> bool:
-    """True if at least one baked POSYDON grid npz is present.
-
-    Baked on the host from an extracted POSYDON HMS-HMS grid (never committed —
-    multi-GB Zenodo source, like MIST/MESA): `python -m star_sim.fetch_posydon`'s
-    recipe, then `python scripts/bake_posydon.py --z-label <label> --feh <feh>`
-    (docs/plans/entwined-consort-inspiral.md, Chunk 4a)."""
-    from star_sim.posydon import BAKED_DIR
-
-    return BAKED_DIR.is_dir() and any(BAKED_DIR.glob("*.npz"))
-
-
-requires_posydon_data = pytest.mark.skipif(
-    not posydon_data_available(),
-    reason="no baked POSYDON grid — run fetch_posydon.py's recipe then "
-    "scripts/bake_posydon.py (see docs/plans/entwined-consort-inspiral.md)",
-)
-
-
-def posydon_co_data_available() -> bool:
-    """True if at least one baked POSYDON CO-HMS_RLO grid npz is present.
-
-    Baked on the host from an extracted POSYDON CO-HMS_RLO grid (never committed — same
-    multi-GB Zenodo tarball as the HMS-HMS grid, a different internal path):
-    `scripts/bake_posydon.py --grid-type co-hms-rlo --z-label <label> --feh <feh>`
-    (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 1a)."""
-    from star_sim.posydon_co import BAKED_CO_DIR
-
-    return BAKED_CO_DIR.is_dir() and any(BAKED_CO_DIR.glob("*.npz"))
-
-
-requires_posydon_co_data = pytest.mark.skipif(
-    not posydon_co_data_available(),
-    reason="no baked POSYDON CO-HMS_RLO grid — run scripts/bake_posydon.py "
-    "--grid-type co-hms-rlo (see docs/plans/tempered-lineage-inspiral.md)",
-)
-
-
-def posydon_co_multifeh_available() -> bool:
-    """True if >=2 baked CO-HMS_RLO metallicity grids are present (the Chunk-1c axis).
-
-    Bake more buckets with `scripts/bake_posydon.py --grid-type co-hms-rlo --z-label
-    <label> --feh <feh>` (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 1c)."""
-    from star_sim.posydon_co import BAKED_CO_DIR
-
-    return BAKED_CO_DIR.is_dir() and len(list(BAKED_CO_DIR.glob("*.npz"))) >= 2
-
-
-requires_posydon_co_multifeh = pytest.mark.skipif(
-    not posydon_co_multifeh_available(),
-    reason="needs >=2 baked POSYDON CO-HMS_RLO metallicity grids — bake another with "
-    "scripts/bake_posydon.py --grid-type co-hms-rlo (Chunk 1c)",
-)
-
-
-def posydon_co_he_data_available() -> bool:
-    """True if BOTH baked He-star CO grids (CO-HeMS + CO-HeMS_RLO) are present — the
-    double-compact-object channel (Chunk 2a). The suite exercises both (one for the
-    He-donor accretion payoff, one for the DCO-classification payoff), so both are needed.
-
-    Baked on the host from the extracted He-star CO grids (never committed — same multi-GB
-    Zenodo tarball, different internal paths):
-    `scripts/bake_posydon.py --grid-type co-hems-rlo` and `--grid-type co-hems`
-    (docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 2a)."""
-    from star_sim.posydon_co import BAKED_CO_HEMS_DIR, BAKED_CO_HEMS_RLO_DIR
-
-    return (BAKED_CO_HEMS_DIR.is_dir() and any(BAKED_CO_HEMS_DIR.glob("*.npz"))
-            and BAKED_CO_HEMS_RLO_DIR.is_dir() and any(BAKED_CO_HEMS_RLO_DIR.glob("*.npz")))
-
-
-requires_posydon_co_he_data = pytest.mark.skipif(
-    not posydon_co_he_data_available(),
-    reason="no baked POSYDON CO-HeMS / CO-HeMS_RLO grids — run scripts/bake_posydon.py "
-    "--grid-type co-hems-rlo and --grid-type co-hems (see "
-    "docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 2a)",
-)
-
-
-def posydon_co_he_multifeh_available() -> bool:
-    """True if >=2 baked metallicity grids exist for BOTH He-star CO grids (the Chunk-2c
-    axis). Bake more buckets with `scripts/bake_posydon.py --grid-type co-hems[-rlo]`."""
-    from star_sim.posydon_co import BAKED_CO_HEMS_DIR, BAKED_CO_HEMS_RLO_DIR
-
-    return (BAKED_CO_HEMS_DIR.is_dir() and len(list(BAKED_CO_HEMS_DIR.glob("*.npz"))) >= 2
-            and BAKED_CO_HEMS_RLO_DIR.is_dir()
-            and len(list(BAKED_CO_HEMS_RLO_DIR.glob("*.npz"))) >= 2)
-
-
-requires_posydon_co_he_multifeh = pytest.mark.skipif(
-    not posydon_co_he_multifeh_available(),
-    reason="needs >=2 baked metallicity grids for both He CO grids — bake more with "
-    "scripts/bake_posydon.py --grid-type co-hems[-rlo] (Chunk 2c)",
-)
+# --- the dataset table --------------------------------------------------------
+# name -> (is the data present?, what to run if it isn't). The `reason` is what a
+# contributor reads in `-rs` output, so it names the fetch/bake command, not the
+# predicate. Ordered spine-outward: MIST, MESA, spectra, structure, the what-if
+# overlays, the ensembles, the binary grids.
+
+_DATASETS: dict[str, tuple[Callable[[], bool], str]] = {
+    # -- the spine's own grids --
+    "mist": (
+        lambda: _find_eep_dir(DATA_DIR) is not None,
+        "MIST grids not fetched — run: python -m star_sim.fetch_mist",
+    ),
+    # The hosted download (`python -m star_sim.fetch_mist_baked`) ships cache-only
+    # buckets: a fully working provider with NO raw text tracks. A test that reads a
+    # raw track as *ground truth* gates on this, or a cache-only clone fails not skips.
+    "mist_raw_tracks": (
+        lambda: any(
+            glob.glob(str(d / "*.track.eep"))
+            or glob.glob(str(d / "**" / "*.track.eep"), recursive=True)
+            for d in _find_eep_dirs(DATA_DIR)
+        ),
+        "needs raw MIST `.track.eep` files as ground truth (the hosted cache-only "
+        "download has none) — run: python -m star_sim.fetch_mist",
+    ),
+    "mist_multifeh": (
+        lambda: len(_mist_fehs()) >= 2,
+        "needs >=2 MIST metallicity grids — e.g. `python -m star_sim.fetch_mist --feh m050`",
+    ),
+    "mist_heldout_feh": (
+        lambda: _HELDOUT_FEHS <= _mist_fehs(),
+        "needs the m050/p000/p050 grids — fetch with `--feh m050` and `--feh p050`",
+    ),
+    # The MESA-vs-MIST cross-validation needs the two MIST grids that bracket the
+    # sample MESA grid's Z=0.00218 ([Fe/H]~-0.84): m100 (-1.0) and m075 (-0.75).
+    "mist_lowz": (
+        lambda: {-1.0, -0.75} <= _mist_fehs(),
+        "needs the m100/m075 MIST grids — fetch with `--feh m075,m100`",
+    ),
+    # The *solar* cross-check needs m050 (Z~0.005) and p000 (Z~0.0164) to bracket the
+    # solar MESA bucket's ZAMS Z=0.01523. p000 alone is *above* it, so it can't bracket.
+    "mist_solar_bracket": (
+        lambda: {-0.5, 0.0} <= _mist_fehs(),
+        "needs the m050/p000 MIST grids to bracket the solar MESA Z — fetch with `--feh m050`",
+    ),
+    # Rotation: the contamination check compares a rotating against a non-rotating grid
+    # at the same [Fe/H], so it needs both buckets — hence >=2 rates, not >=1 rotating.
+    "mist_rotation": (
+        lambda: len(_mist_vvcrits()) >= 2,
+        "needs a rotating MIST grid — run `python -m star_sim.fetch_mist --vvcrit 0.4`",
+    ),
+    "mist_rotation_multifeh": (
+        lambda: len(_mist_fehs(rotating=True)) >= 2,
+        "needs >=2 rotating MIST metallicity grids — e.g. `--vvcrit 0.4 --feh m075`",
+    ),
+    "mist_rotation_heldout_feh": (
+        lambda: _HELDOUT_FEHS <= _mist_fehs(rotating=True),
+        "needs the rotating m050/p000/p050 grids — fetch with `--vvcrit 0.4 --feh m050,p050`",
+    ),
+    # The CHE / low-metallicity rotation payoff lives on the rotating m100 grid.
+    "mist_rotation_lowz": (
+        lambda: any(feh == -1.0 and vc is not None and vc > 0.0 for feh, vc in _mist_grids()),
+        "needs the low-Z rotating grid — run `python -m star_sim.fetch_mist --vvcrit 0.4 --feh m100`",
+    ),
+    # MESAProvider needs offline MESA history.data runs (see fetch_mesa.py provenance).
+    "mesa": (
+        lambda: len(_find_history_files(MESA_DATA_DIR)) > 0,
+        "MESA runs not fetched — run: python -m star_sim.fetch_mesa",
+    ),
+    "mesa_solar": (
+        _mesa_solar,
+        "no near-solar MESA bucket — see backend/docs/mesa_solar_recipe.md",
+    ),
+
+    # -- the spectrum cubes: five different sources, one "is it baked?" shape --
+    # Each is baked once on the host and never committed. The recipes are genuinely
+    # different, so each reason carries its own verbatim (the §1.2 `missing_hint`
+    # finding: these are hand-written recipes, not a template with a slot).
+    "spectra": (
+        lambda: (SPECTRA_DATA_DIR / GRID_FILENAME).is_file(),
+        "spectrum grid not baked — see backend/docs/msg_spectra_build_recipe.md",
+    ),
+    "wd_spectra": (
+        lambda: (SPECTRA_DATA_DIR / WD_GRID_FILENAME).is_file(),
+        "WD spectrum grid not baked — run fetch_koester + scripts/bake_wd_spectra.py",
+    ),
+    "wr_spectra": (
+        lambda: (SPECTRA_DATA_DIR / WR_GRID_FILENAME).is_file(),
+        "WR spectrum grid not baked — run fetch_powr + scripts/bake_wr_spectra.py",
+    ),
+    "alpha_spectra": (
+        lambda: (SPECTRA_DATA_DIR / ALPHA_GRID_FILENAME).is_file(),
+        "alpha spectrum grid not baked — run fetch_coelho + scripts/bake_alpha_spectra.py",
+    ),
+    "stripped_spectra": (
+        lambda: (SPECTRA_DATA_DIR / STRIPPED_GRID_FILENAME).is_file(),
+        "stripped-star spectrum grid not baked — run scripts/bake_stripped_spectra.py "
+        "(needs the Götberg spectra tree; see docs/plans/stripped-consort-unveiling.md)",
+    ),
+
+    # -- interior structure: one "any profiles?" gate + four "which slice?" gates --
+    # The slice gates exist because the 1 M☉ solar run alone satisfies `structure`, so
+    # without them the regime-specific tests would FAIL rather than skip on a checkout
+    # that only has the Sun. Each band excludes the slices already on disk.
+    "structure": (
+        lambda: len(glob.glob(str(_profiles_dir() / "**" / "profile*.data"), recursive=True)) > 0,
+        "no MESA profiles — see backend/docs/mesa_structure_recipe.md",
+    ),
+    "structure_massive": (          # convective core ↔ radiative envelope flip
+        lambda: any(m.mass_init >= 4.0 for m in _profiles()),
+        "no massive MESA profile slice (2/6 M☉) — see backend/docs/mesa_structure_recipe.md §6",
+    ),
+    "structure_lowmass": (          # below the ~0.35 M☉ fully-convective boundary
+        lambda: any(m.mass_init <= 0.5 for m in _profiles()),
+        "no low-mass MESA profile slice (0.25 M☉) — see backend/docs/mesa_structure_recipe.md §9",
+    ),
+    "structure_multifeh": (         # the convective envelope shallows as [Fe/H] drops
+        lambda: any(abs(m.feh) > 0.3 for m in _profiles()),
+        "no non-solar-Z MESA profile slice ([Fe/H]=−1/+0.5) — "
+        "see backend/docs/mesa_structure_recipe.md §10",
+    ),
+    # ~1.3 M☉: a convective core AND a convective envelope at once. The band excludes
+    # both the 1.0 M☉ Sun and the 2.0 M☉ convective-core slice, either of which is
+    # otherwise on disk — so this falls in the gap between massive (≥4) and lowmass (≤0.5).
+    "structure_transitional": (
+        lambda: any(1.1 <= m.mass_init <= 1.5 for m in _profiles()),
+        "no transitional MESA profile slice (~1.3 M☉) — "
+        "see backend/docs/mesa_structure_recipe.md §13",
+    ),
+
+    # -- the what-if overlays: self-run baseline+enhanced MESA pairs, host-built --
+    "helium": (
+        lambda: len(_helium_runs()) > 0,
+        "no initial-helium MESA runs — see backend/docs/mesa_helium_recipe.md",
+    ),
+    "alpha": (
+        lambda: len(_alpha_runs()) > 0,
+        "no α-enhanced MESA runs — see backend/docs/mesa_alpha_recipe.md",
+    ),
+
+    # -- the ensembles --
+    "bpass": (
+        lambda: _sibling_flag("bpass", "bpass_available"),
+        "no baked BPASS cube (data/bpass/bpass_ssp.npz) — see scripts/bake_bpass_spectra.py",
+    ),
+    # A DIFFERENT cube from the SED one: the HR-diagram number-density grid.
+    "bpass_hrd": (
+        lambda: _sibling_flag("bpass", "hrd_available"),
+        "no baked BPASS HRD cube (data/bpass/bpass_hrd.npz) — see scripts/bake_bpass_hrd.py",
+    ),
+    # The published MIST v2.5 `.iso` grid — a separate download from the EEP tracks.
+    "isochrone": (
+        lambda: _sibling_flag("isochrone", "isochrone_available"),
+        "no MIST .iso grid (data/mist_isochrones/) — run python -m star_sim.fetch_mist_iso",
+    ),
+
+    # -- the binary grids --
+    # The Götberg *parameter table* is committed, so the binary sibling's parse/snap/
+    # validity tests always run; only the SED-consistency regression (the check that the
+    # transcribed table matches the ground-truth spectra to ≤0.07 dex) needs the tree.
+    "gotberg": (
+        lambda: len(glob.glob(str(_repo_root() / "data" / "gotberg_stripped" / "grid_014"
+                                  / "**" / "SED.txt"), recursive=True)) > 0,
+        "Götberg stripped-star SEDs not present — host-fetch the VizieR tarball "
+        "into data/gotberg_stripped/ (see docs/plans/stripped-consort-unveiling.md)",
+    ),
+    # POSYDON: one multi-GB Zenodo tarball, several internal grids, each baked to its
+    # own directory of per-metallicity `.npz` buckets by scripts/bake_posydon.py.
+    "posydon": (
+        lambda: _has_npz(_posydon_dir("posydon", "BAKED_DIR")),
+        "no baked POSYDON grid — run fetch_posydon.py's recipe then scripts/bake_posydon.py "
+        "(see docs/plans/entwined-consort-inspiral.md)",
+    ),
+    "posydon_co": (
+        lambda: _has_npz(_posydon_dir("posydon_co", "BAKED_CO_DIR")),
+        "no baked POSYDON CO-HMS_RLO grid — run scripts/bake_posydon.py --grid-type "
+        "co-hms-rlo (see docs/plans/tempered-lineage-inspiral.md)",
+    ),
+    "posydon_co_multifeh": (
+        lambda: _has_npz(_posydon_dir("posydon_co", "BAKED_CO_DIR"), 2),
+        "needs >=2 baked POSYDON CO-HMS_RLO metallicity grids — bake another with "
+        "scripts/bake_posydon.py --grid-type co-hms-rlo (Chunk 1c)",
+    ),
+    # BOTH He-star grids: the suite exercises one for the He-donor accretion payoff and
+    # the other for the double-compact-object classification, so one alone won't do.
+    "posydon_co_he": (
+        lambda: all(_has_npz(_posydon_dir("posydon_co", d))
+                    for d in ("BAKED_CO_HEMS_DIR", "BAKED_CO_HEMS_RLO_DIR")),
+        "no baked POSYDON CO-HeMS / CO-HeMS_RLO grids — run scripts/bake_posydon.py "
+        "--grid-type co-hems-rlo and --grid-type co-hems (see "
+        "docs/plans/tempered-lineage-inspiral.md, Phase 1 Chunk 2a)",
+    ),
+    "posydon_co_he_multifeh": (
+        lambda: all(_has_npz(_posydon_dir("posydon_co", d), 2)
+                    for d in ("BAKED_CO_HEMS_DIR", "BAKED_CO_HEMS_RLO_DIR")),
+        "needs >=2 baked metallicity grids for both He CO grids — bake more with "
+        "scripts/bake_posydon.py --grid-type co-hems[-rlo] (Chunk 2c)",
+    ),
+}
+
+
+# --- the deferred sibling lookups the table's lambdas call --------------------
+# Each import stays inside its function: collecting the suite must not depend on
+# every sibling importing cleanly, and a table row is no place for a statement.
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _profiles_dir() -> Path:
+    from star_sim.structure import PROFILES_DATA_DIR
+
+    return PROFILES_DATA_DIR
+
+
+def _helium_runs() -> list:
+    from star_sim.helium import _find_history_files as helium_histories
+
+    return helium_histories()
+
+
+def _alpha_runs() -> list:
+    from star_sim.alpha import _find_history_files as alpha_histories
+
+    return alpha_histories()
+
+
+def _sibling_flag(module: str, func: str) -> bool:
+    """Call a sibling's own `*_available()`. The sibling, not the test suite, owns the
+    question of whether its grid is usable — its `/…_status` route answers from it."""
+    from importlib import import_module
+
+    return bool(getattr(import_module(f"star_sim.{module}"), func)())
+
+
+def _posydon_dir(module: str, attr: str) -> Path:
+    from importlib import import_module
+
+    return getattr(import_module(f"star_sim.{module}"), attr)
+
+
+# --- turning a row into a marker ---------------------------------------------
+
+
+def requires(dataset: str) -> pytest.MarkDecorator:
+    """Skip unless `dataset`'s data is on disk. A `KeyError` on an unknown name is
+    the point: a typo must fail at import, not mint a marker that never skips."""
+    predicate, reason = _DATASETS[dataset]
+    return pytest.mark.skipif(not predicate(), reason=reason)
+
+
+def pytest_report_header(config) -> list[str]:
+    """List which datasets are present, so a run says up front what it is *not*
+    testing. This is the legibility the table was for: a suite that skips half of
+    itself should say so before the dots start, and `--collect-only` shows it too."""
+    have = sorted(name for name, (predicate, _) in _DATASETS.items() if predicate())
+    missing = sorted(set(_DATASETS) - set(have))
+    return [
+        f"data present ({len(have)}/{len(_DATASETS)}): {', '.join(have) or 'none'}",
+        f"gated off ({len(missing)}): {', '.join(missing) or 'none'}",
+    ]
+
+
+# --- the markers the tests import, one line each ------------------------------
+
+requires_mist_data = requires("mist")
+requires_mist_raw_tracks = requires("mist_raw_tracks")
+requires_mist_multifeh = requires("mist_multifeh")
+requires_mist_heldout_feh = requires("mist_heldout_feh")
+requires_mist_lowz = requires("mist_lowz")
+requires_mist_solar_bracket = requires("mist_solar_bracket")
+requires_mist_rotation = requires("mist_rotation")
+requires_mist_rotation_multifeh = requires("mist_rotation_multifeh")
+requires_mist_rotation_heldout_feh = requires("mist_rotation_heldout_feh")
+requires_mist_rotation_lowz = requires("mist_rotation_lowz")
+requires_mesa_data = requires("mesa")
+requires_mesa_solar = requires("mesa_solar")
+requires_spectra_data = requires("spectra")
+requires_wd_spectra_data = requires("wd_spectra")
+requires_wr_spectra_data = requires("wr_spectra")
+requires_alpha_spectra_data = requires("alpha_spectra")
+requires_stripped_spectra_data = requires("stripped_spectra")
+requires_structure_data = requires("structure")
+requires_structure_massive = requires("structure_massive")
+requires_structure_lowmass = requires("structure_lowmass")
+requires_structure_multifeh = requires("structure_multifeh")
+requires_structure_transitional = requires("structure_transitional")
+requires_helium_data = requires("helium")
+requires_alpha_data = requires("alpha")
+requires_bpass_data = requires("bpass")
+requires_bpass_hrd_data = requires("bpass_hrd")
+requires_isochrone_data = requires("isochrone")
+requires_gotberg_data = requires("gotberg")
+requires_posydon_data = requires("posydon")
+requires_posydon_co_data = requires("posydon_co")
+requires_posydon_co_multifeh = requires("posydon_co_multifeh")
+requires_posydon_co_he_data = requires("posydon_co_he")
+requires_posydon_co_he_multifeh = requires("posydon_co_he_multifeh")

@@ -197,11 +197,49 @@ dest_of, citation)` entry and collapse each module to its table. Add
 `[project.scripts]` entries (`star-sim-fetch`, `star-sim-bake`) once the table
 form exists.
 
-### 1.6 `conftest.py` (560 lines)  · **low**
+### 1.6 `conftest.py` (581 lines)  · **SHIPPED 2026-09-03**
 
-~30 hand-written `*_available()` predicates + 32 markers, all evaluated at import.
-A `requires(dataset)` factory over a small registry `{name: (predicate, reason)}`
-halves the file and lets `pytest --collect-only` list what is gated by what.
+> Done. `_DATASETS` is one table of **33** rows — `name -> (predicate, reason)` — and
+> `requires(name)` turns a row into a skip marker, so each of the 33 markers the tests
+> import is now a single line instead of a docstring'd predicate + a four-line
+> `pytest.mark.skipif` + a comment repeating the docstring. **581 → 422 lines**, and
+> `pytest_report_header` now prints `data present (33/33)` / `gated off (0)` at the top
+> of every run — that is the "`--collect-only` lists what is gated by what" the plan
+> asked for, and it makes a suite that skips half of itself say so before the dots start.
+>
+> Three families collapsed onto one shape each, and that is where most of the 159 lines
+> went: the five spectrum-cube gates became one `(SPECTRA_DATA_DIR / X).is_file()`
+> lambda apiece; the five POSYDON gates became `_has_npz(dir, n)` (with `n=2` reading as
+> "there is a metallicity *axis*", not just "it was baked"); and the eight MIST gates
+> became questions about **one memoised set** of ([Fe/H], v/vcrit) pairs read from the
+> directory names, replacing four separate globs of the same directories. The four
+> `structure_*` slice gates now share **one** memoised `_ProfileIndex()` instead of
+> constructing four.
+>
+> **Three corrections to the plan's text, all worth keeping:**
+>
+> - **A registry buys no laziness, and the file now says so.** `pytest.mark.skipif`
+>   takes a bool, not a callable, so every predicate still runs at import exactly as
+>   before. The wins are line count, one place per dataset, and the report header.
+> - **The sibling imports inside the predicates stay deferred** (`helium`, `alpha`,
+>   `bpass`, `isochrone`, `structure`, `posydon*`). They look like sloppiness and are
+>   load-bearing: hoisting them to module scope makes *collecting the suite at all*
+>   depend on every sibling importing cleanly. They now live in a handful of named
+>   lookup functions the table's lambdas call, so the deferral is deliberate rather
+>   than incidental.
+> - **The prose was kept, so 422 is the honest floor, not 350.** Every gate's
+>   explanation of *why it is separate* (why `mist_raw_tracks` is not `mist`; why a
+>   1 M☉-only checkout needs four more structure gates; why the He-star CO channel
+>   needs both grids) survives as the row's comment. Deleting that would have hit
+>   ~350 by throwing away the only record of what each gate is for.
+>
+> **Acceptance ran in both directions**, because the local zero-skip run only catches
+> half of it. *With* the grids: 468 passed / 0 skipped, and the collected test-ID list
+> is byte-identical — no marker collapsed into always-skip. *Without* them (the whole
+> `data/` directory moved aside, which reproduces CI's data-free clone): per-test
+> outcomes are **identical old-conftest vs new**, 152 passed / 316 skipped / 0 failed —
+> no marker lost the ability to close. The second direction is the one the "green suite
+> that tests nothing" failure hides in, and a local run can never show it.
 
 ---
 
@@ -361,8 +399,9 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
 5. ~~§1.2 shared grid helpers; §1.3 spectra loader collapse~~ — **shipped 2026-09-03**
    (two of §1.2's four helpers measured and rejected; §1.3's directory split deferred —
    see the notes under each).
-6. ~~§1.4 the `providers/mist/` package split~~ — **shipped 2026-09-03**;
-   §1.5–1.6 opportunistically.
+6. ~~§1.4 the `providers/mist/` package split; §1.6 the `conftest.py` dataset
+   table~~ — **shipped 2026-09-03**. §1.5 (the fetch/bake framework) is the only
+   step of this plan left, and stays opportunistic.
 
 Each step is independently shippable and leaves the app byte-identical for the
 user; the measure of success is that the *next* feature (say, the near-IR bake
