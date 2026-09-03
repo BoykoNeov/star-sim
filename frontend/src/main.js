@@ -384,7 +384,7 @@ let ageFraction = 0.46;   // slider position 0..1 (linear in EEP, -> a track row
 // source of truth, so the slider domain and the composition panel's EEP span can
 // never disagree. They used to come from a separate, *unguarded* /age_range fetch:
 // under overlapping requests `maxAge` could stay stuck on a stale mass while the
-// (token-guarded) track settled to the new one — that was the "composition ends
+// (guarded) track settled to the new one — that was the "composition ends
 // before the age slider" mismatch. age_yr is a StellarState field, so reading the
 // window off the track is §3-clean (no provider internals leak).
 let ageMin = 0, ageMax = 1e10;
@@ -540,12 +540,34 @@ const coolDynamoFamily = () =>
   !!currentTrack && currentTrack.some(
     (s) => s.phase === "MS" && s.Teff_K != null && s.Teff_K < COOL_MS_TEFF);
 
+// --- latest-request-wins ------------------------------------------------------
+// Every fetch that a newer one can supersede (a fast mass drag fires several) carries a
+// guard. begin() bumps the counter and hands back a handle whose .current is true only
+// while nothing newer has started; invalidate() bumps WITHOUT starting a request — "drop
+// whatever is in flight" (what a mode switch or a toggle-off wants). The two used to be
+// `const tok = ++xToken` / `xToken++` written out at ~20 call sites over 13 counters.
+//
+// One NAMED guard per stream rather than a keyed registry (`latest("sn")`): there is no
+// JS test harness here, and a mistyped string key would silently mint a FRESH counter —
+// a guard that never fires stale, invisible to the Playwright screenshot pass. A mistyped
+// identifier is a ReferenceError on the first paint, which that pass does catch.
+//
+// The guard is deliberately NOT inside fetchJSON: the status/range probes (/ranges,
+// /health, /*_status, /mass_range) are fire-once and must not acquire counters.
+function makeLatest() {
+  let seq = 0;
+  return {
+    begin() { const mine = ++seq; return { get current() { return mine === seq; } }; },
+    invalidate() { seq++; },
+  };
+}
+
 let endgame = null;             // the latest /endgame result (type, states, masses…)
 let endgameKey = null;          // the requested (mass|feh) the `endgame` data is for
-let endgameToken = 0;           // latest-wins guard for /endgame fetches
+const endgameLatest = makeLatest();           // latest-wins guard for /endgame fetches
 let endgameLoading = false;     // a live-gateway /endgame fetch is in flight (drives the
                                 // "computing…" placeholder; cleared on settle, success OR
-                                // fail, by the latest token only — so a stale/failed fetch
+                                // fail, by the latest request only — so a stale/failed fetch
                                 // can't leave a stuck spinner)
 let endgameMeta = null;         // type-only /endgame?meta=1 result for the CURRENT star —
                                 // {type, mass_init_msun, has_states, …}. Lights the gateway
@@ -554,7 +576,7 @@ let endgameMeta = null;         // type-only /endgame?meta=1 result for the CURR
                                 // loads in the background for the HR preview + a warm enter
                                 // cache, so the slam-to-the-end gesture stays instant).
 let endgameMetaKey = null;      // the (mass|feh) key endgameMeta is for (staleness guard)
-let endgameMetaToken = 0;       // latest-wins guard, SEPARATE from endgameToken — the full
+const endgameMetaLatest = makeLatest();       // latest-wins guard, SEPARATE from endgameLatest — the full
                                 // fetch's stabilized machinery (Chunk D) is left untouched
 let wdFraction = 0;             // slider position 0..1 inside the WD endgame scrub
 let wrFraction = 0;             // slider position 0..1 inside the WR endgame scrub
@@ -580,7 +602,7 @@ const PULSE_GATE_DEX = 0.15;    // median per-pulse ΔlogL floor (measured: 1–
 // and the photosphere Teff depends on L_total, so client-side scaling would be wrong.
 let snModel = null;             // the latest /supernova SupernovaModel
 let snFraction = 0;             // slider position 0..1 in the SN time scrubber (linear in days)
-let snToken = 0;                // latest-wins guard for /supernova fetches (enter + M_Ni + resnap)
+const snLatest = makeLatest();                // latest-wins guard for /supernova fetches (enter + M_Ni + resnap)
 let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for the revert)
 
 // --- binary-stripped-star what-if (stripped-mode) ----------------------------
@@ -591,14 +613,14 @@ let lastEgMass = 1, lastEgFeh = 0;   // last accepted endgame progenitor (for th
 // wd/wr/sn), fetched from /binary (a sibling route, snap-always, no vvcrit). The exit is the
 // SHARED endgame-bar "Back" (= exitEndgame), and unchecking the toggle calls the same path.
 let strippedData = null;        // the latest /binary (or /binary_pair) payload (state + scalars)
-let strippedToken = 0;          // latest-wins guard for /binary fetches (enter + re-snap)
+const strippedLatest = makeLatest();          // latest-wins guard for /binary fetches (enter + re-snap)
 // path (b): when true the stripped fetch hits /binary_pair (donor + companion) and the HR
 // draws the companion as a second marker. Reset on every mode enter/exit — path (a) (the
 // stripped star alone, "companion named not drawn") is the default; ticking "Show companion"
 // reveals the accretor and the Algol mass-ratio reversal.
 let companionOn = false;
 let heliumOn = false;           // the initial-helium overlay is active (MIST HR track hidden)
-let heliumToken = 0;            // latest-wins guard for the /helium fetch (mass/feh can change fast)
+const heliumLatest = makeLatest();            // latest-wins guard for the /helium fetch (mass/feh can change fast)
 let heliumHasGrid = false;      // /helium_status: are the MESA runs present? (else never show the toggle)
 // The eligible progenitor-mass range for the toggle's gate (the Götberg Z=0.014 grid spans
 // ~2–18.2 M☉). Snap-always on the backend, so a drag past these inside the mode shows a
@@ -613,7 +635,7 @@ const HE_MASS_MIN = 0.7, HE_MASS_MAX = 7.0, HE_FEH_TOL = 0.25;
 // solar [Fe/H]), so the same eligibility band — offered near solar Z where the equivalent-Z
 // pair snaps sensibly, hidden elsewhere (the grid carries no other [Fe/H]).
 let alphaOn = false;            // the α-enhanced overlay is active (MIST HR track hidden; shares the He slot)
-let alphaToken = 0;            // latest-wins guard for the /alpha fetch
+const alphaLatest = makeLatest();            // latest-wins guard for the /alpha fetch
 let alphaHasGrid = false;      // /alpha_status: are the MESA runs present? (else never show the toggle)
 const ALPHA_MASS_MIN = 0.7, ALPHA_MASS_MAX = 7.0, ALPHA_FEH_TOL = 0.25;
 // Coeval-population (BPASS) overlay on the SED panel. Unlike He/α it's NOT gated to a
@@ -622,7 +644,7 @@ const ALPHA_MASS_MIN = 0.7, ALPHA_MASS_MAX = 7.0, ALPHA_FEH_TOL = 0.25;
 // snapped ([Fe/H], age) node could change; popNodeKey buckets requests so a same-node
 // age-scrub doesn't refetch (the payload would be identical).
 let populationOn = false;
-let populationToken = 0;        // latest-wins guard for the /population fetch (feh/age move fast)
+const populationLatest = makeLatest();        // latest-wins guard for the /population fetch (feh/age move fast)
 let populationHasGrid = false;  // /population_status: is the BPASS SED cube baked? (else hide the toggle)
 let populationHasHRD = false;   // /population_status has_hrd: is the HR-diagram number cube baked?
 let popNodeKey = "";            // last-fetched ([Fe/H], age-node) bucket — skip refetch if unchanged
@@ -640,7 +662,7 @@ let hzOn = false;
 // fetched .iso grid (/isochrone_status). The cluster ages with the age slider; isoNodeKey
 // buckets so a same-node age-scrub skips the refetch but still repaints the moving marker.
 let isoOn = false;
-let isoToken = 0;               // latest-wins guard for the /isochrone fetch
+const isoLatest = makeLatest();               // latest-wins guard for the /isochrone fetch
 let isoHasGrid = false;        // /isochrone_status: is the .iso grid fetched? (else hide the toggle)
 let isoNodeKey = "";           // last-fetched (feh, age-node, vvcrit) bucket
 let isoLastStates = null;      // cached locus states (redraw the marker within a node w/o refetch)
@@ -665,12 +687,12 @@ let isoLogAges = null;         // available_log_ages from the last fetch (slider
 // filters/ZeroPoints/band integration stay server-side, never reimplemented). Living-only
 // (magnitudes need the absolute-flux main cube; WD/WR/stripped cubes are continuum-normalized).
 let observerOn = false;         // panel eligible & shown (live + cube present)
-let observerToken = 0;          // latest-wins guard for the /photometry readout fetch
+const observerLatest = makeLatest();          // latest-wins guard for the /photometry readout fetch
 let observerHasData = false;    // /photometry reachable (spectrum cube present)? else hide the panel
 let observerMarker = null;      // the last painted marker state (for a knob-drag readout refetch)
 let obsDebounce = null;         // debounce for the readout fetch (the overlay itself is instant)
 let obsTrackKey = null;         // "(mass,feh,vvcrit)" the CMD locus was last fetched for (dedupe)
-let obsTrackToken = 0;          // latest-wins guard for the /photometry_track locus fetch
+const obsTrackLatest = makeLatest();          // latest-wins guard for the /photometry_track locus fetch
 let obsDistancePc = 100;        // seeded distance (μ = 5) — a visible vertical arrow on first view
 let obsAv = 0;                  // seeded dust-free (Spectrum/SED byte-unchanged until dust is added)
 let obsRv = 3.1;                // diffuse-ISM reddening law (the near-universal default)
@@ -702,7 +724,7 @@ let binaryStar1 = null;         // data.steps[].star_1, pulled out once for hr.s
 let binaryStar2 = null;         // data.steps[].star_2 (may contain a trailing null — a merger)
 let binaryFraction = 0;         // 0..1 slider position, index-linear over steps (the WR idiom)
 let binaryDemoKey = null;       // which BINARY_DEMOS entry (or "custom") is live
-let binaryToken = 0;            // latest-wins guard for /binary_track fetches
+const binaryLatest = makeLatest();            // latest-wins guard for /binary_track fetches
 
 // CE/compact-object tail Chunk 1b: the CO-HMS_RLO demo — a compact object (NS/BH) orbiting a
 // still hydrogen-rich star, the stage AFTER the HMS-HMS episode. A STANDALONE curated demo
@@ -749,7 +771,7 @@ let coBinaryView = false;
 let coBinaryTrackData = null;   // the full /co_binary_track payload
 let coBinaryStar = null;        // data.steps[].star, pulled out for hr.setBinaryTrack (star only)
 let coBinaryFraction = 0;       // 0..1 slider position, index-linear over steps
-let coBinaryToken = 0;          // latest-wins guard for /co_binary_track fetches
+const coBinaryLatest = makeLatest();          // latest-wins guard for /co_binary_track fetches
 let coBinaryDemoKey = null;     // "xrb" (curated demo system) | "custom" — which is live
 
 // Chunk 1c: the [Fe/H] picker + free M_star/M_co/P sliders. /co_binary_track was always
@@ -1224,7 +1246,7 @@ const egKey = () => `${massValue.toFixed(4)}|${Number(els.feh.value).toFixed(2)}
 // /track rebuilds the full (mass,[Fe/H]) EEP
 // interpolation window on the backend, so a fast slider fling firing dozens of
 // `input` events would spin the CPU computing intermediate stars whose results the
-// latest-wins token then just throws away. We defer only the fetch — the cheap UI
+// latest-wins guard then just throws away. We defer only the fetch — the cheap UI
 // (thumb, number box, snap) stays synchronous so the slider never feels laggy.
 // `wrapped()` collapses a burst to ONE trailing call; `wrapped.flush()` cancels the
 // pending timer and runs it immediately (used on the slider's `change`, which fires
@@ -1647,11 +1669,12 @@ const gyrNum = (yr) => {
   return g.toFixed(Math.max(ageNumDecimals, sig));
 };
 
-// --- latest-request-wins -----------------------------------------------------
-// The track fetch (the only living-path network call now — the age scrub picks from the
-// already-fetched track, Chunk E) carries a token so a stale response can't overwrite a
-// newer one. (The endgame fetches carry their own separate tokens.)
-let trackToken = 0;
+// --- the track fetch ---------------------------------------------------------
+// The only living-path network call now (the age scrub picks from the already-fetched
+// track, Chunk E). Its guard lives here rather than up with the endgame/overlay ones
+// because this is where it is used; the endgame fetches carry their own separate guards.
+// See makeLatest() for what begin()/invalidate() do.
+const trackLatest = makeLatest();
 
 async function fetchJSON(path) {
   const res = await fetch(`${API}${path}`);
@@ -2392,19 +2415,19 @@ function updatePeculiarControl() {
 // Type-only companion to fetchEndgamePreview: fetch JUST the fate metadata (~120 B via
 // /endgame?meta=1) so the gateway button appears (greyed, foreshadowing) the instant a new
 // track lands — instead of waiting ~150 ms+ for the full ~1 MB /endgame the preview/enter
-// path fetches. Purely ADDITIVE: its OWN token + cache, never touches endgame/endgameToken,
+// path fetches. Purely ADDITIVE: its OWN guard + cache, never touches endgame/endgameLatest,
 // so the stabilized full-fetch machinery (Chunk D) is unchanged. updateGateway prefers the
 // full `endgame` when present and falls back to `endgameMeta` for the button alone — enter
 // + the HR preview + resnap all still read the full `endgame`, so this can't regress them.
 async function fetchEndgameMeta() {
   if (mode !== "live") return;
   const key = egKey();
-  const tok = ++endgameMetaToken;
+  const req = endgameMetaLatest.begin();
   const mass = massValue, feh = Number(els.feh.value);
   try {
     const m = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}&meta=1`);
     // Drop a stale/superseded response, or one for a star we've since moved off of.
-    if (tok !== endgameMetaToken || mode !== "live" || egKey() !== key) return;
+    if (!req.current || mode !== "live" || egKey() !== key) return;
     endgameMeta = m; endgameMetaKey = key;
     // Note: do NOT touch endgameLoading here. It's owned by the full fetch
     // (fetchEndgamePreview — Chunk D). The "computing…" placeholder hides via the `known`
@@ -2423,19 +2446,19 @@ async function fetchEndgameMeta() {
 // preview of where the star is headed (a white dwarf) — and the gateway data is already
 // warm when the user scrubs to the very end. Only a WD endgame yields a preview; SN/WR
 // stars show nothing (we never promise a remnant the star won't form). Latest-wins
-// (shares endgameToken with maybeFetchEndgame, which then no-ops once this populated the
+// (shares endgameLatest with maybeFetchEndgame, which then no-ops once this populated the
 // cache). Fire-and-forget — never blocks the marker refresh. The ~1 MB fetch rides the
 // track debounce (once per settled mass/[Fe/H]), so age scrubbing stays light.
 async function fetchEndgamePreview() {
   if (mode !== "live") return;
   const key = egKey();
-  const tok = ++endgameToken;
+  const req = endgameLatest.begin();
   endgameLoading = true;   // a fetch is now in flight → the placeholder is live
   const mass = massValue, feh = Number(els.feh.value);
   try {
     const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // Drop a stale/superseded response, or one for a star we've since moved off of.
-    if (tok !== endgameToken || mode !== "live" || egKey() !== key) return;
+    if (!req.current || mode !== "live" || egKey() !== key) return;
     endgame = eg; endgameKey = key;
     endgameLoading = false;
     hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
@@ -2444,7 +2467,7 @@ async function fetchEndgamePreview() {
     // non-fatal: no preview/gateway this time. Only the LATEST fetch clears the loading
     // flag (a stale failure mustn't blank a still-pending newer fetch), then repaints —
     // so a failed fetch falls back to the blank reserved slot, not a stuck spinner.
-    if (tok === endgameToken && mode === "live") { endgameLoading = false; updateGateway(); }
+    if (req.current && mode === "live") { endgameLoading = false; updateGateway(); }
   }
 }
 
@@ -2455,25 +2478,25 @@ async function maybeFetchEndgame() {
   if (mode !== "live" || ageFraction < GATE_FETCH) return;
   const key = egKey();
   if (endgame && endgameKey === key) return;
-  const tok = ++endgameToken;
+  const req = endgameLatest.begin();
   endgameLoading = true;   // (the age-scrub path; the mass-change path fetches via
                            // fetchEndgamePreview, which sets this too)
   const mass = massValue, feh = Number(els.feh.value);
   try {
     const eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
-    if (tok !== endgameToken || mode !== "live") return;
+    if (!req.current || mode !== "live") return;
     endgame = eg; endgameKey = key;
     endgameLoading = false;
     // Set the HR preview here too, not just in fetchEndgamePreview: the two share
-    // endgameToken, so if both ever race (e.g. a mass change fires the preview fetch, then
+    // endgameLatest, so if both ever race (e.g. a mass change fires the preview fetch, then
     // an age scrub past GATE_FETCH fires this one before the first lands) only the
-    // token-winner runs its success branch — it must also set the preview, or the dashed
+    // latest-request winner runs its success branch — it must also set the preview, or the dashed
     // track silently fails to appear.
     hr.setEndgamePreview(eg.type === "WD" && eg.states.length ? eg.states : null);
     updateGateway();
   } catch {
-    // non-fatal: no gateway this time. Latest-token-only clear + repaint (see above).
-    if (tok === endgameToken && mode === "live") { endgameLoading = false; updateGateway(); }
+    // non-fatal: no gateway this time. Latest-request-only clear + repaint (see above).
+    if (req.current && mode === "live") { endgameLoading = false; updateGateway(); }
   }
 }
 
@@ -2486,13 +2509,13 @@ function updateLiveGateway() {
 // Enter the reversible white-dwarf endgame from the gateway button.
 function enterWD() {
   if (!endgame || endgame.type !== "WD" || !endgame.states.length) return;
-  dropHeliumForModeSwitch();
+  dropLivingOnlyPanels();
   mode = "wd";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
   // Invalidate any in-flight live /track so it can't land and clobber the WD render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
-  trackToken++;
+  trackLatest.invalidate();
   document.body.classList.add("wd-mode");
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   setWDResnapNote("");
@@ -2519,13 +2542,13 @@ function enterWD() {
 // structure view (no comp.setEndgame).
 function enterWR() {
   if (!endgame || endgame.type !== "WR" || !endgame.states.length) return;
-  dropHeliumForModeSwitch();
+  dropLivingOnlyPanels();
   mode = "wr";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
   // Invalidate any in-flight live /track so it can't land and clobber the WR render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
-  trackToken++;
+  trackLatest.invalidate();
   document.body.classList.add("wr-mode");
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
@@ -2546,6 +2569,14 @@ function enterWR() {
 // restores the living HR frame.
 function exitEndgame() {
   const prevMode = mode;   // captured before the reset — decides the age landing (see below)
+  // Symmetry with every mode ENTRY: tear the living-only panels down here too. On a clean
+  // WD -> Back this is a no-op (entry already dropped them and nothing inside an endgame can
+  // turn them back on) — it exists for the one case that isn't clean: a late fetch that
+  // landed mid-endgame and repopulated an overlay would otherwise survive into the restored
+  // live view as a stale caption. Runs BEFORE mode = "live" so the drops see the endgame
+  // mode, and before refreshMassRangeThenTrack() below repaints — paintState()'s
+  // update*Control()/refreshSeismo() then bring the eligible panels back for the living star.
+  dropLivingOnlyPanels();
   mode = "live";
   document.body.classList.remove("wd-mode", "wr-mode", "sn-mode", "stripped-mode");
   els.endgameBar.hidden = true;
@@ -2557,18 +2588,18 @@ function exitEndgame() {
   hr.clearEndgame();
   comp.clearEndgame();
   endgame = null; endgameKey = null;
-  snModel = null; snToken++;     // drop the SN model + invalidate any in-flight /supernova fetch
-  strippedData = null; strippedToken++;   // drop the stripped model + invalidate its in-flight fetch
+  snModel = null; snLatest.invalidate();     // drop the SN model + invalidate any in-flight /supernova fetch
+  strippedData = null; strippedLatest.invalidate();   // drop the stripped model + invalidate its in-flight fetch
   companionOn = false;                     // reset the path (b) companion reveal (hr.clearEndgame drops its marker)
   document.body.classList.remove("companion-on");   // hide the Roche panel (path (b) Chunk 3)
   // path (b) Chunk 4b: drop the co-evolving binary sub-view too (hr.clearEndgame already
   // called hr.clearBinaryTrack() above; this resets main.js's own copy of the state).
   binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
-  binaryDemoKey = null; binaryToken++;
+  binaryDemoKey = null; binaryLatest.invalidate();
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   // Chunk 1b: drop the CO-HMS_RLO sub-view too (hr.clearBinaryTrack ran above).
-  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
+  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");
   document.body.classList.remove("co-he-kind");
   if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
@@ -2603,16 +2634,16 @@ function exitEndgame() {
 // revert to the last WD progenitor and say so (mirrors the live dead-corner clamp).
 async function tryWDResnap() {
   if (mode !== "wd") return;
-  const tok = ++endgameToken;
+  const req = endgameLatest.begin();
   const mass = massValue, feh = Number(els.feh.value);
   // Keep the rotation gate current as [Fe/H] drags (it may leave the rotating grid),
   // so effVvcrit() can fall back to non-rotating and /endgame never 422s off-grid.
   rotStatus = await fetchRotStatus(mass, feh);
-  if (tok !== endgameToken || mode !== "wd") return;
+  if (!req.current || mode !== "wd") return;
   let eg;
   try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`); }
   catch { return; }
-  if (tok !== endgameToken || mode !== "wd") return;
+  if (!req.current || mode !== "wd") return;
   if (eg.type === "WD" && eg.states.length) {
     endgame = eg; endgameKey = egKey();
     lastEgMass = mass; lastEgFeh = feh;
@@ -2661,15 +2692,15 @@ async function tryWDResnap() {
 // core-collapses (SN), there is no WR — revert to the last WR progenitor and say so.
 async function tryWRResnap() {
   if (mode !== "wr") return;
-  const tok = ++endgameToken;
+  const req = endgameLatest.begin();
   const mass = massValue, feh = Number(els.feh.value);
   // Keep the rotation gate current as [Fe/H] drags (see tryWDResnap).
   rotStatus = await fetchRotStatus(mass, feh);
-  if (tok !== endgameToken || mode !== "wr") return;
+  if (!req.current || mode !== "wr") return;
   let eg;
   try { eg = await fetchJSON(`/endgame?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`); }
   catch { return; }
-  if (tok !== endgameToken || mode !== "wr") return;
+  if (!req.current || mode !== "wr") return;
   if (eg.type === "WR" && eg.states.length) {
     endgame = eg; endgameKey = egKey();
     lastEgMass = mass; lastEgFeh = feh;
@@ -2927,11 +2958,11 @@ async function fetchSNModel(mni) {
 // the track — /endgame returns states=[] for SN — so this FETCHES /supernova on click, with
 // a loading caption + a latest-wins guard (a slow fetch can't paint after we've left).
 async function enterSN() {
-  dropHeliumForModeSwitch();
+  dropLivingOnlyPanels();
   mode = "sn";
   updateRotControl();   // hide the rotation control inside the endgame (mode != live)
   updatePeculiarControl();
-  trackToken++;         // invalidate any in-flight live /track
+  trackLatest.invalidate();         // invalidate any in-flight live /track
   document.body.classList.add("sn-mode");
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
@@ -2943,15 +2974,15 @@ async function enterSN() {
   snFraction = 0;
   els.age.value = snFraction;
   els.endgameAgeCaption.textContent = "Computing the supernova light curve…";
-  const tok = ++snToken;
+  const req = snLatest.begin();
   let model;
   try { model = await fetchSNModel(mniValue); }
   catch {
-    if (tok === snToken && mode === "sn")
+    if (req.current && mode === "sn")
       els.endgameAgeCaption.textContent = "Could not compute the supernova light curve.";
     return;
   }
-  if (tok !== snToken || mode !== "sn") return;
+  if (!req.current || mode !== "sn") return;
   if (!model.is_supernova) { exitEndgame(); return; }   // defensive (the gateway only enables for SN)
   applySNModel(model);
 }
@@ -2960,10 +2991,10 @@ async function enterSN() {
 // can't change — always still an SN). Debounced + latest-wins, like the track fetch.
 async function refetchSNMni() {
   if (mode !== "sn") return;
-  const tok = ++snToken;
+  const req = snLatest.begin();
   let model;
   try { model = await fetchSNModel(mniValue); } catch { return; }
-  if (tok !== snToken || mode !== "sn" || !model.is_supernova) return;
+  if (!req.current || mode !== "sn" || !model.is_supernova) return;
   applySNModel(model);
 }
 
@@ -2973,13 +3004,13 @@ async function refetchSNMni() {
 // a Wolf–Rayet / has no endgame, there is no supernova — revert and say so.
 async function trySNResnap() {
   if (mode !== "sn") return;
-  const tok = ++snToken;
+  const req = snLatest.begin();
   const mass = massValue, feh = Number(els.feh.value);
   rotStatus = await fetchRotStatus(mass, feh);   // keep the rotation gate current as [Fe/H] drags
-  if (tok !== snToken || mode !== "sn") return;
+  if (!req.current || mode !== "sn") return;
   let model;
   try { model = await fetchSNModel(mniValue); } catch { return; }
-  if (tok !== snToken || mode !== "sn") return;
+  if (!req.current || mode !== "sn") return;
   if (model.is_supernova) {
     lastEgMass = mass; lastEgFeh = feh;
     setWDResnapNote("");
@@ -3050,7 +3081,7 @@ function updateHeliumControl() {
 // Turn the overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
 function heliumOff() {
   heliumOn = false;
-  heliumToken++;                 // cancel any in-flight /helium apply
+  heliumLatest.invalidate();                 // cancel any in-flight /helium apply
   if (els.heliumToggle) els.heliumToggle.checked = false;
   hr.clearHeliumOverlay();
   if (currentTrack && currentTrack.length) hr.setTrack(currentTrack);
@@ -3065,13 +3096,13 @@ function heliumOff() {
 // no HR axis, so it would silently vanish without this — advisor catch).
 async function refreshHelium() {
   if (!heliumOn) return;
-  const token = ++heliumToken;
+  const req = heliumLatest.begin();
   const mass = massValue;
   let data;
   try {
     data = await fetchJSON(`/helium?mass=${mass}`);
   } catch (e) {
-    if (token !== heliumToken || !heliumOn) return;
+    if (!req.current || !heliumOn) return;
     // Tear the overlay DOWN on failure (don't leave heliumOn stuck — that guards the live HR
     // calls off and FREEZES the panel with no overlay to justify it). heliumOff restores the
     // live track + unchecks; set the note AFTER it (its updateHeliumControl resets the default).
@@ -3079,7 +3110,7 @@ async function refreshHelium() {
     if (els.heliumNote) els.heliumNote.textContent = "Helium-enhanced tracks unavailable (no MESA data).";
     return;
   }
-  if (token !== heliumToken || !heliumOn || mode !== "live") return;
+  if (!req.current || !heliumOn || mode !== "live") return;
   const b = data.baseline, en = data.enhanced;
   hr.setHeliumOverlay(b.states, en.states, { yBase: b.y_init, yEnh: en.y_init });
   if (els.heliumNote) {
@@ -3100,45 +3131,57 @@ function fmtGyr(gyr) {
   return gyr >= 0.1 ? `${gyr.toFixed(2)} Gyr` : `${Math.round(gyr * 1000)} Myr`;
 }
 
+// --- the living-only chokepoint ----------------------------------------------
+// Several panels/overlays are meaningful ONLY on the living track: a white dwarf's log g ~8
+// or a supernova's log g ~ -5 slips a naive Teff/log g gate and paints garbage, and a stale
+// overlay under an endgame HR panel is exactly the false-caption class CLAUDE.md warns about.
+// So every mode entry that isn't "live" — and the exit back to live — tears them all down
+// through ONE call: dropLivingOnlyPanels().
+//
+// The list is built by REGISTRATION, not by an umbrella function that names its members: each
+// panel calls registerLivingOnly() next to its own drop, so a new overlay opts in where it is
+// written instead of editing a fan-out list six modules away (the previous shape — an
+// eight-line dropHeliumForModeSwitch that happened to also do helium's own teardown last).
+// Registration order = teardown order; the drops are independent (each touches only its own
+// state), so the order is not load-bearing.
+const livingOnly = [];
+function registerLivingOnly(drop) { livingOnly.push(drop); }
+function dropLivingOnlyPanels() { for (const drop of livingOnly) drop(); }
+
 // Drop the overlay STATE when another view (endgame / stripped / SN) takes over the HR panel —
 // that view's own enter path repaints the panel, so unlike heliumOff() this does NOT restore the
 // live track (the hr.setEndgame/setBinaryTrack/… entries already clear heliumMode). Both the
 // helium and the target toggle can be visible at once in their overlapping mass band, so this is
-// reachable; call it at the top of every mode-entry that isn't "live".
+// reachable.
 // The He-ignition-cliff caption describes the living track's core-helium-burning loop —
 // meaningless in any endgame (a WD is past it, a WR/SN never had the degenerate kind), so
-// the shared chokepoint clears it rather than letting a stale confession sit under an
+// the chokepoint clears it rather than letting a stale confession sit under an
 // endgame HR panel.
 function dropCliffCaptionForModeSwitch() {
   heCliff = { ...NO_HE_CLIFF };
   // Drop the remembered state too: on the way back out of an endgame a late
   // /he_ignition_status could otherwise repaint the caption against a PRE-endgame
-  // phase (the mode + token guards would usually catch it, but the cost of being
+  // phase (the mode + latest-wins guards would usually catch it, but the cost of being
   // sure is one assignment, and a caption keyed on a stale phase is exactly the
   // false-label class this whole gate exists to avoid).
   lastPainted = null;
   if (els.hrCliffCaption) { els.hrCliffCaption.hidden = true; els.hrCliffCaption.textContent = ""; }
 }
+registerLivingOnly(dropCliffCaptionForModeSwitch);   // the He-ignition confession is about the LIVING track
 
 function dropHeliumForModeSwitch() {
-  dropAlphaForModeSwitch();      // the two MESA what-ifs share the HR slot — drop both on a mode switch
-  dropPopulationForModeSwitch(); // the SED population overlay is living-only — drop it on any mode switch too
-  dropIsochroneForModeSwitch();  // the cluster-isochrone HR overlay is living-only — drop it too
-  dropHZForModeSwitch();         // the habitable-zone scale-bar overlay is living-only — drop it too
-  dropObserverForModeSwitch();   // the observer reddening/mag view is living-only — drop it too
-  dropSeismoForModeSwitch();     // the asteroseismology panel is living-only — drop it too (a WD's log g~8 would slip its Teff gate)
-  dropCliffCaptionForModeSwitch(); // the He-ignition confession is about the LIVING track — drop it too
   if (!heliumOn) return;
   heliumOn = false;
-  heliumToken++;
+  heliumLatest.invalidate();
   if (els.heliumToggle) els.heliumToggle.checked = false;
   if (els.heliumControl) els.heliumControl.hidden = true;   // updateHeliumControl re-shows it on return to live
 }
+registerLivingOnly(dropHeliumForModeSwitch);   // the helium what-if overlays the living HR track
 
 // Habitable-zone overlay (Axis D) is living-only: the scale bar in every endgame/stripped/binary
 // mode already shows a different axis (the WD cooling star, the SN fireball, the stripped donor),
-// so a stale HZ band there would be meaningless. Called from dropHeliumForModeSwitch (the shared
-// mode-switch chokepoint). CSS also hides the toggle in those modes; this clears the STATE so a
+// so a stale HZ band there would be meaningless. Registered on the living-only chokepoint
+// (dropLivingOnlyPanels). CSS also hides the toggle in those modes; this clears the STATE so a
 // return to live starts clean and scale.js stops drawing the band immediately.
 function dropHZForModeSwitch() {
   // The temporal twin (D2a) follows the band: hide + clear it unconditionally (cheap; it's
@@ -3150,6 +3193,7 @@ function dropHZForModeSwitch() {
   if (els.hzToggle) els.hzToggle.checked = false;
   scale.setHZ(false);
 }
+registerLivingOnly(dropHZForModeSwitch);   // the habitable-zone band belongs to a living star's luminosity
 
 // Map the current track's StellarStates through the (shared) Kopparapu HZ physics into the
 // per-row series the history panel draws: the four edge distances in AU, or {oor:true} for a
@@ -3213,8 +3257,8 @@ function updateObserverControl() {
 // clear the CMD. setReddening(false) is a no-op path on both panels, so this is byte-identical.
 function observerOff() {
   observerOn = false;
-  observerToken++;               // cancel any in-flight /photometry readout
-  obsTrackToken++;               // cancel any in-flight /photometry_track locus fetch
+  observerLatest.invalidate();               // cancel any in-flight /photometry readout
+  obsTrackLatest.invalidate();               // cancel any in-flight /photometry_track locus fetch
   obsTrackKey = null;
   if (obsDebounce) { clearTimeout(obsDebounce); obsDebounce = null; }
   spectrum.setReddening(false, 0, obsRv);
@@ -3225,16 +3269,17 @@ function observerOff() {
 
 // Living-only, like the HZ band: the endgame/stripped spectra come from continuum-normalized or
 // differently-ranged cubes, so a reddened overlay + an absolute magnitude there would be a silent
-// wrong answer. Called from the shared mode-switch chokepoint (dropHeliumForModeSwitch).
+// wrong answer. Registered on the living-only chokepoint (dropLivingOnlyPanels).
 function dropObserverForModeSwitch() {
   if (observerOn) observerOff();
   if (els.observerPanel) els.observerPanel.hidden = true;
 }
+registerLivingOnly(dropObserverForModeSwitch);   // reddened mags off a normalized endgame cube would be a wrong answer
 
 // --- asteroseismology (Axis C) — the star rings ------------------------------
 // A pure VIEW of the living marker's Teff/log g/R (seismo.js does the scaling-relation compute and
 // the power-spectrum/echelle draw). Living-only: paintState pushes the state in live mode (which
-// un-hides the panel), and dropSeismoForModeSwitch (called from the shared chokepoint) hides it in
+// un-hides the panel), and dropSeismoForModeSwitch (registered on the living-only chokepoint) hides it in
 // every endgame/stripped mode. It's meaningful for any cool living star, so it's ON by default —
 // the physics gate (radiative envelope) is handled INSIDE the panel as a caption, not a hide.
 function refreshSeismo(s) {
@@ -3244,13 +3289,14 @@ function refreshSeismo(s) {
   fillSeismoCaption(p);
 }
 
-// The living-only chokepoint drop: a cooling white dwarf has log g ~8 and a Teff that dips below the
+// The living-only drop: a cooling white dwarf has log g ~8 and a Teff that dips below the
 // 6700 K convective-envelope gate, so a pure Teff gate would let it paint a garbage ~1e7 uHz
 // spectrum — and WD/WR/SN/stripped states aren't solar-like oscillators anyway.
 function dropSeismoForModeSwitch() {
   seismo.clear();
   if (els.seismoPanel) els.seismoPanel.hidden = true;
 }
+registerLivingOnly(dropSeismoForModeSwitch);   // a WD's log g ~8 would slip a Teff-only gate
 
 // The readout beneath the panel. For a ringing star: nu_max, Delta-nu, and the seismic M/R —
 // framed as THE PRINCIPLE (the observables invert to M and R, how Kepler/TESS weigh stars), never
@@ -3289,13 +3335,13 @@ async function refreshPhotometryTrack() {
   const key = `${mass}|${feh}|${vv}`;
   if (key === obsTrackKey) return;   // already have this locus
   obsTrackKey = key;
-  const token = ++obsTrackToken;
+  const req = obsTrackLatest.begin();
   try {
     const d = await fetchJSON(`/photometry_track?mass=${mass}&feh=${feh}&vvcrit=${vv}`);
-    if (token !== obsTrackToken || !observerOn || mode !== "live") return;
+    if (!req.current || !observerOn || mode !== "live") return;
     cmd.setLocus(d.points, d.has_bv);
   } catch (e) {
-    if (token !== obsTrackToken) return;
+    if (!req.current) return;
     obsTrackKey = null;   // let a later eligible refresh retry
     cmd.setLocus(null, false);
   }
@@ -3339,20 +3385,20 @@ async function fetchObserverReadout(s) {
   if (!observerOn || mode !== "live" || !s) return;
   const teff = s.Teff_K, logg = s.logg, feh = s.feh_init ?? 0, r = s.R_rsun;
   if (!(r > 0) || teff == null || logg == null) return;
-  const token = ++observerToken;
+  const req = observerLatest.begin();
   let data;
   try {
     data = await fetchJSON(
       `/photometry?teff=${teff}&logg=${logg}&feh=${feh}&radius_rsun=${r}` +
       `&distance_pc=${obsDistancePc}&av=${obsAv}&rv=${obsRv}`);
   } catch (e) {
-    if (token !== observerToken || !observerOn) return;
+    if (!req.current || !observerOn) return;
     if (els.observerReadout) els.observerReadout.textContent = "";
     if (els.observerNote)
       els.observerNote.textContent = "Photometry unavailable (spectrum cube not present).";
     return;
   }
-  if (token !== observerToken || !observerOn || mode !== "live") return;
+  if (!req.current || !observerOn || mode !== "live") return;
   renderObserverReadout(data);
 }
 
@@ -3413,7 +3459,7 @@ function updatePopulationControl() {
 // Turn the overlay OFF: clear the SED-panel curves, uncheck, reset the note.
 function populationOff() {
   populationOn = false;
-  populationToken++;             // cancel any in-flight /population apply
+  populationLatest.invalidate();             // cancel any in-flight /population apply
   popNodeKey = "";
   if (els.populationToggle) els.populationToggle.checked = false;
   sed.clearPopulation();
@@ -3423,17 +3469,18 @@ function populationOff() {
 
 // Drop the overlay when a non-live mode takes over (endgame/stripped/SN/binary). sed.js hides
 // the population in endgame anyway, but clear the state so returning to live never flashes a
-// stale population before the next fetch (called from dropHeliumForModeSwitch, the mode hook).
+// stale population before the next fetch (registered on the living-only chokepoint).
 function dropPopulationForModeSwitch() {
   if (!populationOn) return;
   populationOn = false;
-  populationToken++;
+  populationLatest.invalidate();
   popNodeKey = "";
   if (els.populationToggle) els.populationToggle.checked = false;
   if (els.populationControl) els.populationControl.hidden = true;
   sed.clearPopulation();
   hr.clearPopulationHRD();        // the HR-panel cloud is living-only — drop it on any mode switch
 }
+registerLivingOnly(dropPopulationForModeSwitch);   // the coeval-population overlay is a living-track view
 
 // Fetch + push the population spectra for the marker's ([Fe/H], age). Called from paintState;
 // re-fetches only when the snapped node could change — popNodeKey buckets requests FINER than
@@ -3449,7 +3496,7 @@ async function refreshPopulation(s) {
   const key = `${(Math.round(feh / 0.05) * 0.05).toFixed(2)}|` +
     `${(Math.round(Math.log10(ageGyr) / 0.03) * 0.03).toFixed(2)}`;
   if (key === popNodeKey) return;
-  const token = ++populationToken;
+  const req = populationLatest.begin();
   let data, hrd = null;
   try {
     // The SED spectrum (Chunk 1) is required; the HR-diagram number density (Chunk 2) is an
@@ -3461,14 +3508,14 @@ async function refreshPopulation(s) {
       : Promise.resolve(null));
     [data, hrd] = await Promise.all(reqs);
   } catch (e) {
-    if (token !== populationToken || !populationOn) return;
+    if (!req.current || !populationOn) return;
     popNodeKey = "";
     populationOff();
     if (els.populationNote)
       els.populationNote.textContent = "Population spectra unavailable (BPASS cube not baked).";
     return;
   }
-  if (token !== populationToken || !populationOn || mode !== "live") return;
+  if (!req.current || !populationOn || mode !== "live") return;
   popNodeKey = key;
   sed.setPopulation(data);
   hr.setPopulationHRD(hrd);   // the coeval-population cloud on the HR panel (null-safe: clears)
@@ -3545,7 +3592,7 @@ function resetIsoDecouple() {
 // Turn the overlay OFF: restore the live MIST HR track + marker, drop the caption.
 function isochroneOff() {
   isoOn = false;
-  isoToken++;                    // cancel any in-flight /isochrone apply
+  isoLatest.invalidate();                    // cancel any in-flight /isochrone apply
   isoNodeKey = ""; isoLastStates = null; isoLastTurnoff = null;
   if (els.isochroneToggle) els.isochroneToggle.checked = false;
   hr.clearIsochroneOverlay();
@@ -3556,16 +3603,17 @@ function isochroneOff() {
 
 // Drop the overlay when a non-live mode takes over (endgame/stripped/SN/binary), mirroring
 // dropPopulationForModeSwitch — the entry path repaints the HR panel, so just clear state so a
-// return to live never flashes a stale locus. Called from dropHeliumForModeSwitch (the hook).
+// return to live never flashes a stale locus. Registered on the living-only chokepoint.
 function dropIsochroneForModeSwitch() {
   if (!isoOn) return;
   isoOn = false;
-  isoToken++;
+  isoLatest.invalidate();
   isoNodeKey = ""; isoLastStates = null; isoLastTurnoff = null;
   if (els.isochroneToggle) els.isochroneToggle.checked = false;
   if (els.isochroneControl) els.isochroneControl.hidden = true;
   resetIsoDecouple();            // B3: never leave a stale decoupled cluster age behind a mode swap
 }
+registerLivingOnly(dropIsochroneForModeSwitch);   // the cluster isochrone shares the living HR panel
 
 // Fetch + push the cluster isochrone for the marker's (age, [Fe/H], vvcrit). Called from
 // paintState. Buckets by the snapped node so a same-node age-scrub skips the refetch — but
@@ -3587,18 +3635,18 @@ async function refreshIsochrone(s) {
     hr.setIsochroneOverlay(isoLastStates, isoLastTurnoff, s);  // same locus, moved marker
     return;
   }
-  const token = ++isoToken;
+  const req = isoLatest.begin();
   let data;
   try {
     data = await fetchJSON(`/isochrone?age_yr=${ageYr}&feh=${feh}&vvcrit=${vvcrit}`);
   } catch (e) {
-    if (token !== isoToken || !isoOn) return;
+    if (!req.current || !isoOn) return;
     isoNodeKey = "";
     isochroneOff();
     if (els.isochroneNote) els.isochroneNote.textContent = "Isochrone grid unavailable (not fetched).";
     return;
   }
-  if (token !== isoToken || !isoOn || mode !== "live") return;
+  if (!req.current || !isoOn || mode !== "live") return;
   isoNodeKey = key;
   isoLastStates = data.states; isoLastTurnoff = data.turnoff;
   if (Array.isArray(data.available_log_ages) && data.available_log_ages.length)
@@ -3661,7 +3709,7 @@ function updateAlphaControl() {
 // Turn the α overlay OFF: restore the live MIST HR track + marker, drop the overlay note.
 function alphaOff() {
   alphaOn = false;
-  alphaToken++;                  // cancel any in-flight /alpha apply
+  alphaLatest.invalidate();                  // cancel any in-flight /alpha apply
   if (els.alphaToggle) els.alphaToggle.checked = false;
   hr.clearHeliumOverlay();       // the shared MESA-overlay slot
   if (currentTrack && currentTrack.length) hr.setTrack(currentTrack);
@@ -3676,18 +3724,18 @@ function alphaOff() {
 // own (spectroscopic) fingerprint.
 async function refreshAlpha() {
   if (!alphaOn) return;
-  const token = ++alphaToken;
+  const req = alphaLatest.begin();
   const mass = massValue;
   let data;
   try {
     data = await fetchJSON(`/alpha?mass=${mass}`);
   } catch (e) {
-    if (token !== alphaToken || !alphaOn) return;
+    if (!req.current || !alphaOn) return;
     alphaOff();                  // don't leave alphaOn stuck (it guards the live HR calls off)
     if (els.alphaNote) els.alphaNote.textContent = "α-enhanced tracks unavailable (no MESA data).";
     return;
   }
-  if (token !== alphaToken || !alphaOn || mode !== "live") return;
+  if (!req.current || !alphaOn || mode !== "live") return;
   const b = data.baseline, en = data.enhanced;
   // On-plot ZAMS labels show the equivalent [M/H] — the axis the TRACK actually sees (the lesson).
   hr.setHeliumOverlay(b.states, en.states, {
@@ -3707,14 +3755,15 @@ async function refreshAlpha() {
 // Signed [M/H] for the caption/labels: "+0.29" / "0.00" / "-0.10".
 function fmtMH(mh) { return (mh >= 0 ? "+" : "") + mh.toFixed(2); }
 
-// Drop the α overlay STATE when another view takes over the HR panel (see dropHeliumForModeSwitch).
+// Drop the α overlay STATE when another view takes over the HR panel (see dropLivingOnlyPanels).
 function dropAlphaForModeSwitch() {
   if (!alphaOn) return;
   alphaOn = false;
-  alphaToken++;
+  alphaLatest.invalidate();
   if (els.alphaToggle) els.alphaToggle.checked = false;
   if (els.alphaControl) els.alphaControl.hidden = true;
 }
+registerLivingOnly(dropAlphaForModeSwitch);   // the α what-if shares the helium HR slot
 
 // Fetch the computed stripped model for the current (mass, [Fe/H]). No vvcrit — the stripped
 // grid is single-star-progenitor-parameterized only. When "Show companion" is on (path (b))
@@ -3883,21 +3932,21 @@ function renderStrippedReadout(s, d) {
 // sibling route on entry, with a loading caption + latest-wins guard), but the entry is a
 // mid-life toggle, not an end-of-life gateway. The shared endgame bar carries the "Back".
 async function enterStripped() {
-  dropHeliumForModeSwitch();
+  dropLivingOnlyPanels();
   mode = "stripped";
   updateRotControl();       // hide the rotation control inside the mode (mode != live)
   updatePeculiarControl();
   updateStrippedControl();  // hides the fork button in stripped-mode (exit is the Back bar)
-  trackToken++;             // invalidate any in-flight live /track
+  trackLatest.invalidate();             // invalidate any in-flight live /track
   document.body.classList.add("stripped-mode");
   companionOn = false;      // path (a) by default — the companion is revealed by the toggle
   if (els.companionToggle) els.companionToggle.checked = false;
   binaryView = false; binaryTrackData = null; binaryStar1 = null; binaryStar2 = null;
-  binaryDemoKey = null; binaryToken++;   // path (b) Chunk 4b — always land on the snapshot first
+  binaryDemoKey = null; binaryLatest.invalidate();   // path (b) Chunk 4b — always land on the snapshot first
   document.body.classList.remove("binary-view");
   if (els.binaryCustomControls) els.binaryCustomControls.hidden = true;
   if (els.binaryFehNote) els.binaryFehNote.textContent = "";
-  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryToken++;
+  coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");   // Chunk 1b — snapshot first here too
   document.body.classList.remove("co-he-kind");
   if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
@@ -3915,15 +3964,15 @@ async function enterStripped() {
   els.snControl.hidden = true;
   els.age.disabled = true;   // one representative state — nothing to scrub
   els.endgameAgeCaption.textContent = "Fetching the stripped-star model…";
-  const tok = ++strippedToken;
+  const req = strippedLatest.begin();
   let data;
   try { data = await fetchStripped(); }
   catch {
-    if (tok === strippedToken && mode === "stripped")
+    if (req.current && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the stripped-star model.";
     return;
   }
-  if (tok !== strippedToken || mode !== "stripped") return;
+  if (!req.current || mode !== "stripped") return;
   applyStrippedModel(data);
 }
 
@@ -3933,10 +3982,10 @@ async function enterStripped() {
 // refreshStripped's caption) rather than reverting — the honest read of the Chunk-1 flags.
 async function tryStrippedResnap() {
   if (mode !== "stripped") return;
-  const tok = ++strippedToken;
+  const req = strippedLatest.begin();
   let data;
   try { data = await fetchStripped(); } catch { return; }
-  if (tok !== strippedToken || mode !== "stripped") return;
+  if (!req.current || mode !== "stripped") return;
   lastEgMass = massValue; lastEgFeh = Number(els.feh.value);
   applyStrippedModel(data);
 }
@@ -4000,11 +4049,11 @@ function _binaryParamsFor(demoKey) {
 // track / WD / WR scrubs).
 async function enterBinaryView(demoKey) {
   if (mode !== "stripped") return;
-  // Mutually exclusive with the CO-HMS_RLO movie. Bump coBinaryToken UNCONDITIONALLY (not
+  // Mutually exclusive with the CO-HMS_RLO movie. Bump coBinaryLatest UNCONDITIONALLY (not
   // only when coBinaryView is already true) — a CO track fetch may be IN FLIGHT (its view
   // class not set yet, so its demo button was still clickable), and a late-resolving CO
   // fetch must not re-open co-binary-view on top of this one.
-  coBinaryToken++;
+  coBinaryLatest.invalidate();
   if (coBinaryView) exitCoBinaryView();
   if (demoKey === "custom") {
     await ensureBinaryMeta();
@@ -4013,7 +4062,7 @@ async function enterBinaryView(demoKey) {
   const params = _binaryParamsFor(demoKey);
   if (!params) return;
   const { m1, q, p } = params;
-  const tok = ++binaryToken;
+  const req = binaryLatest.begin();
   binaryDemoKey = demoKey;
   updateBinaryDemoButtons();
   els.age.disabled = true;   // re-enabled once the track lands; disabled meanwhile (fetching)
@@ -4021,11 +4070,11 @@ async function enterBinaryView(demoKey) {
   let data;
   try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=${customFeh}`); }
   catch {
-    if (tok === binaryToken && mode === "stripped")
+    if (req.current && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the co-evolved binary track.";
     return;
   }
-  if (tok !== binaryToken || mode !== "stripped") return;
+  if (!req.current || mode !== "stripped") return;
   _applyBinaryTrackData(data);
   binaryView = true;
   document.body.classList.add("binary-view");
@@ -4050,7 +4099,7 @@ async function enterBinaryView(demoKey) {
 // donor + its one representative state, exactly as it was before "Co-evolve" was clicked).
 function exitBinaryView() {
   binaryView = false;
-  binaryToken++;   // invalidate any in-flight /binary_track — leaving the view for ANY reason
+  binaryLatest.invalidate();   // invalidate any in-flight /binary_track — leaving the view for ANY reason
                     // (incl. enterCoBinaryView's mutual-exclusivity exit) must not let a slow
                     // fetch re-apply binary-view on top of the view we switched to.
   binaryTrackData = null; binaryStar1 = null; binaryStar2 = null; binaryDemoKey = null;
@@ -4081,11 +4130,11 @@ async function refetchBinaryTrack() {
   const params = _binaryParamsFor(demoKey);
   if (!params) return;
   const { m1, q, p } = params;
-  const tok = ++binaryToken;
+  const req = binaryLatest.begin();
   let data;
   try { data = await fetchJSON(`/binary_track?m1=${m1}&q=${q}&p=${p}&feh=${customFeh}`); }
   catch { return; }
-  if (tok !== binaryToken || mode !== "stripped" || !binaryView || binaryDemoKey !== demoKey) return;
+  if (!req.current || mode !== "stripped" || !binaryView || binaryDemoKey !== demoKey) return;
   _applyBinaryTrackData(data);
   refreshBinary();
 }
@@ -4196,18 +4245,18 @@ function _coBinaryParamsFor(demoKey) {
 // binary view: entering here exits that one first.
 async function enterCoBinaryView(demoKey) {
   if (mode !== "stripped") return;
-  // Mutually exclusive with the HMS-HMS movie. Bump binaryToken UNCONDITIONALLY (the
+  // Mutually exclusive with the HMS-HMS movie. Bump binaryLatest UNCONDITIONALLY (the
   // symmetric guard to enterBinaryView) — a /binary_track fetch may be IN FLIGHT with its
   // view class not yet set, so exitBinaryView() alone (which only runs if binaryView is
   // already true) would miss it and let it re-open binary-view over this one.
-  binaryToken++;
+  binaryLatest.invalidate();
   if (binaryView) exitBinaryView();
   if (demoKey === "custom") {
     await ensureCoBinaryMeta();
     if (!coBinaryMeta) return;   // meta fetch failed — bail quietly (the 503 case)
   }
   const { m_star, m_co, p } = _coBinaryParamsFor(demoKey);
-  const tok = ++coBinaryToken;
+  const req = coBinaryLatest.begin();
   coBinaryDemoKey = demoKey;
   els.age.disabled = true;
   if (els.endgameAgeCaption) els.endgameAgeCaption.textContent = "Fetching the compact-object binary track…";
@@ -4216,11 +4265,11 @@ async function enterCoBinaryView(demoKey) {
     data = await fetchJSON(
       `/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}&kind=${coKind}`);
   } catch {
-    if (tok === coBinaryToken && mode === "stripped")
+    if (req.current && mode === "stripped")
       els.endgameAgeCaption.textContent = "Could not fetch the compact-object binary track.";
     return;
   }
-  if (tok !== coBinaryToken || mode !== "stripped") return;
+  if (!req.current || mode !== "stripped") return;
   _applyCoBinaryTrackData(data);
   coBinaryView = true;
   document.body.classList.add("co-binary-view");
@@ -4242,7 +4291,7 @@ async function enterCoBinaryView(demoKey) {
 function exitCoBinaryView() {
   coBinaryView = false;
   coBinaryTrackData = null; coBinaryStar = null; coBinaryDemoKey = null;
-  coBinaryToken++;
+  coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");
   document.body.classList.remove("co-he-kind");
   if (els.coBinaryCustomControls) els.coBinaryCustomControls.hidden = true;
@@ -4268,11 +4317,11 @@ async function refetchCoBinaryTrack() {
   if (mode !== "stripped" || !coBinaryView || !coBinaryDemoKey) return;
   const demoKey = coBinaryDemoKey;
   const { m_star, m_co, p } = _coBinaryParamsFor(demoKey);
-  const tok = ++coBinaryToken;
+  const req = coBinaryLatest.begin();
   let data;
   try { data = await fetchJSON(`/co_binary_track?m_star=${m_star}&m_co=${m_co}&p=${p}&feh=${coCustomFeh}&kind=${coKind}`); }
   catch { return; }
-  if (tok !== coBinaryToken || mode !== "stripped" || !coBinaryView || coBinaryDemoKey !== demoKey) return;
+  if (!req.current || mode !== "stripped" || !coBinaryView || coBinaryDemoKey !== demoKey) return;
   _applyCoBinaryTrackData(data);
   refreshCoBinary();
 }
@@ -4439,36 +4488,36 @@ function refresh() {
 // refresh() to settle the marker. One guarded fetch decides both the panels'
 // track and the slider's domain — they can't disagree (the old /age_range race).
 async function refreshTrack() {
-  const token = ++trackToken;
+  const req = trackLatest.begin();
   massValue = Math.min(Math.max(massValue, validMassMin), validMassMax);
   const mass = massValue;
   const feh = Number(els.feh.value);
   // Refresh the rotation gate FIRST (tiny, awaited) so the effective vvcrit is current for
   // this (mass, [Fe/H]) before the track/endgame fetches read it: has_grid depends on
   // [Fe/H], active on mass, and gating effVvcrit on has_grid keeps /track?vvcrit=0.4 from
-  // ever hitting an [Fe/H] the rotating axis lacks (a 422). Token-guarded like the track.
+  // ever hitting an [Fe/H] the rotating axis lacks (a 422). Guarded like the track.
   const rs = await fetchRotStatus(mass, feh);
-  if (token !== trackToken || mode !== "live") return;
+  if (!req.current || mode !== "live") return;
   rotStatus = rs;
   updateRotControl();
   updatePeculiarControl();
   // The He-ignition gate (§1.3) — fired, NOT awaited: it only decorates the HR panel, so
-  // it must never delay the track fetch below. Token-guarded like every other late
+  // it must never delay the track fetch below. Guarded like every other late
   // arrival; when it lands it repaints its own caption against the last drawn state.
   heCliff = { ...NO_HE_CLIFF };
   updateCliffCaption(lastPainted);
   fetchHeCliff(mass, feh, effVvcrit()).then((hc) => {
-    if (token !== trackToken || mode !== "live") return;
+    if (!req.current || mode !== "live") return;
     heCliff = hc;
     updateCliffCaption(lastPainted);
   });
-  // The uncertain-fate gate (§2) — same shape: fired, not awaited, token-guarded. It only
+  // The uncertain-fate gate (§2) — same shape: fired, not awaited, guarded. It only
   // hedges the gateway's wording, and updateGateway() runs again when it lands (the button
   // itself is driven by the /endgame fetches below, which are slower, so in practice the
   // hedge is in place before there is anything to hedge).
   fateBand = { ...NO_FATE_BAND };
   fetchFateBand(mass, feh, effVvcrit()).then((fb) => {
-    if (token !== trackToken || mode !== "live") return;
+    if (!req.current || mode !== "live") return;
     fateBand = fb;
     updateGateway();
   });
@@ -4476,7 +4525,7 @@ async function refreshTrack() {
     const t = await fetchJSON(`/track?mass=${mass}&feh=${feh}&vvcrit=${effVvcrit()}`);
     // A newer track will drive its own refresh; and a track landing after we entered
     // the WD endgame must not overwrite the endgame view.
-    if (token !== trackToken || mode !== "live") return;
+    if (!req.current || mode !== "live") return;
     currentTrack = t;
     if (!heliumOn && !alphaOn && !isoOn) hr.setTrack(t);   // a MESA/isochrone overlay owns the HR panel; its refresh re-asserts it
     comp.setTrack(t);
@@ -4528,7 +4577,7 @@ async function refreshTrack() {
       rebuildAgeTicks();
     }
   } catch (err) {
-    if (token !== trackToken) return;
+    if (!req.current) return;
     // Non-fatal: keep the last good track + window if we have one (a transient failure
     // shouldn't wipe a working display). But with NO track yet (a first-load /track
     // failure while the backend is otherwise up — init() already covers backend-down)
@@ -4541,11 +4590,11 @@ async function refreshTrack() {
       return;
     }
   }
-  if (token !== trackToken) return;
+  if (!req.current) return;
   await refresh();
   // updateGateway (NOT updateLiveGateway): this path already fired fetchEndgamePreview
   // above, so the fate is on its way. Calling updateLiveGateway here would fire a SECOND
-  // /endgame (maybeFetchEndgame) for the same star, which — sharing endgameToken — would
+  // /endgame (maybeFetchEndgame) for the same star, which — sharing endgameLatest — would
   // invalidate the preview fetch that was about to land, so the button would wait for the
   // later of two competing ~1 MB fetches instead of the one already in flight. Just paint
   // with what we have; fetchEndgamePreview's response repaints when it lands (faster).
@@ -4816,8 +4865,8 @@ async function init() {
       if (mode !== "live") { els.heliumToggle.checked = false; return; }
       // Mutually exclusive with the α overlay (shared HR slot): clear α state first, no repaint
       // (refreshHelium repaints the slot). Reset α's note to its default prompt.
-      if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
-      if (isoOn) { isoOn = false; isoToken++; isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
+      if (alphaOn) { alphaOn = false; alphaLatest.invalidate(); if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
+      if (isoOn) { isoOn = false; isoLatest.invalidate(); isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
       heliumOn = true;
       if (els.heliumNote) els.heliumNote.textContent = "Loading helium-enhanced tracks…";
       refreshHelium();
@@ -4831,8 +4880,8 @@ async function init() {
   if (els.alphaToggle) els.alphaToggle.addEventListener("change", () => {
     if (els.alphaToggle.checked) {
       if (mode !== "live") { els.alphaToggle.checked = false; return; }
-      if (heliumOn) { heliumOn = false; heliumToken++; if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
-      if (isoOn) { isoOn = false; isoToken++; isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
+      if (heliumOn) { heliumOn = false; heliumLatest.invalidate(); if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
+      if (isoOn) { isoOn = false; isoLatest.invalidate(); isoNodeKey = ""; isoLastStates = null; if (els.isochroneToggle) els.isochroneToggle.checked = false; hr.clearIsochroneOverlay(); updateIsochroneControl(); }
       alphaOn = true;
       if (els.alphaNote) els.alphaNote.textContent = "Loading α-enhanced tracks…";
       refreshAlpha();
@@ -4867,8 +4916,8 @@ async function init() {
   if (els.isochroneToggle) els.isochroneToggle.addEventListener("change", () => {
     if (els.isochroneToggle.checked) {
       if (mode !== "live") { els.isochroneToggle.checked = false; return; }
-      if (heliumOn) { heliumOn = false; heliumToken++; if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
-      if (alphaOn) { alphaOn = false; alphaToken++; if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
+      if (heliumOn) { heliumOn = false; heliumLatest.invalidate(); if (els.heliumToggle) els.heliumToggle.checked = false; updateHeliumControl(); }
+      if (alphaOn) { alphaOn = false; alphaLatest.invalidate(); if (els.alphaToggle) els.alphaToggle.checked = false; updateAlphaControl(); }
       isoOn = true;
       isoNodeKey = "";     // force the first fetch (no cached node yet)
       resetIsoDecouple();  // B3: a fresh entry always starts coupled (byte-compatible default)

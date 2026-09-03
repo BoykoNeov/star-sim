@@ -120,14 +120,33 @@ siblings, and one `init` that wires every listener.
 
 Target, in three safe moves:
 
-1. **`fetchJSON` grows the token guard.** `fetchLatest(key, path)` keeps one
-   counter per key and resolves `null` for stale responses. Replace the 12
-   copies one at a time (each is ~6 lines).
-2. **Rename and register the chokepoint.** `dropHeliumForModeSwitch` →
-   `dropLivingOnlyPanels()`, with the six `drop*ForModeSwitch` callbacks pushed
-   onto a `livingOnly[]` list *by the panel that owns them* — a new overlay
-   registers itself instead of editing the umbrella. Then call it from
-   `exitEndgame` too (today it is not — a latent WD→Back→stale-overlay hazard).
+1. **One latest-wins guard object.**  · **SHIPPED 2026-09-03**
+
+   > Done, with one deviation. It was 13 counters, not 12, and the plan's
+   > `fetchLatest(key, path)` → `null` contract does **not** fit the call sites: a
+   > catch block has to know whether it is still the latest (to paint the error and
+   > clear `endgameLoading`), and two guards span *two* awaits (`tryWDResnap`,
+   > `trySNResnap` fetch the rotation gate before the endgame). So the guard stays a
+   > handle — `makeLatest()` → `begin()` / `.current` / `invalidate()` — and
+   > `fetchJSON` is untouched: the 8 fire-once status/range probes must not acquire
+   > counters. **Named guards (`snLatest`), not a keyed registry (`latest("sn")`)**,
+   > because a mistyped string key silently mints a fresh counter — a guard that never
+   > fires stale, invisible to the only check this codebase has; a mistyped identifier
+   > is a ReferenceError the screenshot pass does catch. 21 `begin()` / 41 `.current` /
+   > 30 `invalidate()` sites; zero `Token` identifiers left.
+
+2. **Register the chokepoint.**  · **SHIPPED 2026-09-03**
+
+   > Done as written. `dropHeliumForModeSwitch` → `dropLivingOnlyPanels()` over a
+   > `livingOnly[]` list; all **8** drops (not six) call `registerLivingOnly()` next to
+   > their own definition, and helium's own teardown is now just one more member rather
+   > than the umbrella's tail. Registration order = teardown order, which reverses the
+   > old order — checked by grep (`lastPainted`, `obsTrackKey` are each written by one
+   > drop only), not by argument. `exitEndgame` now calls it too, at the top, before
+   > `mode = "live"`. Acceptance was an **A/B through the served app**: the same
+   > scripted pass against HEAD and against the refactor gives identical panel-state
+   > logs, zero console errors at 1440 + 390.
+
 3. **`init` → per-panel `wire*()` functions** in the panel modules
    (`wireRotationControl`, `wireObserverControls`, …), each taking the shared
    `ctx` object. `main.js` keeps state + the paint pipeline; wiring moves to where
@@ -173,7 +192,8 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
 ## 4. Order of work
 
 1. §1.1 routers + error decorator (one PR; unlocks 1.2–1.3 cleanly).
-2. §2.1 move 1 (`fetchLatest`) and move 2 (chokepoint registry + `exitEndgame`).
+2. ~~§2.1 move 1 (the latest-wins guard) and move 2 (chokepoint registry +
+   `exitEndgame`)~~ — **shipped 2026-09-03**.
 3. §2.3 `node --test` for the pure helpers; add to CI.
 4. §1.2 shared grid helpers; §1.3 spectra package.
 5. §2.1 move 3 (`init` → `wire*`).

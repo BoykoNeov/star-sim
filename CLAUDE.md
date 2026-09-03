@@ -72,8 +72,15 @@ must lie *between* its neighbors on the HR diagram at every phase.
   it with an "appears for…" note rather than deleting it (see the three-hide-reasons
   rule in [[star-sim-frontend-ux]]).
 - **Mode switches go through the shared chokepoint.** Living-only panels tear down in
-  one place (`drop*ForModeSwitch`) — a WD's log g ~8 or an SN's log g ≈ −5 will
-  otherwise slip a naive gate and paint garbage.
+  one place — `dropLivingOnlyPanels()`, called by every non-live mode entry *and* by
+  `exitEndgame` — because a WD's log g ~8 or an SN's log g ≈ −5 will otherwise slip a
+  naive gate and paint garbage. A panel joins it by calling `registerLivingOnly(itsDrop)`
+  next to its own `drop*ForModeSwitch`; never by editing a fan-out list.
+- **Superseded fetches die by their own guard.** Every fetch a newer one can replace
+  holds a `makeLatest()` guard: `const req = xLatest.begin()`, then `if (!req.current …)
+  return` after each await, and `xLatest.invalidate()` to drop what's in flight. One
+  named guard per stream (a mistyped string key would silently mint a fresh counter and
+  disable the guard); `fetchJSON` itself stays unguarded for the fire-once probes.
 - **Evocative vs. modeled.** Corona, wind filaments, fireball boil, Ap/Bp spots and
   the NS dot are *evocative* (spec §7) — label them so. Teff colors, radii and
   tracks are modeled. Never let the two blur in a caption.
