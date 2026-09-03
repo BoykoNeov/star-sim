@@ -58,6 +58,7 @@ paper on use.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -164,9 +165,21 @@ def validate() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    if "--download" in sys.argv[1:]:
+def main(argv: list[str] | None = None) -> int:
+    """Validate by default; `--download` first pulls the ~1 GB Zenodo pair. The flag is
+    its own parser rather than `parse_no_args` because this fetcher really does take one."""
+    ap = argparse.ArgumentParser(
+        description="Recon/validate the BPASS SSP-spectra HDF5 pair (optionally fetch it first)."
+    )
+    ap.add_argument("--download", action="store_true",
+                    help="pull the alpha+00 sin+bin pair (~1 GB) from Zenodo first")
+    args = ap.parse_args(argv)
+    if args.download:
         rc = download()
         if rc != 0:
-            sys.exit(rc)
-    sys.exit(validate())
+            return rc
+    return validate()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -28,14 +28,12 @@ Run once after checkout, instead of the `fetch_mist_iso.py` + bake recipe:
 
 from __future__ import annotations
 
-import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import parse_no_args, run
 from .isochrone import ISO_DATA_DIR
 
 RELEASE_TAG = "mist-iso-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 # The solar-scaled non-rotating [Fe/H] axis (−1.0 … +0.5, matching the live tracks;
 # denser than the tracks' 5 nodes — the iso grid has ±0.25 steps). Each name is unique,
@@ -52,28 +50,16 @@ _ASSETS: dict[str, str] = {
 }
 
 
-def _fetch_one(filename: str, expected_sha256: str) -> str:
-    url = f"{_ASSET_BASE}/{filename}"
-    return fetch_one(url, ISO_DATA_DIR / filename, expected_sha256)
-
-
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Fetch the pre-baked MIST isochrone cubes.")
-    args = ap.parse_args(argv)
-    del args
-
-    print(f"Fetching pre-baked MIST isochrone cubes from release '{RELEASE_TAG}' -> {ISO_DATA_DIR}")
-    n_ok = n_skip = 0
-    for filename, digest in _ASSETS.items():
-        status = _fetch_one(filename, digest)
-        print(f"  {filename}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Dotter (2016), ApJS 222, 8 + Choi et al. (2016), ApJ 823, 102 "
-          "(MIST) on use.")
-    return 0
+    parse_no_args("Fetch the pre-baked MIST isochrone cubes.", argv)
+    return run(
+        RELEASE_TAG,
+        _ASSETS,
+        what="pre-baked MIST isochrone cubes",
+        dest_root=ISO_DATA_DIR,
+        citation="Cite Dotter (2016), ApJS 222, 8 + Choi et al. (2016), ApJ 823, 102 "
+        "(MIST) on use.",
+    )
 
 
 if __name__ == "__main__":

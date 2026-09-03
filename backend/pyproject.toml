@@ -24,6 +24,13 @@ dependencies = [
     "matplotlib>=3.8",
 ]
 
+[project.scripts]
+# The catalogue in front of the 21 `fetch_*.py` modules (`star_sim/fetch.py`), so a
+# fresh checkout can list and run them without knowing the module names. There is no
+# `star-sim-bake` twin: `backend/scripts/bake_*.py` sit outside the packaged
+# `star_sim*` tree, so no entry point can resolve to them.
+star-sim-fetch = "star_sim.fetch:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

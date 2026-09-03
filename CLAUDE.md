@@ -124,7 +124,16 @@ must lie *between* its neighbors on the HR diagram at every phase.
   no api, not even `state`; a test pins it. A helper joins them only when it is the same
   shape everywhere: the missing-data hints and the `*_snapped_far` predicates were
   measured and are deliberately NOT shared ([[star-sim-shared-grid-leaf]]).
-- `fetch_*.py` — build-time grid fetches; `scripts/bake_*.py` — host-side bakes.
+- `fetch_*.py` — build-time grid fetches, all 21 with the same `main(argv=None) -> int`;
+  `scripts/bake_*.py` — host-side bakes. **`_fetch.py`** is their shared leaf (stdlib
+  only, imports nothing from `star_sim`): `run(tag, assets, …)` *is* a baked fetcher's
+  whole body, so such a module is its docstring, its `{key: sha256}` table and a
+  ≤ 12-line `main()`; `user_agent(purpose)` is the one User-Agent, purpose tag kept.
+  **`fetch.py`** is the `star-sim-fetch` catalogue — a new fetcher is one row there
+  plus its module, and a test fails if the two disagree. Three strings stay separate
+  in `run()` — release asset name, destination path, printed label — because for MIST
+  and the helium/alpha runs they differ. No `star-sim-bake`: `scripts/` is outside the
+  packaged `star_sim*` tree. [[star-sim-fetch-framework]]
 
 **`backend/tests/`** — §10 sanity checks. Skip markers in `conftest.py` gate by data
 present (`requires_mist_data`, `requires_mesa_data`, `requires_spectra_data`,

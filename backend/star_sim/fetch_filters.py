@@ -41,12 +41,14 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from ._fetch import user_agent
+
 # star_sim/data/ sits beside this module (the committed-asset home, like gotberg).
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 FILTERS_JSON = _DATA_DIR / "filters.json"
 
 _FPS_BASE = "http://svo2.cab.inta-csic.es/theory/fps"
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; Axis A photometry, SVO FPS)"
+_USER_AGENT = user_agent("Axis A photometry, SVO FPS")
 
 # The bands we bake: (short name, SVO id, role). B/V are the flagship (B−V, M_V) CMD;
 # BP is a photon-counting verification band (a different detector-type code path).

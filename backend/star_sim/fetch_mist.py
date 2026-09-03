@@ -31,6 +31,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urljoin
 
+from ._fetch import user_agent
 from .providers.mist import DATA_DIR, MISTProvider  # single source of truth for where data lives
 
 # The index page only — deliberately *not* a deep link to a tarball. The first
@@ -41,7 +42,7 @@ INDEX_PAGES = (
     "https://mist.science/model_grids.html",
 )
 
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; spec §6 build-time fetch)"
+_USER_AGENT = user_agent("spec §6 build-time fetch")
 
 
 def discover_tarball_url(

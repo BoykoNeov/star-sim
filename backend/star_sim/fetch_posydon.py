@@ -81,6 +81,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from ._fetch import parse_no_args
+
 # Repo-root  data/posydon/  (gitignored, like data/mist / data/mesa / data/gotberg_stripped).
 _DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "posydon"
 
@@ -144,5 +146,12 @@ def validate() -> int:
     return 0
 
 
+def main(argv: list[str] | None = None) -> int:
+    """The recon/validator entry point — no fetch of its own (the ~10 GB tarball is a
+    manual Zenodo download; `fetch_posydon_baked` is the one-command path)."""
+    parse_no_args("Inspect a hand-downloaded POSYDON grid tarball's HDF5 schema.", argv)
+    return validate()
+
+
 if __name__ == "__main__":
-    sys.exit(validate())
+    sys.exit(main())

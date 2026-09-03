@@ -70,7 +70,7 @@ declutter → then the key bug surfaced.
 **Chunk 3 BUILT 2026-07-10 (hosting)**: `fetch_bpass_baked.py` pulls the 4.1 MB `bpass_ssp.npz`
 from the `bpass-baked-v1` GitHub Release (the **9th** tag — see [[star-sim-hosted-data-assets]]).
 Mirrors `fetch_coelho_baked.py` exactly (the single self-contained cube — a flat
-`{GRID_FILENAME: sha256}` over `_baked_release.fetch_one`, NOT the helium/alpha 2-tuple
+`{GRID_FILENAME: sha256}` over `_fetch.run()`, NOT the helium/alpha 2-tuple
 asset-name mapping, which only exists because every `history.data` collides). **No loader/test
 change**: `_Bpass.__init__` is `np.load` + a `bake_version` check with no MIST-style raw-source
 fingerprint, so a freshly-downloaded npz loads directly (the spectra-cube path). The ONLY runtime

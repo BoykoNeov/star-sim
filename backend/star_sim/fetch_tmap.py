@@ -47,6 +47,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from ._fetch import user_agent
 from .spectra import SPECTRA_DATA_DIR  # single source of truth for where spectra live
 
 # The collection's SSAP base. The index (no `fid`) returns a VOTable enumerating
@@ -56,7 +57,7 @@ SSAP_BASE = "https://svo2.cab.inta-csic.es/theory/newov2/ssap.php?model=tmap"
 
 TMAP_DIR = SPECTRA_DATA_DIR / "grids" / "tmap"
 
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; endgame Chunk 6b hot-WD/CSPN spectra)"
+_USER_AGENT = user_agent("endgame Chunk 6b hot-WD/CSPN spectra")
 
 # A real TMAP ascii spectrum is ~1.8 MB; anything much smaller is a truncated
 # download or an error page, so we treat it as missing and re-fetch.

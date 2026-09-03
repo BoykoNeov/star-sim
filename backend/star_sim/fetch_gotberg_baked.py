@@ -24,44 +24,27 @@ Run once after checkout, instead of the `fetch_gotberg.py` recipe:
 
 from __future__ import annotations
 
-import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import parse_no_args, run
 from .spectra import SPECTRA_DATA_DIR, STRIPPED_GRID_FILENAME
 
 RELEASE_TAG = "gotberg-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 _ASSETS: dict[str, str] = {
     STRIPPED_GRID_FILENAME: "62f5f57145b9c251d4b3a221365927991c4699ea1ba2f9aa123183bc395851d3",
 }
 
 
-def _fetch_one(filename: str, expected_sha256: str) -> str:
-    url = f"{_ASSET_BASE}/{filename}"
-    return fetch_one(url, SPECTRA_DATA_DIR / filename, expected_sha256)
-
-
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="Fetch the pre-baked Götberg binary-stripped-star spectrum cube."
+    parse_no_args("Fetch the pre-baked Götberg binary-stripped-star spectrum cube.", argv)
+    return run(
+        RELEASE_TAG,
+        _ASSETS,
+        what="pre-baked stripped-star spectrum cube",
+        dest_root=SPECTRA_DATA_DIR,
+        citation="Cite Götberg, Justham, de Mink et al. (2018), A&A 615, A78 on use.",
     )
-    args = ap.parse_args(argv)
-    del args
-
-    print(f"Fetching pre-baked stripped-star spectrum cube from release "
-          f"'{RELEASE_TAG}' -> {SPECTRA_DATA_DIR}")
-    n_ok = n_skip = 0
-    for filename, digest in _ASSETS.items():
-        status = _fetch_one(filename, digest)
-        print(f"  {filename}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Götberg, Justham, de Mink et al. (2018), A&A 615, A78 on use.")
-    return 0
 
 
 if __name__ == "__main__":

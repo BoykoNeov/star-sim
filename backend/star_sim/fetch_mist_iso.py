@@ -36,6 +36,7 @@ from urllib.parse import urljoin
 
 import numpy as np
 
+from ._fetch import user_agent
 from .isochrone import BAKE_VERSION, ISO_DATA_DIR
 
 # Only the columns the HR overlay consumes are kept (a 170-column, ~550 MB .iso bakes to a
@@ -56,7 +57,7 @@ INDEX_PAGES = (
     "https://waps.cfa.harvard.edu/MIST/model_grids.html",
     "https://mist.science/model_grids.html",
 )
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; outward-quartet Axis B iso fetch)"
+_USER_AGENT = user_agent("outward-quartet Axis B iso fetch")
 
 # Default cache dir for the big transient tarball (a regenerable download — keep it out of
 # the repo tree). Sits beside the extracted grid.

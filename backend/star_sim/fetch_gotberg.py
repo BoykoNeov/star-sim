@@ -45,6 +45,8 @@ import re
 import sys
 from pathlib import Path
 
+from ._fetch import parse_no_args
+
 # repo-root/data/gotberg_stripped (the gitignored spectra tree). star_sim/fetch_gotberg.py
 # -> [0]=star_sim [1]=backend [2]=repo root (same anchor as the other data trees).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -99,12 +101,14 @@ def validate(strict: bool = False) -> int:
     return grids_found
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
+    parse_no_args("Validate a hand-downloaded Götberg (2018) stripped-star grid tree.", argv)
     grids = validate()
     if grids == 0:
-        sys.exit(1)
+        return 1
     print(f"[gotberg] OK - {grids}/4 metallicity grids present under {GOTBERG_DIR}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

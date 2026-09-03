@@ -31,6 +31,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from ._fetch import user_agent
 from .providers.mesa import MESA_DATA_DIR, MESAProvider
 
 # Pinned source: bearums/InteractivePlots @ this commit (reproducible). The
@@ -45,7 +46,7 @@ _RAW = "https://raw.githubusercontent.com/{repo}/{commit}/{path}"
 # The masses available in the source grid (M_sun, integer-labeled dirs).
 SAMPLE_MASSES = (1, 2, 4, 6, 10, 14, 20)
 
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; MESAProvider sample fetch)"
+_USER_AGENT = user_agent("MESAProvider sample fetch")
 
 _PROVENANCE = f"""MESA sample grid — provenance
 ==============================

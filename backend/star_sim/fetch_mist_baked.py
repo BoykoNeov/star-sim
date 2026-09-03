@@ -39,11 +39,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import asset_base, run
 from .providers.mist import CACHE_FILENAME, DATA_DIR
 
 RELEASE_TAG = "mist-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 # bucket dir name -> sha256 of the standalone `.npz` release asset (same base name +
 # ".npz"). Checked against the release notes at publish time. Add an entry (and
@@ -75,13 +74,6 @@ def _vvcrit_of(bucket: str) -> str | None:
     return bucket.rsplit("vvcrit", 1)[1]
 
 
-def _fetch_one(bucket: str, expected_sha256: str) -> str:
-    filename = f"{bucket}.npz"
-    url = f"{_ASSET_BASE}/{filename}"
-    dest = DATA_DIR / bucket / "eeps" / CACHE_FILENAME
-    return fetch_one(url, dest, expected_sha256)
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Fetch pre-baked, standalone MIST parsed-track caches from a GitHub Release."
@@ -107,19 +99,19 @@ def main(argv: list[str] | None = None) -> int:
         print("No buckets match the given --feh/--vvcrit filter.")
         return 1
 
-    print(f"Fetching {len(wanted)} pre-baked MIST bucket(s) from release "
-          f"'{RELEASE_TAG}' -> {DATA_DIR}")
-
-    n_ok = n_skip = 0
-    for bucket in wanted:
-        status = _fetch_one(bucket, _ASSETS[bucket])
-        print(f"  {bucket}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Dotter (2016), ApJS 222, 8 and Choi et al. (2016), ApJ 823, 102 on use.")
-    return 0
+    # The one table needing BOTH overrides: the release asset is `<bucket>.npz`, but
+    # the provider wants it as the parse cache *inside* that bucket's `eeps/` — the
+    # bucket name is neither the URL's nor the file's. (helium/alpha need `dest_of`
+    # alone; the flat six need neither.)
+    return run(
+        RELEASE_TAG,
+        {bucket: _ASSETS[bucket] for bucket in wanted},
+        what=f"{len(wanted)} pre-baked MIST bucket(s)",
+        dest_root=DATA_DIR,
+        url_of=lambda bucket: f"{asset_base(RELEASE_TAG)}/{bucket}.npz",
+        dest_of=lambda bucket: DATA_DIR / bucket / "eeps" / CACHE_FILENAME,
+        citation="Cite Dotter (2016), ApJS 222, 8 and Choi et al. (2016), ApJ 823, 102 on use.",
+    )
 
 
 if __name__ == "__main__":

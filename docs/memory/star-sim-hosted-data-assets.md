@@ -23,7 +23,7 @@ is ONE ~6.7 GB MIST v2.5 isochrone tarball per rotation rate (all metallicities)
 fresh clone would otherwise stream 6.7 GB + bake. The tag hosts the **7 baked non-rotating
 cubes** (`iso_feh{-1.00…+0.50}_vvcrit0.0.npz`, ~2.6 MB each, ~18 MB total — only the ~11
 columns the HR overlay reads). `fetch_mist_iso_baked.py` uses the **flat `{filename:
-sha256}` `_ASSETS`** over `_baked_release.fetch_one` (all 7 uniquely named — the BPASS
+sha256}` `_ASSETS`** over `_fetch.run()` (all 7 uniquely named — the BPASS
 model, NOT the helium/alpha 2-tuple mapping), dest = `ISO_DATA_DIR`. **No code change to
 `isochrone.py`** — the cubes are self-contained `np.load` + a `bake_version` check with no
 MIST-track-style raw-source fingerprint (`_IsochroneIndex` just globs `*.npz` and reads
@@ -38,7 +38,7 @@ sha256 → `isochrone_available()` True → the 4.6 Gyr solar iso reproduces tur
 **BPASS (`bpass-baked-v1`, 2026-07-10) — the 9th tag; now hosts BOTH population cubes.**
 The coeval-population overlay (see [[star-sim-coeval-ensemble-bpass]]) backs two panels,
 so the tag carries **two** flat drop-in assets, mapped in one `{GRID_FILENAME: sha256,
-GRID_FILENAME_HRD: sha256}` dict over `_baked_release.fetch_one` (NOT the helium/alpha
+GRID_FILENAME_HRD: sha256}` dict over `_fetch.run()` (NOT the helium/alpha
 2-tuple asset-name mapping — both BPASS files are uniquely named):
 - `bpass_ssp.npz` (4.1 MB) — the SED integrated-spectrum cube (Chunk 1); hosted so
   users skip the ~1 GB **v2.3** Zenodo sin+bin pair + the h5py bake. **License: BPASS
@@ -68,13 +68,13 @@ same class of artifact as MIST (which is itself published MESA output). No
 third-party redistribution question applies, and the user explicitly authorized
 the public publish. So `mesa-helium-baked-v1` + `mesa-alpha-baked-v1` host the six
 `history.data` files each (3 masses × baseline/enhanced, ~4.2 MB/dataset), fetched
-by `fetch_helium_baked.py` / `fetch_alpha_baked.py` (both onto `_baked_release.py`,
+by `fetch_helium_baked.py` / `fetch_alpha_baked.py` (both onto `_fetch.py`,
 like the rest). **The only structural difference from the other fetch modules:**
 every file is literally named `history.data`, and GitHub requires **unique asset
 names per release**, so `_ASSETS` maps a unique asset name (`helium_baseline_1Msun.data`)
 → `(relpath_under_data_dir, sha256)` — a richer 2-tuple value than the flat
 `{filename: sha256}` the spectra modules use (`fetch_one` already takes `dest`
-separately from the URL, so this needed no `_baked_release.py` change). No npz bake
+separately from the URL, so this needed no `_fetch.py` change). No npz bake
 (the siblings read `history.data` raw). **A Windows-console bug was caught in
 verification:** the fetch scripts printed `α`/`—` glyphs, which crash on cp1252
 (`UnicodeEncodeError`) — a casual Windows user's exact path; fixed to ASCII-only
@@ -144,12 +144,16 @@ and each bake script (`bake_wd_spectra.py`/`bake_wr_spectra.py`/
 just what the app reads, so the existing `data/spectra/*.npz` files (9.7-26 MB
 each, vs 150 MB-17 GB raw depending on source) were hosted as-is.
 
-**Shared plumbing:** `star_sim/_baked_release.py` factors the download/sha256/
-verify mechanics out of what was five near-duplicate scripts (the original
-`fetch_posydon_baked.py` was refactored onto it too, behavior-identical — verified
-by re-running it, "skip" on the already-present asset). Each `fetch_*_baked.py`
-module owns only its release tag, asset list, destination path(s), and citation
-text.
+**Shared plumbing:** `star_sim/_fetch.py` (named `_baked_release.py` until
+2026-09-03) factors the download/sha256/verify mechanics out of what was five
+near-duplicate scripts (the original `fetch_posydon_baked.py` was refactored onto it
+too, behavior-identical — verified by re-running it, "skip" on the already-present
+asset). Each `fetch_*_baked.py` module owns only its release tag, asset list,
+destination path(s), and citation text — and since the §1.5 collapse that is
+*literally* all it owns: `_fetch.run(tag, assets, what=…, dest_root=…, citation=…)`
+is the whole body, with `url_of`/`dest_of`/`label_of` overrides for the two tables
+whose asset name isn't its destination name (MIST's buckets, the helium/alpha
+`history.data` pairs). See [[star-sim-fetch-framework]].
 
 **Verified end-to-end**, not just unit-tested: a real `gh release create` publish
 of all 5 new tags, then a real fetch (via `STAR_SIM_DATA_DIR`/`STAR_SIM_SPECTRA_DIR`

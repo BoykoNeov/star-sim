@@ -40,11 +40,12 @@ import time
 import urllib.request
 from pathlib import Path
 
+from ._fetch import user_agent
 from .spectra import SPECTRA_DATA_DIR  # single source of truth for where spectra live
 
 POWR_DIR = SPECTRA_DATA_DIR / "grids" / "powr"
 _BASE = "https://www.astro.physik.uni-potsdam.de/~htodt/powr-sed"
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; endgame Chunk 7 WR spectra)"
+_USER_AGENT = user_agent("endgame Chunk 7 WR spectra")
 
 # A real PoWR grid tarball is 61–129 MB; anything much smaller is a truncated
 # download or an error page, so we treat it as missing and re-fetch.

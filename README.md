@@ -126,6 +126,12 @@ recipe (`backend/docs/mesa_solar_recipe.md`). The other `fetch_*.py` modules und
 `backend/star_sim/` document the from-source recipe if you'd rather not depend
 on this repo's releases.
 
+Don't want to remember module names? `pip install -e .` puts a **`star-sim-fetch`**
+command on your path; run it with no arguments for the catalogue of all 21 fetchers
+(pre-baked and from-source, one line each), then `star-sim-fetch mist-baked --feh p000`
+for any of them — each fetcher's own flags are passed straight through, and
+`python -m star_sim.fetch_<name>` keeps working exactly as before.
+
 ## Test
 
 ```bash

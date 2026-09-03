@@ -28,18 +28,18 @@ Run once after checkout, instead of the `mesa_helium_recipe.md` Docker batch:
 
 from __future__ import annotations
 
-import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import parse_no_args, run
 from .helium import HELIUM_DATA_DIR
 
 RELEASE_TAG = "mesa-helium-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 # GitHub requires unique asset names per release, but every file is named
 # `history.data`, so each is uploaded under a unique asset name that maps back to
-# its real destination path under HELIUM_DATA_DIR.  asset_name -> (relpath, sha256)
+# its real destination path under HELIUM_DATA_DIR — which is why this table alone
+# carries a relpath and hands `run()` a `dest_of`/`label_of` pair.
+#   asset_name -> (relpath, sha256)
 _ASSETS: dict[str, tuple[str, str]] = {
     "helium_baseline_1Msun.data": (
         "baseline/1Msun/history.data",
@@ -69,27 +69,17 @@ _ASSETS: dict[str, tuple[str, str]] = {
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="Fetch the pre-baked initial-helium (Y) MESA runs."
+    parse_no_args("Fetch the pre-baked initial-helium (Y) MESA runs.", argv)
+    return run(
+        RELEASE_TAG,
+        {name: sha for name, (_, sha) in _ASSETS.items()},
+        what="pre-baked He-enhanced MESA runs",
+        dest_root=HELIUM_DATA_DIR,
+        dest_of=lambda name: HELIUM_DATA_DIR / _ASSETS[name][0],
+        label_of=lambda name: _ASSETS[name][0],
+        citation="Cite MESA (Paxton et al. 2011/2013/2015/2018/2019; Jermyn et al. 2023) "
+        "on use - these are self-run MESA r24.03.1 tracks.",
     )
-    args = ap.parse_args(argv)
-    del args
-
-    print(f"Fetching pre-baked He-enhanced MESA runs from release "
-          f"'{RELEASE_TAG}' -> {HELIUM_DATA_DIR}")
-    n_ok = n_skip = 0
-    for asset_name, (relpath, digest) in _ASSETS.items():
-        url = f"{_ASSET_BASE}/{asset_name}"
-        dest = HELIUM_DATA_DIR / relpath
-        status = fetch_one(url, dest, digest)
-        print(f"  {relpath}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite MESA (Paxton et al. 2011/2013/2015/2018/2019; Jermyn et al. 2023) "
-          "on use - these are self-run MESA r24.03.1 tracks.")
-    return 0
 
 
 if __name__ == "__main__":

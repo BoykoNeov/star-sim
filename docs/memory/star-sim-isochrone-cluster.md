@@ -65,7 +65,7 @@ works (turnoff 6239K/1.21M☉ at 4.5 Gyr → 5710K/0.95M☉ at 11 Gyr), 0 consol
 The ~18 MB baked npz set is hosted on GitHub Release **`mist-iso-baked-v1`** (the
 `fetch_*_baked.py` / [[star-sim-hosted-data-assets]] pattern) so a fresh clone skips the 6.7 GB
 `.iso` tarball + bake. `fetch_mist_iso_baked.py` mirrors `fetch_bpass_baked.py` exactly: a **flat
-`{filename: sha256}` `_ASSETS`** over `_baked_release.fetch_one` (the 7 cubes are uniquely named,
+`{filename: sha256}` `_ASSETS`** over `_fetch.run()` (the 7 cubes are uniquely named,
 so NOT the helium/alpha 2-tuple mapping), dest = `ISO_DATA_DIR`. **Zero code change to
 `isochrone.py`** — the cubes are self-contained `np.load` + a `bake_version` check with no
 MIST-style raw-source fingerprint (the BPASS/Coelho/spectra precedent, unlike the EEP-track cubes

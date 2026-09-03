@@ -29,11 +29,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import run
 from .posydon import BAKED_DIR  # single source of truth for where baked grids live
 
 RELEASE_TAG = "posydon-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 # filename -> sha256, checked against `docs/plans/lantern-grid-waystation.md`'s release
 # notes at publish time. Add an entry here (and re-upload the asset to the same
@@ -48,11 +47,6 @@ _ASSETS: dict[str, str] = {
     "1e-4Zsun.npz": "6ee3a1b1b8241d33656dc9ffda9ace1f3526e100dc8250264ca273d67eb21f3e",
     "2Zsun.npz": "bc1b4af81764204db41cef94d96c9ef16cb369f1cd0e6050249e87576d81b701",
 }
-
-
-def _fetch_one(filename: str, expected_sha256: str) -> str:
-    url = f"{_ASSET_BASE}/{filename}"
-    return fetch_one(url, BAKED_DIR / filename, expected_sha256)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -71,20 +65,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Unknown asset(s): {unknown}. Known: {list(_ASSETS)}")
         return 1
 
-    BAKED_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"Fetching {len(wanted)} pre-baked POSYDON grid(s) from release "
-          f"'{RELEASE_TAG}' -> {BAKED_DIR}")
-
-    n_ok = n_skip = 0
-    for filename in wanted:
-        status = _fetch_one(filename, _ASSETS[filename])
-        print(f"  {filename}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Fragos et al. 2023 and Andrews et al. 2024 on use (CC-BY).")
-    return 0
+    return run(
+        RELEASE_TAG,
+        {filename: _ASSETS[filename] for filename in wanted},
+        what=f"{len(wanted)} pre-baked POSYDON grid(s)",
+        dest_root=BAKED_DIR,
+        citation="Cite Fragos et al. 2023 and Andrews et al. 2024 on use (CC-BY).",
+    )
 
 
 if __name__ == "__main__":

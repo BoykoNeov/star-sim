@@ -201,14 +201,66 @@ the `MISTProvider` class. The interpolation core just changed (log-mass weight,
 this branch) and is now covered by a cache-friendly held-out test — a good moment
 to split *because* the guard exists. Do not touch `CACHE_VERSION`.
 
-### 1.5 Fetch/bake framework  · **low, do opportunistically**
+### 1.5 Fetch/bake framework  · **SHIPPED 2026-09-03**
 
-Ten `fetch_*_baked.py` each re-declare a byte-identical `_fetch_one` wrapper
-over `_baked_release.fetch_one`; raw fetchers carry seven distinct user-agent
-strings and five have no `main()`. Give `_baked_release` a `run(tag, assets,
-dest_of, citation)` entry and collapse each module to its table. Add
-`[project.scripts]` entries (`star-sim-fetch`, `star-sim-bake`) once the table
-form exists.
+> Done. `_baked_release.py` became **`_fetch.py`** — the framework both families of
+> fetcher sit on, not just the baked half — with `run(tag, assets, what=…,
+> dest_root=…, citation=…, url_of=…, dest_of=…, label_of=…)`, `user_agent(purpose)`,
+> `asset_base(tag)` and `parse_no_args()`. All ten baked modules are now their
+> docstring, their table and a ≤ 12-line `main()`; the eight raw fetchers' user-agent
+> strings come from one formatter; and `star-sim-fetch` is a `[project.scripts]`
+> catalogue in front of all 21. Plus the first tests these modules have ever had:
+> `tests/test_fetch_framework.py`, 66 cases, **data-free and network-free** (468 →
+> 534 collected; 534 passed / 0 skipped with the grids on disk).
+>
+> **The line count went UP, and that is the honest summary.** The ten baked fetchers
+> lost 131 lines (826 → 695) and every one of them was duplication — eight `_fetch_one`
+> wrappers, ten copies of the fetch/count/print loop, ten `_ASSET_BASE` constants. But
+> the shared leaf grew (52 → 137, mostly the docstring explaining the three-strings
+> rule), `fetch.py` is 93 new lines, and the raw fetchers gained 35 for three `main()`
+> entry points that did not exist. Across the whole fetch surface: **2,726 → 2,808
+> (+82)** — the duplication is gone; the growth bought a CLI catalogue, three missing
+> entry points and a test file.
+>
+> Acceptance was a **byte-identical behaviour snapshot**, since there was no existing
+> safety net to lean on: a harness that stubs the downloader, runs every module's
+> `main()` (plus `--feh`/`--vvcrit`/`--asset` filters, the two error paths and all ten
+> `--help` texts) and prints each asset's URL, destination and sha256 alongside every
+> printed line. 317 lines, **zero diff** before vs. after.
+>
+> **Four corrections to the plan's text above, all measured:**
+>
+> - **"Ten byte-identical `_fetch_one` wrappers" was six.** `fetch_mist_baked`'s
+>   differs (the asset is `<bucket>.npz`, the destination is the parse cache *inside*
+>   that bucket), and `fetch_helium_baked`/`fetch_alpha_baked` have none at all — their
+>   tables are `asset_name -> (relpath, sha)` because GitHub forces unique asset names
+>   over files all literally named `history.data`. That is why `run()` takes three
+>   separate callables: **the release asset name, the destination path and the printed
+>   label are three different strings**, and flattening them would have changed what
+>   the user sees.
+> - **"Seven user-agent strings" was eight** (nine counting `_baked_release`'s own).
+>   They collapsed onto `user_agent(purpose)` rather than one constant: the *format* is
+>   shared, the purpose tag is not. These go to MIST, SVO, Zenodo and CDS, where a
+>   maintainer reading their logs should still be able to tell which fetch is knocking.
+> - **"Five have no `main()`" was two** (`fetch_bpass`, `fetch_posydon`), plus
+>   `fetch_gotberg`'s `main() -> None`. All three now have `main(argv=None) -> int`,
+>   which is what the dispatcher forwards a command line to; a parametrized test pins
+>   that shape for all 21.
+> - **`star-sim-bake` is blocked and was not forced.** `[tool.setuptools.packages.find]`
+>   packages `star_sim*` only, so `backend/scripts/bake_*.py` are not importable and no
+>   console script can resolve to them. Giving them one means moving nine host-side
+>   one-offs into the runtime package — a bigger, README/recipe-touching move than this
+>   step, and one that puts bake-only deps (h5py, pymsg) next to the served app.
+>   `star-sim-fetch` shipped; the reason for its missing twin is recorded in both
+>   `pyproject.toml` and `fetch.py`'s docstring.
+>
+> **One real bug, found by running the thing rather than testing it:** the new
+> catalogue printed `α`, and a Windows console is cp1252, which has no Greek block —
+> `print` raises `UnicodeEncodeError` and the listing dies half-drawn. This is the
+> *same* defect [[star-sim-hosted-data-assets]] recorded being fixed by hand in the
+> helium/alpha fetchers. It now has a gate: two tests encode the catalogue and every
+> baked fetcher's output as cp1252. (Em dashes and `×` are fine — they *are* in cp1252;
+> only the Greek and mathematical blocks are not.)
 
 ### 1.6 `conftest.py` (581 lines)  · **SHIPPED 2026-09-03**
 
@@ -413,8 +465,16 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
    (two of §1.2's four helpers measured and rejected; §1.3's directory split deferred —
    see the notes under each).
 6. ~~§1.4 the `providers/mist/` package split; §1.6 the `conftest.py` dataset
-   table~~ — **shipped 2026-09-03**. §1.5 (the fetch/bake framework) is the only
-   step of this plan left, and stays opportunistic.
+   table~~ — **shipped 2026-09-03**.
+7. ~~§1.5 the fetch framework (`_fetch.py` + `run()`, one user-agent formatter,
+   `star-sim-fetch`)~~ — **shipped 2026-09-03**. Its `star-sim-bake` twin is the one
+   piece of this plan deliberately *not* built; the reason is measured under §1.5.
+
+**Every step of this plan has now shipped.** What is left of it is §1.3's deferred
+`spectra/` directory split (recorded under §1.3, waiting for a reason bigger than
+line count) and the bake-script packaging question under §1.5 — both open items, not
+queued work. New structural debt goes in a fresh section with its own measurement,
+not appended here.
 
 Each step is independently shippable and leaves the app byte-identical for the
 user; the measure of success is that the *next* feature (say, the near-IR bake

@@ -22,41 +22,27 @@ Run once after checkout, instead of the `fetch_coelho.py` recipe:
 
 from __future__ import annotations
 
-import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import parse_no_args, run
 from .spectra import ALPHA_GRID_FILENAME, SPECTRA_DATA_DIR
 
 RELEASE_TAG = "coelho-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 _ASSETS: dict[str, str] = {
     ALPHA_GRID_FILENAME: "7a0f5f5f302115e644e1601feb5851e56c52b29380665540c49b2c4bc09614f2",
 }
 
 
-def _fetch_one(filename: str, expected_sha256: str) -> str:
-    url = f"{_ASSET_BASE}/{filename}"
-    return fetch_one(url, SPECTRA_DATA_DIR / filename, expected_sha256)
-
-
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Fetch the pre-baked Coelho [alpha/Fe] spectrum cube.")
-    args = ap.parse_args(argv)
-    del args
-
-    print(f"Fetching pre-baked [alpha/Fe] spectrum cube from release '{RELEASE_TAG}' -> {SPECTRA_DATA_DIR}")
-    n_ok = n_skip = 0
-    for filename, digest in _ASSETS.items():
-        status = _fetch_one(filename, digest)
-        print(f"  {filename}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Coelho (2014), MNRAS 440, 1027 on use.")
-    return 0
+    parse_no_args("Fetch the pre-baked Coelho [alpha/Fe] spectrum cube.", argv)
+    return run(
+        RELEASE_TAG,
+        _ASSETS,
+        what="pre-baked [alpha/Fe] spectrum cube",
+        dest_root=SPECTRA_DATA_DIR,
+        citation="Cite Coelho (2014), MNRAS 440, 1027 on use.",
+    )
 
 
 if __name__ == "__main__":

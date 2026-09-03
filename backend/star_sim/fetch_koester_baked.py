@@ -23,44 +23,28 @@ Run once after checkout, instead of the `fetch_koester.py` + `fetch_tmap.py` rec
 
 from __future__ import annotations
 
-import argparse
 import sys
 
-from ._baked_release import fetch_one
+from ._fetch import parse_no_args, run
 from .spectra import SPECTRA_DATA_DIR, WD_GRID_FILENAME
 
 RELEASE_TAG = "koester-baked-v1"
-_ASSET_BASE = f"https://github.com/BoykoNeov/star-sim/releases/download/{RELEASE_TAG}"
 
 _ASSETS: dict[str, str] = {
     WD_GRID_FILENAME: "f933914077b6e72b82db2c3afba9d936ce1ed7deb3320f96bcd66d1fe854877b",
 }
 
 
-def _fetch_one(filename: str, expected_sha256: str) -> str:
-    url = f"{_ASSET_BASE}/{filename}"
-    return fetch_one(url, SPECTRA_DATA_DIR / filename, expected_sha256)
-
-
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="Fetch the pre-baked white-dwarf (Koester DA + TMAP) spectrum cube."
+    parse_no_args("Fetch the pre-baked white-dwarf (Koester DA + TMAP) spectrum cube.", argv)
+    return run(
+        RELEASE_TAG,
+        _ASSETS,
+        what="pre-baked WD spectrum cube",
+        dest_root=SPECTRA_DATA_DIR,
+        citation="Cite Koester (2010), Mem.S.A.It. 81, 921 (DA models) and "
+        "Werner et al. (2003) / Rauch et al. (2003) (TMAP) on use.",
     )
-    args = ap.parse_args(argv)
-    del args
-
-    print(f"Fetching pre-baked WD spectrum cube from release '{RELEASE_TAG}' -> {SPECTRA_DATA_DIR}")
-    n_ok = n_skip = 0
-    for filename, digest in _ASSETS.items():
-        status = _fetch_one(filename, digest)
-        print(f"  {filename}: {status}")
-        n_ok += status == "ok"
-        n_skip += status == "skip"
-
-    print(f"Done: {n_ok} downloaded, {n_skip} already present.")
-    print("Cite Koester (2010), Mem.S.A.It. 81, 921 (DA models) and "
-          "Werner et al. (2003) / Rauch et al. (2003) (TMAP) on use.")
-    return 0
 
 
 if __name__ == "__main__":

@@ -238,7 +238,7 @@ real schema, not a recalled guess — the boron-b8 / α-axis discipline):
 
 ### Chunk 3 (hosting) — BUILT 2026-07-10
 - `fetch_bpass_baked.py` (the `fetch_coelho_baked.py` single-cube precedent — flat
-  `{filename: sha256}` over `_baked_release.fetch_one`) pulls the 4.1 MB `bpass_ssp.npz`
+  `{filename: sha256}` over `_fetch.run()`) pulls the 4.1 MB `bpass_ssp.npz`
   from the `bpass-baked-v1` GitHub Release. No loader/test change (the cube has no
   raw-source fingerprint like MIST — pure `np.load` + `bake_version` check); the only
   runtime touch is `bpass.py`'s `_MISSING_HINT` (now leads with the baked fast path).

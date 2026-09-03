@@ -44,6 +44,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from ._fetch import user_agent
 from .spectra import SPECTRA_DATA_DIR  # single source of truth for where spectra live
 
 # The collection's SSAP base. The index (no `fid`) returns a VOTable enumerating every
@@ -54,7 +55,7 @@ SSAP_BASE = "https://svo2.cab.inta-csic.es/theory/newov2/ssap.php?model=coelho_h
 
 COELHO_DIR = SPECTRA_DATA_DIR / "grids" / "coelho"
 
-_USER_AGENT = "star-sim/0.1 (+local teaching tool; [alpha/Fe] axis, Coelho 2014)"
+_USER_AGENT = user_agent("[alpha/Fe] axis, Coelho 2014")
 
 # A real Coelho highres ASCII spectrum is ~10.7 MB; anything much smaller is a
 # truncated download or an error page, so we treat it as missing and re-fetch.
