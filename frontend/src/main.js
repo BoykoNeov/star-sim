@@ -1688,8 +1688,14 @@ function sunResidualNote(s) {
     "simulator, and not something it corrects: forcing L = R = 1 here would be a fake " +
     "green check that quietly hid the same few-percent offset in every other star (it " +
     "is also why the asteroseismology panel rings a few percent below the Sun's " +
-    "measured 3090 µHz). Hover the data-source token in the status line for where " +
-    "this model's Sun actually sits.";
+    "measured 3090 µHz)." +
+    // Only MIST's tooltip says where ITS Sun sits, so only MIST gets the pointer — the
+    // sentence above is provider-agnostic by construction and must not quietly re-acquire
+    // a MIST assumption in its last clause.
+    (providerName === "MISTProvider"
+      ? " Hover the MISTProvider token in the status line for where this model's Sun " +
+        "actually sits."
+      : "");
 }
 
 // Each row is [term, description, value]. Mass and [Fe/H] come from the state

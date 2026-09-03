@@ -244,15 +244,14 @@ surface. The false-caption check is part of every feature's Gate 0.
 
 ## 6. Prioritised NEXT list (bounded, honest, in order)
 
-1. **Sun-residual tooltip** (§1.2) — frontend-only, one string.
-2. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
+1. **Rossby-flavoured `activity`** (§1.6) — closes the last spec §11 question; reuse
    the SED gyrochronology period; stays labeled evocative.
-3. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
+2. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
    `BAKE_VERSION` bump; unlocks Gaia G/RP and 2MASS on the CMD panel.
-4. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
+3. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
    measured there; MIST has no finer nodes, so this would mean MESA slices.
 
-(Two captions have left this list: the He-ignition cliff (§1.3) and the uncertain-fate
-band (§2), both shipped 2026-09-03.)
+(Three items have left this list, all shipped 2026-09-03: the He-ignition cliff (§1.3),
+the uncertain-fate band (§2) and the Sun-residual tooltip (§1.2).)
 
 Everything in **OOS** stays out until the grid approach "hits a real wall" (spec §9).
