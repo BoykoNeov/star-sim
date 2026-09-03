@@ -1,17 +1,27 @@
 ---
 name: star-sim-js-test-harness
-description: The frontend/tests node --test harness — what it covers, the extract-don't-shim rule, and the cross-language CCM89 parity pin.
+description: The frontend/tests node --test harness — what it covers (seven helpers incl. controls.js), the extract-don't-shim rule, and the cross-language CCM89 parity pin.
 metadata:
   type: project
 ---
 
 # The JS test harness (`frontend/tests`, shipped 2026-09-03)
 
-**Current state.** 50 tests over six DOM-free modules under Node's own runner, in
+**Current state.** 66 tests over seven DOM-free modules under Node's own runner, in
 CI as a second job. Run it with `cd frontend/tests && node --test` — bare, from
 inside the directory. Covered: `color.js`, `hz.js`, `seismo.js`, `gravdark.js`,
-`classify.js`, `reddening.js`. Not covered, by design: everything that draws.
-`frontend/tests/README.md` is the operational doc; this file is the why.
+`classify.js`, `reddening.js`, `controls.js`. Not covered, by design: everything that
+draws. `frontend/tests/README.md` is the operational doc; this file is the why.
+
+**`controls.js` (+16 tests, 2026-09-03) is the harness paying off as intended.** It was
+*created* by the `init` → `wire*()` split — `main.js` can't be imported here (it touches
+the DOM at load), so the only way to test what its controls compute was to extract the
+numbers-only part, which is also how seven copies of the same snap loop got found. Its
+tests are the rule below in miniature: the round-trip and geometric-mean identities and
+the two behaviours a rewrite could silently drop (a **strict** `d < tol` boundary,
+first-wins ties) carry the weight; one published anchor (100 pc a quarter along a
+10 pc–100 kpc log slider, from the distance modulus) sits under them. Detail:
+[[star-sim-mainjs-guards-chokepoint]].
 
 ## The three rules it establishes
 

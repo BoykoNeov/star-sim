@@ -1,11 +1,11 @@
 ---
 name: star-sim-mainjs-guards-chokepoint
-description: main.js's two shared mechanisms — the makeLatest() fetch guard and the registered living-only chokepoint — plus why neither took the shape the plan drafted.
+description: main.js's shared mechanisms — the makeLatest() fetch guard, the registered living-only chokepoint, and the per-control wire*() split — plus why none took the shape the plan drafted.
 metadata:
   type: project
 ---
 
-# `main.js`: the fetch guard + the living-only chokepoint (shipped 2026-09-03)
+# `main.js`: the fetch guard, the living-only chokepoint, the wiring split (2026-09-03)
 
 **Current state.** Two mechanisms that used to be copy-paste now exist once each in
 `frontend/src/main.js`:
@@ -20,11 +20,14 @@ metadata:
 - **`dropLivingOnlyPanels()`** — the mode-switch chokepoint, a `livingOnly[]` list.
   Eight drops join it by calling `registerLivingOnly(theirDrop)` next to their own
   definition. Called by every non-live mode entry **and** by `exitEndgame`.
+- **23 `wire*()` functions** — the old 650-line `init` is 31 lines:
+  `loadRangesAndSeedControls()`, then one call per control group, then the first fetch.
+  A new control adds a `wireX()` and one call; it never grows `init` again. Nothing in
+  a `wire*()` paints. Their arithmetic lives in `frontend/src/controls.js`
+  (see [[star-sim-js-test-harness]] — that module is why the split is testable at all).
 
-Plan row: [[structure-refactor]] §2.1 moves 1–2; measured payoff in
-`docs/plans/SHIPPED.md` §6. Move 3 (`init` → per-panel `wire*()`) is still open, and
-§2.3 (the `node --test` harness) is the item that would have made this change checkable
-by something other than screenshots.
+Plan rows: [[structure-refactor]] §2.1 moves 1–3 (all shipped 2026-09-03); measured
+payoff in `docs/plans/SHIPPED.md` §6.
 
 ## The four decisions worth not re-litigating
 
@@ -85,3 +88,47 @@ phase gate) → visible again on scrubbing back into CHeB. See [[star-sim-he-ign
 
 Related: [[star-sim-api-routers]] (the backend half of the same track),
 [[star-sim-frontend-ux]] (what the panels actually draw).
+
+## Move 3: why the `wire*()` functions did NOT go into the panel modules
+
+The plan drafted `wireRotationControl(ctx)` etc. **inside** `rot`/`sed`/`hr`, each
+taking a shared `ctx`. Read the listeners and that seam collapses: a listener's whole
+job is to mutate the ~170 module-level `let`s in `main.js` and re-run the paint
+pipeline, so `ctx` would have to expose dozens of *mutable* slots — a wider interface
+than the `init` it replaces, and one no test could pin. Worse, three of the toggles
+exist to enforce **cross-panel** exclusivity (helium / α / isochrone all own the one
+HR slot and clear each other), which is not any single panel's business. §3's own
+framing agrees: a panel is a *consumer* of a `StellarState`, not an owner of app state.
+
+So the wiring stayed in `main.js` and only the **arithmetic** moved out. That split is
+the reusable lesson: in a module this size, the part worth extracting is the part with
+no state, and the part worth leaving is the part that is nothing but state.
+
+## `controls.js` — the three shapes every control had re-implemented
+
+| Helper | Replaced | Watch out for |
+|---|---|---|
+| `nearestWithin` / `snapWithin` | **7** snap-to-landmark loops (mass ticks, [Fe/H], age rows, WD, WR, SN, ⁵⁶Ni) + the SN day→sample lookup | The tolerance is **strict** (`d < tol`) and ties go to the **first** target in scan order — both were properties of the hand-written loops, and the age strip depends on the tie rule (a late landmark row can sit exactly as far from the drag as the 1.0 endpoint) |
+| `logValueAt` / `logPosOf` | **6** log-position pairs (⁵⁶Ni, observer distance, M_star/M_co/P, M1/P) | Bounds are read at call time from `binaryMeta`/`coBinaryMeta`, never captured — a [Fe/H] or grid-kind change swaps in a different baked grid with a different span |
+| `commitNumber` | **9** number-box preambles | Returns `null` for blank/unparseable = "leave the model alone"; `"0"` must still commit (A_V = 0 and [Fe/H] = 0 are real values) |
+
+**Two sites deliberately stayed hand-written**, each with a comment saying why:
+`massFromSliderPos` (its bounds are already log10 and `massValue` is the source of
+truth for every fetch — a pow/log round trip risks drift on the one number that must
+not drift) and the inclination number box (a cleared angle box means 0°, not "leave
+the view alone", so it is not a `commitNumber` site).
+
+## The acceptance test that has now been run three times
+
+Not a screenshot: a **scripted A/B through the served app**. `pass.py`/`pass2.py`
+(kept under `M:\claud_projects\temp\star-sim-wire`, regenerable) drive the real UI and
+dump a panel-state snapshot after each step — slider values, notes, captions, body
+classes, panel visibility, tick labels — then the same pass runs against `git stash`ed
+HEAD and the two JSON logs are diffed. Move 3 ran 60 steps over two passes (all six
+number boxes including blank/out-of-range, every offered toggle, WD + SN endgames with
+an in-endgame re-snap, stripped mode + both binary movies + both CO grid pickers,
+390 px): identical at every step, zero console errors both sides. Two lessons for the
+next run: the endgame gateway buttons need **~12 s** after a mass change before they
+are clickable (the fate + preview fetches gate them), and the mass has to sit inside
+each feature's band (the stripped-mode button is 2.0–18.2 M☉, so a 25 M☉ star silently
+skips that whole branch).

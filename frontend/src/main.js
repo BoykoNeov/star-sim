@@ -18,6 +18,11 @@ import { createSeismo } from "./seismo.js";
 import { createHZHist } from "./hzhist.js";
 import { habitableZone } from "./hz.js";
 import { createClassification } from "./classify.js";
+// The DOM-free control arithmetic every slider and number box shares (see
+// controls.js: one snap, one log-position map, one number-box commit).
+import {
+  nearestWithin, snapWithin, logValueAt, logPosOf, commitNumber,
+} from "./controls.js";
 import { makeSortable } from "./layout.js";
 import { initTooltips } from "./tooltip.js";
 import { teffToCSS } from "./color.js";
@@ -405,6 +410,10 @@ let currentTrack = null;           // last /track result; the source for age tic
 // Snap-tick positions in each slider's own coordinate (mass/age: 0..1; feh: dex).
 let massTickPos = [], massTickVals = [], fehTickPos = [], ageTickPos = [];
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
+// How magnetic a landmark tick is, in slider-POSITION units (1.5% of the travel).
+// One constant for every scrub — mass, age, the WD/WR/SN endgame sequences — so
+// "close enough to snap" means the same thing under the thumb everywhere.
+const SNAP_TOL = 0.015;
 // GLSL-style smoothstep on a scalar (used to drive the SN fireball grow/fade beats).
 const smoothstep01 = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
@@ -698,9 +707,8 @@ let obsAv = 0;                  // seeded dust-free (Spectrum/SED byte-unchanged
 let obsRv = 3.1;                // diffuse-ISM reddening law (the near-universal default)
 // The distance slider is log-spaced over 10 pc (absolute-mag reference) → 100 kpc (past the LMC).
 const OBS_D_MIN = 10, OBS_D_MAX = 1e5;
-const OBS_D_LO = Math.log10(OBS_D_MIN), OBS_D_HI = Math.log10(OBS_D_MAX);
-const obsDistFromFrac = (v) => 10 ** (OBS_D_LO + v * (OBS_D_HI - OBS_D_LO));
-const obsFracFromDist = (d) => (Math.log10(d) - OBS_D_LO) / (OBS_D_HI - OBS_D_LO);
+const obsDistFromFrac = (v) => logValueAt(v, OBS_D_MIN, OBS_D_MAX);
+const obsFracFromDist = (d) => logPosOf(d, OBS_D_MIN, OBS_D_MAX);
 
 // --- path (b) Chunk 4b: the co-evolving POSYDON binary (a deeper reveal INSIDE ------
 // stripped-mode — mode stays "stripped" throughout, mirroring how the thermal-pulse
@@ -843,30 +851,14 @@ function populateCoBinaryFehOptions(list) {
 
 // All three CO axes span a wide dynamic range (and M_co is a physical mass, not a <1-dex
 // ratio like q) → log-scale position sliders on every one, the mni-slider idiom.
-const coMstarFromPos = (pos) => {
-  const lo = Math.log10(coBinaryMeta.m_star_min), hi = Math.log10(coBinaryMeta.m_star_max);
-  return 10 ** (lo + clamp01(pos) * (hi - lo));
-};
-const posFromCoMstar = (m) => {
-  const lo = Math.log10(coBinaryMeta.m_star_min), hi = Math.log10(coBinaryMeta.m_star_max);
-  return clamp01((Math.log10(m) - lo) / (hi - lo));
-};
-const coMcoFromPos = (pos) => {
-  const lo = Math.log10(coBinaryMeta.m_co_min), hi = Math.log10(coBinaryMeta.m_co_max);
-  return 10 ** (lo + clamp01(pos) * (hi - lo));
-};
-const posFromCoMco = (m) => {
-  const lo = Math.log10(coBinaryMeta.m_co_min), hi = Math.log10(coBinaryMeta.m_co_max);
-  return clamp01((Math.log10(m) - lo) / (hi - lo));
-};
-const coPFromPos = (pos) => {
-  const lo = Math.log10(coBinaryMeta.p_min), hi = Math.log10(coBinaryMeta.p_max);
-  return 10 ** (lo + clamp01(pos) * (hi - lo));
-};
-const posFromCoP = (p) => {
-  const lo = Math.log10(coBinaryMeta.p_min), hi = Math.log10(coBinaryMeta.p_max);
-  return clamp01((Math.log10(p) - lo) / (hi - lo));
-};
+// Bounds are read from coBinaryMeta at call time, never captured: a [Fe/H] or
+// grid-kind change swaps in a different baked grid with a different span.
+const coMstarFromPos = (pos) => logValueAt(pos, coBinaryMeta.m_star_min, coBinaryMeta.m_star_max);
+const posFromCoMstar = (m) => logPosOf(m, coBinaryMeta.m_star_min, coBinaryMeta.m_star_max);
+const coMcoFromPos = (pos) => logValueAt(pos, coBinaryMeta.m_co_min, coBinaryMeta.m_co_max);
+const posFromCoMco = (m) => logPosOf(m, coBinaryMeta.m_co_min, coBinaryMeta.m_co_max);
+const coPFromPos = (pos) => logValueAt(pos, coBinaryMeta.p_min, coBinaryMeta.p_max);
+const posFromCoP = (p) => logPosOf(p, coBinaryMeta.p_min, coBinaryMeta.p_max);
 
 function configureCoBinaryCustomSliders() {
   if (!coBinaryMeta || !els.coBinaryCustomMstar) return;
@@ -979,22 +971,10 @@ function populateBinaryFehOptions(list) {
 // M1 and P span a wide dynamic range (~1.9 / ~4.7 dex) — log-scale position sliders, the
 // mni-slider idiom. q spans <1 dex and is a plain ratio, so its range input binds the
 // physical value directly (no position indirection needed).
-const customM1FromPos = (pos) => {
-  const lo = Math.log10(binaryMeta.m1_min), hi = Math.log10(binaryMeta.m1_max);
-  return 10 ** (lo + clamp01(pos) * (hi - lo));
-};
-const posFromCustomM1 = (m) => {
-  const lo = Math.log10(binaryMeta.m1_min), hi = Math.log10(binaryMeta.m1_max);
-  return clamp01((Math.log10(m) - lo) / (hi - lo));
-};
-const customPFromPos = (pos) => {
-  const lo = Math.log10(binaryMeta.p_min), hi = Math.log10(binaryMeta.p_max);
-  return 10 ** (lo + clamp01(pos) * (hi - lo));
-};
-const posFromCustomP = (p) => {
-  const lo = Math.log10(binaryMeta.p_min), hi = Math.log10(binaryMeta.p_max);
-  return clamp01((Math.log10(p) - lo) / (hi - lo));
-};
+const customM1FromPos = (pos) => logValueAt(pos, binaryMeta.m1_min, binaryMeta.m1_max);
+const posFromCustomM1 = (m) => logPosOf(m, binaryMeta.m1_min, binaryMeta.m1_max);
+const customPFromPos = (pos) => logValueAt(pos, binaryMeta.p_min, binaryMeta.p_max);
+const posFromCustomP = (p) => logPosOf(p, binaryMeta.p_min, binaryMeta.p_max);
 
 function configureBinaryCustomSliders() {
   if (!binaryMeta || !els.binaryCustomM1) return;
@@ -1050,9 +1030,8 @@ function updateBinaryFehNote() {
 // slider is LOG in M_Ni (it spans 0.001–0.3, ~2.5 decades). Canonical default 0.06.
 const M_NI_DEFAULT = 0.06, M_NI_MIN = 0.001, M_NI_MAX = 0.3;
 let mniValue = M_NI_DEFAULT;    // ⁵⁶Ni mass / M☉ — source of truth for the slider
-const mniLogMin = Math.log10(M_NI_MIN), mniLogMax = Math.log10(M_NI_MAX);
-const mniFromPos = (pos) => 10 ** (mniLogMin + clamp01(pos) * (mniLogMax - mniLogMin));
-const posFromMni = (m) => clamp01((Math.log10(m) - mniLogMin) / (mniLogMax - mniLogMin));
+const mniFromPos = (pos) => logValueAt(pos, M_NI_MIN, M_NI_MAX);
+const posFromMni = (m) => logPosOf(m, M_NI_MIN, M_NI_MAX);
 const MNI_TICKS = [0.001, 0.01, 0.06, 0.1, 0.3];   // observed floor · low · canonical · high · ceiling
 let pinAgeToEnd = false;        // one-shot: land the next track refresh at the very end
 
@@ -1112,13 +1091,7 @@ function wdIndexFromFraction(frac, z) {
 
 // Snap the WD scrub to its landmarks (pulses / central star / cold cinder).
 function snapWDFraction(raw) {
-  const thresh = 0.015;
-  let best = raw, bestD = thresh;
-  for (const t of [0, WD_FR, 1]) {
-    const d = Math.abs(raw - t);
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  return clamp01(best);
+  return clamp01(snapWithin(raw, [0, WD_FR, 1], SNAP_TOL));
 }
 
 // The WD landmark ticks: only three, well separated — no stagger needed.
@@ -1207,13 +1180,7 @@ function snapWRFraction(raw) {
   const z = wrZones(endgame.states);
   const targets = [0, 1];
   if (z.wc > 0 && z.last > 0) targets.push(z.wc / z.last);
-  const thresh = 0.015;
-  let best = raw, bestD = thresh;
-  for (const t of targets) {
-    const d = Math.abs(raw - t);
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  return clamp01(best);
+  return clamp01(snapWithin(raw, targets, SNAP_TOL));
 }
 
 // The WR landmark ticks: the WN onset, the WN→WC transition (only if the star reaches it),
@@ -1289,12 +1256,10 @@ const sliderFromMass = (m) =>
 // position. This is the slider's own snap — the number box deliberately bypasses it
 // (the arbitrary-precision escape hatch: typing 0.99 must stay 0.99, not snap to 1).
 function massFromSliderInput(rawPos) {
-  const thresh = 0.015;
-  let bestIdx = -1, bestD = thresh;
-  for (let i = 0; i < massTickPos.length; i++) {
-    const d = Math.abs(rawPos - massTickPos[i]);
-    if (d < bestD) { bestD = d; bestIdx = i; }
-  }
+  // The index, not the snapped position: the exact ROUND mass is carried in a
+  // parallel array (massTickVals), which is the whole reason this snap can't use
+  // snapWithin's value directly.
+  const bestIdx = nearestWithin(rawPos, massTickPos, SNAP_TOL);
   if (bestIdx >= 0) return { pos: massTickPos[bestIdx], mass: massTickVals[bestIdx] };
   return { pos: rawPos, mass: massFromSliderPos(rawPos) };
 }
@@ -1318,15 +1283,11 @@ function gyr(yr) {
 // hatch and deliberately bypass snapping.
 
 // Snap a raw slider value to the nearest tick within 1.5% of its range —
-// landmarks are magnetic, but every value between them stays reachable.
+// landmarks are magnetic, but every value between them stays reachable. ([Fe/H]
+// is the one slider whose input binds a physical value, not a 0..1 position, so
+// SNAP_TOL has to be scaled by its span here.)
 function snap(value, ticks, min, max) {
-  const thresh = (max - min) * 0.015;
-  let best = value, bestD = thresh;
-  for (const t of ticks) {
-    const d = Math.abs(value - t);
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  return best;
+  return snapWithin(value, ticks, (max - min) * SNAP_TOL);
 }
 
 // Snap an age-slider POSITION (0..1, linear in EEP) to a landmark row or to a track
@@ -1337,13 +1298,7 @@ function snap(value, ticks, min, max) {
 // the range input's step-quantized value) so the row index round() lands exactly on the
 // snapped landmark's EEP row.
 function snapAge(raw) {
-  const thresh = 0.015;
-  let best = raw, bestD = thresh;
-  for (const t of [0, ...ageTickPos, 1]) {
-    const d = Math.abs(raw - t);
-    if (d < bestD) { bestD = d; best = t; }
-  }
-  return best;
+  return snapWithin(raw, [0, ...ageTickPos, 1], SNAP_TOL);
 }
 
 // Populate a <datalist> (a native, browser-dependent tick hint) from {pos,label}.
@@ -2742,12 +2697,9 @@ function snMaxDay() {
 function snStateIndex(frac) {
   const t = snModel.light_curve.time_days;
   const target = clamp01(frac) * snMaxDay();
-  let best = 0, bestD = Infinity;
-  for (let i = 0; i < t.length; i++) {
-    const d = Math.abs(t[i] - target);
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
+  // No tolerance here: the nearest sample is always the answer (the light curve
+  // has no landmark grid to be "close enough" to).
+  return Math.max(0, nearestWithin(target, t, Infinity));
 }
 // Snap the SN scrub to its landmarks (explosion / plateau end / last sample).
 function snapSNFraction(raw) {
@@ -2755,10 +2707,7 @@ function snapSNFraction(raw) {
   const targets = [0, 1];
   if (snModel && snModel.has_plateau && snModel.plateau_duration_days)
     targets.push(clamp01(snModel.plateau_duration_days / maxDay));
-  const thresh = 0.015;
-  let best = raw, bestD = thresh;
-  for (const t of targets) { const d = Math.abs(raw - t); if (d < bestD) { bestD = d; best = t; } }
-  return clamp01(best);
+  return clamp01(snapWithin(raw, targets, SNAP_TOL));
 }
 // The SN time-scrub landmark ticks: the explosion, the plateau end (only if the curve has
 // one), and the last sampled day. Few + well separated — no stagger.
@@ -4638,8 +4587,26 @@ function relocateOverlayControls() {
   if (sed) { const p = document.getElementById("population-control"); if (p) sed.appendChild(p); }
 }
 
-async function init() {
-  relocateOverlayControls();   // move the overlay what-ifs onto the panels they drive (see above)
+// --- wiring ------------------------------------------------------------------
+// One `wire*()` per control group, each owning the listeners for the DOM ids of
+// exactly one panel or one facet of the slider column, and each named for the
+// control the reader is looking for. They stay HERE rather than moving into the
+// panel modules (the shape docs/plans/structure-refactor.md §2.1 first sketched):
+// a listener's job is to mutate the module state above and re-run the paint
+// pipeline, so a panel module could only do it through a ctx object exposing
+// dozens of mutable slots — a wider seam than the one it would remove — and
+// several of these toggles are deliberately about CROSS-panel exclusivity (the
+// He / α / isochrone overlays share one HR slot), which is nobody's panel to own.
+// What DID move out is the arithmetic: see controls.js (and its tests).
+//
+// Everything below is called once, from init(), in file order.
+
+// Seed every control's bounds from the provider's own ranges, and probe once for
+// the optional data each what-if needs (a control that could only ever 503 must
+// not appear — the honesty gate). Returns false when the backend is unreachable,
+// having already put the reason on screen; init() then wires nothing, because
+// there is nothing behind any of it.
+async function loadRangesAndSeedControls() {
   try {
     const ranges = await fetchJSON("/ranges");
     logMassMin = Math.log10(ranges.mass_msun.min);
@@ -4701,9 +4668,15 @@ async function init() {
     els.status.textContent =
       `Cannot reach backend (${err.message}). Start it with: ` +
       `cd backend && uvicorn star_sim.api:app --reload`;
-    return;
+    return false;
   }
+  return true;
+}
 
+// The three spine controls — mass, [Fe/H], age — and the one place a drag decides
+// whether it is rebuilding a living track, re-snapping an endgame progenitor, or
+// scrubbing a pre-fetched sequence.
+function wireStarSliders() {
   // Sliders snap to landmarks on drag. The editable number field is kept live
   // during the drag (cheap, no fetch) so it tracks the thumb instead of lagging a
   // fetch behind. The EXPENSIVE part — the /track (+/state) backend window build —
@@ -4798,68 +4771,80 @@ async function init() {
     refresh();
     updateLiveGateway();   // offer the gateway once scrubbed to the end of the life
   });
+}
 
-  // Number inputs commit on change (Enter/blur) and BYPASS snapping — the exact
-  // hand-typed value is honored, only clamped to the valid range.
+// The hand-entry escape hatches for the same three values. They commit on change
+// (Enter/blur) and BYPASS snapping — the exact typed number is honored, only
+// clamped to the valid range (commitNumber; a blank or unparseable box commits
+// nothing rather than resetting the star).
+function wireStarNumberBoxes() {
   els.massNum.addEventListener("change", () => {
-    if (els.massNum.value.trim() === "") return;
-    const m = Number(els.massNum.value);
-    if (!isFinite(m)) return;
-    massValue = Math.min(Math.max(m, validMassMin), validMassMax);
+    const m = commitNumber(els.massNum.value, validMassMin, validMassMax);
+    if (m === null) return;
+    massValue = m;
     els.mass.value = clamp01(sliderFromMass(massValue));
     (mode !== "live" ? tryResnap : refreshTrack)();
   });
   els.fehNum.addEventListener("change", () => {
-    if (els.fehNum.value.trim() === "") return;
-    const f = Number(els.fehNum.value);
-    if (!isFinite(f)) return;
-    els.feh.value = Math.min(Math.max(f, fehMin), fehMax);
+    const f = commitNumber(els.fehNum.value, fehMin, fehMax);
+    if (f === null) return;
+    els.feh.value = f;
     (mode !== "live" ? tryResnap : refreshMassRangeThenTrack)();
   });
   els.ageNum.addEventListener("change", () => {
     if (mode !== "live") return;   // the age box is hidden in the endgame modes
-    if (els.ageNum.value.trim() === "" || !(ageMax > ageMin)) return;
-    const gy = Number(els.ageNum.value);
-    if (!isFinite(gy)) return;
+    if (!(ageMax > ageMin)) return;
+    // Unbounded on purpose: posFromAge maps a typed age onto the track's own EEP
+    // rows, so the track — not a slider bound — is what clamps it.
+    const gy = commitNumber(els.ageNum.value);
+    if (gy === null) return;
     ageValue = gy * 1e9;   // the typed absolute age is the new desired value
     ageFraction = posFromAge(ageValue);   // -> the nearest EEP row position (Chunk E)
     els.age.value = ageFraction;
     refresh();
     updateLiveGateway();
   });
+}
 
-  // Rotation toggle (rotation Chunk 3): flip the selected rotation and refetch the
-  // (rotating / non-rotating) track + endgame for the current star. Only meaningful in
-  // live mode and only enabled where rotation_status.active is true (updateRotControl
-  // greys it otherwise), so a `change` here always refers to a real track swap.
+// Rotation toggle (rotation Chunk 3): flip the selected rotation and refetch the
+// (rotating / non-rotating) track + endgame for the current star. Only meaningful in
+// live mode and only enabled where rotation_status.active is true (updateRotControl
+// greys it otherwise), so a `change` here always refers to a real track swap.
+function wireRotationToggle() {
   if (els.rotToggle) els.rotToggle.addEventListener("change", () => {
     if (mode !== "live") return;
     rotationOn = els.rotToggle.checked;
     refreshTrack();
   });
+}
 
-  // Ap/Bp chemically-peculiar toggle (atlas Tier C): a pure 3D-look what-if — no fetch, no
-  // track/HR/spectrum change (off the spine). refresh() repaints the current EEP row through
-  // paintState -> star.update({peculiar}), so the spots appear/vanish instantly on the marker.
+// Ap/Bp chemically-peculiar toggle (atlas Tier C): a pure 3D-look what-if — no fetch, no
+// track/HR/spectrum change (off the spine). refresh() repaints the current EEP row through
+// paintState -> star.update({peculiar}), so the spots appear/vanish instantly on the marker.
+function wirePeculiarToggle() {
   if (els.peculiarToggle) els.peculiarToggle.addEventListener("change", () => {
     if (mode !== "live") return;
     peculiarOn = els.peculiarToggle.checked;
     updatePeculiarControl();
     refresh();
   });
+}
 
-  // Binary-stripped-star what-if BUTTON: clicking it enters the reversible stripped-mode (a
-  // mid-life fork — the whole display snaps to the stripped He-star, fetched from /binary). It's a
-  // one-way ENTER like the WD/WR/SN gateway buttons; the endgame bar's "Back" is the single exit
-  // (exitEndgame). Disabled out of the eligible mass band, so the guard is belt-and-suspenders.
+// Binary-stripped-star what-if BUTTON: clicking it enters the reversible stripped-mode (a
+// mid-life fork — the whole display snaps to the stripped He-star, fetched from /binary). It's a
+// one-way ENTER like the WD/WR/SN gateway buttons; the endgame bar's "Back" is the single exit
+// (exitEndgame). Disabled out of the eligible mass band, so the guard is belt-and-suspenders.
+function wireStrippedButton() {
   if (els.strippedBtn) els.strippedBtn.addEventListener("click", () => {
     if (mode === "live" && !els.strippedBtn.disabled) enterStripped();
   });
+}
 
-  // Initial-helium overlay (Phase 2): a light HR overlay, not a mode-swap. Checking it fetches
-  // the baseline+enhanced MESA pair and takes over the HR panel (MIST spine hidden); unchecking
-  // restores the live track. Only meaningful in live mode within the eligible region — the
-  // control is hidden otherwise, so this only fires when a real toggle is possible.
+// Initial-helium overlay (Phase 2): a light HR overlay, not a mode-swap. Checking it fetches
+// the baseline+enhanced MESA pair and takes over the HR panel (MIST spine hidden); unchecking
+// restores the live track. Only meaningful in live mode within the eligible region — the
+// control is hidden otherwise, so this only fires when a real toggle is possible.
+function wireHeliumToggle() {
   if (els.heliumToggle) els.heliumToggle.addEventListener("change", () => {
     if (els.heliumToggle.checked) {
       if (mode !== "live") { els.heliumToggle.checked = false; return; }
@@ -4874,9 +4859,11 @@ async function init() {
       heliumOff();
     }
   });
+}
 
-  // α-enhanced overlay (Phase 3): the twin of the He toggle, mutually exclusive with it. Checking
-  // it fetches the baseline+enhanced (equivalent-Z) MESA pair and takes over the HR panel.
+// α-enhanced overlay (Phase 3): the twin of the He toggle, mutually exclusive with it. Checking
+// it fetches the baseline+enhanced (equivalent-Z) MESA pair and takes over the HR panel.
+function wireAlphaToggle() {
   if (els.alphaToggle) els.alphaToggle.addEventListener("change", () => {
     if (els.alphaToggle.checked) {
       if (mode !== "live") { els.alphaToggle.checked = false; return; }
@@ -4889,10 +4876,12 @@ async function init() {
       alphaOff();
     }
   });
+}
 
-  // Coeval-population (BPASS) overlay on the SED panel. Independent of the He/α HR overlays
-  // (different panel), so NOT mutually exclusive with them. Checking it fetches /population for
-  // the current marker and pushes the curves into the SED panel; paintState keeps it in sync.
+// Coeval-population (BPASS) overlay on the SED panel. Independent of the He/α HR overlays
+// (different panel), so NOT mutually exclusive with them. Checking it fetches /population for
+// the current marker and pushes the curves into the SED panel; paintState keeps it in sync.
+function wirePopulationToggle() {
   if (els.populationToggle) els.populationToggle.addEventListener("change", () => {
     if (els.populationToggle.checked) {
       if (mode !== "live") { els.populationToggle.checked = false; return; }
@@ -4908,11 +4897,13 @@ async function init() {
       populationOff();
     }
   });
+}
 
-  // Cluster-isochrone (MIST .iso) overlay on the HR panel. Owns the HR slot like the He/α
-  // overlays, so mutually exclusive with them. Checking it fetches /isochrone for the marker's
-  // (age, [Fe/H]) and draws the coeval-cluster locus; paintState keeps it in sync as the age
-  // scrubs (the cluster ages with the slider).
+// Cluster-isochrone (MIST .iso) overlay on the HR panel. Owns the HR slot like the He/α
+// overlays, so mutually exclusive with them. Checking it fetches /isochrone for the marker's
+// (age, [Fe/H]) and draws the coeval-cluster locus; paintState keeps it in sync as the age
+// scrubs (the cluster ages with the slider).
+function wireIsochroneToggle() {
   if (els.isochroneToggle) els.isochroneToggle.addEventListener("change", () => {
     if (els.isochroneToggle.checked) {
       if (mode !== "live") { els.isochroneToggle.checked = false; return; }
@@ -4931,22 +4922,27 @@ async function init() {
       isochroneOff();
     }
   });
+}
 
-  // Habitable-zone overlay (Axis D) on the scale bar. A pure L+Teff VIEW on a DIFFERENT panel than
-  // the HR overlays, so it is NOT mutually exclusive with them (no HR-panel ownership). The only
-  // gate is live mode; scale.js self-gates by Kopparapu's 2600–7200 K range (band absent for hot
-  // stars). No fetch — setHZ redraws from the scale bar's retained state.
+// Habitable-zone overlay (Axis D) on the scale bar. A pure L+Teff VIEW on a DIFFERENT panel than
+// the HR overlays, so it is NOT mutually exclusive with them (no HR-panel ownership). The only
+// gate is live mode; scale.js self-gates by Kopparapu's 2600–7200 K range (band absent for hot
+// stars). No fetch — setHZ redraws from the scale bar's retained state.
+function wireHZToggle() {
   if (els.hzToggle) els.hzToggle.addEventListener("change", () => {
     if (els.hzToggle.checked && mode !== "live") { els.hzToggle.checked = false; return; }
     hzOn = els.hzToggle.checked;
     scale.setHZ(hzOn);
     syncHZHistory();   // the same toggle governs the temporal twin (D2a) — show/hide + push
   });
+}
 
-  // Observer's view (Axis A) — distance + dust. A pure VIEW (never the HR marker), so NOT mutually
-  // The three observer knobs. Each re-pushes the client-side reddening overlay INSTANTLY (so the
-  // curve tracks the drag with no lag) and re-fetches the readout (debounced inside refreshObserver)
-  // for the last painted marker. Distance is log-spaced; A_V/R_V are linear.
+// Observer's view (Axis A) — the distance + dust knobs. A pure VIEW (they never move the HR
+// marker), so not mutually exclusive with anything. Each re-pushes the client-side reddening
+// overlay INSTANTLY (so the curve tracks the drag with no lag) and re-fetches the readout
+// (debounced inside refreshObserver) for the last painted marker. Distance is log-spaced
+// (10 pc – 100 kpc, so 100 pc sits a quarter along); A_V/R_V are linear.
+function wireObserverKnobs() {
   const onObserverKnob = () => {
     syncObserverKnobs();
     if (observerMarker) refreshObserver(observerMarker);
@@ -4963,11 +4959,14 @@ async function init() {
     obsRv = parseFloat(els.obsRv.value);
     onObserverKnob();
   });
+}
 
-  // B3: decouple the cluster's age from the star's age slider. Checking it gives the cluster its
-  // own log-age slider (bounds = the isochrone grid's tabulated ages, served as available_log_ages);
-  // pin the star, sweep the cluster, watch the turnoff march down the MS. Only the AGE decouples —
-  // [Fe/H] stays the star's. A fresh seed = the star's current age (a continuous hand-off).
+// B3: decouple the cluster's age from the star's age slider, and the decoupled slider itself.
+// Checking it gives the cluster its own log-age slider (bounds = the isochrone grid's tabulated
+// ages, served as available_log_ages); pin the star, sweep the cluster, watch the turnoff march
+// down the MS. Only the AGE decouples — [Fe/H] stays the star's. A fresh seed = the star's
+// current age (a continuous hand-off).
+function wireIsochroneDecouple() {
   if (els.isoDecoupleToggle) els.isoDecoupleToggle.addEventListener("change", () => {
     if (!isoOn) { els.isoDecoupleToggle.checked = false; return; }
     if (els.isoDecoupleToggle.checked) {
@@ -5013,20 +5012,24 @@ async function init() {
       if (i >= 0) refreshIsochrone(currentTrack[i]);
     }
   });
+}
 
-  // path (b): "Show companion" — reveal/hide the un-stripped accretor as a second HR marker.
-  // Flipping it re-fetches the current node (now via /binary_pair or /binary) and re-applies,
-  // so the companion appears/disappears with the reversal caption + readout in lockstep.
+// path (b): "Show companion" — reveal/hide the un-stripped accretor as a second HR marker.
+// Flipping it re-fetches the current node (now via /binary_pair or /binary) and re-applies,
+// so the companion appears/disappears with the reversal caption + readout in lockstep.
+function wireCompanionToggle() {
   if (els.companionToggle) els.companionToggle.addEventListener("change", () => {
     if (mode !== "stripped") return;
     companionOn = els.companionToggle.checked;
     tryStrippedResnap();   // re-fetch the current (mass, [Fe/H]) via the now-correct route + re-apply
   });
+}
 
-  // path (b) Chunk 4b/4c: the "Co-evolve the system" demo picker. Delegated (all four
-  // buttons — three curated + "custom" — share the .binary-demo-btn class + a data-demo
-  // key); the picker row itself is CSS-hidden once a demo is live, so this only fires from
-  // a fresh stripped-mode entry. enterBinaryView already branches on demoKey === "custom".
+// path (b) Chunk 4b/4c: the "Co-evolve the system" demo picker. Delegated (all four
+// buttons — three curated + "custom" — share the .binary-demo-btn class + a data-demo
+// key); the picker row itself is CSS-hidden once a demo is live, so this only fires from
+// a fresh stripped-mode entry. enterBinaryView already branches on demoKey === "custom".
+function wireBinaryDemoPicker() {
   if (els.binaryDemoRow) els.binaryDemoRow.addEventListener("click", (ev) => {
     const btn = ev.target.closest(".binary-demo-btn");
     if (btn && mode === "stripped") enterBinaryView(btn.dataset.demo);
@@ -5034,12 +5037,14 @@ async function init() {
   if (els.binaryDemoBack) els.binaryDemoBack.addEventListener("click", () => {
     if (mode === "stripped" && binaryView) exitBinaryView();
   });
+}
 
-  // CE/compact-object tail Chunk 1b/1c: the standalone CO-HMS_RLO demo — the curated Gate-1
-  // "xrb" system OR (Chunk 1c) a free "custom" one — + its own "Back to the snapshot".
-  // Enters/exits the reversible co-binary-view, mutually exclusive with the HMS-HMS
-  // "Co-evolve" movie (enterCoBinaryView exits it first). enterCoBinaryView branches on the
-  // demo key (custom → reveal the M_star/M_co/P sliders once the view is live).
+// CE/compact-object tail Chunk 1b/1c: the standalone CO-HMS_RLO demo — the curated Gate-1
+// "xrb" system OR (Chunk 1c) a free "custom" one — + its own "Back to the snapshot".
+// Enters/exits the reversible co-binary-view, mutually exclusive with the HMS-HMS
+// "Co-evolve" movie (enterCoBinaryView exits it first). enterCoBinaryView branches on the
+// demo key (custom → reveal the M_star/M_co/P sliders once the view is live).
+function wireCoBinaryDemoPicker() {
   if (els.coBinaryDemoXrb) els.coBinaryDemoXrb.addEventListener("click", () => {
     if (mode === "stripped") enterCoBinaryView("xrb");
   });
@@ -5049,11 +5054,14 @@ async function init() {
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.addEventListener("click", () => {
     if (mode === "stripped" && coBinaryView) exitCoBinaryView();
   });
+}
 
-  // Chunk 1c: the free M_star/M_co/P sliders behind the CO "Custom system" — dragging
-  // refetches /co_binary_track (debounced + latest-wins) and re-snaps to the nearest real
-  // track; updateCoBinaryCustomNote (inside _applyCoBinaryTrackData) always states the TRUE
-  // snapped node + the WD-placeholder caveat, never the raw dragged number.
+// Chunk 1c: the free M_star/M_co/P sliders behind the CO "Custom system" — dragging
+// refetches /co_binary_track (debounced + latest-wins) and re-snaps to the nearest real
+// track; updateCoBinaryCustomNote (inside _applyCoBinaryTrackData) always states the TRUE
+// snapped node + the WD-placeholder caveat, never the raw dragged number. All three axes
+// span decades, so each range input carries a log POSITION (controls.js), not the value.
+function wireCoBinaryCustomSliders() {
   const debouncedCoBinaryCustom = debounce(refetchCoBinaryTrack, SLIDER_FETCH_DELAY_MS);
   if (els.coBinaryCustomMstar) {
     els.coBinaryCustomMstar.addEventListener("input", () => {
@@ -5064,10 +5072,11 @@ async function init() {
     els.coBinaryCustomMstar.addEventListener("change", () => debouncedCoBinaryCustom.flush());
   }
   if (els.coBinaryCustomMstarNum) els.coBinaryCustomMstarNum.addEventListener("change", () => {
-    if (!coBinaryMeta || els.coBinaryCustomMstarNum.value.trim() === "") return;
-    const m = Number(els.coBinaryCustomMstarNum.value);
-    if (!isFinite(m)) return;
-    coCustomMstar = Math.min(Math.max(m, coBinaryMeta.m_star_min), coBinaryMeta.m_star_max);
+    if (!coBinaryMeta) return;
+    const m = commitNumber(els.coBinaryCustomMstarNum.value,
+                           coBinaryMeta.m_star_min, coBinaryMeta.m_star_max);
+    if (m === null) return;
+    coCustomMstar = m;
     els.coBinaryCustomMstar.value = String(posFromCoMstar(coCustomMstar));
     refetchCoBinaryTrack();
   });
@@ -5081,10 +5090,11 @@ async function init() {
     els.coBinaryCustomMco.addEventListener("change", () => debouncedCoBinaryCustom.flush());
   }
   if (els.coBinaryCustomMcoNum) els.coBinaryCustomMcoNum.addEventListener("change", () => {
-    if (!coBinaryMeta || els.coBinaryCustomMcoNum.value.trim() === "") return;
-    const m = Number(els.coBinaryCustomMcoNum.value);
-    if (!isFinite(m)) return;
-    coCustomMco = Math.min(Math.max(m, coBinaryMeta.m_co_min), coBinaryMeta.m_co_max);
+    if (!coBinaryMeta) return;
+    const m = commitNumber(els.coBinaryCustomMcoNum.value,
+                           coBinaryMeta.m_co_min, coBinaryMeta.m_co_max);
+    if (m === null) return;
+    coCustomMco = m;
     els.coBinaryCustomMco.value = String(posFromCoMco(coCustomMco));
     refetchCoBinaryTrack();
   });
@@ -5098,18 +5108,25 @@ async function init() {
     els.coBinaryCustomP.addEventListener("change", () => debouncedCoBinaryCustom.flush());
   }
   if (els.coBinaryCustomPNum) els.coBinaryCustomPNum.addEventListener("change", () => {
-    if (!coBinaryMeta || els.coBinaryCustomPNum.value.trim() === "") return;
-    const p = Number(els.coBinaryCustomPNum.value);
-    if (!isFinite(p)) return;
-    coCustomP = Math.min(Math.max(p, coBinaryMeta.p_min), coBinaryMeta.p_max);
+    if (!coBinaryMeta) return;
+    const p = commitNumber(els.coBinaryCustomPNum.value,
+                           coBinaryMeta.p_min, coBinaryMeta.p_max);
+    if (p === null) return;
+    coCustomP = p;
     els.coBinaryCustomP.value = String(posFromCoP(coCustomP));
     refetchCoBinaryTrack();
   });
+}
 
-  // The CO [Fe/H] picker — applies to WHICHEVER CO demo is showing (curated or custom), the
-  // binaryFeh twin. A bucket change can shift the M_star/M_co/P grid bounds (each POSYDON
-  // metallicity is its own baked grid), so invalidate the cached meta + await the bounds
-  // refresh (which clamps/repositions the sliders) BEFORE re-fetching the track.
+// The two pickers that choose WHICH baked CO grid is in play — orthogonal to each other and
+// to which demo is showing. Both invalidate the cached bounds and await the refresh before
+// re-fetching, because each (metallicity, kind) pair is its own grid with its own span.
+//
+// The CO [Fe/H] picker — applies to WHICHEVER CO demo is showing (curated or custom), the
+// binaryFeh twin. A bucket change can shift the M_star/M_co/P grid bounds (each POSYDON
+// metallicity is its own baked grid), so invalidate the cached meta + await the bounds
+// refresh (which clamps/repositions the sliders) BEFORE re-fetching the track.
+function wireCoBinaryGridPickers() {
   if (els.coBinaryFeh) els.coBinaryFeh.addEventListener("change", async () => {
     const f = Number(els.coBinaryFeh.value);
     if (!isFinite(f)) return;
@@ -5143,11 +5160,13 @@ async function init() {
       refetchCoBinaryTrack();
     });
   }
+}
 
-  // path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches
-  // /binary_track (debounced + latest-wins, the ⁵⁶Ni-slider idiom) and re-snaps to the
-  // nearest real POSYDON track — updateBinaryCustomNote (inside _applyBinaryTrackData)
-  // always states the TRUE snapped node, never the raw dragged number.
+// path (b) Chunk 4c: the free M1/q/P sliders behind "Custom orbit". Dragging refetches
+// /binary_track (debounced + latest-wins, the ⁵⁶Ni-slider idiom) and re-snaps to the
+// nearest real POSYDON track — updateBinaryCustomNote (inside _applyBinaryTrackData)
+// always states the TRUE snapped node, never the raw dragged number.
+function wireBinaryCustomSliders() {
   const debouncedBinaryCustom = debounce(refetchBinaryTrack, SLIDER_FETCH_DELAY_MS);
   if (els.binaryCustomM1) {
     els.binaryCustomM1.addEventListener("input", () => {
@@ -5158,10 +5177,10 @@ async function init() {
     els.binaryCustomM1.addEventListener("change", () => debouncedBinaryCustom.flush());
   }
   if (els.binaryCustomM1Num) els.binaryCustomM1Num.addEventListener("change", () => {
-    if (!binaryMeta || els.binaryCustomM1Num.value.trim() === "") return;
-    const m = Number(els.binaryCustomM1Num.value);
-    if (!isFinite(m)) return;
-    customM1 = Math.min(Math.max(m, binaryMeta.m1_min), binaryMeta.m1_max);
+    if (!binaryMeta) return;
+    const m = commitNumber(els.binaryCustomM1Num.value, binaryMeta.m1_min, binaryMeta.m1_max);
+    if (m === null) return;
+    customM1 = m;
     els.binaryCustomM1.value = String(posFromCustomM1(customM1));
     refetchBinaryTrack();
   });
@@ -5175,10 +5194,10 @@ async function init() {
     els.binaryCustomQ.addEventListener("change", () => debouncedBinaryCustom.flush());
   }
   if (els.binaryCustomQNum) els.binaryCustomQNum.addEventListener("change", () => {
-    if (!binaryMeta || els.binaryCustomQNum.value.trim() === "") return;
-    const q = Number(els.binaryCustomQNum.value);
-    if (!isFinite(q)) return;
-    customQ = Math.min(Math.max(q, binaryMeta.q_min), binaryMeta.q_max);
+    if (!binaryMeta) return;
+    const q = commitNumber(els.binaryCustomQNum.value, binaryMeta.q_min, binaryMeta.q_max);
+    if (q === null) return;
+    customQ = q;
     els.binaryCustomQ.value = String(customQ);
     refetchBinaryTrack();
   });
@@ -5192,19 +5211,21 @@ async function init() {
     els.binaryCustomP.addEventListener("change", () => debouncedBinaryCustom.flush());
   }
   if (els.binaryCustomPNum) els.binaryCustomPNum.addEventListener("change", () => {
-    if (!binaryMeta || els.binaryCustomPNum.value.trim() === "") return;
-    const p = Number(els.binaryCustomPNum.value);
-    if (!isFinite(p)) return;
-    customP = Math.min(Math.max(p, binaryMeta.p_min), binaryMeta.p_max);
+    if (!binaryMeta) return;
+    const p = commitNumber(els.binaryCustomPNum.value, binaryMeta.p_min, binaryMeta.p_max);
+    if (p === null) return;
+    customP = p;
     els.binaryCustomP.value = String(posFromCustomP(customP));
     refetchBinaryTrack();
   });
+}
 
-  // The [Fe/H] metallicity-bucket picker — applies to WHICHEVER demo is showing (curated
-  // or custom), unlike M1/q/P which only ever drive "custom". Switching buckets means the
-  // M1/q/P grid bounds can shift too (each POSYDON metallicity is its own baked grid), so
-  // this invalidates the cached binaryMeta and re-fetches it (refreshing the custom
-  // sliders' bounds/clamps) alongside re-fetching whichever track is live.
+// The [Fe/H] metallicity-bucket picker — applies to WHICHEVER demo is showing (curated
+// or custom), unlike M1/q/P which only ever drive "custom". Switching buckets means the
+// M1/q/P grid bounds can shift too (each POSYDON metallicity is its own baked grid), so
+// this invalidates the cached binaryMeta and re-fetches it (refreshing the custom
+// sliders' bounds/clamps) alongside re-fetching whichever track is live.
+function wireBinaryFehPicker() {
   if (els.binaryFeh) els.binaryFeh.addEventListener("change", async () => {
     const f = Number(els.binaryFeh.value);
     if (!isFinite(f)) return;
@@ -5217,11 +5238,15 @@ async function init() {
     await ensureBinaryMeta();
     refetchBinaryTrack();     // re-snap whichever demo/custom system is currently showing
   });
+}
 
-  // Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the
-  // 3D star and re-broadens the spectrum's lines (v sin i) with NO refetch and NO track/HR
-  // change (it's off the spine). Slider ↔ number input kept in sync; both drive
-  // applyInclination, which pushes the angle to both consumers in lockstep.
+// Inclination slider (gravity darkening Chunk 2): a pure VIEWING control — it re-tilts the
+// 3D star and re-broadens the spectrum's lines (v sin i) with NO refetch and NO track/HR
+// change (it's off the spine). Slider ↔ number input kept in sync; both drive
+// applyInclination, which pushes the angle to both consumers in lockstep. The number box
+// does NOT go through commitNumber: an angle has no "unset", so a cleared box means 0°
+// (edge-on) here rather than "leave the view alone".
+function wireInclinationControls() {
   if (els.incl) els.incl.addEventListener("input", () => {
     const v = Number(els.incl.value);
     if (els.inclNum) els.inclNum.value = String(v);
@@ -5235,16 +5260,21 @@ async function init() {
     if (els.incl) els.incl.value = String(v);
     applyInclination(v);
   });
-  // Orientation-grid toggle: a pure viewing aid on the 3D star (see axisGridOn). Manual changes
-  // are sticky — the one-shot auto-enable (updateRotControl) is already latched by the time the
-  // user can click, so unchecking here suppresses the grid for good across rotating↔non cycles.
+}
+
+// Orientation-grid toggle: a pure viewing aid on the 3D star (see axisGridOn). Manual changes
+// are sticky — the one-shot auto-enable (updateRotControl) is already latched by the time the
+// user can click, so unchecking here suppresses the grid for good across rotating↔non cycles.
+function wireAxisGridToggle() {
   if (els.axisGridToggle) els.axisGridToggle.addEventListener("change", () => {
     axisGridOn = els.axisGridToggle.checked;
     star.setAxisGrid(axisGridOn);
   });
+}
 
-  // The stellar-endgame gateway: enter the WD / WR / SN endgame from the button at the slider
-  // limit; the bar's "Back" button leaves it (reversible — Locked decision #1).
+// The stellar-endgame gateway: enter the WD / WR / SN endgame from the button at the slider
+// limit; the bar's "Back" button leaves it (reversible — Locked decision #1).
+function wireEndgameGateway() {
   if (els.gatewayWd) els.gatewayWd.addEventListener("click", enterWD);
   if (els.gatewayWr) els.gatewayWr.addEventListener("click", enterWR);
   if (els.gatewaySn) els.gatewaySn.addEventListener("click", enterSN);
@@ -5254,20 +5284,19 @@ async function init() {
   if (els.pulseToggle) els.pulseToggle.addEventListener("click", () => {
     if (pulseView) exitPulseView(); else enterPulseView();
   });
+}
 
-  // The ⁵⁶Ni-mass slider (SN endgame, Tier-3): moving it REFETCHES the light curve (the
-  // tail/peak rescale; mass/[Fe/H] fixed, so the progenitor can't change). Debounced +
-  // latest-wins, like the track fetch. The number box is the exact-entry escape hatch.
+// The ⁵⁶Ni-mass slider (SN endgame, Tier-3): moving it REFETCHES the light curve (the
+// tail/peak rescale; mass/[Fe/H] fixed, so the progenitor can't change). Debounced +
+// latest-wins, like the track fetch. The number box is the exact-entry escape hatch.
+function wireSNMniSlider() {
   const debouncedSNMni = debounce(refetchSNMni, SLIDER_FETCH_DELAY_MS);
   if (els.snMni) {
     els.snMni.addEventListener("input", () => {
-      // snap to a round ⁵⁶Ni yield if close, else read the log position
+      // Snap to a round ⁵⁶Ni yield if the drag lands close to one, else keep the raw log
+      // position. A slightly wider tolerance than SNAP_TOL: five ticks over one slider.
       const raw = Number(els.snMni.value);
-      let pos = raw, bestD = 0.02;
-      for (const m of MNI_TICKS) {
-        const p = posFromMni(m); const d = Math.abs(raw - p);
-        if (d < bestD) { bestD = d; pos = p; }
-      }
+      const pos = snapWithin(raw, MNI_TICKS.map(posFromMni), 0.02);
       els.snMni.value = pos;
       mniValue = mniFromPos(pos);
       setNum(els.snMniNum, fmt(mniValue));
@@ -5277,14 +5306,49 @@ async function init() {
     els.snMni.addEventListener("change", () => debouncedSNMni.flush());
   }
   if (els.snMniNum) els.snMniNum.addEventListener("change", () => {
-    if (mode !== "sn" || els.snMniNum.value.trim() === "") return;
-    const m = Number(els.snMniNum.value);
-    if (!isFinite(m)) return;
-    mniValue = Math.min(Math.max(m, M_NI_MIN), M_NI_MAX);
+    if (mode !== "sn") return;
+    const m = commitNumber(els.snMniNum.value, M_NI_MIN, M_NI_MAX);
+    if (m === null) return;
+    mniValue = m;
     els.snMni.value = posFromMni(mniValue);
     els.snMniNote.textContent = mniNote();
     refetchSNMni();
   });
+}
+
+// The one wiring pass. Seed the controls from the provider's ranges, hand each control
+// group its listeners, then fetch the first star — after which everything that happens is
+// a listener above calling into the paint pipeline. Nothing here paints: a `wire*()` that
+// drew something would be a second source of the first frame.
+async function init() {
+  relocateOverlayControls();   // move the overlay what-ifs onto the panels they drive (see above)
+  // Backend unreachable → the reason is already on screen and there is no range to bound a
+  // control with, so wire nothing: a live-looking slider over a dead backend is a lie.
+  if (!(await loadRangesAndSeedControls())) return;
+
+  wireStarSliders();
+  wireStarNumberBoxes();
+  wireRotationToggle();
+  wirePeculiarToggle();
+  wireStrippedButton();
+  wireHeliumToggle();
+  wireAlphaToggle();
+  wirePopulationToggle();
+  wireIsochroneToggle();
+  wireHZToggle();
+  wireObserverKnobs();
+  wireIsochroneDecouple();
+  wireCompanionToggle();
+  wireBinaryDemoPicker();
+  wireCoBinaryDemoPicker();
+  wireCoBinaryCustomSliders();
+  wireCoBinaryGridPickers();
+  wireBinaryCustomSliders();
+  wireBinaryFehPicker();
+  wireInclinationControls();
+  wireAxisGridToggle();
+  wireEndgameGateway();
+  wireSNMniSlider();
 
   await refreshMassRangeThenTrack();
 }

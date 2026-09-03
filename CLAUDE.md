@@ -76,6 +76,12 @@ must lie *between* its neighbors on the HR diagram at every phase.
   `exitEndgame` — because a WD's log g ~8 or an SN's log g ≈ −5 will otherwise slip a
   naive gate and paint garbage. A panel joins it by calling `registerLivingOnly(itsDrop)`
   next to its own `drop*ForModeSwitch`; never by editing a fan-out list.
+- **A new control gets its own `wire*()`, and its math goes in `controls.js`.** `init()` is
+  a fixed 31 lines — seed the ranges, call the `wire*()` functions, fetch the first star —
+  so a new control adds a `wireX()` next to its siblings and one call, never a block inside
+  `init`. Nothing in a `wire*()` paints. Snapping to landmarks, log-position sliders and
+  number-box commits already exist as tested pure functions (`snapWithin` / `logValueAt` +
+  `logPosOf` / `commitNumber`); re-hand-rolling one is how the 7 snap loops happened.
 - **Superseded fetches die by their own guard.** Every fetch a newer one can replace
   holds a `makeLatest()` guard: `const req = xLatest.begin()`, then `if (!req.current …)
   return` after each await, and `xLatest.invalidate()` to drop what's in flight. One
@@ -86,7 +92,7 @@ must lie *between* its neighbors on the HR diagram at every phase.
   tracks are modeled. Never let the two blur in a caption.
 - **Pure JS helpers are unit-tested; everything that draws is checked by screenshot.**
   `frontend/tests/*.test.mjs` runs the DOM-free modules (`color` `hz` `seismo`
-  `gravdark` `classify` `reddening`) under `node --test` — no bundler, no npm, in CI.
+  `gravdark` `classify` `reddening` `controls`) under `node --test` — no bundler, no npm, in CI.
   A helper worth testing gets its pure part **extracted as a named export**
   (`classifyLabel` out of `createClassification`); never add a DOM shim to widen the
   net. For the drawing modules the **Playwright screenshot pass IS the regression
@@ -124,11 +130,12 @@ parametrized table — add every new sibling there. The Sun anchor is the regres
 `pytest` on a clone with no grids must pass with every data-gated test skipped.
 
 **`frontend/`** — static SPA, no bundler. `index.html`, `styles.css`, and
-`src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,layout,tooltip,sn,hz,hzhist,reddening,cmd,seismo}.js`.
+`src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,controls,layout,tooltip,sn,hz,hzhist,reddening,cmd,seismo}.js`.
 `main.js` owns state and pushes it to panels; most panels are **pushed-data
 consumers** (`update()`/`set*()`), not fetchers. `color.js` is the reference
 Planck→CIE→sRGB pipeline; `canvas.js` the shared HiDPI `fitCanvas`; `tooltip.js` the
-singleton hover layer. Three.js via CDN importmap, served by FastAPI.
+singleton hover layer; `controls.js` the slider/number-box arithmetic (one snap, one
+log-position map, one number-box commit — see the wiring rule below). Three.js via CDN importmap, served by FastAPI.
 **`frontend/tests/`** — `node --test` over the six DOM-free helpers, asserting the
 identities their own headers state (flux conservation, seismic invertibility, the
 CCM89 cross-language parity with `photometry.py`). See its README before adding.

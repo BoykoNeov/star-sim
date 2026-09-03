@@ -16,7 +16,8 @@ differently across versions (it fails outright on Node 24). One form that works
 everywhere beats three that each work somewhere.
 
 **What belongs here.** Only the modules that are pure functions of numbers —
-`color.js`, `hz.js`, `seismo.js`, `gravdark.js`, `classify.js`, `reddening.js`.
+`color.js`, `hz.js`, `seismo.js`, `gravdark.js`, `classify.js`, `reddening.js`,
+`controls.js`.
 Everything else in `frontend/src` draws on a canvas or owns DOM, and the
 Playwright screenshot pass (1440 + 390 px, zero console errors) stays the
 regression check for those. Do not add a DOM shim to widen this net: if a helper
@@ -41,6 +42,12 @@ A number pinned by running the current implementation is labeled
 an independent check. Keeping that line visible is the point of the harness —
 this project's recurring defect is *plausible but wrong*, and a golden value
 harvested from the code under test cannot catch it.
+
+`controls.js` is here for a second reason worth keeping in mind: it exists *because*
+the wiring split needed something a test could hold. `main.js` itself can't be
+imported here (it touches the DOM at module load), so the way to test anything it
+does is to extract the numbers-only part — which is also how the seven copies of the
+snap loop were found in the first place.
 
 Note for whoever next edits `canvas.js`: `seismo.js` imports it, and importing it
 under bare Node only works because `fitCanvas` touches `window` inside its body.

@@ -147,14 +147,48 @@ Target, in three safe moves:
    > scripted pass against HEAD and against the refactor gives identical panel-state
    > logs, zero console errors at 1440 + 390.
 
-3. **`init` → per-panel `wire*()` functions** in the panel modules
-   (`wireRotationControl`, `wireObserverControls`, …), each taking the shared
-   `ctx` object. `main.js` keeps state + the paint pipeline; wiring moves to where
-   the DOM ids are used.
+3. **`init` → per-panel `wire*()` functions.**  · **SHIPPED 2026-09-03**
+
+   > Done, with one deviation and one addition. The 650-line `init` is now 31 lines:
+   > `loadRangesAndSeedControls()` (the /ranges seed + the six data probes, returning
+   > false when the backend is unreachable so nothing gets wired over a dead
+   > backend), then 23 named `wire*()` calls, then the first fetch. Each `wire*()`
+   > owns one control group's listeners and carries the comment block that used to
+   > sit mid-`init`.
+   >
+   > **Deviation: they stay in `main.js`, not the panel modules.** The plan's `ctx`
+   > object cannot be small — a listener's whole job is to mutate the ~170 module
+   > state variables above it and re-run the paint pipeline, so the seam would have
+   > to expose dozens of mutable slots (wider than the one it removes) — and three of
+   > these toggles exist to enforce CROSS-panel exclusivity (He / α / isochrone share
+   > one HR slot), which is nobody's panel to own. §3 also wants panels to be
+   > consumers of a `StellarState`, not owners of app state.
+   >
+   > **Addition (what the plan asked for in its last line): the arithmetic did move
+   > out**, into a new DOM-free `frontend/src/controls.js` with 16 tests under
+   > `node --test`. Three shapes had been hand-written once per control:
+   > `nearestWithin`/`snapWithin` replaces **7** copies of the snap-to-landmark loop
+   > (mass, [Fe/H], age, WD, WR, SN, ⁵⁶Ni) plus the SN day→sample lookup;
+   > `logValueAt`/`logPosOf` replaces **6** log-position pairs (⁵⁶Ni, observer
+   > distance, M_star/M_co/P, M1/P); `commitNumber` replaces **9** number-box
+   > preambles (blank → commit nothing, garbage → commit nothing, else clamp).
+   > `massFromSliderPos` deliberately stays hand-written: its bounds are already
+   > log10 values and `massValue` is the source of truth for every fetch, so a
+   > pow/log round trip there would risk drift on the one number that must not
+   > drift. The inclination box also stays as it was — a cleared angle box means 0°,
+   > not "leave the view alone", so it is not a `commitNumber` site.
+   >
+   > **Acceptance was the A/B through the served app again**, widened to 60 scripted
+   > steps over two passes (spine sliders + all six number boxes incl. blank/clamp
+   > cases, every offered what-if toggle, the iso decouple slider, the observer
+   > knobs, WD enter/scrub/back, stripped mode → companion → the HMS-HMS custom
+   > orbit → the CO movie with both grid pickers, the SN gateway → ⁵⁶Ni slider +
+   > box + an in-endgame mass re-snap, 390 px): panel-state snapshots **identical**
+   > against HEAD at every step, zero console errors on both sides.
 
 Playwright screenshot pass (1440 + 390 px, zero console errors) is the regression
-check for each move — CLAUDE.md's standing rule. Move 3 is the first one that can
-lean on §2.3 as well: any pure helper it lifts out of `init` gets a `node --test`
+check for each move — CLAUDE.md's standing rule. Move 3 was the first one that could
+lean on §2.3 as well: the pure helpers it lifted out of `init` got a `node --test`
 file rather than only a screenshot.
 
 ### 2.2 The `create*` closure factories  · **accept**
@@ -228,8 +262,8 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
 2. ~~§2.1 move 1 (the latest-wins guard) and move 2 (chokepoint registry +
    `exitEndgame`)~~ — **shipped 2026-09-03**.
 3. ~~§2.3 `node --test` for the pure helpers; add to CI~~ — **shipped 2026-09-03**.
-4. §1.2 shared grid helpers; §1.3 spectra package.
-5. §2.1 move 3 (`init` → `wire*`).
+4. ~~§2.1 move 3 (`init` → `wire*`, + `controls.js`)~~ — **shipped 2026-09-03**.
+5. §1.2 shared grid helpers; §1.3 spectra package.
 6. §1.4–1.6 opportunistically.
 
 Each step is independently shippable and leaves the app byte-identical for the

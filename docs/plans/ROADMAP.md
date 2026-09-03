@@ -46,12 +46,13 @@ list. CLAUDE.md's "what's next" points at this file.
 
 ## Structure (from `structure-refactor.md` §4, in order)
 
-*Steps 1–3 shipped 2026-09-03 — `api.py` → routers, `main.js` guards + the living-only
-registry, and the `node --test` harness. See `SHIPPED.md` §6.*
+*Steps 1–4 shipped 2026-09-03 — `api.py` → routers, `main.js` guards + the living-only
+registry, the `node --test` harness, and `init` → per-panel `wire*()` (+ `controls.js`).
+See `SHIPPED.md` §6.*
 
 1. Shared grid helpers (`snap`, `load_npz`, missing-data hints); `spectra/` package.
-2. `init` → per-panel `wire*()` — the 650-line wiring block, now with the JS harness in
-   place to cover any pure helper it lifts out.
+2. `providers/mist.py` split along its existing seams (`_parse` / `_grid` / the class);
+   the fetch/bake table form; the `conftest.py` `requires(dataset)` factory.
 
 ## Cross-cutting cautions (unchanged)
 
