@@ -175,6 +175,19 @@ import `api`).
 > there is no `_modules_of()` analog to write: the check is about who reaches *into*
 > the provider layer, and the provider layer is not outside itself.
 >
+> **The re-export surface was narrowed on purpose.** `__init__.py` re-exports the 14
+> names that something outside the package actually imports (grepped across `tests/`,
+> `scripts/` and `star_sim/`), not every private name `mist.py` happened to expose:
+> `_parse_track_file`, `_load_all_tracks`, `_Track`, `_Grid`, `_Axis`, `_load_grid`
+> and the three blend helpers are now package-internal. `scripts/bake_mist_standalone.py`
+> names `_parse_track_file` in its *header prose* as the columns reference, which is
+> not an import and still reads correctly. The re-exports use the `X as X` form: a
+> plain re-import is what the ruff net flags, and listing 14 private names in `__all__`
+> would claim they are public API. All three external consumers were then imported for
+> real (`scripts/bake_mist_standalone.py`, `fetch_mist`, `fetch_mist_baked`) — `pytest`
+> never touches `scripts/`, so ruff resolving the names is not the same as the chain
+> working.
+>
 > The other §1.3 hazard was checked and is absent: **nothing monkeypatches
 > `mist.DATA_DIR`** (grepped — the 8 patch sites are all `spectra.SPECTRA_DATA_DIR`),
 > so the package-attribute problem that deferred the spectra directory split does not
