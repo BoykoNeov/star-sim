@@ -110,7 +110,7 @@ halves the file and lets `pytest --collect-only` list what is gated by what.
 
 ---
 
-## 2. Frontend (`frontend/src`, 11.7 kLOC, no harness)
+## 2. Frontend (`frontend/src`, 11.7 kLOC; pure helpers under `node --test` since §2.3)
 
 ### 2.1 `main.js` (4,985 lines; `init` alone 650)  · **highest payoff, medium risk**
 
@@ -153,7 +153,9 @@ Target, in three safe moves:
    the DOM ids are used.
 
 Playwright screenshot pass (1440 + 390 px, zero console errors) is the regression
-check for each move — CLAUDE.md's standing rule.
+check for each move — CLAUDE.md's standing rule. Move 3 is the first one that can
+lean on §2.3 as well: any pure helper it lifts out of `init` gets a `node --test`
+file rather than only a screenshot.
 
 ### 2.2 The `create*` closure factories  · **accept**
 
@@ -162,7 +164,38 @@ check for each move — CLAUDE.md's standing rule.
 drawing. Do not split for its own sake; extract only pure helpers that a test could
 call (the `hz.js` / `seismo.js` / `gravdark.js` precedent).
 
-### 2.3 A minimal JS harness  · **medium, cheap**
+### 2.3 A minimal JS harness  · **SHIPPED 2026-09-03**
+
+> Done: `frontend/tests/` — 50 tests over the six helpers under `node --test`, a
+> second CI job, no npm install. Three deviations from the text below.
+>
+> **(a) `classify.js` was not pure.** Its only export was `createClassification(el)`,
+> which writes `el.innerHTML`; all seven label functions were module-private. The fix
+> is the one §2.2 already blesses — extract the pure part as a named export
+> (`classifyLabel(state, mode, opts)`) and leave the factory as two DOM writes — *not*
+> a fake `el`, which would bake a DOM shim into a harness whose whole point is not
+> needing one. **The rule that follows: a helper earns a test by being extracted, never
+> by the harness growing a stub to reach it.**
+>
+> **(b) Invariants first, anchors second.** The plan listed only pinned values. A value
+> harvested from the code under test preserves a flipped sign or a wrong exponent
+> happily — this project's named defect class. So the first tests are the identities each
+> module's own header states: `kEq²·kPol = 1` and flux conservation in `gravdark.js`;
+> the seismic relations *inverting* back to the (M, R) put in, which pins four exponents
+> at once; CCM89 being **exactly** identity outside 1.1–8 µm⁻¹. The published anchors
+> (0.95/1.68 AU, 3090/135 µHz) and the two regressions the headers record (740 nm used
+> to render pure green; a 145 R☉ giant used to flatten to a 1.5 axis ratio) sit under
+> those. Every number pinned from current output is labeled as such in a comment.
+>
+> **(c) `reddening.js` parity is now enforced from both ends.** Its header calls it a
+> verbatim port of `photometry.py`'s `ccm89` and says to re-run the match by hand. A
+> JS-only test catches JS drift and nothing else, so the same three anchors are asserted
+> in `backend/tests/test_photometry.py::test_ccm89_matches_the_javascript_port` — a
+> change on either side now fails a test.
+>
+> Invocation: `cd frontend/tests && node --test`, bare, from inside the directory. A
+> glob argument needs Node ≥ 22 and a directory argument fails on Node 24; the bare form
+> works everywhere and is what CI runs.
 
 The pure helpers (`color.js`, `hz.js`, `seismo.js`, `gravdark.js`, `classify.js`,
 `reddening.js`) are ES modules with no DOM. Node ≥ 20 runs them as-is: a
@@ -194,7 +227,7 @@ the already-measured anchors (Sun → 0.95 / 1.68 AU; ν_max/Δν solar; Planck 
 1. §1.1 routers + error decorator (one PR; unlocks 1.2–1.3 cleanly).
 2. ~~§2.1 move 1 (the latest-wins guard) and move 2 (chokepoint registry +
    `exitEndgame`)~~ — **shipped 2026-09-03**.
-3. §2.3 `node --test` for the pure helpers; add to CI.
+3. ~~§2.3 `node --test` for the pure helpers; add to CI~~ — **shipped 2026-09-03**.
 4. §1.2 shared grid helpers; §1.3 spectra package.
 5. §2.1 move 3 (`init` → `wire*`).
 6. §1.4–1.6 opportunistically.

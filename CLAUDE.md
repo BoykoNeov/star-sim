@@ -84,9 +84,14 @@ must lie *between* its neighbors on the HR diagram at every phase.
 - **Evocative vs. modeled.** Corona, wind filaments, fireball boil, Ap/Bp spots and
   the NS dot are *evocative* (spec §7) — label them so. Teff colors, radii and
   tracks are modeled. Never let the two blur in a caption.
-- **No JS test harness → the Playwright screenshot pass IS the regression check.**
-  Use Playwright's bundled Chromium (`chrome --headless` hijacks the user's running
-  Chrome). Check 1440 + 390 px, zero console errors.
+- **Pure JS helpers are unit-tested; everything that draws is checked by screenshot.**
+  `frontend/tests/*.test.mjs` runs the DOM-free modules (`color` `hz` `seismo`
+  `gravdark` `classify` `reddening`) under `node --test` — no bundler, no npm, in CI.
+  A helper worth testing gets its pure part **extracted as a named export**
+  (`classifyLabel` out of `createClassification`); never add a DOM shim to widen the
+  net. For the drawing modules the **Playwright screenshot pass IS the regression
+  check**: Playwright's bundled Chromium (`chrome --headless` hijacks the user's
+  running Chrome), 1440 + 390 px, zero console errors.
 
 ## Where things are
 
@@ -124,6 +129,9 @@ parametrized table — add every new sibling there. The Sun anchor is the regres
 consumers** (`update()`/`set*()`), not fetchers. `color.js` is the reference
 Planck→CIE→sRGB pipeline; `canvas.js` the shared HiDPI `fitCanvas`; `tooltip.js` the
 singleton hover layer. Three.js via CDN importmap, served by FastAPI.
+**`frontend/tests/`** — `node --test` over the six DOM-free helpers, asserting the
+identities their own headers state (flux conservation, seismic invertibility, the
+CCM89 cross-language parity with `photometry.py`). See its README before adding.
 
 **`data/`** — downloaded/baked grids (gitignored). Most are pre-baked as GitHub
 Release assets — see [[star-sim-hosted-data-assets]] for the fetch tags.
@@ -139,6 +147,9 @@ uvicorn star_sim.api:app --reload                  # serves API + frontend at :8
 pytest                                             # sanity tests (skip if grids absent)
 ruff check star_sim tests scripts                  # what CI runs (syntax/undefined/unused only)
 python -m star_sim.fetch_mist_baked                # faster alternative: hosted pre-parsed buckets
+
+# frontend pure-helper tests (from frontend/tests/, no npm install)
+cd ../frontend/tests && node --test
 ```
 
 Open http://127.0.0.1:8000 — drag the mass slider; the whole UI transforms.

@@ -142,6 +142,27 @@ function strippedLabel(state, mStrip) {
   return { tag: "He★", name: "stripped helium star (proto-Wolf–Rayet)" };
 }
 
+// The label itself — the whole decision, with no DOM anywhere in it: state + mode in,
+// { tag, name } out. Split out from the renderer below so a test can call it (the
+// hz.js / seismo.js / gravdark.js precedent — see docs/plans/structure-refactor.md
+// §2.2/§2.3, whose text wrongly assumed this module was already pure). Returns null
+// for a state the panel would decline to repaint, which is exactly the old early
+// return.
+//
+// mode === "wd"/"wr"/"sn"/"stripped": the endgame/what-if label, not the MK type.
+export function classifyLabel(state, mode, opts) {
+  if (!state || state.Teff_K == null) return null;
+  if (mode === "wd" || mode === "wr" || mode === "sn" || mode === "stripped") {
+    return mode === "wr" ? wrLabel(state)
+      : mode === "sn" ? snLabel(state, !!(opts && opts.failed))
+      : mode === "stripped" ? strippedLabel(state, opts && opts.mStrip)
+      : wdLabel(state);
+  }
+  const t = tempClass(state.Teff_K);
+  const lum = lumClass(state);
+  return { tag: `${t.letter}${t.sub} ${lum.roman}`, name: commonName(t, lum) };
+}
+
 // Build the two child spans once; update() only rewrites their text + the type color.
 export function createClassification(el) {
   if (!el) return { update() {} };
@@ -150,24 +171,12 @@ export function createClassification(el) {
   const nameEl = el.querySelector(".sc-name");
 
   return {
-    // mode === "wd"/"wr"/"sn"/"stripped": show the endgame/what-if label, not the MK type.
     update(state, mode, opts) {
-      if (!state || state.Teff_K == null) return;
-      if (mode === "wd" || mode === "wr" || mode === "sn" || mode === "stripped") {
-        const w = mode === "wr" ? wrLabel(state)
-          : mode === "sn" ? snLabel(state, !!(opts && opts.failed))
-          : mode === "stripped" ? strippedLabel(state, opts && opts.mStrip)
-          : wdLabel(state);
-        typeEl.textContent = w.tag;
-        typeEl.style.color = teffToCSS(state.Teff_K);
-        nameEl.textContent = w.name;
-        return;
-      }
-      const t = tempClass(state.Teff_K);
-      const lum = lumClass(state);
-      typeEl.textContent = `${t.letter}${t.sub} ${lum.roman}`;
+      const label = classifyLabel(state, mode, opts);
+      if (!label) return;
+      typeEl.textContent = label.tag;
       typeEl.style.color = teffToCSS(state.Teff_K);
-      nameEl.textContent = commonName(t, lum);
+      nameEl.textContent = label.name;
     },
   };
 }

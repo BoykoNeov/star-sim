@@ -112,6 +112,30 @@ def test_ccm89_shape() -> None:
     assert a[1] > a[0] and a[2] > a[1]            # bluer → more extinction
 
 
+def test_ccm89_matches_the_javascript_port() -> None:
+    """The frontend's `reddening.js` is a hand-written port of this function, and the two
+    paint the *same* physical extinction side by side: the served magnitude/colour readout
+    comes from here, the reddened curve drawn beside it from there. The port's header says
+    it was matched at 5000 Å (optical branch), 2175 Å (the UV bump) and 1500 Å (deep UV) —
+    but that match was re-run by hand, so nothing caught a drift.
+
+    These three literals also appear verbatim in
+    `frontend/tests/reddening.test.mjs`, so **either** language changing its answer now
+    fails a test. Deliberately included: 1500 Å, where this implementation omits the deep-UV
+    F_a/F_b correction a textbook CCM89 would add — a "fix" on one side alone would silently
+    put the drawn overlay and the served number on different laws.
+    """
+    got = photometry.ccm89(np.array([5000.0, 2175.0, 1500.0]), rv=3.1)
+    assert got[0] == pytest.approx(1.122246878899302, rel=1e-12)
+    assert got[1] == pytest.approx(3.185101275314405, rel=1e-12)
+    assert got[2] == pytest.approx(2.6366457176802633, rel=1e-12)
+
+    # The other half of the contract: outside 1.1–8 µm⁻¹ the law is *exactly* identity, not
+    # merely small. The SED panel spans γ-ray → radio and leaves all but that slice alone.
+    off = photometry.ccm89(np.array([9500.0, 1200.0]), rv=3.1)
+    assert (off == 0.0).all()
+
+
 # --- route shape --------------------------------------------------------------
 
 @requires_spectra_data

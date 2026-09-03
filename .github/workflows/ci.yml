@@ -4,6 +4,10 @@ name: ci
 # lint clean and run the sanity suite with every data-gated test SKIPPED, never
 # failing. The §3 architecture tests and the stub/Lane-Emden/supernova/binary
 # physics invariants run for real here (see backend/tests/test_architecture.py).
+#
+# Two jobs, same contract: `backend` is ruff + pytest on a data-free clone;
+# `frontend` runs the pure JS helpers under Node's own test runner (no npm install,
+# no bundler — see frontend/tests/README.md). Neither reads anything under data/.
 on:
   push:
     branches: [main]
@@ -29,3 +33,22 @@ jobs:
         run: ruff check star_sim tests scripts
       - name: sanity tests on a data-free clone (data-gated tests must skip, not fail)
         run: python -m pytest -q -p no:cacheprovider
+
+  # The frontend's pure helpers (no DOM, no canvas, no fetch) under node --test.
+  # Node's own runner, no npm install and no bundler — see frontend/tests/README.md.
+  # The drawing modules are still checked by the Playwright screenshot pass, not here.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"           # the floor the harness targets; no npm deps to cache
+      - name: pure-helper tests (color, hz, seismo, gravdark, classify, reddening)
+        # Bare `node --test` from inside the directory, deliberately: it discovers
+        # *.test.mjs by Node's own naming convention on every Node ≥ 18, whereas a glob
+        # argument needs Node ≥ 22 and a directory argument is version-sensitive too.
+        run: node --test

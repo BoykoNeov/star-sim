@@ -58,6 +58,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Structure refactor plan](../plans/structure-refactor.md) — the structural debts with measured sizes (api routers, main.js chokepoint, shared grid helpers, JS harness) in payoff order.
 - [api/ router package](star-sim-api-routers.md) — the shipped api.py split: the swap point via `_deps.provider()`, the app-wide 422/503 handlers, and the two hazards the next file→package split will hit.
 - [main.js guards + chokepoint](star-sim-mainjs-guards-chokepoint.md) — the shipped frontend half: `makeLatest()` latest-wins guards (why a handle, not a null-resolving fetch) and the registered `dropLivingOnlyPanels()`.
+- [JS test harness](star-sim-js-test-harness.md) — `frontend/tests` under `node --test`: the six pure helpers, the extract-don't-shim rule, invariants-before-pinned-values, and the CCM89 parity pinned in both languages.
 - [CI data-free contract](star-sim-ci-data-free-contract.md) — ruff + data-free pytest in CI; the two MIST gates (working provider vs raw tracks); the §3 architecture table test.
 - [GitHub repo](star-sim-github-repo.md) — public repo location + how it was created.
 - [Always commit and push](always-commit-push.md) — standing preference: finish substantive changes by committing AND pushing unprompted.
