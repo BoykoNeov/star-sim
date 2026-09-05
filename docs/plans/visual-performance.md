@@ -25,6 +25,7 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `shots.mjs` | full-page + star-canvas screenshots, desktop 1440 and phone 390, Sun / 15 M☉ / 15 M☉ late / 0.3 M☉ | `node shots.mjs <suffix>` → `shots-<suffix>/` |
 | `heights.mjs` | the Controls panel's vertical budget: reserved vs *used* height for the panel and for the rotation section, plus every facet's box, across seven mass/rotation regimes at 1440 / 512 / 390 | `node heights.mjs` |
 | `rotmax.mjs` | the **tallest reachable** rotation section and Controls panel, swept over 22 masses × 5 [Fe/H] × rotation off/on at three widths — what a `min-height` floor has to cover | `node rotmax.mjs` |
+| `gatenote.mjs` | the `#incl-gate-note` floor against the state space that actually selects its text — **[Fe/H] × mass**, not mass alone, because the rotating-track toggle's visibility moves with metallicity — at all three widths | `node gatenote.mjs` |
 | `jumpcheck.mjs` | whether a state change actually **moves a neighbouring panel** — every panel's top/height before and after the two known overflow states. The difference between a real jump and a floor that is merely undersized on paper | `node jumpcheck.mjs` |
 | `panelshot.mjs` | just the Controls panel, desktop + phone, so a reserved-space change can be compared without diffing a 4000 px full-page shot | `node panelshot.mjs <suffix>` → `panel-<suffix>/` |
 | `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
@@ -276,9 +277,15 @@ case appears.
   track exists). A measured `min-height` (100 px desktop / 64 px phone) makes it **absorb** the
   slack rather than float at the top of a void; it is sized to the *tightest* state that shows
   it (1.35 M☉, track unticked — 198 px of the 316 px floor used at 1440 and 512, 234 px at 390),
-  so it can only ever eat space that is already reserved and already empty. Verified: every
-  state stays inside the floor (the tightest lands at 310/316 at all three widths), the tall
-  states are untouched, and the panel's own used height is unchanged. The wording uses the
+  so it can only ever eat space that is already reserved and already empty. Verified over the
+  state space that actually selects the note's text — **[Fe/H] × mass, not mass alone**, since
+  the toggle's visibility (and therefore which of the two texts shows) moves with metallicity:
+  `gatenote.mjs`, 6 × 9 × 3 widths = 162 states, **zero overflows**, worst 310 of 316 px at all
+  three widths. The state that looked dangerous (toggle hidden, period slider still present, so
+  the *longer* text shows) occurs at low [Fe/H] where no rotating grid exists, and is clear by a
+  wide margin — the toggle row and its caption leave the section at the same moment, freeing
+  more than the longer text costs. The tall states are untouched and the panel's own used
+  height is unchanged. The wording uses the
   code's ~1.2 M☉ Kraft break, **not** this plan's earlier "≳ 1.3 M☉", which never matched the gate.
 - **The shrink claim is RETRACTED.** This row used to promise "the panel's height on the Sun
   shrinks by ~150 px". It cannot: `.controls-panel`'s 992 px floor is the thrice-requested
@@ -308,11 +315,17 @@ so these are confirmed movements of neighbouring panels, not bookkeeping:
 - **The trade, and why it is not obvious.** Closing the jumps costs ~137 px (desktop) and
   ~145 px (phone) of *permanent* bottom slack on every star — more whitespace than the ~180 px
   V1 was opened to remove. Raising the floors and V1 pull in opposite directions.
-- **The third option, and the better one.** Both floors are dominated by ONE caption — the
-  two-sided uncertain-fate hedge in the gateway. Shortening it shrinks the jump *and* the
-  reservation, instead of trading one for the other. Measure the hedge's height first
-  (`panelmax.mjs` prints `gateway`), and treat it as an honesty-gate edit (the hedge exists to
-  refuse a false verdict — see [[star-sim-uncertain-fate-band]]), not a layout edit.
+- **A third option — with a hard limit on it.** Both floors are dominated by ONE caption: the
+  two-sided uncertain-fate hedge in the gateway (`panelmax.mjs` prints `gateway`). Shortening it
+  would shrink the jump *and* the reservation instead of trading one for the other. **But its
+  length is a CONSTRAINT, not the variable being optimised.** That caption is the 3rd honesty
+  gate — hedged on both sides deliberately, with a measured lower edge and a cited 8 M☉ ceiling
+  ([[star-sim-uncertain-fate-band]]) — and it is 158/196/253 px tall because refusing to give a
+  false verdict takes words. Trimming a hedge to fit a pixel budget is the "never paint a false
+  caption" rule inverted, and it is the failure this project keeps re-learning. The floors move
+  to fit the caption; the caption does not shrink to fit the floors. Whoever picks this row up
+  may re-word for density only if the hedge still refuses the verdict on both sides — and if it
+  cannot, the answer is to leave every number here alone and close the row as "measured → skip".
 - **Acceptance.** `jumpcheck.mjs` reports no moved panels in either trigger, at all three widths.
 
 ### V2. Row-height imbalance in the two-column layout · *idea, judgement call*
