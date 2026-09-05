@@ -98,7 +98,7 @@ after and paste the numbers into the commit message.
   for the star canvas only. One line; the Playwright DPR-2 screenshot changes slightly
   (softer granulation); the 2D canvases keep DPR 2.
 
-### P2. Vendor `three.module.js` (drop the unpkg dependency) · *sketched*
+### P2. Vendor `three.module.js` (drop the unpkg dependency) · **shipped 2026-09-05**
 
 - **Why.** The importmap points at `https://unpkg.com/three@0.160.0/…` (1.2 MB). A
   first visit with no network — or unpkg slow — leaves the 3D panel black with no error
@@ -110,6 +110,35 @@ after and paste the numbers into the commit message.
   `star.js`. 1.2 MB in git is the cost; it never changes.
 - **Acceptance.** Network log in `measure.mjs` shows no external request; `node --check`
   irrelevant (no JS change); screenshot pass byte-identical.
+- **What it actually was (measured 2026-09-05).** The “black 3D panel” in the *Why* above
+  **understated it**. `offline.mjs` (in §0's harness dir) runs two passes against the same
+  server with every non-localhost request aborted, rewriting the importmap back to the CDN
+  URL for the *before* pass:
+
+  | With all external network blocked | before (CDN) | after (vendored) |
+  |---|---|---|
+  | external requests attempted | 1 | **0** |
+  | console errors | 1 (`net::ERR_FAILED`) | **0** |
+  | `loading` skeleton cleared | **no** (30 s timeout) | yes |
+  | `/track` ever fetched | **no** | yes |
+
+  The whole app dies, not the 3D panel: `main.js` statically imports `star.js`, which
+  imports `three`, so the failed import takes down the entire module graph before any
+  panel runs. That is the honest version of the payoff.
+- **Also changed (the caption rule, applied to a code comment).** The comment above the
+  importmap said “internet assumed at dev time … a pinned CDN build is the simplest sane
+  setup” — false the moment this shipped, so it was rewritten. Same for CLAUDE.md's
+  “Three.js via CDN importmap”. `NOTICE` gained a three.js paragraph in the MIST entry's
+  form, and `LICENSE.three.txt` sits beside the build (the `LICENSE.MIST_codes.txt` idiom).
+- **Download integrity was verified, not assumed** (a truncated file or an error page would
+  reproduce exactly the black-panel symptom this removes): 1,272,972 bytes,
+  `REVISION = '160'`, zero relative sub-imports, and `node` imports it (416 exports).
+  sha256 `76dea8151bc9352aef3528b4262e249b2604f62543828328db978d060d61a495`.
+- **After numbers on the normal (online) path.** `measure.mjs 1 d3d11`: no external request
+  in the log, `/vendor/three-0.160.0.module.js` served in 14 ms, first paint 573 ms, idle
+  16.6 ms (vsync), star-canvas backing-store sets 0. Screenshot pass 1440 + 390: `errors []`.
+  Pixel-identical was **not** claimed — the surface granulation boils on a real clock, so no
+  two runs match byte-for-byte; the check is zero console errors plus a rendering star.
 
 ### P3. `/track` payload size (811 KB per mass change) · *measure first*
 

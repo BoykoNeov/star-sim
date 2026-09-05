@@ -20,6 +20,15 @@ That file is Copyright (c) 2017 Jieun Choi and is distributed under the MIT
 License, a copy of which sits beside it as LICENSE.MIST_codes.txt.
 Source: https://github.com/jieunchoi/MIST_codes
 
+This product bundles three.js r160 — the WebGL library the 3D star panel is
+built on — kept verbatim as the upstream unminified ES-module build at:
+
+    frontend/vendor/three-0.160.0.module.js
+
+That file is Copyright © 2010-2023 three.js authors and is distributed under
+the MIT License, a copy of which sits beside it as LICENSE.three.txt.
+Source: https://github.com/mrdoob/three.js
+
 The MIST/MESA stellar-evolution tracks and the model-atmosphere spectral grids
 that this software downloads at build time are NOT part of this repository and
 are NOT redistributed here. Each carries its own upstream license and citation

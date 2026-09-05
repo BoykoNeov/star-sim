@@ -161,7 +161,7 @@ consumers** (`update()`/`set*()`), not fetchers. `color.js` is the reference
 Planck→CIE→sRGB pipeline (memoized on the exact Teff — the HR track asks for ~800
 colours per scrub; keep the key exact, never quantized); `canvas.js` the shared HiDPI `fitCanvas`; `tooltip.js` the
 singleton hover layer; `controls.js` the slider/number-box arithmetic (one snap, one
-log-position map, one number-box commit — see the wiring rule below). Three.js via CDN importmap, served by FastAPI.
+log-position map, one number-box commit — see the wiring rule below). Three.js is **vendored** at `frontend/vendor/three-0.160.0.module.js` (importmap, no bundler, MIT licence beside it) so the app has **no external assets at all** — everything is served by FastAPI from disk.
 **`frontend/tests/`** — `node --test` over the six DOM-free helpers, asserting the
 identities their own headers state (flux conservation, seismic invertibility, the
 CCM89 cross-language parity with `photometry.py`). See its README before adding.

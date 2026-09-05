@@ -6,13 +6,19 @@
   <title>Star Simulator</title>
   <link rel="stylesheet" href="./styles.css" />
 
-  <!-- Three.js as an ES module from a CDN. This app is local-only (no bundle
-       budget, internet assumed at dev time — STAR_SIM_SPEC.md §2), so an
-       importmap to a pinned CDN build is the simplest sane setup. -->
+  <!-- Three.js as an ES module, vendored. This was a pinned CDN URL until the
+       measured visuals/performance pass (docs/plans/visual-performance.md P2)
+       pointed out it was the ONE asset in the app served off the network: a
+       first visit with no internet — or a slow unpkg — left the 3D panel black
+       with no error the user could act on, while every other panel worked from
+       disk. Same pinned r160 build, unminified (so a screenshot diff still
+       means something) and version-named, with its MIT licence beside it;
+       FastAPI's static mount serves it like the rest of frontend/. Still no
+       bundler (STAR_SIM_SPEC.md §2) — an importmap is the whole setup. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      "three": "./vendor/three-0.160.0.module.js"
     }
   }
   </script>
