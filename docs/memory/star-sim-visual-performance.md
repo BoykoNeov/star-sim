@@ -79,7 +79,25 @@ pixel, so it validates the screenshot baseline before P1 might change one).**
   the fix would read as dead code. `adapt.mjs <dpr> <gl> [mass]` joined the harness — it
   prints the star canvas **backing store** per window, the direct observable for this.
 
-**Still open (in the plan, payoff order):** measure the 811 KB `/track` parse before
-touching it (P3), static layers for `sed.js` / the comp cno view (P4), cold-disk first load
-(P5), the ~200 px reserved blank in the Controls panel on the default Sun (V1), row-height
-pairing in the two-column layout (V2).
+- **V1, the reserved blank — and the rule that reserved space must be LABELLED, not just
+  held.** The ~180 px void on the Sun was *inside* the rotation section (316 px reserved,
+  134 used), not panel slack, so the slot was fixable even though the panel's height is
+  frozen. It now carries an "Appears for…" line whose `min-height` is sized to the
+  **tightest state that shows it**, so the note absorbs slack it can never overflow. The
+  transferable part: a fixed reservation and a request for less whitespace **cannot both be
+  satisfied** — the reservation must cover the tallest reachable state, so the only real
+  levers are labelling the space or making the tall state shorter. A plan row that promises
+  a shrink *and* keeps the floor is asking for something impossible; read the acceptance
+  criterion against the constraint before implementing it.
+- **The floors were undersized, and `jumpcheck.mjs` is why we know it matters.** Both
+  `.rot-control` (316) and `.controls-panel` (992/1060) miss states that are reachable, and
+  the overflow **really does move 5–6 neighbouring panels** — 60/137/145 px at the
+  uncertain-fate hedge, 33/21 px on ticking the rotating track at 1.35 M☉. A floor being
+  numerically short is not the finding; a *neighbour moving* is, and those are different
+  questions. Always ask the second one before changing a floor: a panel that is not the
+  tallest in its flex row can overflow and shift nothing. Left unfixed on purpose — closing
+  it costs ~140 px of permanent whitespace everywhere, more than V1 removed (see V1b).
+
+**Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
+(P4), cold-disk first load (P5), the undersized floors + the three measured jumps (V1b),
+row-height pairing in the two-column layout (V2).

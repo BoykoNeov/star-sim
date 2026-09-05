@@ -506,6 +506,16 @@
             </span>
           </label>
         </div>
+
+        <!-- The inclination facet's slot is RESERVED whether or not the facet is showing (the
+             .rot-control min-height), so that ticking the rotating track can't shove the age
+             slider. That reservation was previously left EMPTY — ~180px of blank on the Sun,
+             which reads as a rendering fault rather than as held space. This note fills it with
+             the same "Appears for…" sentence the other gated controls use (the three-hide-reasons
+             rule), so the space is labelled instead of broken. It is shown ONLY when the facet is
+             hidden, i.e. only in states that already have slack, so it can never grow the
+             section's tallest state or the floor derived from it. -->
+        <p class="note rot-note incl-gate-note" id="incl-gate-note" hidden></p>
       </div>
 
       <!-- Chemically peculiar (Ap/Bp) — atlas Tier C, an EVOCATIVE surface what-if (spec §7,

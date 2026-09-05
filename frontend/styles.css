@@ -339,6 +339,29 @@ main {
    growth is absorbed by the whole-panel min-height and needs no per-note floor here. */
 #helium-note { min-height: 42px; }
 #alpha-track-note { min-height: 80px; }
+/* The "Appears for…" line that labels the inclination facet's reserved-but-empty slot.
+   Muted rather than accent-coloured: it describes space being HELD, not a live caption about
+   this star, so it should read as quieter than the facet notes above it.
+
+   The min-height makes the note ABSORB the slack instead of floating at the top of a void:
+   the section's floor reserves the facet's height in every state, so on a star that can't show
+   the facet the leftover read as a rendering fault (~180px of nothing on the Sun). The value is
+   the slack available in the TIGHTEST state that shows this note — 1.35 M☉ with the rotating
+   track unticked, where the toggle + its note + the period slider are all present (used 198px
+   of the 316px floor at both 1440 and 512, 234px at 390) — minus this element's own top margin.
+   Sized to the tightest state, so the note can never push the section past its floor: it only
+   ever eats space that is already reserved and already empty. Re-measure with heights.mjs if
+   either the floor or a facet's height changes. */
+.incl-gate-note {
+  color: var(--muted); margin-top: 12px;
+  min-height: 100px; display: flex; align-items: center;
+}
+/* `display:flex` above beats the UA [hidden]{display:none}, exactly as it does for
+   .rot-toggle-row, so the JS `.hidden = true` wouldn't hide it — re-assert it. */
+.incl-gate-note[hidden] { display: none; }
+/* The phone stack shares the 316px floor (no ≤480 override on .rot-control) but its facets are
+   taller — the tightest state uses 234px, leaving 82px — so this floor has to come down. */
+@media (max-width: 480px) { .incl-gate-note { min-height: 64px; } }
 /* The relocated period slider: left-aligned + full-width here (it was centered/narrow
    in the SED panel). Its label/note styling (.sed-rot*) is reused as-is. */
 .rot-control .sed-rot { max-width: none; margin: 8px 0 0; }

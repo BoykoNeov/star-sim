@@ -71,7 +71,7 @@ append here.
 | `/track` payload (792 KB per mass change) | **measured 2026-09-06 → skip** | `JSON.parse` is 0.8–2.6 ms, far under the 15 ms gate; the cost is server-side serialisation (32–79 ms), which gzip does not touch. No compression added. | `visual-performance.md` P3 |
 | Static layers for `sed.js` / the comp cno view | optional | The scrub is ~1.5 ms now; only if a slower target is measured. | `visual-performance.md` P4 |
 | Cold-disk first load (155 s) | only if still a complaint | Hidden behind the pre-warm; shortening it means a cache-format change and a re-bake of the hosted assets. | `visual-performance.md` P5 |
-| The Controls panel's ~200 px reserved blank on the default Sun | sketched, needs a 1440 + 390 jump check | Replace the fixed reservation with the one-line "Appears for…" note the other gated controls use. | `visual-performance.md` V1 |
+| The Controls panel's reserved floors are undersized — three measured jumps | **open, needs a decision** | Dragging to 6.5 M☉ at low [Fe/H] moves 5–6 panels by 60–145 px; ticking the rotating track at 1.35 M☉ moves them by 21–33 px on narrow widths. Closing it costs ~140 px of permanent whitespace everywhere — unless the uncertain-fate hedge caption (the single dominant term) is shortened instead. | `visual-performance.md` V1b |
 | Row-height pairing in the two-column layout | idea | Short beside tall (Readout ↔ Controls, Spectrum ↔ SED); three options, screenshot each. | `visual-performance.md` V2 |
 
 ## Cross-cutting cautions (unchanged)

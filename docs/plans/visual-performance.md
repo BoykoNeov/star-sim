@@ -25,6 +25,8 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `shots.mjs` | full-page + star-canvas screenshots, desktop 1440 and phone 390, Sun / 15 M☉ / 15 M☉ late / 0.3 M☉ | `node shots.mjs <suffix>` → `shots-<suffix>/` |
 | `heights.mjs` | the Controls panel's vertical budget: reserved vs *used* height for the panel and for the rotation section, plus every facet's box, across seven mass/rotation regimes at 1440 / 512 / 390 | `node heights.mjs` |
 | `rotmax.mjs` | the **tallest reachable** rotation section and Controls panel, swept over 22 masses × 5 [Fe/H] × rotation off/on at three widths — what a `min-height` floor has to cover | `node rotmax.mjs` |
+| `jumpcheck.mjs` | whether a state change actually **moves a neighbouring panel** — every panel's top/height before and after the two known overflow states. The difference between a real jump and a floor that is merely undersized on paper | `node jumpcheck.mjs` |
+| `panelshot.mjs` | just the Controls panel, desktop + phone, so a reserved-space change can be compared without diffing a 4000 px full-page shot | `node panelshot.mjs <suffix>` → `panel-<suffix>/` |
 | `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
 | `time_startup.py` | provider startup stages: dir discovery, fingerprint, `.npz` read per grid | `python time_startup.py` (backend venv) |
 
@@ -259,20 +261,59 @@ case appears.
 
 ## 4. Visuals — remaining items
 
-### V1. The reserved blank in the Controls panel · *sketched, needs a 1440 + 390 check*
+### V1. The reserved blank in the Controls panel · **shipped 2026-09-06 (label, not shrink)**
 
-- **What.** On the default Sun the Controls panel shows ~200 px of empty space between the
-  rotation caption and "Chemically peculiar" (`shots-base/desk-sun.png`, y ≈ 1900–2100).
-  It is the reserved height of the inclination / gravity-darkening facet, which only
-  appears for a rotating massive star — the anti-jump discipline in
-  [[star-sim-frontend-ux]].
-- **Recipe.** Replace the fixed reservation with the same treatment the other gated
-  controls already use (the "three hide reasons" rule): a one-line greyed "Appears for
-  rotating stars ≳ 1.3 M☉ (gravity darkening)" note in the facet's slot, sized like the
-  Ap/Bp note. Then check the jump: scrub mass 1 → 5 at 1440 and 390 and confirm the panels
-  below do not shift by more than the one line the note already occupies.
-- **Acceptance.** Screenshots before/after at both widths; the panel's height on the Sun
-  shrinks by ~150 px; no console errors.
+- **What.** On the default Sun the Controls panel showed ~180 px of empty space between the
+  rotation caption and "Chemically peculiar" (`panel-before/desk-sun.png`). It is the reserved
+  height of the inclination / gravity-darkening facet, which only appears for a rotating
+  massive star — the anti-jump discipline in [[star-sim-frontend-ux]].
+- **Measured** (`heights.mjs`, 1440 / 512 / 390): the blank is *inside* the rotation section,
+  not panel-floor slack — on the Sun at 1440 the section reserved 316 px and used 134. So the
+  slot itself was the fixable thing.
+- **Shipped.** `#incl-gate-note` — an "Appears for…" line in the facet's own slot, in the
+  three-hide-reasons idiom the other gated controls use, with two texts kept apart: the toggle
+  is present but unticked (one click away) vs. this star is below the Kraft break (no rotating
+  track exists). A measured `min-height` (100 px desktop / 64 px phone) makes it **absorb** the
+  slack rather than float at the top of a void; it is sized to the *tightest* state that shows
+  it (1.35 M☉, track unticked — 198 px of the 316 px floor used at 1440 and 512, 234 px at 390),
+  so it can only ever eat space that is already reserved and already empty. Verified: every
+  state stays inside the floor (the tightest lands at 310/316 at all three widths), the tall
+  states are untouched, and the panel's own used height is unchanged. The wording uses the
+  code's ~1.2 M☉ Kraft break, **not** this plan's earlier "≳ 1.3 M☉", which never matched the gate.
+- **The shrink claim is RETRACTED.** This row used to promise "the panel's height on the Sun
+  shrinks by ~150 px". It cannot: `.controls-panel`'s 992 px floor is the thrice-requested
+  "panels never change size on slider/click" rule, and the reservation must cover the tallest
+  state the section can reach. Empty pixels on the Sun go 182 → ~144 (the note claims the middle
+  of the slot); they cannot go to zero without cutting the reservation. Screenshots:
+  `temp/star-sim-perf/panel-{before,after2}/`.
+
+### V1b. The reserved floors are UNDERSIZED — three measured jumps · *open, needs a decision*
+
+Found while measuring V1, pre-existing, and **not** caused by it (the numbers below reproduce
+with the note reverted). `jumpcheck.mjs` records every panel's box before/after a state change,
+so these are confirmed movements of neighbouring panels, not bookkeeping:
+
+| Trigger | 1440 | 512 | 390 | What moves |
+|---|---|---|---|---|
+| Mass → 6.5 M☉ at [Fe/H] −1.5 (the two-sided uncertain-fate hedge) | +60 px | +137 px | +145 px | 5–6 panels below |
+| Ticking the rotating track at 1.35 M☉ | 0 (absorbed) | +33 px | +21 px | 6 panels below |
+
+- **Why.** `.rot-control`'s 316 px floor was set from a single "311 px at ~512 px" measurement
+  taken before the inclination facet grew its orientation-grid row; it now needs 351 / 369 /
+  405. And `.controls-panel`'s 992 / 1060 floors miss the gateway's tallest state entirely —
+  `panelmax.mjs` puts max non-rotation content at 717 / 794 / 870 (at 6.5 M☉, [Fe/H] −1.5,
+  where the hedge caption alone is 158 / 196 / 253 px).
+- **The arithmetic.** Required panel floor = max(non-rotation content) + rotation floor →
+  **1129 base / 1205 phone** against today's 992 / 1060.
+- **The trade, and why it is not obvious.** Closing the jumps costs ~137 px (desktop) and
+  ~145 px (phone) of *permanent* bottom slack on every star — more whitespace than the ~180 px
+  V1 was opened to remove. Raising the floors and V1 pull in opposite directions.
+- **The third option, and the better one.** Both floors are dominated by ONE caption — the
+  two-sided uncertain-fate hedge in the gateway. Shortening it shrinks the jump *and* the
+  reservation, instead of trading one for the other. Measure the hedge's height first
+  (`panelmax.mjs` prints `gateway`), and treat it as an honesty-gate edit (the hedge exists to
+  refuse a false verdict — see [[star-sim-uncertain-fate-band]]), not a layout edit.
+- **Acceptance.** `jumpcheck.mjs` reports no moved panels in either trigger, at all three widths.
 
 ### V2. Row-height imbalance in the two-column layout · *idea, judgement call*
 

@@ -63,6 +63,8 @@ const els = {
   incl: document.getElementById("incl"),
   inclNum: document.getElementById("incl-num"),
   inclNote: document.getElementById("incl-note"),
+  // The "Appears for…" line that labels the inclination facet's RESERVED-but-empty slot.
+  inclGateNote: document.getElementById("incl-gate-note"),
   axisGridToggle: document.getElementById("axis-grid-toggle"),
   // Ap/Bp chemically-peculiar toggle (atlas Tier C): an evocative surface what-if, gated to
   // the A/B main-sequence mass regime. Independent of the Rotation control.
@@ -2307,6 +2309,22 @@ function updateRotControl() {
       if (els.incl) els.incl.value = String(inclinationDeg);
       if (els.inclNum) els.inclNum.value = String(inclinationDeg);
       if (els.inclNote && !els.inclNote.textContent) applyInclination(inclinationDeg);
+    }
+  }
+  // -- the inclination facet's reserved slot, when the facet itself is hidden -- The section's
+  // min-height reserves the facet's height in EVERY live state (so ticking the toggle can't
+  // shove the age slider below it), which left a ~180px void on a star that can't show it. Say
+  // what the space is for, with the two reasons it is empty kept apart: the toggle is there but
+  // unticked (one click away) vs. this star is below the Kraft break (no rotating track at all).
+  // Shown only where the facet is hidden — i.e. only in states that already have slack — so it
+  // never enters the tallest reachable state the floor is measured from.
+  if (els.inclGateNote) {
+    els.inclGateNote.hidden = showIncl;
+    if (!showIncl) {
+      els.inclGateNote.textContent = showToggle
+        ? "Viewing angle (inclination + gravity darkening) appears with the rotating track above."
+        : "Appears for rotating tracks above the ~1.2 M☉ Kraft break: the viewing angle "
+          + "(inclination), which tilts the star and sets its gravity darkening.";
     }
   }
   // Inclination cue (user request): when the inclination control is available the 3D sphere tilts
