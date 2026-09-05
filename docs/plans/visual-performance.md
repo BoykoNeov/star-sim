@@ -23,6 +23,9 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `measure.mjs` | first paint (ms), every request's server time, rAF frame times idle / scrolled-off / after a scrub / at 8 M☉, backing-store `width` sets per canvas (a per-frame `setSize` shows up here), long tasks, every canvas's CSS vs backing size | `node measure.mjs <dpr> <swiftshader\|d3d11\|headed>` |
 | `profile_scrub.mjs` | CDP CPU profile of 120 synchronous age-slider `input` events → self and inclusive time per function | `node profile_scrub.mjs <mass>` |
 | `shots.mjs` | full-page + star-canvas screenshots, desktop 1440 and phone 390, Sun / 15 M☉ / 15 M☉ late / 0.3 M☉ | `node shots.mjs <suffix>` → `shots-<suffix>/` |
+| `heights.mjs` | the Controls panel's vertical budget: reserved vs *used* height for the panel and for the rotation section, plus every facet's box, across seven mass/rotation regimes at 1440 / 512 / 390 | `node heights.mjs` |
+| `rotmax.mjs` | the **tallest reachable** rotation section and Controls panel, swept over 22 masses × 5 [Fe/H] × rotation off/on at three widths — what a `min-height` floor has to cover | `node rotmax.mjs` |
+| `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
 | `time_startup.py` | provider startup stages: dir discovery, fingerprint, `.npz` read per grid | `python time_startup.py` (backend venv) |
 
 `node_modules` there is a junction to `M:\claud_projects\temp\star-sim-pw\node_modules`
@@ -190,19 +193,33 @@ time never approaches the threshold; and it screenshots after 1.2–1.5 s waits,
   Pixel-identical was **not** claimed — the surface granulation boils on a real clock, so no
   two runs match byte-for-byte; the check is zero console errors plus a rendering star.
 
-### P3. `/track` payload size (811 KB per mass change) · *measure first*
+### P3. `/track` payload size · **measured 2026-09-06 → no change made**
 
-- **Why.** Every settled mass/[Fe/H] change sends ~800 rows × ~55 fields as full-precision
-  JSON: 70–240 ms server time plus the client `JSON.parse`. On localhost the transfer is
-  free; the *serialisation + parse* is what costs.
-- **Recipe, step 1 (measure).** `performance.now()` around the `fetchJSON("/track…")`
-  await and around `JSON.parse` (temporarily) at 1, 8 and 60 M☉. If the parse is < 15 ms,
-  stop here and record the number in this row.
-- **Step 2 (only if measured).** Add `GZipMiddleware(minimum_size=4096)` in
-  `api/__init__.py` (stdlib zlib; ~80 % smaller). Do **not** round floats — several tests
-  compare route output to provider output exactly, and the honesty rule prefers the real
-  number.
-- **Acceptance.** `measure.mjs` request log: `/track` `ms` and `size`; pytest unchanged.
+- **Why it was on the list.** Every settled mass/[Fe/H] change sends the whole track as
+  full-precision JSON. The row assumed "~800 rows × ~55 fields = 811 KB" and 70–240 ms of
+  server time, and asked whether the client `JSON.parse` was hurting the scrub.
+- **The gate the row set for itself.** "If the parse is < 15 ms, stop here and record the
+  number." Measured with `p3_track.mjs` (§0 harness; three runs per mass, median of the
+  medians, warm server, localhost, 1440 px, d3d11):
+
+  | mass | payload | rows × fields | `fetch` (incl. server) | `JSON.parse` |
+  |---|---|---|---|---|
+  | 1 M☉ | 792 KB | 606 × 20 | 79 ms | **2.6 ms** |
+  | 8 M☉ | 786 KB | 606 × 20 | 79 ms | **2.5 ms** |
+  | 60 M☉ | 597 KB | 461 × 20 | 63 ms | **1.8 ms** |
+  | 0.3 M☉ | 332 KB | 253 × 20 | 32 ms | **0.8 ms** |
+
+- **Verdict: skip, and do not re-propose.** The parse is 6× under the gate at its worst.
+  The row's own premise was also wrong in the direction that matters: the payload is
+  **606 rows × 20 fields**, not ~800 × ~55, so the "811 KB" figure came from somewhere
+  other than this route's current output. What remains is the 32–79 ms inside `fetch`,
+  which is **server-side serialisation** — `GZipMiddleware` would shrink the bytes on a
+  link that is already free (localhost) and would *add* CPU to the part that actually
+  costs. Compression is the wrong tool here; it was not added.
+- **If a remote-serve use case ever appears**, this changes: transfer stops being free and
+  gzip becomes worth it. That is the only condition under which to reopen this row. Even
+  then, do **not** round the floats — several tests compare route output to provider output
+  exactly, and the honesty rule prefers the real number.
 
 ### P4. Static layers for the two panels that still repaint per scrub · *optional*
 

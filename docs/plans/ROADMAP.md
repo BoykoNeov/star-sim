@@ -47,19 +47,28 @@ list. CLAUDE.md's "what's next" points at this file.
 
 ## Structure (from `structure-refactor.md` §4, in order)
 
-*Steps 1–4 shipped 2026-09-03 — `api.py` → routers, `main.js` guards + the living-only
-registry, the `node --test` harness, and `init` → per-panel `wire*()` (+ `controls.js`).
-See `SHIPPED.md` §6.*
+**Every step of `structure-refactor.md` §4 has shipped** (2026-09-03): `api.py` → routers,
+`main.js` guards + the living-only registry, the `node --test` harness, `init` → per-panel
+`wire*()` (+ `controls.js`), the shared `_grid.py` leaf + the spectra loader collapse, the
+`providers/mist/` package split, the `conftest.py` dataset table, and the fetch framework
+(`_fetch.py` + `star-sim-fetch`). See `SHIPPED.md` §6.
 
-1. Shared grid helpers (`snap`, `load_npz`, missing-data hints); `spectra/` package.
-2. `providers/mist.py` split along its existing seams (`_parse` / `_grid` / the class);
-   the fetch/bake table form; the `conftest.py` `requires(dataset)` factory.
+What is left of that plan is two **open questions, not queued work** — neither has a reason
+to act yet, and both are recorded in place so they are not re-proposed as tasks:
+
+| Question | Where |
+|---|---|
+| §1.3's deferred `spectra/` **directory** split — waiting for a reason bigger than line count. | `structure-refactor.md` §1.3 |
+| The bake-script packaging question (no `star-sim-bake` twin; `scripts/` sits outside the packaged tree). | `structure-refactor.md` §1.5 |
+
+New structural debt gets a fresh section in that plan with its own measurement, not an
+append here.
 
 ## Visuals & performance (from `visual-performance.md` §§3–4, in payoff order)
 
 | Item | Status | Hook | Where |
 |---|---|---|---|
-| `/track` payload (811 KB per mass change) | measure first | Time the fetch + `JSON.parse`; only then `GZipMiddleware`. Never round the floats. | `visual-performance.md` P3 |
+| `/track` payload (792 KB per mass change) | **measured 2026-09-06 → skip** | `JSON.parse` is 0.8–2.6 ms, far under the 15 ms gate; the cost is server-side serialisation (32–79 ms), which gzip does not touch. No compression added. | `visual-performance.md` P3 |
 | Static layers for `sed.js` / the comp cno view | optional | The scrub is ~1.5 ms now; only if a slower target is measured. | `visual-performance.md` P4 |
 | Cold-disk first load (155 s) | only if still a complaint | Hidden behind the pre-warm; shortening it means a cache-format change and a re-bake of the hosted assets. | `visual-performance.md` P5 |
 | The Controls panel's ~200 px reserved blank on the default Sun | sketched, needs a 1440 + 390 jump check | Replace the fixed reservation with the one-line "Appears for…" note the other gated controls use. | `visual-performance.md` V1 |
