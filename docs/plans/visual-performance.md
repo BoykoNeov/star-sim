@@ -142,9 +142,11 @@ observable: 420 CSS px × the pixel ratio).
 Also unchanged: `measure.mjs 2 d3d11` through the scroll-off/on park cycle, the scrub and a
 mass change — backing store 840² at the end, `canvasWidthSets.star-canvas` still 0 (the
 2026-09-05 realloc fix holds; the new `resize()` call adds no per-frame churn). Screenshot
-pass 1440 + 390: `errors []`. The screenshot pass runs on d3d11, so it never trips the
-adaptation — worth knowing before anyone re-points it at software GL and reads the softer
-granulation as a regression.
+pass 1440 + 390: `errors []`. Two independent things keep the screenshot pass out of the
+adaptation's way, and it is worth knowing both before anyone re-points it at software GL and
+reads softer granulation as a regression: `shots.mjs` runs on **d3d11**, where the frame
+time never approaches the threshold; and it screenshots after 1.2–1.5 s waits, **inside the
+3 s warm-up**, where no sample counts at all. The warm-up alone would protect it.
 
 ### P2. Vendor `three.module.js` (drop the unpkg dependency) · **shipped 2026-09-05**
 

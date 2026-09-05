@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"           # the floor the harness targets; no npm deps to cache
-      - name: pure-helper tests (color, hz, seismo, gravdark, classify, reddening)
+      - name: pure-helper tests (color, hz, seismo, gravdark, classify, reddening, controls, framebudget)
         # Bare `node --test` from inside the directory, deliberately: it discovers
         # *.test.mjs by Node's own naming convention on every Node ≥ 18, whereas a glob
         # argument needs Node ≥ 22 and a directory argument is version-sensitive too.
