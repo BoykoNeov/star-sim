@@ -952,10 +952,18 @@ export function createStar(canvas) {
   coMarker.visible = false;
   scene.add(coMarker);
 
+  // Compare against the BACKING-STORE size renderer.setSize will actually set
+  // (CSS px × pixel ratio), not the CSS size. The old `canvas.width !== w` test was
+  // only ever equal at devicePixelRatio 1: on any HiDPI screen (DPR 1.5–2, i.e.
+  // most laptops) it was true on EVERY frame, so setSize reallocated the WebGL
+  // drawing buffer 60× a second — measured at DPR 2: 840×840 re-created per frame,
+  // and a full-frame giant dropping to 0.6 fps on a software GL. A real resize
+  // (the responsive layout re-packing the panel) still passes through.
   function resize() {
     const w = canvas.clientWidth || 1;
     const h = canvas.clientHeight || 1;
-    if (canvas.width !== w || canvas.height !== h) {
+    const pr = renderer.getPixelRatio();
+    if (canvas.width !== Math.floor(w * pr) || canvas.height !== Math.floor(h * pr)) {
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -1340,7 +1348,30 @@ export function createStar(canvas) {
   // it runs at full speed young (uFade 0) and freezes at the end (uFade 1).
   let fireballTime = 0;
   let lastElapsed = 0;
+  // Render only while the canvas is actually on screen. The dashboard is a long
+  // page (a phone scrolls the star off within one flick), and the surface shader
+  // is the single most expensive thing in the app (two Worley octaves × two
+  // granule generations per fragment) — burning it for a panel nobody can see
+  // costs battery and steals GPU/main-thread time from the 2D panels being
+  // scrubbed. The loop parks itself when the observer says "off screen" and the
+  // observer restarts it on re-entry; `update()` calls made meanwhile just set
+  // uniforms, which the first visible frame picks up. The clock keeps running,
+  // so the boil/rotation resume at the right phase rather than replaying.
+  let onScreen = true;
+  if (typeof IntersectionObserver !== "undefined") {
+    new IntersectionObserver((entries) => {
+      const now = entries[entries.length - 1].isIntersecting;
+      if (now === onScreen) return;
+      onScreen = now;
+      if (now && !raf) {
+        lastElapsed = clock.getElapsedTime();   // no fireball time-jump across the pause
+        raf = requestAnimationFrame(animate);
+      }
+    }).observe(canvas);
+  }
   function animate() {
+    raf = 0;
+    if (!onScreen) return;   // parked; the observer restarts us
     resize();
     // Drive time from a real clock so boil/rotation speed is frame-rate
     // independent (not a per-frame increment).

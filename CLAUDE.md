@@ -18,7 +18,9 @@ stays small on purpose. Per-feature history, gotchas, measured values and the
   everything proposed-but-unbuilt; update it (not a second list) when scope changes.
   Shipped rows move to **`docs/plans/SHIPPED.md`** (the build log). Two standing plans:
   **`science-hurdles.md`** (the tiered ledger of every measured scientific limit + the
-  NEXT list) and **`structure-refactor.md`** (the structural debts, ordered).
+  NEXT list) and **`structure-refactor.md`** (the structural debts, ordered). A third,
+  **`visual-performance.md`**, is the measured visuals/performance ledger — read it (and
+  reuse its harness in `M:\claud_projects\temp\star-sim-perf`) before any perf work.
 - **git** — dates, "chunk N built", test counts, per-PR narration.
 
 When you finish work: put the durable knowledge in the topic file, and only touch
@@ -115,6 +117,9 @@ must lie *between* its neighbors on the HR diagram at every phase.
   `api/__init__.py` (the swap point) and routers reach it via `_deps.provider()`, never
   by import. The 422/503 ladder is app-wide in `_errors.py`, not per route: a router
   body is the sibling call and nothing else.
+  `__init__.py` also owns the **startup pre-warm** (a lifespan daemon thread that loads the
+  MIST grids + the spectrum cube while the browser opens; `STAR_SIM_NO_PREWARM=1` opts out;
+  `TestClient(app)` never runs it, so tests stay data-free).
 - Siblings (each bypasses `PROVIDER`): `lane_emden.py` · `structure.py` · `spectra.py` ·
   `supernova.py` · `binary.py` · `posydon.py` · `posydon_co.py` · `helium.py` ·
   `alpha.py` · `bpass.py` · `isochrone.py` · `photometry.py`.
@@ -153,7 +158,8 @@ parametrized table — add every new sibling there. The Sun anchor is the regres
 `src/{main,star,hr,comp,lane,structure,roche,spectrum,sed,scale,classify,color,canvas,controls,layout,tooltip,sn,hz,hzhist,reddening,cmd,seismo}.js`.
 `main.js` owns state and pushes it to panels; most panels are **pushed-data
 consumers** (`update()`/`set*()`), not fetchers. `color.js` is the reference
-Planck→CIE→sRGB pipeline; `canvas.js` the shared HiDPI `fitCanvas`; `tooltip.js` the
+Planck→CIE→sRGB pipeline (memoized on the exact Teff — the HR track asks for ~800
+colours per scrub; keep the key exact, never quantized); `canvas.js` the shared HiDPI `fitCanvas`; `tooltip.js` the
 singleton hover layer; `controls.js` the slider/number-box arithmetic (one snap, one
 log-position map, one number-box commit — see the wiring rule below). Three.js via CDN importmap, served by FastAPI.
 **`frontend/tests/`** — `node --test` over the six DOM-free helpers, asserting the

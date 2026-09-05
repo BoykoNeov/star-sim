@@ -28,6 +28,9 @@ is the sibling call and nothing else.
 
 from __future__ import annotations
 
+import contextlib
+import os
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -50,7 +53,39 @@ PROVIDER: StellarStateProvider = MISTProvider()
 #   star_sim/api/__init__.py -> parents [0]=api [1]=star_sim [2]=backend [3]=repo root
 FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend"
 
-app = FastAPI(title="Star Simulator", version="0.1.0")
+# --- startup pre-warm ---------------------------------------------------------
+# Every grid is lazy (nothing touches disk at import), which is right for tests and
+# for a data-free clone — but it means the FIRST request that needs a grid pays the
+# whole cold read, and on a cold OS file cache that is the slow part: measured on
+# the dev box, the ten MIST `.npz` caches (450 MB) took 155 s on the first /track and
+# the 98 MB spectrum cube 11 s on the first /photometry, while the page sat on its
+# first-load shimmer. The server, though, is idle for the seconds it takes the user
+# to open the browser, so we start the same two loads in a daemon thread the moment
+# the app is up. A request that arrives mid-load blocks on the provider's load lock
+# and gets the warmed grid; nothing is duplicated. Anything missing (a fresh clone)
+# is swallowed — the pre-warm is an optimization, never a gate: the 503 ladder on
+# the real request still says what to fetch.
+#
+# Only a *served* app pre-warms: FastAPI runs the lifespan when uvicorn starts it,
+# not when a test builds `TestClient(app)` without a context manager, so the
+# data-free CI run and the unit tests never spawn the thread. `STAR_SIM_NO_PREWARM=1`
+# opts out explicitly (profiling, or a laptop on battery).
+def _prewarm() -> None:
+    with contextlib.suppress(Exception):
+        PROVIDER.parameter_ranges()          # every MIST grid (the provider's whole load)
+    with contextlib.suppress(Exception):
+        from ..photometry import photometry_payload
+        photometry_payload(5772.0, 4.44, 0.0, 1.0)   # the spectrum cube + the filter curves
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if not os.environ.get("STAR_SIM_NO_PREWARM"):
+        threading.Thread(target=_prewarm, name="star-sim-prewarm", daemon=True).start()
+    yield
+
+
+app = FastAPI(title="Star Simulator", version="0.1.0", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # localhost-only app; keep simple

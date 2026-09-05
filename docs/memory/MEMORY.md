@@ -55,6 +55,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Hosted data assets](star-sim-hosted-data-assets.md) — the pre-baked GitHub Release tags and what each holds; which MESA output is hosted vs excluded; the adding-buckets test hazard.
 - [Roadmap (future-work index)](../plans/ROADMAP.md) — the canonical index of everything proposed-but-unbuilt. Update this, not a second list; shipped rows go to [SHIPPED.md](../plans/SHIPPED.md).
 - [Science hurdles ledger](../plans/science-hurdles.md) — every measured scientific limit, tiered T1–T4/OOS with a verdict; the prioritised NEXT list.
+- [Visual & performance pass](star-sim-visual-performance.md) — the 2026-09-05 measured pass: the per-frame WebGL realloc at DPR ≥ 1.5, the Planck integral dominating the age scrub (exact-key memo), concurrent probes, the startup pre-warm thread; the harness in `temp/star-sim-perf` and the plan for what remains.
 - [Structure refactor plan](../plans/structure-refactor.md) — the structural debts with measured sizes, in payoff order; all shipped except §1.5 (the fetch/bake framework).
 - [api/ router package](star-sim-api-routers.md) — the shipped api.py split: the swap point via `_deps.provider()`, the app-wide 422/503 handlers, and the two hazards the next file→package split will hit.
 - [Fetch framework (`_fetch.py` + `star-sim-fetch`)](star-sim-fetch-framework.md) — the shipped §1.5: `run()` is a baked fetcher's whole body, one user-agent formatter, the 21-fetcher catalogue; the four corrections to the plan and the cp1252 gate.

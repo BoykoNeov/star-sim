@@ -12,6 +12,7 @@ age once on the blended track. See the package docstring for the full contract.
 from __future__ import annotations
 
 import math
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -160,6 +161,10 @@ class MISTProvider:
         # metallicity out as ground truth, and by the API to curate the axis.
         self._want_fehs = tuple(fehs) if fehs is not None else None
         self._loaded = False
+        # Serializes the (slow, seconds-to-minutes on a cold disk) first load: the API
+        # pre-warms in a background thread while the first requests arrive, and the
+        # request-handler threadpool would otherwise race it into a duplicate parse.
+        self._load_lock = threading.Lock()
         # One `_Axis` per rotation rate (vvcrit bucket). The default axis (0.0, or
         # the lowest available) is what every existing query uses; a rotating axis
         # is selected only when a request passes vvcrit != 0.0.
@@ -179,7 +184,11 @@ class MISTProvider:
     def _ensure_loaded(self) -> None:
         if self._loaded:
             return
+        with self._load_lock:
+            if not self._loaded:      # a concurrent caller may have finished meanwhile
+                self._load()
 
+    def _load(self) -> None:
         eep_dirs = _find_eep_dirs(self._data_dir)
         if not eep_dirs:
             raise ProviderDataMissing(_FETCH_HINT.format(data_dir=self._data_dir))

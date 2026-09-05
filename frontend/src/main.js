@@ -4601,6 +4601,14 @@ function relocateOverlayControls() {
 //
 // Everything below is called once, from init(), in file order.
 
+// Every optional-data probe has answered (see loadRangesAndSeedControls): if a star is
+// already painted, re-run refresh() so the `update*Control()` gates see the flags and the
+// data-backed controls appear. If no track has landed yet there is nothing to do — the
+// pending refreshTrack() ends in its own refresh(), which reads the same flags.
+function settleProbes() {
+  if (mode === "live" && currentTrack && currentTrack.length) refresh();
+}
+
 // Seed every control's bounds from the provider's own ranges, and probe once for
 // the optional data each what-if needs (a control that could only ever 503 must
 // not appear — the honesty gate). Returns false when the backend is unreachable,
@@ -4613,25 +4621,36 @@ async function loadRangesAndSeedControls() {
     logMassMax = Math.log10(ranges.mass_msun.max);
     validMassMin = ranges.mass_msun.min;
     validMassMax = ranges.mass_msun.max;
-    try { providerName = (await fetchJSON("/health")).provider || ""; } catch { /* non-fatal */ }
-    // The initial-helium overlay has data only if the (never-hosted) MESA runs were generated
-    // locally — probe once so the toggle is hidden on a fresh clone (the /rotation_status gate
-    // pattern; a control that could only ever 503 shouldn't appear).
-    try { heliumHasGrid = !!(await fetchJSON("/helium_status")).has_grid; } catch { heliumHasGrid = false; }
-    try { alphaHasGrid = !!(await fetchJSON("/alpha_status")).has_grid; } catch { alphaHasGrid = false; }
-    // The coeval-population overlay likewise has data only if the BPASS cube was host-baked
-    // (gitignored) — probe once so the toggle is hidden on a fresh clone.
-    try {
-      const ps = await fetchJSON("/population_status");
-      populationHasGrid = !!ps.has_grid;    // SED-spectrum cube (Chunk 1) — gates the toggle
-      populationHasHRD = !!ps.has_hrd;      // HR-diagram number cube (Chunk 2) — adds the HR cloud
-    } catch { populationHasGrid = false; populationHasHRD = false; }
-    try { isoHasGrid = !!(await fetchJSON("/isochrone_status")).has_grid; } catch { isoHasGrid = false; }
-    // Observer's view (Axis A) needs the absolute-flux spectrum cube (filters.json is committed).
-    // There's no dedicated status route (A2 is frontend-only), so probe /photometry once with the
-    // Sun's parameters: a 200 means the cube is present → offer the toggle; a 503 hides it.
-    try { await fetchJSON("/photometry?teff=5772&logg=4.44&feh=0&radius_rsun=1"); observerHasData = true; }
-    catch { observerHasData = false; }
+    // The optional-data probes run CONCURRENTLY, and the first star does NOT wait for them.
+    // They used to be awaited one after another, ahead of the track fetch: on a cold server
+    // the /photometry probe alone (it loads the 98 MB spectrum cube) held the first paint for
+    // 11 s, with the page shimmering the whole time. Each probe only flips a `*HasGrid` flag
+    // that the `update*Control()` gates read inside refresh(), so the star can paint first and
+    // the controls appear when their data answers: settleProbes() re-runs refresh() once every
+    // probe has landed if a track is already on screen (else the pending refreshTrack's own
+    // refresh() will see the flags). A control that could only ever 503 still never appears —
+    // the flags start false and the probes are the only thing that sets them.
+    const probes = [
+      fetchJSON("/health").then((h) => { providerName = h.provider || ""; }, () => { /* non-fatal */ }),
+      // The initial-helium overlay has data only if the (never-hosted) MESA runs were generated
+      // locally — probe once so the toggle is hidden on a fresh clone (the /rotation_status gate
+      // pattern; a control that could only ever 503 shouldn't appear).
+      fetchJSON("/helium_status").then((r) => { heliumHasGrid = !!r.has_grid; }, () => { heliumHasGrid = false; }),
+      fetchJSON("/alpha_status").then((r) => { alphaHasGrid = !!r.has_grid; }, () => { alphaHasGrid = false; }),
+      // The coeval-population overlay likewise has data only if the BPASS cube was host-baked
+      // (gitignored) — probe once so the toggle is hidden on a fresh clone.
+      fetchJSON("/population_status").then((ps) => {
+        populationHasGrid = !!ps.has_grid;    // SED-spectrum cube (Chunk 1) — gates the toggle
+        populationHasHRD = !!ps.has_hrd;      // HR-diagram number cube (Chunk 2) — adds the HR cloud
+      }, () => { populationHasGrid = false; populationHasHRD = false; }),
+      fetchJSON("/isochrone_status").then((r) => { isoHasGrid = !!r.has_grid; }, () => { isoHasGrid = false; }),
+      // Observer's view (Axis A) needs the absolute-flux spectrum cube (filters.json is committed).
+      // There's no dedicated status route (A2 is frontend-only), so probe /photometry once with the
+      // Sun's parameters: a 200 means the cube is present → offer the toggle; a 503 hides it.
+      fetchJSON("/photometry?teff=5772&logg=4.44&feh=0&radius_rsun=1")
+        .then(() => { observerHasData = true; }, () => { observerHasData = false; }),
+    ];
+    Promise.all(probes).then(settleProbes);
 
     els.mass.min = 0; els.mass.max = 1; els.mass.step = 0.0005;
     els.mass.value = sliderFromMass(1.0); // default: the Sun

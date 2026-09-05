@@ -91,12 +91,31 @@ function linearToSRGB(c) {
 // outside sRGB at the temperature extremes), THEN normalize by the brightest
 // channel — we want full-brightness chromaticity for a self-luminous disk, so we
 // keep the hue and discard the absolute luminance (size + glow carry brightness).
+//
+// MEMOIZED on the exact (clamped) Teff. The Planck×CMF integral is ~80 multiplies
+// and three transcendental calls per wavelength step, and the HR track paints
+// ~800 segments per scrub, each asking for its own segment colour — measured at
+// 60–80 % of a whole age-scrub repaint before this cache. A track's Teff values
+// repeat EXACTLY from one scrub to the next (same array, same rows), so an
+// exact-key cache hits ~100 % and is byte-identical to recomputing (no
+// quantization — a rounded key would shift colours by a unit or two and break
+// the screenshot regression check). Bounded: cleared when it fills, which only a
+// pathological caller (millions of distinct Teffs) ever reaches. Callers only
+// destructure or `.map` the result, so sharing the cached array is safe; mutate
+// a copy if you ever need to.
+const LINEAR_CACHE = new Map();
+const LINEAR_CACHE_MAX = 8192;
 export function teffToLinearRGB(kelvin) {
   const t = Math.max(1000, Math.min(40000, kelvin)); // grid never leaves this band
+  const hit = LINEAR_CACHE.get(t);
+  if (hit) return hit;
   const [X, Y, Z] = planckToXYZ(t);
   let rgb = xyzToLinearSRGB(X, Y, Z).map((c) => Math.max(0, c));
   const max = Math.max(rgb[0], rgb[1], rgb[2]) || 1;
-  return rgb.map((c) => c / max);
+  rgb = rgb.map((c) => c / max);
+  if (LINEAR_CACHE.size >= LINEAR_CACHE_MAX) LINEAR_CACHE.clear();
+  LINEAR_CACHE.set(t, rgb);
+  return rgb;
 }
 
 // Teff -> display sRGB in 0..1 (gamma applied last). For the 2D UI; the 3D star
@@ -105,9 +124,17 @@ export function teffToRGB(kelvin) {
   return teffToLinearRGB(kelvin).map(linearToSRGB);
 }
 
+// The CSS string is cached too (same exact-key reasoning): it is the form the
+// 2D panels ask for per segment, and strings are immutable so sharing is free.
+const CSS_CACHE = new Map();
 export function teffToCSS(kelvin) {
+  const hit = CSS_CACHE.get(kelvin);
+  if (hit) return hit;
   const [r, g, b] = teffToRGB(kelvin).map((v) => Math.round(v * 255));
-  return `rgb(${r}, ${g}, ${b})`;
+  const css = `rgb(${r}, ${g}, ${b})`;
+  if (CSS_CACHE.size >= LINEAR_CACHE_MAX) CSS_CACHE.clear();
+  CSS_CACHE.set(kelvin, css);
+  return css;
 }
 
 // Monochromatic wavelength (nm) -> the perceived sRGB hue of light at exactly

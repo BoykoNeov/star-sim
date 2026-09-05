@@ -19,6 +19,7 @@ list. CLAUDE.md's "what's next" points at this file.
 |---|---|
 | [`science-hurdles.md`](science-hurdles.md) | The tiered ledger of every measured scientific limit (T1 residual / T2 data-limited / T3 parametrized / T4 evocative / out-of-scope) with a verdict per row and a prioritised **NEXT** list (§6). |
 | [`structure-refactor.md`](structure-refactor.md) | The project-structure debts with measured sizes (api routers, shared grid helpers, `main.js` chokepoint/registry, a `node --test` harness) and the order to pay them. |
+| [`visual-performance.md`](visual-performance.md) | The measured visuals/performance ledger: the 2026-09-05 numbers, what shipped, and the remaining rows (each with a recipe + acceptance check) — plus the reusable measurement harness in `temp/star-sim-perf`. |
 
 ## Open science (from `science-hurdles.md` §6, in priority order)
 
@@ -53,6 +54,18 @@ See `SHIPPED.md` §6.*
 1. Shared grid helpers (`snap`, `load_npz`, missing-data hints); `spectra/` package.
 2. `providers/mist.py` split along its existing seams (`_parse` / `_grid` / the class);
    the fetch/bake table form; the `conftest.py` `requires(dataset)` factory.
+
+## Visuals & performance (from `visual-performance.md` §§3–4, in payoff order)
+
+| Item | Status | Hook | Where |
+|---|---|---|---|
+| Adaptive pixel ratio for the 3D star | sketched | The surface shader is 108 hash evaluations per fragment; at DPR 2 that is ~76 M per frame. Drop the star canvas's pixel ratio by 0.5 when a 60-frame mean exceeds 25 ms; never on a capable GPU. | `visual-performance.md` P1 |
+| Vendor `three.module.js` | sketched | The only external asset (1.2 MB from unpkg); no network → a black 3D panel with no actionable error. | `visual-performance.md` P2 |
+| `/track` payload (811 KB per mass change) | measure first | Time the fetch + `JSON.parse`; only then `GZipMiddleware`. Never round the floats. | `visual-performance.md` P3 |
+| Static layers for `sed.js` / the comp cno view | optional | The scrub is ~1.5 ms now; only if a slower target is measured. | `visual-performance.md` P4 |
+| Cold-disk first load (155 s) | only if still a complaint | Hidden behind the pre-warm; shortening it means a cache-format change and a re-bake of the hosted assets. | `visual-performance.md` P5 |
+| The Controls panel's ~200 px reserved blank on the default Sun | sketched, needs a 1440 + 390 jump check | Replace the fixed reservation with the one-line "Appears for…" note the other gated controls use. | `visual-performance.md` V1 |
+| Row-height pairing in the two-column layout | idea | Short beside tall (Readout ↔ Controls, Spectrum ↔ SED); three options, screenshot each. | `visual-performance.md` V2 |
 
 ## Cross-cutting cautions (unchanged)
 

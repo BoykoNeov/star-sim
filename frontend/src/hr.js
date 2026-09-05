@@ -161,7 +161,10 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
       ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, H - PAD); ctx.stroke();
       ctx.globalAlpha = 1;
       const kK = Math.round(10 ** logT / 100) / 10;
-      ctx.fillText(`${kK}kK`, x, H - PAD + 15);
+      // Baseline 12 px under the frame (was 15): the axis title below sits on its
+      // own line at H − 4, and the two rows used to overlap where the 10kK tick
+      // lands under the centred title (measured: a 3 px collision at every width).
+      ctx.fillText(`${kK}kK`, x, H - PAD + 12);
     }
     // L gridlines — tick numbers right-aligned in the lane just left of the
     // frame, so they never collide with the rotated axis title further left.
@@ -175,7 +178,9 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     }
     // axis titles
     ctx.textAlign = "center";
-    ctx.fillText("Teff →  (hot left)", W / 2, H - 6);
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillText("Teff →  (hot left)", W / 2, H - 4);
+    ctx.font = "12px system-ui, sans-serif";
     ctx.save();
     ctx.translate(12, H / 2); ctx.rotate(-Math.PI / 2);
     ctx.fillText("L / L☉", 0, 0);
@@ -428,17 +433,39 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // so the marker's place in the whole life is legible without touching the age
     // slider. (With no marker yet, everything draws as "past" for one frame.)
     const split = splitIndex(track);
-    for (let i = 1; i < track.length; i++) {
-      const a = track[i - 1], b = track[i];
-      const past = i <= split;
-      ctx.lineWidth = past ? 1.8 : 1.1;
-      ctx.globalAlpha = past ? 0.9 : 0.3;
-      ctx.beginPath();
-      ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
-      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
-      ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+    strokeRuns(track, split, [1.8, 0.9], [1.1, 0.3]);
+  }
+
+  // Stroke a Teff-coloured, past/future-split polyline as RUNS: consecutive segments
+  // whose 8-bit colour string and past/future side are identical join one path and
+  // one stroke() call. Colour changes slowly along a track, so an ~800-segment
+  // polyline strokes in a few dozen calls instead of ~800 beginPath/stroke pairs (this
+  // loop was 18 % of a whole age-scrub repaint as one stroke per segment). It also
+  // reads better: overlapping butt-capped segments used to double-blend at every
+  // vertex, which on the α 0.3 future track showed as a faint bead at each row.
+  function strokeRuns(list, split, pastStyle, futureStyle) {
+    let runCss = null, runPast = null;
+    const flush = () => {
+      if (runCss === null) return;
+      const [width, alpha] = runPast ? pastStyle : futureStyle;
+      ctx.lineWidth = width;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = runCss;
       ctx.stroke();
+    };
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i];
+      const past = i <= split;
+      const css = teffToCSS((a.Teff_K + b.Teff_K) / 2);
+      if (css !== runCss || past !== runPast) {
+        flush();
+        runCss = css; runPast = past;
+        ctx.beginPath();
+        ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
+      }
+      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
     }
+    flush();
     ctx.globalAlpha = 1;
   }
 
@@ -460,18 +487,7 @@ export function createHR(canvas, cssW = 300, cssH = 260) {
     // Same past/future split as the living track: the scrubbed-through part of the
     // cooling/stripping journey draws solid, what's still ahead dimmer.
     const split = splitIndex(endgameTrack);
-    for (let i = 1; i < endgameTrack.length; i++) {
-      const a = endgameTrack[i - 1], b = endgameTrack[i];
-      const past = i <= split;
-      ctx.lineWidth = past ? 2 : 1.3;
-      ctx.globalAlpha = past ? 1 : 0.35;
-      ctx.beginPath();
-      ctx.moveTo(xOf(Math.log10(a.Teff_K)), yOf(Math.log10(a.L_lsun)));
-      ctx.lineTo(xOf(Math.log10(b.Teff_K)), yOf(Math.log10(b.L_lsun)));
-      ctx.strokeStyle = teffToCSS((a.Teff_K + b.Teff_K) / 2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    strokeRuns(endgameTrack, split, [2, 1], [1.3, 0.35]);
   }
 
   // A faint preview of where a WD-bound star is headed once its visible life ends, drawn on
