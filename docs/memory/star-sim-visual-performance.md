@@ -1,6 +1,6 @@
 ---
 name: star-sim-visual-performance
-description: "The 2026-09-05 visuals/performance pass: what was measured (cold-disk first load, per-frame WebGL realloc at DPR≥1.5, the Planck integral dominating the age scrub), the seven fixes, the harness in temp/, and the plan doc for what remains"
+description: "The 2026-09-05 visuals/performance passes: the seven measured fixes, then three.js vendored (the app now has no external assets) and the star's adaptive pixel ratio; the harness in temp/ and what remains"
 metadata:
   type: project
 ---
@@ -45,7 +45,41 @@ taken through the real served app with a Playwright harness kept in
 **Verified fine, don't re-propose:** real-GPU frame time is vsync in every state; the phone
 star canvas; the supergiant's look; class bands / iso-radius lines at 390 px.
 
-**Open (in the plan, payoff order):** adaptive pixel ratio for integrated GPUs (P1), vendor
-`three.module.js` (P2), measure the 811 KB `/track` parse before touching it (P3), the
-~200 px reserved blank in the Controls panel on the default Sun (V1), row-height pairing in
-the two-column layout (V2).
+**Second batch, shipped 2026-09-05 (P2 then P1 — that order on purpose: P2 cannot move a
+pixel, so it validates the screenshot baseline before P1 might change one).**
+
+- **P2, three.js vendored.** The importmap pointed at unpkg — the one asset in the app
+  served off the network. The plan predicted “a black 3D panel with no actionable error”;
+  **measured with all external requests blocked, the whole app dies**: `main.js` statically
+  imports `star.js`, which imports `three`, so one dead module takes down the entire graph
+  — the `loading` skeleton never clears and `/track` is never fetched. After: 0 external
+  requests, 0 console errors. The generalisable bit is the *method*: the before/after ran
+  against one server in one script, with Playwright rewriting the importmap back to the CDN
+  URL for the before pass (`offline.mjs`) — no stashing, no second checkout. Download
+  integrity was verified rather than assumed (bytes, `REVISION`, no sub-imports, node
+  imports it) because a truncated file reproduces exactly the symptom being removed.
+- **P1, the star drops resolution instead of frames.** SwiftShader, DPR 2, 15 M☉ giant:
+  **100 ms/frame → 33.4 ms**, backing store 840² → 420² in two steps. On the real GPU at
+  the same DPR and mass it **never fires** — 24 s of vsync, backing store unmoved.
+  **The whole difficulty was the negative case**, and it is the transferable lesson: the
+  positive case (a slow machine adapting) is exactly what a runtime pass shows, and the
+  expensive mistake (adapting when nothing is wrong — a silent visual regression on
+  hardware that was fine) is exactly what it *cannot* show. So the decision came out of
+  the render loop as pure `framebudget.js` and got unit-tested against a cold start, a GC
+  pause and a backgrounded tab. That is also where the plan's own recipe was wrong twice:
+  a **mean** would adapt on one 3000 ms frame from a returning background tab, and it had
+  **no warm-up**, so a fast GPU would adapt during shader compile — violating the
+  acceptance line the same recipe wrote. Read a recipe's acceptance criterion as the
+  spec and the recipe's mechanism as a draft.
+- **Two harness facts worth keeping.** `shots.mjs` runs on **d3d11 (real GPU)**, so it
+  never trips the adaptation — check that before re-pointing it at software GL and reading
+  softer granulation as a regression. And `measure.mjs` samples 3 s per phase while the
+  render loop runs continuously across the whole page life, which is why P1's window is
+  two × 30 frames rather than the planned 60: 60-frame windows would outlast a phase and
+  the fix would read as dead code. `adapt.mjs <dpr> <gl> [mass]` joined the harness — it
+  prints the star canvas **backing store** per window, the direct observable for this.
+
+**Still open (in the plan, payoff order):** measure the 811 KB `/track` parse before
+touching it (P3), static layers for `sed.js` / the comp cno view (P4), cold-disk first load
+(P5), the ~200 px reserved blank in the Controls panel on the default Sun (V1), row-height
+pairing in the two-column layout (V2).

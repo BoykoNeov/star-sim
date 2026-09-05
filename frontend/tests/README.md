@@ -17,12 +17,21 @@ everywhere beats three that each work somewhere.
 
 **What belongs here.** Only the modules that are pure functions of numbers —
 `color.js`, `hz.js`, `seismo.js`, `gravdark.js`, `classify.js`, `reddening.js`,
-`controls.js`.
+`controls.js`, `framebudget.js`.
 Everything else in `frontend/src` draws on a canvas or owns DOM, and the
 Playwright screenshot pass (1440 + 390 px, zero console errors) stays the
 regression check for those. Do not add a DOM shim to widen this net: if a helper
 is worth testing, extract the pure part into a named export the way
 `classifyLabel` was extracted out of `createClassification`.
+
+`framebudget.js` is that rule applied on purpose rather than after the fact. The
+adaptive pixel ratio it decides lives inside `star.js`'s WebGL render loop, and its
+*positive* case — a slow GPU adapting — was verified through the real runtime, which
+is the stronger check. What a runtime pass cannot show is the mistake that matters:
+adapting when nothing is wrong, which is a silent visual regression on hardware that
+was fine. So the decision — warm-up, window median, two consecutive windows — came
+out as a pure function fed frame times, and the tests here are mostly negative: a
+vsync-locked machine, a cold start, one multi-second stall from a backgrounded tab.
 
 **What the tests assert, in priority order.**
 

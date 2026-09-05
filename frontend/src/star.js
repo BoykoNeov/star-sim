@@ -29,6 +29,7 @@
 // picture, the diagram and the numbers always describe one consistent star (§3).
 
 import * as THREE from "three";
+import { createFrameBudget } from "./framebudget.js";
 
 import { teffToLinearRGB } from "./color.js";
 import { rotationDistortion } from "./gravdark.js";
@@ -1348,6 +1349,52 @@ export function createStar(canvas) {
   // it runs at full speed young (uFade 0) and freezes at the end (uFade 1).
   let fireballTime = 0;
   let lastElapsed = 0;
+
+  // --- Adaptive pixel ratio (integrated GPUs) ---------------------------------
+  // The surface shader is the most expensive thing in the app: two Worley octaves
+  // × two granule generations = 108 hash evaluations per fragment, so at DPR 2 the
+  // 420-px canvas is 705 k fragments ≈ 76 M hashes per frame. On the dev box (RTX,
+  // d3d11) that is free — every state idles at 16.7 ms, i.e. vsync — but on software
+  // GL a full-frame giant measured 100 ms/frame, and a real integrated GPU at DPR 2
+  // is the realistic worst case for a "runs locally" teaching app. When the budget
+  // is clearly blown we spend fewer fragments rather than degrade the shader: the
+  // star gets softer granulation, the 2D panels keep their full DPR, and the app
+  // stays interactive. One way only — raising it back would flicker between two looks.
+  //
+  // The decision itself is `framebudget.js`, kept pure so the false-positive cases
+  // can be unit-tested. They are the whole difficulty here: the acceptance bar is
+  // "a capable GPU never adapts", so a false trigger is a silent visual regression
+  // on hardware that was fine. Three defaults exist only to prevent one:
+  //
+  //   * warmupS — shader compilation and first paint land in the first frames, so a
+  //     fast GPU can look slow on a cold start.
+  //   * the window MEDIAN, not the mean (the plan said mean) — one stall must not
+  //     decide; see the note in framebudget.js.
+  //   * two consecutive windows, plus forget() at every seam where frame times stop
+  //     being comparable (the park below, and a ratio change).
+  //
+  // windowFrames is 30 rather than the plan's 60 because at ~100 ms/frame a 60-frame
+  // window is 6 s and two of them 12 s — longer than a measurement phase in the perf
+  // harness, so the fix would read as dead code. Two 30-frame windows are the same
+  // 60 frames of evidence in half the wall-clock. Measured (SwiftShader, DPR 2, a
+  // 15 M☉ giant): 100 ms → 33.3 ms after two steps; on d3d11 it never fires.
+  const frameBudget = createFrameBudget();
+
+  function adaptPixelRatio(dt, t) {
+    const pr = renderer.getPixelRatio();
+    const verdict = frameBudget.sample(dt * 1000, t, pr);
+    if (!verdict) return;
+    renderer.setPixelRatio(verdict.ratio);
+    resize();                                  // adopt the new backing size now
+    frameBudget.forget();                      // judge the next window on the new ratio
+    // info, not warn/error: the screenshot pass greps for errors, and this is a
+    // successful adaptation, not a fault.
+    console.info(
+      `star: ${verdict.median.toFixed(0)} ms/frame — lowering the 3D star's pixel ratio ` +
+      `${pr} → ${verdict.ratio} to keep it interactive (2D panels unchanged).`
+    );
+  }
+
   // Render only while the canvas is actually on screen. The dashboard is a long
   // page (a phone scrolls the star off within one flick), and the surface shader
   // is the single most expensive thing in the app (two Worley octaves × two
@@ -1365,6 +1412,7 @@ export function createStar(canvas) {
       onScreen = now;
       if (now && !raf) {
         lastElapsed = clock.getElapsedTime();   // no fireball time-jump across the pause
+        frameBudget.forget();                   // a window must not straddle the pause
         raf = requestAnimationFrame(animate);
       }
     }).observe(canvas);
@@ -1398,6 +1446,7 @@ export function createStar(canvas) {
       fireballMat.uniforms.uTime.value = fireballTime;
     }
     renderer.render(scene, camera);
+    adaptPixelRatio(dt, t);
     raf = requestAnimationFrame(animate);
   }
   animate();

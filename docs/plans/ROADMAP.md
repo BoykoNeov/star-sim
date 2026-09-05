@@ -59,7 +59,6 @@ See `SHIPPED.md` §6.*
 
 | Item | Status | Hook | Where |
 |---|---|---|---|
-| Adaptive pixel ratio for the 3D star | sketched | The surface shader is 108 hash evaluations per fragment; at DPR 2 that is ~76 M per frame. Drop the star canvas's pixel ratio by 0.5 when a 60-frame mean exceeds 25 ms; never on a capable GPU. | `visual-performance.md` P1 |
 | `/track` payload (811 KB per mass change) | measure first | Time the fetch + `JSON.parse`; only then `GZipMiddleware`. Never round the floats. | `visual-performance.md` P3 |
 | Static layers for `sed.js` / the comp cno view | optional | The scrub is ~1.5 ms now; only if a slower target is measured. | `visual-performance.md` P4 |
 | Cold-disk first load (155 s) | only if still a complaint | Hidden behind the pre-warm; shortening it means a cache-format change and a re-bake of the hosted assets. | `visual-performance.md` P5 |

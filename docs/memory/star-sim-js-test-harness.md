@@ -1,17 +1,27 @@
 ---
 name: star-sim-js-test-harness
-description: The frontend/tests node --test harness — what it covers (seven helpers incl. controls.js), the extract-don't-shim rule, and the cross-language CCM89 parity pin.
+description: The frontend/tests node --test harness — what it covers (eight helpers incl. controls.js and framebudget.js), the extract-don't-shim rule, and the cross-language CCM89 parity pin.
 metadata:
   type: project
 ---
 
 # The JS test harness (`frontend/tests`, shipped 2026-09-03)
 
-**Current state.** 66 tests over seven DOM-free modules under Node's own runner, in
+**Current state.** 73 tests over eight DOM-free modules under Node's own runner, in
 CI as a second job. Run it with `cd frontend/tests && node --test` — bare, from
 inside the directory. Covered: `color.js`, `hz.js`, `seismo.js`, `gravdark.js`,
-`classify.js`, `reddening.js`, `controls.js`. Not covered, by design: everything that
-draws. `frontend/tests/README.md` is the operational doc; this file is the why.
+`classify.js`, `reddening.js`, `controls.js`, `framebudget.js`. Not covered, by design:
+everything that draws. `frontend/tests/README.md` is the operational doc; this file is the why.
+
+**`framebudget.js` (+7 tests, 2026-09-05) is the harness used *before* the fact.** The
+adaptive pixel ratio it decides lives in `star.js`'s WebGL loop, and its positive case
+(a slow GPU adapting) was measured through the real runtime — the stronger check. It was
+extracted anyway, because the case that actually threatened the feature is one no runtime
+pass can produce on demand: adapting when nothing is wrong. Its tests are therefore mostly
+negative — a vsync-locked machine, a cold start's shader compile, one multi-second frame
+from a backgrounded tab — and two of them encode corrections to the plan's own recipe.
+The rule generalises: **when the failure you fear is a false positive, extract and unit-test;
+when it is a false negative, the runtime pass is usually enough.**
 
 **`controls.js` (+16 tests, 2026-09-03) is the harness paying off as intended.** It was
 *created* by the `init` → `wire*()` split — `main.js` can't be imported here (it touches

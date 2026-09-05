@@ -78,7 +78,7 @@ a cold read, copy the `.npz` under a new name and time a read of the copy.
 Each row: **what / why / recipe / acceptance**. Do one row per commit; run §0 before and
 after and paste the numbers into the commit message.
 
-### P1. Adaptive pixel ratio for the 3D star (integrated GPUs) · *sketched*
+### P1. Adaptive pixel ratio for the 3D star (integrated GPUs) · **shipped 2026-09-05**
 
 - **Why.** The surface shader is two Worley octaves × two granule generations = 108 hash
   evaluations per fragment; at DPR 2 the 420-px canvas is 705 k fragments (~76 M hashes per
@@ -97,6 +97,54 @@ after and paste the numbers into the commit message.
 - **Alternative if the above is judged too clever:** cap `setPixelRatio(Math.min(1.5, dpr))`
   for the star canvas only. One line; the Playwright DPR-2 screenshot changes slightly
   (softer granulation); the 2D canvases keep DPR 2.
+
+**What shipped, and the three places it departs from the recipe above.** All three are
+consequences of the acceptance bar being the NEGATIVE case — “a capable GPU never adapts,
+so the look is untouched there.” A false trigger is a silent visual regression on hardware
+that was fine, so the design is shaped around not producing one.
+
+1. **Median, not mean.** `dt` is rAF pacing, so one stall decides a mean: a GC pause, a
+   mass-change fetch, or a backgrounded tab returning (frames stop entirely there, so the
+   first one back is a multi-second dt — one 3000 ms frame among 29 healthy ones averages
+   116 ms and would adapt twice). The median ignores all of it and equals the mean for the
+   case we want, every frame slow.
+2. **Two 30-frame windows, not one 60-frame window.** Same 60 frames of evidence, half the
+   wall-clock. At ~100 ms/frame a 60-frame window is 6 s and two of them 12 s — longer than
+   a `measure.mjs` sampling phase, so the fix would have read as dead code.
+3. **A warm-up (3 s), which the recipe did not have.** Shader compilation and first paint
+   land in the first frames; without it a fast GPU can adapt on a cold start, which is
+   precisely the outcome the acceptance line forbids.
+
+The decision left the render loop as **`frontend/src/framebudget.js`** — pure, fed frame
+times, no canvas or clock of its own — so those three cases are unit-tested
+(`framebudget.test.mjs`, 7 tests, mostly negative). The runtime pass cannot show them; it
+can only show the positive case. `star.js` keeps the WebGL half: `setPixelRatio`, the
+immediate `resize()`, and `frameBudget.forget()` at the two seams where frame times stop
+being comparable (a ratio change, and the IntersectionObserver un-parking the loop).
+
+**Measured.** Baseline taken by restoring the committed `star.js` on the same running
+server, so both runs differ only in this change (`adapt.mjs <dpr> <gl> [mass]`, added to
+the §0 harness — it prints the star canvas backing store per window, which is the direct
+observable: 420 CSS px × the pixel ratio).
+
+| SwiftShader, DPR 2, 15 M☉ late (full-frame giant) | before | after |
+|---|---|---|
+| frame time, sustained | 100 ms | **33.4 ms** |
+| star backing store | 840² | 420² |
+| adaptations | — | 2 → 1.5 at t=11 s, 1.5 → 1 at t=16.5 s, then quiet |
+
+| d3d11 (RTX 5090), DPR 2, same giant, 24 s | before | after |
+|---|---|---|
+| frame time | 16.7 ms (vsync) | 16.7 ms (vsync) |
+| star backing store | 840² | **840² — never moves** |
+| adaptations | — | **none** |
+
+Also unchanged: `measure.mjs 2 d3d11` through the scroll-off/on park cycle, the scrub and a
+mass change — backing store 840² at the end, `canvasWidthSets.star-canvas` still 0 (the
+2026-09-05 realloc fix holds; the new `resize()` call adds no per-frame churn). Screenshot
+pass 1440 + 390: `errors []`. The screenshot pass runs on d3d11, so it never trips the
+adaptation — worth knowing before anyone re-points it at software GL and reads the softer
+granulation as a regression.
 
 ### P2. Vendor `three.module.js` (drop the unpkg dependency) · **shipped 2026-09-05**
 
