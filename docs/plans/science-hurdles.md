@@ -56,6 +56,51 @@ Not done (measured, not worth it): the 0.35–0.45 M☉ nodes are slightly *wors
 under log-M (0.018→0.026 at 0.35). That is the fully-convective transition, where
 neither weighting is right; the fix there is grid density, not weighting.
 
+### 1.1a Grid density at 0.3–0.45 M☉ — **CLOSED (2026-09-06): measured, not visible** · T1
+
+§1.1 left one conditional follow-on ("only if a user-visible drag artefact is ever
+measured there"), and it was the last open row on the roadmap's science list. It has now
+been measured, and there is no artefact to fix.
+
+**Method — the drag itself, not a dex table.** The mass slider's real step is 0.0005 of a
+0..1 position spanning 0.1–300 M☉ logarithmically, i.e. **0.00174 dex per step**, so
+0.24→0.52 M☉ is **194 discrete slider steps** and the 0.05-wide grid brackets are crossed
+6 times. Every step was evaluated through the provider at five age-slider positions, and
+each state converted to a pixel on the **HR panel's real geometry, taken from the served
+app** (654 × 320 CSS px at a 1440 viewport → **441.5 px/dex in log Teff, 26.0 px/dex in
+log L**; the low-mass end never triggers `applyLivingBounds`, confirmed by screenshot-
+diffing the panel at 0.30 / 0.325 / 0.35 / 0.40 / 0.45 M☉ — only a ~40 × 40 px box around
+the marker ever changes and the axis furniture never moves). The whole 0.24 → 0.52 M☉ drag
+moves the dot **33–36 px**; one grid bracket is **~3.7 px**.
+
+| What the user does | Measured |
+|---|---|
+| **Crosses a grid node** (the artefact, if any) | per-step dot travel **0.146 px at node steps vs 0.145 px between them**; max 0.39 px either way — statistically the same step |
+| **The kink** (change in per-step travel at a node) | **≤ 0.13 px**, peaking at 0.3501 and 0.4505 M☉ — the nodes, as expected, but an eighth of a pixel |
+| **Reads Teff / L / R** while dragging | smooth: Teff changes 0.066 %/step, and the largest *change in that rate* at a node is 0.038 %/step (L: 1.0 %/step, node kink ≤ 0.21) |
+| **Reversals** (dot backing up) | 0–3 over 193 steps, each ≤ 0.15 px — i.e. sub-pixel jitter at a turning point, not a wobble |
+| **Sits mid-bracket** (offset from truth) | held-out node rebuilt from its neighbours: **1.7 px at 0.35, 2.4 px at 0.45** median on the HR panel (Teff dominates — that axis is 17× more pixel-dense per dex than L) |
+| **Track window** | 253 rows at *every* mass across the sweep — no row-count discontinuity to jump the age slider |
+
+**The held-out numbers are a 2× upper bound, not the error.** Holding out 0.35 forces a
+blend across 0.30→0.40, twice the 0.05 spacing the UI actually uses; a two-point blend's
+error goes as the bracket squared, so the real mid-bracket offset is **~4× smaller** —
+under a pixel. For scale, the same construction at 1.00 M☉ (the best-understood part of
+the grid) gives a *larger* maximum offset (4.96 px) than anything measured at 0.3–0.45.
+
+**The one number that is genuinely off is the age clock, and it is not a drag artefact.**
+Held-out age error is **29 % at 0.30, 20 % at 0.35, 16 % at 0.40, 3 % at 0.45** (≈ 4–7 % on
+the real bracket) — consistent with the ~0.15 dex already noted in
+`test_mass_interpolation_held_out_grid_nodes`. It is an accuracy limit on a main-sequence
+lifetime far longer than the age of the universe, it moves smoothly under the drag (the
+largest node kink is ~1 %/step against a ~1 %/step rate), and no observation can check it.
+**ACCEPT**, recorded here so the number is not rediscovered as a surprise.
+
+**Verdict: the row is closed, not deferred.** MESA slices at 0.3–0.45 M☉ would buy at most
+a couple of pixels of accuracy nobody can see, against a new grid axis to fetch, bake, host
+and keep version-consistent. Reopen only if a *different* consumer than the HR panel is
+built with far finer resolution at these masses (harness: `M:\claud_projects\temp\star-sim-lowmass`).
+
 ### 1.2 The Sun anchor — **ACCEPT, docstring corrected**  · T1
 
 `state_at(1.0, 0.0, 4.567 Gyr)` reads **L = 1.067, Teff = 5834 K, R = 1.012,
@@ -302,10 +347,14 @@ surface. The false-caption check is part of every feature's Gate 0.
 
 ## 6. Prioritised NEXT list (bounded, honest, in order)
 
-1. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
-   measured there; MIST has no finer nodes, so this would mean MESA slices.
+**The list is empty (2026-09-06).** Its last entry — grid density at 0.3–0.45 M☉ — was
+conditional on measuring a user-visible drag artefact there, and the measurement says there
+is none: crossing a grid node moves the HR dot 0.146 px against 0.145 px for a step that
+crosses nothing, and the largest kink is an eighth of a pixel. See §1.1a for the method and
+the full table. Nothing is queued here; a new row arrives the way every other one did — a
+measurement first, then a verdict.
 
-(Five items have left this list. Four shipped 2026-09-03: the He-ignition cliff (§1.3),
+(Six items have left this list. Four shipped 2026-09-03: the He-ignition cliff (§1.3),
 the uncertain-fate band (§2), the Sun-residual tooltip (§1.2) and the Rossby-flavoured
 `activity` proxy (§1.6) — with the last of those, **spec §11's `activity` question is
 answered**. The fifth, the **near-IR bake to 2.5 µm**, shipped 2026-09-06: the wall was

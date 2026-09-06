@@ -29,9 +29,9 @@ hosted pre-baked assets), which is built and recorded in memory `star-sim-hosted
 
 ## Open science (from `science-hurdles.md` §6, in priority order)
 
-| Item | Status | Hook | Where |
-|---|---|---|---|
-| Grid density at 0.3–0.45 M☉ | idea | The fully-convective transition is the one place log-mass weighting is slightly worse; MIST has no finer nodes, so this would mean MESA slices. Only if a visible drag artefact is measured. | `science-hurdles.md` §1.1 |
+**Nothing is open.** The ledger's NEXT list emptied on 2026-09-06 when its last conditional
+row (grid density at 0.3–0.45 M☉) was measured and closed — see the skip table below and
+`science-hurdles.md` §1.1a. A new row here starts with a measurement, never with an idea.
 
 ## Open engines and follow-ons
 
@@ -47,6 +47,7 @@ hosted pre-baked assets), which is built and recorded in memory `star-sim-hosted
 | Item | Status | Hook | Where |
 |---|---|---|---|
 | Microturbulence (ξ) | idea | Spectral line-saturation knob (CAP18-large carries it); real but thin pedagogy — likely not worth a control. | `whirling-cohort-atlas.md` (Tier B) |
+| Grid density at 0.3–0.45 M☉ | **closed (measured 2026-09-06)** | The condition was "only if a visible drag artefact is measured". It isn't one: over the real slider's 194 steps from 0.24 to 0.52 M☉ the HR dot travels 33–36 px in total, a node-crossing step moves it **0.146 px against 0.145 px** for a step that crosses nothing, the kink at a node is **≤ 0.13 px**, and the mid-bracket offset from truth is 1.7–2.4 px on a *doubled* bracket (so ~4× less in reality) — smaller than the same construction gives at 1.0 M☉. The age clock is the one real error (16–29 % held-out at 0.30–0.40) and it is smooth under the drag. MESA slices would buy invisible pixels for a whole new grid axis. | `science-hurdles.md` §1.1a |
 | Spectra density re-bake | skip (measured) | 2.5 Å bins ≈ 1 bin/px at full width; reconsider only per zoom band where the sample dots show under-sampling. | `graceful-toasting-thimble.md`; `SHIPPED.md` |
 | Koester DB (He-atmosphere WD) spectra | blocked (licence) | Restricted / non-redistributable. | memory `star-sim-wr-wd-endgame-plan.md` |
 | [α/Fe] spectra beyond [Fe/H] +0.2 | blocked (data) | Coelho has α = 0 only at {−1.0, −0.5, 0, +0.2}. | `SHIPPED.md` |
