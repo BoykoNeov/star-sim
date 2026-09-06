@@ -13,7 +13,7 @@ import { createStructure } from "./structure.js";
 import { createRoche } from "./roche.js";
 import { createSpectrum } from "./spectrum.js";
 import { createSED } from "./sed.js";
-import { createCMD } from "./cmd.js";
+import { createCMD, CMD_DIAGRAMS } from "./cmd.js";
 import { createSeismo } from "./seismo.js";
 import { createHZHist } from "./hzhist.js";
 import { habitableZone } from "./hz.js";
@@ -126,6 +126,7 @@ const els = {
   obsRv: document.getElementById("obs-rv"),
   obsRvVal: document.getElementById("obs-rv-val"),
   observerReadout: document.getElementById("observer-readout"),
+  cmdDiagram: document.getElementById("cmd-diagram"),
   observerNote: document.getElementById("observer-note"),
   // path (b): "Show companion" — draw the un-stripped accretor as a 2nd HR marker (the Algol
   // reversal). Lives in the endgame bar, shown only in stripped-mode (CSS-gated).
@@ -707,6 +708,15 @@ const obsTrackLatest = makeLatest();          // latest-wins guard for the /phot
 let obsDistancePc = 100;        // seeded distance (μ = 5) — a visible vertical arrow on first view
 let obsAv = 0;                  // seeded dust-free (Spectrum/SED byte-unchanged until dust is added)
 let obsRv = 3.1;                // diffuse-ISM reddening law (the near-universal default)
+// Which colour–magnitude plane the panel draws (cmd.js CMD_DIAGRAMS). Johnson (B−V, M_V)
+// is the default because it is the one every textbook draws; Gaia and 2MASS need bands
+// that only exist once the spectrum cube reaches the near-infrared, and stay greyed with
+// a reason until it does. `lastObserverData` is the last /photometry payload, kept so
+// switching plane re-renders the readout from data already in hand — no refetch.
+let cmdDiagramId = CMD_DIAGRAMS[0].id;
+let lastObserverData = null;
+const currentCmdDiagram = () =>
+  CMD_DIAGRAMS.find((d) => d.id === cmdDiagramId) || CMD_DIAGRAMS[0];
 // The distance slider is log-spaced over 10 pc (absolute-mag reference) → 100 kpc (past the LMC).
 const OBS_D_MIN = 10, OBS_D_MAX = 1e5;
 const obsDistFromFrac = (v) => logValueAt(v, OBS_D_MIN, OBS_D_MAX);
@@ -3231,6 +3241,8 @@ function observerOff() {
   spectrum.setReddening(false, 0, obsRv);
   sed.setReddening(false, 0, obsRv);
   cmd.clear();
+  lastObserverData = null;      // a stale payload must not re-render for the next star
+  syncCmdDiagramButtons();      // band availability is unknown again until a locus arrives
   if (els.observerPanel) els.observerPanel.hidden = true;
 }
 
@@ -3306,11 +3318,13 @@ async function refreshPhotometryTrack() {
   try {
     const d = await fetchJSON(`/photometry_track?mass=${mass}&feh=${feh}&vvcrit=${vv}`);
     if (!req.current || !observerOn || mode !== "live") return;
-    cmd.setLocus(d.points, d.has_bv);
+    cmd.setLocus(d.points, d.bands);
+    syncCmdDiagramButtons();   // which planes this cube can draw is now known
   } catch (e) {
     if (!req.current) return;
     obsTrackKey = null;   // let a later eligible refresh retry
-    cmd.setLocus(null, false);
+    cmd.setLocus(null, null);
+    syncCmdDiagramButtons();
   }
 }
 
@@ -3374,23 +3388,31 @@ async function fetchObserverReadout(s) {
 // colour that is only a lower bound, and the synthetic (B−V) carries a known ~0.04-mag B-band
 // zero-point convention offset that is common-mode (so it cancels in the CMD — see A3).
 function renderObserverReadout(d) {
+  lastObserverData = d;
   if (!els.observerReadout) return;
-  const mvAbs = d.mv_abs, mvApp = d.mv_app, mu = d.distance_modulus;
-  const bv0 = d.bv0, bvObs = d.bv_obs, ebv = d.ebv;
+  // The readout speaks the SELECTED diagram's bands, so the numbers under the panel and
+  // the axes on it can never disagree: pick Gaia and it reads M_G and (BP−RP), not M_V.
+  // Every band rides in the payload's absolute_mag/apparent_mag dicts, so switching plane
+  // costs no fetch.
+  const dg = currentCmdDiagram();
+  const [ca, cb] = dg.colour;
+  const abs = d.absolute_mag || {}, app = d.apparent_mag || {};
+  const mAbs = abs[dg.mag], mApp = app[dg.mag], mu = d.distance_modulus;
+  const c0 = (abs[ca] != null && abs[cb] != null) ? abs[ca] - abs[cb] : null;
+  const cObs = (app[ca] != null && app[cb] != null) ? app[ca] - app[cb] : null;
   const parts = [];
-  if (mvAbs != null) parts.push(`M<sub>V</sub> ${mvAbs.toFixed(2)}`);
-  if (mvApp != null && mu != null)
-    parts.push(`apparent V ${mvApp.toFixed(2)} <span class="obs-dim">(μ = ${mu.toFixed(2)})</span>`);
-  if (bv0 != null && bvObs != null && ebv != null)
-    parts.push(`(B−V)₀ ${bv0.toFixed(2)} → reddened ${bvObs.toFixed(2)} ` +
-      `<span class="obs-dim">E(B−V) = ${ebv.toFixed(2)}</span>`);
+  if (mAbs != null) parts.push(`M<sub>${dg.magLabel}</sub> ${mAbs.toFixed(2)}`);
+  if (mApp != null && mu != null)
+    parts.push(`apparent ${dg.magLabel} ${mApp.toFixed(2)} ` +
+      `<span class="obs-dim">(μ = ${mu.toFixed(2)})</span>`);
+  if (c0 != null && cObs != null)
+    parts.push(`${dg.colourLabel}₀ ${c0.toFixed(2)} → reddened ${cObs.toFixed(2)} ` +
+      `<span class="obs-dim">${dg.excessLabel} = ${(cObs - c0).toFixed(2)}</span>`);
   els.observerReadout.innerHTML = parts.join(" · ");
-  // Push the EXACT intrinsic + observed positions to the CMD marker (the tested-path values, so the
-  // arrow tip is never an approximation). observed==intrinsic when dust-free at 10 pc (zero arrow).
-  if (bv0 != null && mvAbs != null) {
-    const obs = (bvObs != null && mvApp != null) ? { bv: bvObs, mv: mvApp } : null;
-    cmd.setMarker({ bv: bv0, mv: mvAbs }, obs);
-  }
+  // Push the EXACT intrinsic + observed magnitudes to the CMD marker (the tested-path values,
+  // so the arrow tip is never an approximation). The panel itself decides there is no shift
+  // when the two coincide — dust-free at 10 pc gives a zero-length arrow, not a special case.
+  cmd.setMarker(abs, app);
   // The honesty note: hot-clamp lower bound (if the spectrum hit the grid ceiling) + the standing
   // B-band ZP-convention caveat that keeps the absolute colour from over-claiming.
   if (els.observerNote) {
@@ -3398,8 +3420,10 @@ function renderObserverReadout(d) {
     els.observerNote.textContent = clamped
       ? `Spectrum clamped to the grid's ${Math.round(d.teff_max).toLocaleString()} K ceiling — ` +
         `this hot star's blue colour is a lower bound.`
-      : "Synthetic (B−V) runs ~0.04 mag blue (a B-band zero-point convention) — common-mode, so it " +
-        "cancels in the cluster CMD.";
+      : currentCmdDiagram().id === "bv"
+        ? "Synthetic (B−V) runs ~0.04 mag blue (a B-band zero-point convention) — common-mode, so it " +
+          "cancels in the cluster CMD."
+        : "";
   }
 }
 
@@ -5005,6 +5029,42 @@ function wireObserverKnobs() {
   });
 }
 
+// A5: the colour–magnitude plane picker. It drives ONE panel, so it lives on that panel
+// (the "a control lives where its effect is visible" rule). A diagram whose bands the
+// served cube cannot supply is GREYED with a reason rather than removed — the third of
+// the three hide-reasons: the feature is real, it just does not apply to this data yet.
+function syncCmdDiagramButtons() {
+  if (!els.cmdDiagram) return;
+  for (const btn of els.cmdDiagram.querySelectorAll("button")) {
+    const id = btn.dataset.diagram;
+    const ok = cmd.isAvailable(id);
+    btn.classList.toggle("active", id === cmdDiagramId && ok);
+    btn.disabled = !ok;
+    btn.title = ok
+      ? ""
+      : "Appears once the spectrum grid reaches the near-infrared (the bands this plane " +
+        "needs are past the red edge of the grid that is baked).";
+  }
+}
+
+function wireCmdDiagram() {
+  if (!els.cmdDiagram) return;
+  for (const btn of els.cmdDiagram.querySelectorAll("button")) {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.diagram;
+      if (!cmd.isAvailable(id)) return;
+      cmdDiagramId = id;
+      cmd.setDiagram(id);
+      syncCmdDiagramButtons();
+      // Re-render the readout in the new plane's bands from the payload already fetched;
+      // only if none has arrived yet do we fall back to asking for one.
+      if (lastObserverData) renderObserverReadout(lastObserverData);
+      else if (observerMarker) refreshObserver(observerMarker);
+    });
+  }
+  syncCmdDiagramButtons();
+}
+
 // B3: decouple the cluster's age from the star's age slider, and the decoupled slider itself.
 // Checking it gives the cluster its own log-age slider (bounds = the isochrone grid's tabulated
 // ages, served as available_log_ages); pin the star, sweep the cluster, watch the turnoff march
@@ -5381,6 +5441,7 @@ async function init() {
   wireIsochroneToggle();
   wireHZToggle();
   wireObserverKnobs();
+  wireCmdDiagram();
   wireIsochroneDecouple();
   wireCompanionToggle();
   wireBinaryDemoPicker();

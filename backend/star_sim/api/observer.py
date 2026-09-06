@@ -64,8 +64,11 @@ def photometry_track(
     Like `/photometry` this is a **view**, not the spine: it goes through `PROVIDER`
     only to fetch the track's `StellarState`s, then composes each one's served surface
     spectrum (`spectrum_data`) into a flux stack and convolves the whole stack through
-    the committed B/V/BP filters in ONE vectorized pass (`band_mags_stack`, written for
-    exactly this). The result is the INTRINSIC absolute magnitudes (10 pc, no dust) —
+    every committed filter the served cube can answer for in ONE vectorized pass
+    (`band_mags_stack`, written for exactly this — B/V/BP on the optical cube, plus Gaia
+    G/RP and 2MASS J/H/Ks once the cube reaches 2.5 µm). Each row carries a `mag` dict,
+    so the panel forms whichever colour its chosen diagram needs. The result is the
+    INTRINSIC absolute magnitudes (10 pc, no dust) —
     the CMD backdrop; the panel draws distance (a uniform μ shift) and reddening (the
     CMD reddening vector) on top, and the current-age marker's EXACT observed position
     comes from `/photometry`, so nothing approximate is ever plotted as truth.
@@ -89,21 +92,21 @@ def photometry_track(
         [st.R_rsun for st in states],
     )
 
-    have_bv = "B" in mags and "V" in mags
-    points = []
-    for i, st in enumerate(states):
-        row = {
+    # One magnitude dict per row, not a hand-picked mv/bv0/bp trio: with the near-IR cube
+    # the panel can draw (B−V, M_V), (BP−RP, M_G) or (J−Ks, M_Ks), and which colours are
+    # interesting is the panel's business, not this route's. A colour is a difference of
+    # two of these — computing it here as well would put V in the payload twice with no
+    # way to tell which copy is authoritative.
+    points = [
+        {
             "age_yr": st.age_yr,
             "eep": st.eep,
             "phase": st.phase,
             "teff": st.Teff_K,
-            "mv": float(mags["V"][i]),
+            "mag": {band: float(vals[i]) for band, vals in mags.items()},
         }
-        if have_bv:
-            row["bv0"] = float(mags["B"][i] - mags["V"][i])
-        if "BP" in mags:
-            row["bp"] = float(mags["BP"][i])
-        points.append(row)
+        for i, st in enumerate(states)
+    ]
     # The bands the served cube could answer for (not the filter asset's full list):
     # `track_band_mags` already dropped any whose transmission runs off the cube's edge.
-    return {"bands": list(mags.keys()), "points": points, "has_bv": have_bv}
+    return {"bands": list(mags.keys()), "points": points}

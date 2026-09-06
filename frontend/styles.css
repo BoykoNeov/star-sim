@@ -646,11 +646,20 @@ body.stripped-mode .hr-panel .helium-control { display: none; }
   color: var(--bg); background: var(--accent);
   border-color: var(--accent); font-weight: 600;
 }
+/* Present-but-inapplicable: the observer panel's band picker greys a colour-magnitude
+   plane whose filters run off the red edge of the baked spectrum grid, rather than
+   removing it (the "appears when..." hide-reason). Same muted look as
+   .rot-toggle-row.disabled / .sed-rot.disabled, and :hover must not un-grey it. */
+.mode-btn:disabled { opacity: 0.45; cursor: default; }
+.mode-btn:disabled:hover { color: var(--muted); border-color: var(--line); }
 .comp-modes .help { margin-left: auto; }
 
 /* Spectrum zoom / detail sub-band control — a row of preset bands that reframe the
    x-axis onto a narrow window (reusing the .mode-btn look). flex-wrap so it folds on
-   a phone; the "?" help pushes to the right like .comp-modes. */
+   a phone; the "?" help pushes to the right like .comp-modes. The observer panel's
+   colour-magnitude band picker (#cmd-diagram) reuses this same row shape: a label, a
+   few .mode-btn presets and a trailing "?" — one look for "pick a view of the data
+   already served". */
 .spectrum-zoom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
 /* `display:flex` above beats the UA [hidden]{display:none} (equal specificity, later rule),
    so re-assert it — else the row's [hidden]=true (set by updateWD/updateWR/updateStripped/

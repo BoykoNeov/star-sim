@@ -1,7 +1,15 @@
 // The observational colour–magnitude diagram (Axis A3 of the outward quartet) — the
 // observer's version of the HR diagram. Where the HR panel plots the intrinsic L vs
-// Teff, this plots what a telescope measures: colour (B−V) against absolute magnitude
-// M_V, and then shows what DISTANCE and interstellar DUST do to it.
+// Teff, this plots what a telescope measures: a colour against an absolute magnitude,
+// and then shows what DISTANCE and interstellar DUST do to it.
+//
+// **Which diagram** is a choice, not a constant. The baked spectrum cube reaches 2.5 µm,
+// so the same track can be drawn as Johnson (B−V, M_V), as Gaia (BP−RP, M_G) — the plane
+// nearly every modern cluster paper uses — or as 2MASS (J−Ks, M_Ks), where interstellar
+// dust is ~9× weaker and the giant branch separates cleanly. The panel holds no band
+// arithmetic of its own: each locus row carries a `mag` dict from /photometry_track and
+// the marker carries the absolute/apparent dicts from /photometry, so a diagram is just
+// which two bands to subtract and which one to plot down the side.
 //
 // A pure pushed-data consumer (like roche.js / the population overlay): main.js fetches
 // the intrinsic locus from /photometry_track once per (mass,[Fe/H]) and pushes it via
@@ -11,7 +19,7 @@
 // LOCUS applies the marker's reddening+distance vector uniformly (the standard de-reddening
 // assumption), and it is labelled as such.
 //
-// Axis convention (the real observational CMD): B−V increases to the RIGHT (blue left,
+// Axis convention (the real observational CMD): colour increases to the RIGHT (blue left,
 // red right); magnitude increases DOWNWARD (bright/negative at the top) — so the y-axis
 // is inverted, exactly as astronomers draw it.
 import { fitCanvas } from "./canvas.js";
@@ -25,47 +33,106 @@ const COL_INK = "#c9d3e6";
 const COL_APPARENT = "rgba(255,150,90,0.85)";   // the reddened/dimmed "as observed" — dusty orange
 const COL_ARROW = "rgba(255,150,90,0.95)";
 
+// The diagrams this panel can draw. `colour` is the pair to subtract (blue band first,
+// so the colour grows to the red), `mag` the band plotted down the side. Availability is
+// decided by the served payload's `bands`, never by a hardcoded assumption: on an
+// optical-only cube only Johnson resolves, and the other two say so rather than vanish.
+export const CMD_DIAGRAMS = [
+  {
+    id: "bv", name: "Johnson", colour: ["B", "V"], mag: "V",
+    x: "B − V  (colour → redder)", y: "M_V  (brighter ↑)",
+    colourLabel: "(B−V)", excessLabel: "E(B−V)", magLabel: "V",
+  },
+  {
+    id: "gaia", name: "Gaia", colour: ["BP", "RP"], mag: "G",
+    x: "BP − RP  (colour → redder)", y: "M_G  (brighter ↑)",
+    colourLabel: "(BP−RP)", excessLabel: "E(BP−RP)", magLabel: "G",
+  },
+  {
+    id: "2mass", name: "2MASS", colour: ["J", "Ks"], mag: "Ks",
+    x: "J − Ks  (colour → redder)", y: "M_Ks  (brighter ↑)",
+    colourLabel: "(J−Ks)", excessLabel: "E(J−Ks)", magLabel: "Ks",
+  },
+];
+
+// The bands a diagram needs present before it can be drawn at all.
+export function diagramBands(d) {
+  return [...new Set([...d.colour, d.mag])];
+}
+
 export function createCMD(canvas) {
-  if (!canvas) return { setLocus() {}, setMarker() {}, clear() {}, resize() {} };
+  if (!canvas) {
+    return { setLocus() {}, setMarker() {}, setDiagram() {}, isAvailable() { return false; },
+      clear() {}, resize() {} };
+  }
   let ctx, W, H, plotW, plotH;
   ({ ctx, W, H } = fitCanvas(canvas, 460, 300));
   plotW = W - PAD_L - PAD_R;
   plotH = H - PAD_T - PAD_B;
 
-  // locus: [{bv0, mv, teff}], intrinsic marker {bv, mv}, observed marker {bv, mv}.
-  let locus = null, hasBv = false;
-  // Whether a /photometry_track fetch has actually RESOLVED yet. Without this, the initial
-  // `hasBv=false` (nothing fetched) is indistinguishable from a resolved "grid has no B/V" — so
-  // the panel would flash "unavailable" during the pre-load gap even though B/V are fine. We only
-  // ever show that notice once a fetch has returned and genuinely lacks B/V (and no marker colour).
+  // locus: [{mag:{band:value}, teff}]; markers: the absolute/apparent mag dicts.
+  let locus = null, bands = null;
+  // Whether a /photometry_track fetch has actually RESOLVED yet. Without this, "no bands
+  // known" (nothing fetched) is indistinguishable from a resolved "this cube cannot do
+  // this diagram" — so the panel would flash "unavailable" during the pre-load gap even
+  // though the bands are fine. We only ever show that notice once a fetch has returned.
   let locusLoaded = false;
-  let mInt = null, mObs = null;
-  // Cached fit bounds (recomputed on setLocus / setMarker).
+  let mAbs = null, mApp = null;
+  let diagram = CMD_DIAGRAMS[0];
+  // Cached fit bounds (recomputed on setLocus / setMarker / setDiagram).
   let x0 = -0.4, x1 = 1.8, y0 = -8, y1 = 6;
 
-  function fit() {
-    const bvs = [], mvs = [];
-    if (locus) for (const p of locus) { if (p.bv0 != null) bvs.push(p.bv0); mvs.push(p.mv); }
-    for (const m of [mInt, mObs]) if (m) { if (m.bv != null) bvs.push(m.bv); mvs.push(m.mv); }
-    // The "as observed" locus shifts by the marker vector — include its extremes so the
-    // dashed trail can't run off the frame.
-    if (locus && mInt && mObs) {
-      const dbv = (mObs.bv ?? 0) - (mInt.bv ?? 0);
-      const dmv = mObs.mv - mInt.mv;
-      for (const p of locus) { if (p.bv0 != null) bvs.push(p.bv0 + dbv); mvs.push(p.mv + dmv); }
-    }
-    if (!mvs.length) return;
-    let bvLo = Math.min(...bvs), bvHi = Math.max(...bvs);
-    let mvLo = Math.min(...mvs), mvHi = Math.max(...mvs);
-    if (!isFinite(bvLo)) { bvLo = -0.4; bvHi = 1.8; }
-    const bvPad = Math.max(0.1, (bvHi - bvLo) * 0.08);
-    const mvPad = Math.max(0.3, (mvHi - mvLo) * 0.06);
-    x0 = bvLo - bvPad; x1 = bvHi + bvPad;
-    y0 = mvLo - mvPad; y1 = mvHi + mvPad;   // y0 = brightest (top), y1 = faintest (bottom)
+  // A magnitude dict → this diagram's (colour, magnitude), or null when the dict is
+  // missing a band. Returning null rather than NaN keeps every "is there a point here?"
+  // test a plain null check, the way the old bv0-may-be-absent code read.
+  function pointOf(mag) {
+    if (!mag) return null;
+    const [a, b] = diagram.colour;
+    const c = mag[a], d = mag[b], m = mag[diagram.mag];
+    if (c == null || d == null || m == null) return null;
+    return { c: c - d, m };
   }
 
-  const xOf = (bv) => PAD_L + ((bv - x0) / (x1 - x0)) * plotW;
-  const yOf = (mv) => PAD_T + ((mv - y0) / (y1 - y0)) * plotH;   // inverted: bright up
+  // Is the selected diagram answerable from what the last fetch returned? (`bands` is the
+  // list the SERVED cube could measure — see photometry.bands_within.)
+  function isAvailable(which = diagram) {
+    const d = typeof which === "string" ? CMD_DIAGRAMS.find((x) => x.id === which) : which;
+    if (!d || !bands) return false;
+    return diagramBands(d).every((b) => bands.includes(b));
+  }
+
+  // The bands this diagram needs that the served cube did not supply — what the
+  // "unavailable" notice names, so it points at the missing data rather than scolding.
+  function missingBands(d = diagram) {
+    if (!bands) return diagramBands(d);
+    return diagramBands(d).filter((b) => !bands.includes(b));
+  }
+
+  function fit() {
+    const cs = [], ms = [];
+    const pts = [];
+    if (locus) for (const p of locus) { const q = pointOf(p.mag); if (q) pts.push(q); }
+    for (const q of pts) { cs.push(q.c); ms.push(q.m); }
+    const qAbs = pointOf(mAbs), qApp = pointOf(mApp);
+    for (const q of [qAbs, qApp]) if (q) { cs.push(q.c); ms.push(q.m); }
+    // The "as observed" locus shifts by the marker vector — include its extremes so the
+    // dashed trail can't run off the frame.
+    if (qAbs && qApp) {
+      const dc = qApp.c - qAbs.c, dm = qApp.m - qAbs.m;
+      for (const q of pts) { cs.push(q.c + dc); ms.push(q.m + dm); }
+    }
+    if (!ms.length) return;
+    let cLo = Math.min(...cs), cHi = Math.max(...cs);
+    let mLo = Math.min(...ms), mHi = Math.max(...ms);
+    if (!isFinite(cLo)) { cLo = -0.4; cHi = 1.8; }
+    const cPad = Math.max(0.1, (cHi - cLo) * 0.08);
+    const mPad = Math.max(0.3, (mHi - mLo) * 0.06);
+    x0 = cLo - cPad; x1 = cHi + cPad;
+    y0 = mLo - mPad; y1 = mHi + mPad;   // y0 = brightest (top), y1 = faintest (bottom)
+  }
+
+  const xOf = (c) => PAD_L + ((c - x0) / (x1 - x0)) * plotW;
+  const yOf = (m) => PAD_T + ((m - y0) / (y1 - y0)) * plotH;   // inverted: bright up
 
   function niceStep(span, target) {
     const raw = span / target;
@@ -76,7 +143,8 @@ export function createCMD(canvas) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    if (!locus && !mInt) {
+    const qAbs = pointOf(mAbs), qApp = pointOf(mApp);
+    if (!locus && !qAbs) {
       ctx.fillStyle = COL_AXIS;
       ctx.font = "12px system-ui, sans-serif";
       ctx.textAlign = "center";
@@ -107,31 +175,32 @@ export function createCMD(canvas) {
     ctx.strokeRect(PAD_L, PAD_T, plotW, plotH);
     ctx.fillStyle = COL_AXIS; ctx.font = "11px system-ui, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
-    ctx.fillText("B − V  (colour → redder)", PAD_L + plotW / 2, PAD_T + plotH + 22);
+    ctx.fillText(diagram.x, PAD_L + plotW / 2, PAD_T + plotH + 22);
     ctx.save();
     ctx.translate(12, PAD_T + plotH / 2); ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "middle";
-    ctx.fillText("M_V  (brighter ↑)", 0, 0);
+    ctx.fillText(diagram.y, 0, 0);
     ctx.restore();
 
-    // Show the "unavailable" notice only for a RESOLVED absence of B/V — and never when a marker
-    // carries a real (B−V), since the readout below the panel prints that colour and the graph must
-    // not contradict it. Before the first locus fetch resolves we just draw the axes (no flash).
-    const markerHasBv = !!(mInt && mInt.bv != null);
-    if (!hasBv && !markerHasBv) {
+    // Show the "unavailable" notice only for a RESOLVED absence — and never when the
+    // marker itself carries this diagram's bands, since the readout below the panel
+    // prints that colour and the graph must not contradict it. Before the first locus
+    // fetch resolves we just draw the axes (no flash).
+    if (!isAvailable() && !qAbs) {
       if (locusLoaded) {
         ctx.fillStyle = COL_AXIS; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText("(B and V bands unavailable for this grid)", PAD_L + plotW / 2, PAD_T + plotH / 2);
+        ctx.fillText(`(${missingBands().join(", ")} unavailable from this spectrum grid)`,
+          PAD_L + plotW / 2, PAD_T + plotH / 2);
       }
       return;
     }
 
     // --- the "as observed" locus (dashed): intrinsic shifted by the marker's vector ---
-    let dbv = 0, dmv = 0, shifted = false;
-    if (mInt && mObs) {
-      dbv = (mObs.bv ?? 0) - (mInt.bv ?? 0);
-      dmv = mObs.mv - mInt.mv;
-      shifted = Math.abs(dbv) > 1e-3 || Math.abs(dmv) > 1e-3;
+    let dc = 0, dm = 0, shifted = false;
+    if (qAbs && qApp) {
+      dc = qApp.c - qAbs.c;
+      dm = qApp.m - qAbs.m;
+      shifted = Math.abs(dc) > 1e-3 || Math.abs(dm) > 1e-3;
     }
     if (locus && shifted) {
       ctx.save();
@@ -140,8 +209,9 @@ export function createCMD(canvas) {
       ctx.beginPath();
       let started = false;
       for (const p of locus) {
-        if (p.bv0 == null) continue;
-        const x = xOf(p.bv0 + dbv), y = yOf(p.mv + dmv);
+        const q = pointOf(p.mag);
+        if (!q) continue;
+        const x = xOf(q.c + dc), y = yOf(q.m + dm);
         if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -152,30 +222,30 @@ export function createCMD(canvas) {
     if (locus) {
       ctx.lineWidth = 2.2;
       for (let i = 1; i < locus.length; i++) {
-        const a = locus[i - 1], b = locus[i];
-        if (a.bv0 == null || b.bv0 == null) continue;
-        ctx.strokeStyle = teffToCSS(b.teff);
+        const a = pointOf(locus[i - 1].mag), b = pointOf(locus[i].mag);
+        if (!a || !b) continue;
+        ctx.strokeStyle = teffToCSS(locus[i].teff);
         ctx.beginPath();
-        ctx.moveTo(xOf(a.bv0), yOf(a.mv));
-        ctx.lineTo(xOf(b.bv0), yOf(b.mv));
+        ctx.moveTo(xOf(a.c), yOf(a.m));
+        ctx.lineTo(xOf(b.c), yOf(b.m));
         ctx.stroke();
       }
     }
 
     // --- the reddening/distance vector arrow (intrinsic → observed) ---
-    if (mInt && mObs && shifted) {
-      drawArrow(xOf(mInt.bv), yOf(mInt.mv), xOf(mObs.bv), yOf(mObs.mv));
+    if (qAbs && qApp && shifted) {
+      drawArrow(xOf(qAbs.c), yOf(qAbs.m), xOf(qApp.c), yOf(qApp.m));
     }
 
     // --- the markers ---
-    if (mInt) {
-      const x = xOf(mInt.bv), y = yOf(mInt.mv);
+    if (qAbs) {
+      const x = xOf(qAbs.c), y = yOf(qAbs.m);
       ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
       ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
       ctx.fillStyle = "rgba(20,26,40,0.6)"; ctx.fill();
     }
-    if (mObs && shifted) {
-      const x = xOf(mObs.bv), y = yOf(mObs.mv);
+    if (qApp && shifted) {
+      const x = xOf(qApp.c), y = yOf(qApp.m);
       ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
       ctx.fillStyle = COL_APPARENT; ctx.fill();
       ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 1; ctx.stroke();
@@ -207,22 +277,31 @@ export function createCMD(canvas) {
     ctx.closePath(); ctx.fill();
   }
 
-  // main.js pushes the intrinsic locus from /photometry_track (once per mass/[Fe/H]).
-  function setLocus(points, hasBvFlag) {
+  // main.js pushes the intrinsic locus from /photometry_track (once per mass/[Fe/H]),
+  // along with the band list the served cube could actually measure.
+  function setLocus(points, bandList) {
     locus = points && points.length ? points : null;
-    hasBv = !!hasBvFlag;
-    locusLoaded = true;   // a fetch resolved — "unavailable" may now legitimately show if !hasBv
+    bands = bandList && bandList.length ? [...bandList] : null;
+    locusLoaded = true;   // a fetch resolved — "unavailable" may now legitimately show
     fit(); draw();
   }
-  // main.js pushes the EXACT intrinsic + observed marker positions from /photometry.
+  // main.js pushes the EXACT intrinsic + observed magnitude dicts from /photometry.
   // Pass observed=null (or equal to intrinsic) when there is no distance/dust shift.
-  function setMarker(intrinsic, observed) {
-    mInt = intrinsic || null;
-    mObs = observed || null;
+  function setMarker(absolute, apparent) {
+    mAbs = absolute || null;
+    mApp = apparent || null;
+    fit(); draw();
+  }
+  // Choose which colour–magnitude plane to draw. Pure reframe of the SAME pushed data —
+  // no refetch, because every band already rode along in the payload.
+  function setDiagram(id) {
+    const found = CMD_DIAGRAMS.find((d) => d.id === id);
+    if (!found || found === diagram) return;
+    diagram = found;
     fit(); draw();
   }
   function clear() {
-    locus = null; mInt = null; mObs = null; hasBv = false; locusLoaded = false;
+    locus = null; mAbs = null; mApp = null; bands = null; locusLoaded = false;
     draw();
   }
   function resize(cssW, cssH) {
@@ -232,5 +311,5 @@ export function createCMD(canvas) {
   }
 
   draw();
-  return { setLocus, setMarker, clear, resize };
+  return { setLocus, setMarker, setDiagram, isAvailable, clear, resize };
 }

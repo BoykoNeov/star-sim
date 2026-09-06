@@ -80,6 +80,10 @@ const LINES = [
 ];
 
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
+// The red edge of the DEFAULT (unzoomed) frame. The served cube reaches 2.5 µm; this
+// panel opens on the optical, where its lines, its shading and its measured sampling
+// are. See viewWindow().
+const OPTICAL_VIEW_HI = 10000;
 const COL_GRID = "#283149";
 // Observer's view (Axis A): the reddened flux overlay — a dusty tan, dashed, drawn UNDER the
 // intrinsic curve (same normalization) so the interstellar reddening's blue-end suppression reads
@@ -592,12 +596,30 @@ export function createSpectrum({ api }) {
   }
 
   // The wavelength window to frame: the selected band clamped to the served data's own
-  // range, or the full served range when no band is chosen (so full-view behaviour is
-  // byte-identical to before — the loop below spans every sample).
+  // range, or — with no band chosen — the served range capped at the optical red edge.
+  //
+  // The cube now runs to 2.5 µm, but this panel's pedagogy is optical: the visible-band
+  // colour shading, every marked line, and the measured ~1 bin/px sampling all live below
+  // 1 µm. Framing all 22000 Å by default would squeeze the entire visible spectrum into
+  // the left third of the canvas to make room for a smooth near-IR continuum. So the
+  // default view stays optical and the near-IR is a band you pick, like any other.
+  // Every other cube (WD/WR/stripped/α) stops at 8999 Å, so for them this cap is a no-op
+  // and their framing is byte-identical to before.
   function viewWindow(lam) {
     const lo0 = lam[0], hi0 = lam[lam.length - 1];
-    if (!viewBand) return [lo0, hi0];
+    if (!viewBand) return [lo0, Math.min(hi0, OPTICAL_VIEW_HI)];
     return [Math.max(viewBand.lo, lo0), Math.min(viewBand.hi, hi0)];
+  }
+
+  // Are the native sample dots legible in this window? They are the honest half of the
+  // zoom view — they show the baked grid's real density — but only while they are
+  // separated on screen. A narrow line band holds ~50 samples across 700 px; the whole
+  // near-IR holds 1500, which would paint a dotted rope rather than a sampling. So the
+  // test is density, not "is a band selected".
+  function dotsAreLegible(lam, lamLo, lamHi) {
+    let n = 0;
+    for (let i = 0; i < lam.length; i++) if (lam[i] >= lamLo && lam[i] <= lamHi) n++;
+    return n > 0 && n <= 220;
   }
 
   // A round tick step (nm) for a zoomed window ~spanNm wide: the largest of a preset
@@ -685,8 +707,9 @@ export function createSpectrum({ api }) {
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.3; ctx.stroke();
-    // Zoomed: mark the native 2.5 Å sample points so the grid's real resolution shows.
-    if (viewBand) drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(flux[i]), COL_CURVE);
+    // Zoomed in far enough: mark the native sample points so the grid's real resolution shows.
+    if (viewBand && dotsAreLegible(lam, lamLo, lamHi))
+      drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(flux[i]), COL_CURVE);
     ctx.restore();
 
     // 3) Observer's view: the REDDENED flux, on the SAME normalization (fmax is the intrinsic
@@ -877,8 +900,10 @@ export function createSpectrum({ api }) {
     // Zoomed: mark the native sample points on both curves (white + coral) so the α
     // comparison is visibly made at the grid's real resolution, not on a smoothed line.
     if (viewBand) {
-      drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f0[i] / m0), COL_CURVE);
-      drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f4[i] / m4), COL_ALPHA);
+      if (dotsAreLegible(lam, lamLo, lamHi)) {
+        drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f0[i] / m0), COL_CURVE);
+        drawSamplePoints(xOf, lam, lamLo, lamHi, (i) => yOf(f4[i] / m4), COL_ALPHA);
+      }
     }
     ctx.restore();
 
@@ -1193,9 +1218,36 @@ export function createSpectrum({ api }) {
   // (2.5 Å per sample); the resolving power R = λ/Δλ is NOT constant (≈1200 in the blue at
   // Ca H&K, ≈3600 in the red), so we quote Δλ, not R.
   function zoomNote() {
-    if (!viewBand) return "";
-    return ` · Zoomed to ${viewBandLabel} (${viewBand.lo}–${viewBand.hi} Å) — the dots are the ` +
-      `grid's native 2.5 Å sampling; a finer, higher-resolution bake would sharpen these line cores.`;
+    const lam = data && data.wavelength;
+    if (!lam || !lam.length) return "";
+    if (!viewBand) {
+      // The default frame is optical, so say so whenever the served model has more to give
+      // than the frame shows — otherwise the near-IR band looks like a feature with no data
+      // behind it. Silent on every cube that stops at 8999 Å (all four endgame ones).
+      const hi0 = lam[lam.length - 1];
+      return hi0 > OPTICAL_VIEW_HI
+        ? ` · Framed on the optical; this model runs to ${(hi0 / 1e4).toFixed(1)} µm — the ` +
+          `near-IR band shows the rest.`
+        : "";
+    }
+    // The sampling quoted is MEASURED off the served λ array in this window, not assumed:
+    // the cube's bins are 2.5 Å through the optical and coarser past 1 µm, so a single
+    // hard-coded number would be wrong in one half of the panel's own range.
+    const [lo, hi] = viewWindow(lam);
+    let n = 0, first = -1, last = -1;
+    for (let i = 0; i < lam.length; i++) {
+      if (lam[i] < lo || lam[i] > hi) continue;
+      if (first < 0) first = i;
+      last = i; n++;
+    }
+    const step = n > 1 ? (lam[last] - lam[first]) / (n - 1) : 0;
+    const stepTxt = step >= 10 ? step.toFixed(0) : step.toFixed(1);
+    const head = ` · Zoomed to ${viewBandLabel} (${viewBand.lo}–${viewBand.hi} Å) — `;
+    return dotsAreLegible(lam, lo, hi)
+      ? head + `the dots are the grid's native ${stepTxt} Å sampling; a finer, ` +
+        `higher-resolution bake would sharpen these line cores.`
+      : head + `the grid samples this window every ${stepTxt} Å, too densely to dot at this ` +
+        `width, so the curve is drawn plain.`;
   }
 
   function renderCaption() {
@@ -1335,7 +1387,8 @@ export function createSpectrum({ api }) {
   }
 
   // The zoom / detail sub-band buttons. Each button carries its window in data-lo/data-hi
-  // (Å); "Full" has empty attrs → viewBand null. Picking a band is a pure client-side
+  // (Å); "Optical" has empty attrs → viewBand null (the default optical frame). Picking a
+  // band is a pure client-side
   // reframe of the cached `data` (draw + re-caption, NO refetch). `viewBand` persists
   // across living-star updates (a chosen view) and is reset to Full on endgame entry.
   function setActiveZoom(active) {
@@ -1347,7 +1400,7 @@ export function createSpectrum({ api }) {
     viewBandLabel = null;
     if (zoomRow) {
       const btns = zoomRow.querySelectorAll("button");
-      btns.forEach((b, i) => b.classList.toggle("active", i === 0));   // the first is "Full"
+      btns.forEach((b, i) => b.classList.toggle("active", i === 0));   // the first is "Optical"
     }
   }
   if (zoomRow) {

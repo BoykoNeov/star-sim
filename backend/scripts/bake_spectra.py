@@ -46,11 +46,19 @@ the frozen 3500 K clamp. The Göttingen grid shares CAP18's logarithmic ``[Fe/H]
 sampling is even simpler than the hot one. Both splices compose — the Teff axis
 becomes ``[cool nodes < 3500][CAP18 3500–30000][hot nodes > 30000]``.
 
+**The λ range is set by the NARROWEST spliced grid, so the cool grid picks it.**
+CAP18 carries flux to 6.5 µm and OSTAR2002 to 5 µm, but Göttingen **MedRes-A stops
+at 1 µm** — which is why v1 was an optical cube and Gaia G/RP + 2MASS JHK were
+uncomputable. **MedRes-R** is the same grid over the same axes and ranges out to
+**2.5 µm**; passing it (and ``--lam-max 25000``) is the whole near-IR extension.
+Bins are piecewise (see ``build_lam_edges``): the optical keeps 2.5 Å, the near-IR
+gets ``--nir-step`` so the cube stays affordable in memory.
+
 Run inside the container (env per the recipe), e.g.:
 
     python bake_spectra.py --grid /tmp/sg-CAP18-coarse.h5 \
                            --hot-grid /tmp/sg-OSTAR2002-low.h5 \
-                           --cool-grid /tmp/sg-Goettingen-MedRes-A.h5 \
+                           --cool-grid /tmp/sg-Goettingen-MedRes-R.h5 \
                            --out /tmp/spectra_grid.npz
 
 then `docker cp` the `.npz` out to the host `data/spectra/`.
@@ -531,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
                         ">30000 K coverage. Its linear Z/Zo axis is sampled via "
                         "Z/Zo=10**[Fe/H]; log g is clamped to the hot grid's range.")
     p.add_argument("--cool-grid", default=None,
-                   help="optional cool grid (e.g. sg-Goettingen-MedRes-A.h5) spliced "
+                   help="optional cool grid (e.g. sg-Goettingen-MedRes-R.h5) spliced "
                         "onto the Teff axis below the primary grid's floor, extending "
                         "<3500 K coverage for the coolest M-dwarfs / RGB-AGB tips. It "
                         "shares CAP18's log-[Fe/H] convention (no Z/Zo conversion); "
