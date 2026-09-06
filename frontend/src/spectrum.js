@@ -80,10 +80,14 @@ const LINES = [
 ];
 
 const COL_CURVE = "#eef2f9";   // the flux curve, bright over the shaded band
-// The red edge of the DEFAULT (unzoomed) frame. The served cube reaches 2.5 µm; this
-// panel opens on the optical, where its lines, its shading and its measured sampling
-// are. See viewWindow().
-const OPTICAL_VIEW_HI = 10000;
+// The red edge of the DEFAULT (unzoomed) frame. The served main cube reaches 2.5 µm; this
+// panel opens on the optical, where its lines, its shading and its measured sampling are.
+// 8999 Å — the exact red edge of the WD / WR / stripped / α cubes — and NOT a round 1 µm:
+// those four are the main cube's optical PREFIX (a backend test pins that), so ending the
+// default frame where they end means switching in and out of an endgame does not move the
+// x-axis or the line guides at all. A 1 µm default would have reintroduced a 10 % axis jump
+// on every endgame entry, which is the thing the shared-grid bake was for. See viewWindow().
+const OPTICAL_VIEW_HI = 8999;
 const COL_GRID = "#283149";
 // Observer's view (Axis A): the reddened flux overlay — a dusty tan, dashed, drawn UNDER the
 // intrinsic curve (same normalization) so the interstellar reddening's blue-end suppression reads
@@ -1234,19 +1238,24 @@ export function createSpectrum({ api }) {
     // the cube's bins are 2.5 Å through the optical and coarser past 1 µm, so a single
     // hard-coded number would be wrong in one half of the panel's own range.
     const [lo, hi] = viewWindow(lam);
-    let n = 0, first = -1, last = -1;
+    let first = -1, last = -1, dMin = Infinity, dMax = 0;
     for (let i = 0; i < lam.length; i++) {
       if (lam[i] < lo || lam[i] > hi) continue;
       if (first < 0) first = i;
-      last = i; n++;
+      else { const d = lam[i] - lam[i - 1]; if (d < dMin) dMin = d; if (d > dMax) dMax = d; }
+      last = i;
     }
-    const step = n > 1 ? (lam[last] - lam[first]) / (n - 1) : 0;
-    const stepTxt = step >= 10 ? step.toFixed(0) : step.toFixed(1);
+    // Report the real spacings, not their mean: the cube's bins are 2.5 Å through the
+    // optical and 10 Å past 1 µm, so a window straddling the break averages to ~8.4 Å —
+    // a number no bin in it actually has. A range is the honest form.
+    const fmtStep = (d) => (d >= 10 ? d.toFixed(0) : d.toFixed(1));
+    const stepTxt = last <= first ? "0"
+      : dMax - dMin > 0.05 * dMax ? `${fmtStep(dMin)}–${fmtStep(dMax)}` : fmtStep(dMax);
     const head = ` · Zoomed to ${viewBandLabel} (${viewBand.lo}–${viewBand.hi} Å) — `;
     return dotsAreLegible(lam, lo, hi)
       ? head + `the dots are the grid's native ${stepTxt} Å sampling; a finer, ` +
         `higher-resolution bake would sharpen these line cores.`
-      : head + `the grid samples this window every ${stepTxt} Å, too densely to dot at this ` +
+      : head + `the grid samples this window at ${stepTxt} Å, too densely to dot at this ` +
         `width, so the curve is drawn plain.`;
   }
 

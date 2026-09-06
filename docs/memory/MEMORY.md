@@ -23,6 +23,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Real interior structure (MESA)](star-sim-interior-structure-mesa.md) — `structure.py` + `/structure`: real MESA radial profiles, canonical (not fitted) polytrope overlays, the interior regimes + the partial 2D (mass×[Fe/H]) grid.
 - [Phase 3 Lane–Emden](star-sim-phase3-lane-emden.md) — the §8 polytrope panel: sibling not provider, `/polytrope`, DOP853+θ=0 event.
 - [Phase 5 spectra](star-sim-phase5-spectra.md) — the synthetic-spectrum panel: MSG/pymsg bake → `spectra.py` runtime + `/spectrum`; the SED panel. Recipe `backend/docs/msg_spectra_build_recipe.md`.
+- [Near-IR cube (λ → 2.5 µm)](star-sim-near-ir-cube.md) — the v2 spectrum cube: the COOL grid was the wall (MedRes-A stops at 1 µm), piecewise λ bins + float32-as-baked make it cheaper than the optical cube, per-cube BAKE_VERSION, CCM89's IR branch, and the Johnson/Gaia/2MASS CMD planes.
 - [Binary-stripped stars](star-sim-binary-stripped.md) — `binary.py` + `/binary` (Götberg He-star, the ~70% WR channel), Roche geometry, the POSYDON two-star co-evolution movie.
 - [CO-HMS_RLO compact-object binary](star-sim-co-hms-rlo.md) — `posydon_co.py` + `/co_binary_track`, parameterized by `kind`; the DCO/GW-progenitor classifier and the Eddington accretion-cue gating.
 - [Coeval-ensemble overlay (BPASS)](star-sim-coeval-ensemble-bpass.md) — the first ENSEMBLE sibling: `bpass.py` + `/population` + `/population_hrd`, single-star vs +binaries.

@@ -107,13 +107,21 @@ def test_alpha_spectrum_endpoint_well_formed():
 
 
 @requires_alpha_spectra_data
-def test_alpha_shares_the_main_cube_wavelength_grid():
-    """The alpha cube is baked onto the SAME 3000–9000 Å @ 2.5 Å grid as the main cube,
-    so the panel's x-axis and line guides don't jump when it switches cubes (the
-    cool→hot handoff)."""
-    a = alpha_spectrum_data(5000, 4.5, -0.5, 0.0)
-    main = spectra.spectrum_data(5000, 4.5, -0.5)
-    assert np.allclose(np.asarray(a["wavelength"]), np.asarray(main["wavelength"]))
+def test_alpha_grid_is_a_prefix_of_the_main_cube_wavelength_grid():
+    """The alpha cube is baked onto the SAME 3000–9000 Å @ 2.5 Å bins as the main cube's
+    OPTICAL half, so the panel's x-axis and line guides don't jump when it switches cubes
+    (the cool→hot handoff).
+
+    It used to be the whole of the main grid; since the near-IR re-bake the main cube runs
+    on to 2.5 µm and the alpha cube is its **prefix**. That is the invariant that actually
+    matters — over every wavelength both cubes have, the bins coincide exactly — and the
+    panel's default frame is capped at the optical (`OPTICAL_VIEW_HI`) so the visible axis
+    is identical either way. A re-bake that shifted the optical bins would still fail here.
+    """
+    a = np.asarray(alpha_spectrum_data(5000, 4.5, -0.5, 0.0)["wavelength"])
+    main = np.asarray(spectra.spectrum_data(5000, 4.5, -0.5)["wavelength"])
+    assert a.size <= main.size
+    assert np.allclose(a, main[:a.size])
 
 
 # --- data-gated: the [alpha/Fe] line physics (measured through the runtime path) ---

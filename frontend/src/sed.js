@@ -315,8 +315,8 @@ export function createSED(canvas, opts) {
   let population = null;
   // Observer's view (Axis A): the interstellar reddening pushed in via setReddening(). redOn &&
   // redAv>0 → overlay a REDDENED blackbody (client-side CCM89, reddening.js). Because CCM89 is
-  // identity outside ~1250–9091 Å, the reddened curve coincides with the blackbody over most of
-  // the 14 decades and only dips in the UV/optical — carving out the characteristic 2175 Å
+  // identity outside ~1250 Å–3.33 µm, the reddened curve coincides with the blackbody over most
+  // of the 14 decades and only dips in the UV/optical/near-IR — carving out the characteristic 2175 Å
   // extinction BUMP, the SED's payoff. A pure overlay (off/av=0 is a no-op). Living-only.
   let redOn = false, redAv = 0, redRv = 3.1;
 
@@ -412,8 +412,8 @@ export function createSED(canvas, opts) {
       ctx.strokeStyle = COL_CURVE; ctx.lineWidth = 1.6; ctx.stroke();
     }
 
-    // Observer's view (Axis A): the REDDENED blackbody. CCM89 is identity outside ~1250–9091 Å, so
-    // this hugs the intrinsic curve across most of the 14 decades and only dips in the UV/optical —
+    // Observer's view (Axis A): the REDDENED blackbody. CCM89 is identity outside ~1250 Å–3.33 µm,
+    // so this hugs the intrinsic curve across most of the 14 decades and only dips in the UV to near-IR —
     // carving out the 2175 Å extinction BUMP (the b(x) Lorentzian), the SED's reddening payoff.
     // Same intrinsic-peak normalization (logPeak), so the blackbody curve above is unchanged.
     if (redOn && redAv > 0 && !endgameMode && shown("blackbody")) {

@@ -204,9 +204,16 @@ def test_photometry_route_ok() -> None:
     assert r.status_code == 200
     j = r.json()
     assert j["mv_abs"] == pytest.approx(4.81, abs=0.05)
-    assert set(j["bands"]) == {"B", "V", "BP"}
     assert "absolute_mag" in j and "apparent_mag" in j
     assert j["grid_name"]
+
+    # The band list follows the SERVED cube, not a constant: B/V/BP are always in reach,
+    # and the 2MASS/Gaia red bands appear exactly when the spectrum extends over them.
+    bands = set(j["bands"])
+    assert {"B", "V", "BP"} <= bands
+    lam_max = spectrum_data(5772.0, 4.44, 0.0)["wavelength"][-1]
+    assert ("Ks" in bands) == (lam_max >= 23990.0)
+    assert ("G" in bands and "RP" in bands) == (lam_max >= 10800.0)
 
 
 def test_photometry_route_422_on_bad_radius() -> None:

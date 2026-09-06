@@ -267,7 +267,7 @@ This is the honest reason the He/α what-ifs are MESA-vs-MESA only.
 | POSYDON HMS-HMS | T2 | No eccentricity; C/N/O only; no per-row phase. | GATED. |
 | Accretion cue | T3 | η = 0.1 schematic; artifact rows (505,221× Edd on `unstable_MT`) gated → ≤3.46× grid-wide. | GATED — re-derive the bound if the gate changes. |
 | DCO merger time | OOS | Needs natal kicks — two prescriptions deep. | Deferred. |
-| Photometry | T1 | Cube ends 8999 Å → no G/RP/JHK; B-band ZP offset 0.04 mag common-mode; M_V,☉ = 4.832. | ACCEPT. **NEXT:** extend the bake to 2.5 µm with the same PHOENIX/CAP18 sources to unlock Gaia G/RP + 2MASS — the observer panel's most-asked-for gap. Data-gated (host bake). |
+| Photometry | T1 | **Cube now ends at 2.5 µm** (2026-09-06 re-bake): eight bands — B, V, BP, G, RP, J, H, Ks. Solar anchors M_V 4.832 / M_G 4.683 / M_Ks 3.317, (BP−RP) 0.819 vs 0.82, (J−Ks) 0.368 vs 0.362, (V−Ks) 1.516 vs 1.560. B-band ZP offset 0.04 mag common-mode, unchanged. | ACCEPT — the gap is closed. The residual is the same zero-point *convention* scale (~0.04 mag) in B−V and V−Ks, common-mode across star, track and isochrone. Bands are gated on the served cube's own λ coverage, so a narrower cube silently offers fewer rather than extrapolating. |
 | Habitable zone | T2 | Kopparapu quartic diverges outside 2600–7200 K → band blanks. Liquid-water only. | GATED. |
 | Asteroseismology | T1 | Scaling relations only; rings 3 % low (the §1.2 root). M/R "recovery" is the principle, never a measurement. | ACCEPT. |
 | Isochrone turnoff | T1 | Bluest MS-phase row (naive max-Teff is off 20–50× on old isochrones). | Pinned. |
@@ -302,14 +302,16 @@ surface. The false-caption check is part of every feature's Gate 0.
 
 ## 6. Prioritised NEXT list (bounded, honest, in order)
 
-1. **Near-IR spectrum bake to 2.5 µm** (§3 photometry) — host-side bake + one
-   `BAKE_VERSION` bump; unlocks Gaia G/RP and 2MASS on the CMD panel.
-2. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
+1. **Grid density at 0.3–0.45 M☉** — only if a user-visible drag artefact is ever
    measured there; MIST has no finer nodes, so this would mean MESA slices.
 
-(Four items have left this list, all shipped 2026-09-03: the He-ignition cliff (§1.3),
+(Five items have left this list. Four shipped 2026-09-03: the He-ignition cliff (§1.3),
 the uncertain-fate band (§2), the Sun-residual tooltip (§1.2) and the Rossby-flavoured
-`activity` proxy (§1.6). With the last of those, **spec §11's `activity` question is
-answered** — the remaining NEXT items are both data-gated or conditional.)
+`activity` proxy (§1.6) — with the last of those, **spec §11's `activity` question is
+answered**. The fifth, the **near-IR bake to 2.5 µm**, shipped 2026-09-06: the wall was
+never the atmospheres — CAP18 already carried flux to 6.5 µm and OSTAR2002 to 5 µm, and
+the cool splice's Göttingen MedRes-A stopped at 1 µm while `bake()` clamps λ to the
+narrowest grid it holds. Swapping in MedRes-R (same axes, same ranges, 2.5 µm) made Gaia
+G/RP and 2MASS J/H/Ks real. See recipe §6a. The one remaining NEXT item is conditional.)
 
 Everything in **OOS** stays out until the grid approach "hits a real wall" (spec §9).

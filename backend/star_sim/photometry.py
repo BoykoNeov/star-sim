@@ -27,9 +27,10 @@ composes with the Axis-B isochrone into a real cluster colour–magnitude diagra
 
 **Scope (measured — Gate 0).** The main absorption cube is absolute physical surface
 F_λ (the Sun integrates to ~98% of the Planck in-band σT⁴), so magnitudes anchor
-correctly: the Sun lands at M_V ≈ 4.82 with the exact 10.00 distance modulus. The cube
-covers only 3001–8999 Å, so the honest bands are B, V (flagship CMD) + BP (verification);
-Gaia G/RP and 2MASS JHK fall off the red edge and are out of scope. The synthetic solar
+correctly: the Sun lands at M_V ≈ 4.82 with the exact 10.00 distance modulus. Which bands
+are honest follows the cube's own λ coverage rather than a fixed list (`bands_within`): the
+optical v1 cube (3001–8999 Å) answered for B, V and BP only, and the v2 near-IR cube (to
+2.5 µm) adds Gaia G/RP and 2MASS J/H/Ks. The synthetic solar
 B−V comes out ~0.04 blue of the observed 0.65 — a known B-band Vega-zero-point *convention*
 offset (SVO Bessell.B 3908.5 Jy vs literature ~4000–4060), **common-mode** across the star,
 its track, and the isochrone, so it cancels in their *relative* CMD placement (the star

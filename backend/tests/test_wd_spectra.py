@@ -114,12 +114,19 @@ def test_wd_spectrum_endpoint_well_formed():
 
 
 @requires_wd_spectra_data
-def test_wd_shares_the_main_cube_wavelength_grid():
-    """The WD cube is baked onto the SAME 3000–9000 Å @ 2.5 Å grid as the main cube,
-    so the panel's x-axis and line guides don't jump when it switches cubes."""
-    wd = wd_spectrum_data(13000, 8.0)
-    main = spectra.spectrum_data(9500, 4.0, 0.0)
-    assert np.allclose(np.asarray(wd["wavelength"]), np.asarray(main["wavelength"]))
+def test_wd_grid_is_a_prefix_of_the_main_cube_wavelength_grid():
+    """The WD cube is baked onto the SAME 3000–9000 Å @ 2.5 Å bins as the main cube's
+    OPTICAL half, so the panel's x-axis and line guides don't jump when it switches cubes.
+
+    It used to be the whole of the main grid; since the near-IR re-bake the main cube runs
+    on to 2.5 µm and the WD cube is its **prefix**. Over every wavelength both cubes have,
+    the bins coincide exactly — and the panel's default frame is capped at the optical
+    (`OPTICAL_VIEW_HI`), so entering the WD endgame does not move the axis at all.
+    """
+    wd = np.asarray(wd_spectrum_data(13000, 8.0)["wavelength"])
+    main = np.asarray(spectra.spectrum_data(9500, 4.0, 0.0)["wavelength"])
+    assert wd.size <= main.size
+    assert np.allclose(wd, main[:wd.size])
 
 
 # --- data-gated: the DA line physics (measured through the runtime path) ------

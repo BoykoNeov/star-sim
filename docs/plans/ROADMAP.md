@@ -25,7 +25,6 @@ list. CLAUDE.md's "what's next" points at this file.
 
 | Item | Status | Hook | Where |
 |---|---|---|---|
-| Near-IR spectrum bake (→ 2.5 µm) | planned, data-gated | Extends the main absorption cube past 8999 Å so Gaia G/RP and 2MASS JHK become computable on the observer CMD. Host-side bake + one `BAKE_VERSION` bump. | `science-hurdles.md` §3; `outward-quartet-atlas.md` §Axis A |
 | Grid density at 0.3–0.45 M☉ | idea | The fully-convective transition is the one place log-mass weighting is slightly worse; MIST has no finer nodes, so this would mean MESA slices. Only if a visible drag artefact is measured. | `science-hurdles.md` §1.1 |
 
 ## Open engines and follow-ons

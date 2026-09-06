@@ -342,6 +342,90 @@ serves `/spectrum`; `pytest backend/tests/test_spectra.py` gates the line physic
 (measured through the runtime path), and the `requires_spectra_data` marker skips
 those if the cube is absent.
 
+## 6a. The near-IR extension (Göttingen MedRes-R, λ → 2.5 µm) — BUILT 2026-09-06
+
+The v1 cube stopped at **8999 Å**, which put Gaia G/RP and 2MASS JHK out of reach and made
+the observer panel an optical-only CMD. **The wall was never the atmospheres.** Measured off
+the `.h5` files themselves (`specsource` attrs), not the grids page:
+
+| grid | λ range | verdict |
+|---|---|---|
+| `sg-CAP18-coarse.h5` | 1300 Å – 6.5 µm | already there |
+| `sg-OSTAR2002-low.h5` | 880 Å – 5 µm | already there |
+| `sg-Goettingen-MedRes-A.h5` | 3000 Å – **1 µm** | **the binding limit** |
+| `sg-Goettingen-MedRes-R.h5` | 3000 Å – **2.49999 µm** | the fix |
+
+`bake()` clamps λ to the *narrowest* spliced grid, so the cool grid alone decided the cube's
+red edge. MedRes-R is the same Göttingen/PHOENIX library over the **same three axes and the
+same ranges** (Teff 2300–12000, [Fe/H] −4…+1, log g 0–6 — confirmed in the bake log), at
+R = 10000 ×10-oversampled instead of Δλ = 1 Å, and 4.8 GB instead of 1.7:
+
+```bash
+curl -fL -o data/spectra/grids/sg-Goettingen-MedRes-R.h5   http://user.astro.wisc.edu/~townsend/resource/download/msg/grids/Goettingen/MedRes-R/v3/sg-Goettingen-MedRes-R.h5
+```
+
+**The λ axis is piecewise, and that is the whole design.** 3000–25000 Å at the optical 2.5 Å
+step would be 8800 bins — **629 MB resident, measured**, against 171 MB for v1's 2400 bins.
+Coarsening the optical to pay for it is not available: those 2.5 Å bins were measured at
+~1 bin/px at full panel width (Na D lands on 2.4 bins). So `build_lam_edges` keeps 2.5 Å below
+`NIR_FROM` (1 µm) and uses `NIR_STEP` (10 Å) above it — R = 1000 at 1 µm rising to 2500 at
+2.5 µm, comparable to the optical's R ≈ 2400 at 6000 Å and far finer than the 2MASS/Gaia
+bands this exists to serve.
+
+The **other** half of the memory story: `_Spectra` used to do `np.asarray(npz["flux"],
+dtype=float)`, upcasting a float32 cube to float64 and doubling it for nothing. Kept as
+baked, the *wider* cube costs **less** than the optical one did:
+
+| cube | bins | npz | resident |
+|---|---|---|---|
+| v1 optical (float64 on load) | 2400 | 98 MB | 343 MB |
+| v2 near-IR (float32 as baked) | 4299 | 180 MB | **308 MB** (measured), cold load 0.7 s |
+
+Bake command — identical to §6's, with the new cool grid (`--lam-max` now defaults to 25000):
+
+```bash
+docker cp data/spectra/grids/sg-Goettingen-MedRes-R.h5 msg_spike:/tmp/
+docker exec msg_spike bash -c '
+  source /opt/conda/etc/profile.d/conda.sh && conda activate base
+  export MSG_DIR=/tmp/msg-2.2 MESASDK_ROOT="$CONDA_PREFIX"
+  export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$MSG_DIR/lib"
+  python -u /tmp/bake_spectra.py --grid /tmp/sg-CAP18-coarse.h5     --hot-grid /tmp/sg-OSTAR2002-low.h5     --cool-grid /tmp/sg-Goettingen-MedRes-R.h5 --out /tmp/spectra_grid.npz'
+docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz
+```
+
+**Result** (181 s, 2-core container): `(142, 12, 11, 4299)`, **180.5 MB**, λ
+**3001.2 – 24985.0 Å** — 2800 optical bins + 1499 near-IR. The red edge is 24985, not 25000,
+because MedRes-R's own `lam_max` is 24999.91 and `bake()` floors it; nothing downstream cares,
+but a test that pins 25000 against the *cube* (rather than against `build_lam_edges`) would be
+wrong. Void statistics are **unchanged from v1** — 7380 voids (39.4 %), filled 6390 along log g,
+990 same-Teff, **0 fallback** — so the wider λ moved nothing in the splice logic.
+
+**BAKE_VERSION 1 → 2, and it is now PER CUBE.** One constant in `spectra.py` was checked
+against all five cubes, so this bump would have rejected the alpha/WD/WR/stripped cubes on a
+machine whose four were fine — and CI could not have caught it, because every one of those
+tests skips on a data-free clone. The version now rides in the `_CUBE_FILES` row.
+
+**Verification (the measurements that matter), v1 kept aside and compared:**
+
+- **The optical did not move.** Every CAP18 (3500–30000 K) and OSTAR2002 (>30000 K) node is
+  **bit-identical** to v1 over the first 2400 bins — median and max |ΔF|/F both exactly 0.
+  The 19 sub-3500 K nodes changed, as they must (MedRes-A → MedRes-R is a different
+  resampling of the same PHOENIX models): median 0.25 %, p90 2.6 %, p99 12 %. The single
+  >100× outlier is one bin whose v1 flux was 3.2e-6 against a cool-block median of 4.7e4 —
+  a dead molecular line core, ten orders below the continuum, not a physical change.
+- **The Sun, through the real photometry path** (literature in brackets):
+  M_V 4.832 (4.81, *unchanged from v1 to the last digit*) · M_G 4.683 (4.67) ·
+  M_Ks 3.317 (3.27) · (BP−RP) 0.819 (0.82) · (J−Ks) 0.368 (0.362) · (V−Ks) 1.516 (1.560) ·
+  (B−V) 0.612 (0.65 — the known B-band zero-point convention offset, unchanged).
+- **A cool star, where the near-IR is the point.** At 3300 K / log g 4.9: V−Ks = 4.67
+  (observed M dwarfs run ~4–5), J−Ks = 0.86, and **67.7 %** of the served 3000 Å – 2.5 µm
+  flux falls beyond 1 µm — against 28.1 % for the Sun. The panel's near-IR band shows the
+  H₂O bands and the J/H/K windows between them.
+- **Extinction now exists out there.** CCM89 gained its IR branch (eq. 2a/2b, 0.3 ≤ x ≤ 1.1)
+  in `photometry.py` *and* `reddening.js`, pinned in both test suites: A_J/A_V = 0.288,
+  A_H/A_V = 0.182, A_Ks/A_V = 0.118. Before this, every λ past 9091 Å returned exactly 0, so
+  a reddened star would have kept an unreddened J/H/K tail beside a dimmed B and V.
+
 ## 7. Endgame spectral grids (Chunk 0 scoping — WR/WD, go/no-go + format notes)
 
 For the stellar-endgame gateway (`docs/plans/smoldering-cinder-gateway.md`, Chunks

@@ -264,20 +264,31 @@ main {
        .structure-panel  882 → 890     phone  882, under the existing 910 — unchanged
    481 covers the wider widths for free: the panel is 433px there vs 480 at a 1024 viewport and
    688 at 1440 (the dashboard packs 2 columns at both, so 1440 is the WIDEST panel, not the
-   narrowest). 1024 is where the shift was first seen, not a regime needing its own rule. */
+   narrowest). 1024 is where the shift was first seen, not a regime needing its own rule.
+
+   .observer-panel RE-MEASURED 2026-09-06 (temp/star-sim-perf/nir-observer-floor.mjs) after the
+   near-IR work put a band-picker row (#cmd-diagram, 23px) above the readout AND lengthened the
+   readout's own labels: the plane is selectable now, so the widest strings are the 2MASS/Gaia
+   ones (M_Ks / (BP−RP)₀ / E(BP−RP)), not M_V / (B−V)₀ / E(B−V). Both had to be re-swept — a
+   floor sized against the old labels would be short by the difference. Same rule as above, max
+   + ~7:
+       .observer-panel   700 → 707     phone  721 → 728
+   The note is EMPTY in the Gaia/2MASS planes (the B-band zero-point caveat is Johnson's alone),
+   so the tallest state still pairs the longest READOUT with the Johnson NOTE — a combination no
+   single screen shows, which is exactly why it is injected rather than swept for. */
 .controls-panel  { min-height: 1024px; }
 .structure-panel { min-height: 890px; }
 .star-panel      { min-height: 815px; }
 .hr-panel        { min-height: 820px; }
 .sed-panel       { min-height: 830px; }
-.observer-panel  { min-height: 675px; }
+.observer-panel  { min-height: 707px; }
 @media (max-width: 480px) {
   .controls-panel  { min-height: 1140px; }
   .structure-panel { min-height: 910px; }
   .star-panel      { min-height: 830px; }
   .hr-panel        { min-height: 870px; }
   .sed-panel       { min-height: 960px; }
-  .observer-panel  { min-height: 715px; }
+  .observer-panel  { min-height: 728px; }
 }
 
 /* The 3D star: a modest square that shrinks to fit a narrow (phone) panel. star.js
