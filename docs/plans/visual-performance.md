@@ -25,7 +25,7 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `shots.mjs` | full-page + star-canvas screenshots, desktop 1440 and phone 390, Sun / 15 M☉ / 15 M☉ late / 0.3 M☉ | `node shots.mjs <suffix>` → `shots-<suffix>/` |
 | `heights.mjs` | the Controls panel's vertical budget: reserved vs *used* height for the panel and for the rotation section, plus every facet's box, across seven mass/rotation regimes at 1440 / 512 / 390 | `node heights.mjs` |
 | `rotmax.mjs` | the **tallest reachable** rotation section and Controls panel, swept over 22 masses × 5 [Fe/H] × rotation off/on at three widths — what a `min-height` floor has to cover | `node rotmax.mjs` |
-| `gatenote.mjs` | the `#incl-gate-note` floor against the state space that actually selects its text — **[Fe/H] × mass**, not mass alone, because the rotating-track toggle's visibility moves with metallicity — at all three widths | `node gatenote.mjs` |
+| `gatenote.mjs` | the `#incl-gate-note` floor against the state space that actually selects its text — **[Fe/H] × mass**, not mass alone, because the rotating-track toggle's visibility moves with metallicity — at 1440 / 512 / **481** / 390, reading the floor off the page rather than hardcoding it | `node gatenote.mjs` |
 | `jumpcheck.mjs` | whether a state change actually **moves a neighbouring panel** — every panel's top/height before and after the two known overflow states. The difference between a real jump and a floor that is merely undersized on paper | `node jumpcheck.mjs` |
 | `innerjump.mjs` | whether the rotation section overflowing its floor moves anything **inside** the Controls panel (age slider, gateway). `jumpcheck.mjs` only snapshots `main > section`, so it is blind to a within-panel shove — at 1440 the panel's own floor absorbs the growth and jumpcheck reports clean while the age slider drops 36 px | `node innerjump.mjs` |
 | `notefit.mjs` | how tall `#incl-gate-note` may be for a given `.rot-control` floor: the content above the note in the **tightest note-showing** state, measured order-independently so it stays right if the note stops being the last child | `node notefit.mjs` |
@@ -345,7 +345,10 @@ acceptance check could never have caught it, which is why acceptance now needs b
   margin`: `376 − 198 − 12` and `412 − 234 − 12` both give 166 → 160. So the ≤ 480 override is
   gone rather than duplicated. `gatenote.mjs` now reads the floor off the page instead of
   hardcoding it, and reports 6 px headroom and zero overflows across the whole [Fe/H] × mass
-  sweep at every width.
+  sweep at **all four** widths — 481 included, where the section's lines turn out not to rewrap
+  (370 used, same as 512). **The coincidence is a coupling:** the single note value is safe only
+  because the two rotation floors and the two content-above values differ by the same 36 px.
+  Change either floor and both must be re-derived; the CSS comment says so.
 - **The cost, stated plainly.** +222 px (desktop) and +248 px (phone) of *permanent* bottom slack
   on every star — more than the ~140 px this row estimated, and more than the ~180 px V1 was
   opened to remove. The estimate was low because it read the raw observed panel heights out of

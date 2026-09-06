@@ -379,7 +379,10 @@ main {
    own top margin and a few px of safety. That tightest state puts 198px above this note at every
    width above 480 and 234px on the phone, so 376−198−12 and 412−234−12 both land on 166 → 160:
    the two regimes coincide to the pixel, which is why there is no ≤480 override here any more
-   (there was a 64px one, needed only while .rot-control had a single desktop-wide floor).
+   (there was a 64px one, needed only while .rot-control had a single desktop-wide floor). That
+   coincidence is a COUPLING, not a fact about this note: it holds only because the two
+   .rot-control floors and the two content-above values happen to differ by the same 36px. Change
+   either floor and both of these must be re-derived — the single value stops being safe.
    Sized to the tightest state, so the note can never push the section past its floor: it only
    ever eats space that is already reserved and already empty. Re-measure with notefit.mjs (it
    reads the floor off the page) if either the floor or a facet's height changes. */
