@@ -15,15 +15,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ccm89, extinctionFactor } from "../src/reddening.js";
 
-// A(lambda)/A(V) from photometry.py at the three wavelengths the port was checked
-// against: the optical branch, the 2175 A bump, and the deep UV.
+// A(lambda)/A(V) from photometry.py at the wavelengths the port was checked
+// against: the optical branch, the 2175 A bump, the deep UV, and — since the near-IR
+// cube — the three 2MASS pivots on the IR branch (CCM89 eq. 2a/2b).
 const PY = {
   5000: 1.122246878899302,   // optical branch (CCM89 eq. 3a/3b)
   2175: 3.185101275314405,   // the UV bump — the b(x) Lorentzian peak
   1500: 2.6366457176802633,  // deep UV, base eq. 4a/4b with NO F_a/F_b term
+  12350: 0.28760574926358984,  // 2MASS J — IR branch (A_J/A_V, ~0.29)
+  16620: 0.17830578090680688,  // 2MASS H
+  21590: 0.11701313389302863,  // 2MASS Ks — dust is ~9x weaker here than in V
+  25000: 0.09240552762537405,  // the cube's red edge, 2.5 um
 };
 
-test("the port still matches photometry.py at the three checked wavelengths", () => {
+test("the port still matches photometry.py at every checked wavelength", () => {
   for (const [lam, expected] of Object.entries(PY)) {
     const got = ccm89(Number(lam));
     assert.ok(Math.abs(got - expected) < 1e-12,
@@ -41,19 +46,43 @@ test("the deep-UV branch keeps its deliberate omission of the F_a/F_b correction
   assert.ok(Math.abs(ccm89(1500) - PY[1500]) < 1e-12);
 });
 
-test("reddening is exactly identity outside 1.1-8 inverse microns", () => {
+test("reddening is exactly identity outside 0.3-8 inverse microns", () => {
   // Not "small" — exactly zero. The SED panel spans gamma-ray to radio, so most of
   // its 14 decades must be untouched rather than nudged.
-  assert.equal(ccm89(9500), 0, "past 9091 A the coefficients are zero");
+  assert.equal(ccm89(4e4), 0, "past 3.33 um the coefficients are zero");
   assert.equal(ccm89(1e6), 0, "radio");
   assert.equal(ccm89(1200), 0, "below 1250 A the coefficients are zero");
   assert.equal(ccm89(1), 0, "X-ray");
-  assert.equal(extinctionFactor(9500, 1.0), 1.0);
+  assert.equal(extinctionFactor(4e4, 1.0), 1.0);
   assert.equal(extinctionFactor(1200, 1.0), 1.0);
 });
 
-test("the band edges are inclusive (9091 A and 1250 A are reddened, not identity)", () => {
+test("the near-IR is reddened, and by less than the optical", () => {
+  // The whole point of the IR branch: 9500 A used to return exactly 0, so a dust-
+  // reddened star kept an untouched J/H/K tail beside a dimmed B/V. Extinction must
+  // now be non-zero out to 3.33 um and must FALL monotonically with wavelength.
+  const ir = [9500, 12350, 16620, 21590, 25000].map((l) => ccm89(l));
+  for (const v of ir) assert.ok(v > 0, "the near-IR must be reddened at all");
+  for (let i = 1; i < ir.length; i++) {
+    assert.ok(ir[i] < ir[i - 1], "extinction must fall towards the infrared");
+  }
+  assert.ok(ir[0] < ccm89(5500), "the near-IR is less extinguished than V");
+});
+
+test("the IR and optical branches meet at x = 1.1 (a 3e-4 seam, not a cliff)", () => {
+  // CCM89's branches are separate fits, so they do NOT agree to machine precision at
+  // the seam: measured here, the IR power law gives 0.47100 and the optical
+  // polynomial 0.47131 — a 3.0e-4 step (0.06 %), which is CCM89's own, not a port
+  // bug. Pinned as a BOUND: a mis-transcribed coefficient would open it far wider.
+  const seam = ccm89(1e4 / 1.1), justBelow = ccm89(1e4 / 1.0999999);
+  const step = Math.abs(seam - justBelow);
+  assert.ok(step < 1e-3, `step at the seam: ${seam} vs ${justBelow} (${step})`);
+  assert.ok(step > 1e-5, "a step of exactly 0 would mean one branch never runs");
+});
+
+test("the band edges are inclusive (3.33 um and 1250 A are reddened, not identity)", () => {
   assert.ok(ccm89(1e4 / 1.1) !== 0, "x = 1.1 exactly is inside the optical branch");
+  assert.ok(ccm89(1e4 / 0.3) !== 0, "x = 0.3 exactly is inside the IR branch");
   assert.ok(ccm89(1e4 / 8.0) !== 0, "x = 8.0 exactly is inside the UV branch");
 });
 

@@ -66,8 +66,12 @@ import time
 import numpy as np
 
 # Bump when the on-disk schema or axis/flux semantics change, so the runtime can
-# reject a stale cube (mirrors MIST's CACHE_VERSION discipline).
-BAKE_VERSION = 1
+# reject a stale cube (mirrors MIST's CACHE_VERSION discipline). Must match
+# `star_sim.spectra.MAIN_BAKE_VERSION` — which is the MAIN cube's own version, not a
+# constant shared with the four other cubes (bumping this must not reject those).
+#   v1: optical only, 3000-8999 A at a uniform 2.5 A.
+#   v2: near-IR, 3000 A - 2.5 um, PIECEWISE bins (2.5 A optical, coarser NIR).
+BAKE_VERSION = 2
 
 # MSG axis label -> our canonical lowercased key (what the runtime/state speak).
 # Anything not in this map is passed through lowercased with non-alnum stripped,
@@ -87,6 +91,44 @@ _AXIS_PLAN = {
     "feh": dict(n=None, log=False, step=0.5),
 }
 _AXIS_PLAN_DEFAULT = dict(n=8, log=False, step=None)
+
+# --- the wavelength plan (v2: optical at the old resolution, near-IR coarser) -------
+#
+# The cube's memory cost is (n_nodes x n_lam x 4 bytes) and the runtime holds it all
+# resident, so the λ axis is where a near-IR extension is won or lost: 3000-25000 Å at
+# the optical 2.5 Å step would be 8800 bins (629 MB resident), against 2400 bins
+# (171 MB) for the old optical-only cube. A UNIFORM coarser step is not an option — it
+# would coarsen the optical, whose 2.5 Å bins were measured at ~1 bin/px at full panel
+# width (Na D lands on 2.4 bins). So the axis is PIECEWISE: the optical keeps 2.5 Å
+# exactly as baked before, and only λ > NIR_FROM is binned at NIR_STEP.
+#
+# NIR_STEP = 10 Å gives R = λ/Δλ from 1000 at 1 µm to 2500 at 2.5 µm — comparable to
+# the optical's R ≈ 2400 at 6000 Å, and far finer than the 2MASS/Gaia band widths this
+# extension exists to make computable. Total 4300 bins (307 MB), i.e. the near-IR cube
+# is CHEAPER in memory than the optical one was as float64.
+NIR_FROM = 10000.0
+NIR_STEP = 10.0
+
+
+def build_lam_edges(lo: float, hi: float, step: float,
+                    nir_from: float = NIR_FROM,
+                    nir_step: float = NIR_STEP) -> np.ndarray:
+    """Bin EDGES over [lo, hi]: `step` below `nir_from`, `nir_step` above it.
+
+    Pure and side-effect-free so it is testable outside the container (the rest of this
+    module needs pymsg). The seam edge lands exactly on `nir_from` when it is inside
+    the range, so no bin straddles the two resolutions; when `hi <= nir_from` the
+    result is the plain uniform axis v1 baked, unchanged.
+    """
+    if hi <= lo:
+        raise ValueError(f"empty wavelength range [{lo}, {hi}]")
+    seam = min(max(nir_from, lo), hi)
+    edges = np.arange(lo, seam + step, step)
+    edges = edges[edges <= seam + 1e-9]
+    if seam < hi:
+        nir = np.arange(edges[-1] + nir_step, hi + nir_step, nir_step)
+        edges = np.concatenate([edges, nir[nir <= hi + 1e-9]])
+    return edges
 
 
 def _canon(label: str) -> str:
@@ -305,7 +347,8 @@ def _cool_grid_info(cg, cool_grid_path: str) -> dict:
 
 def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
          lam_step: float, n_teff: int | None, hot_grid_path: str | None = None,
-         cool_grid_path: str | None = None) -> None:
+         cool_grid_path: str | None = None, nir_from: float = NIR_FROM,
+         nir_step: float = NIR_STEP) -> None:
     import pymsg  # imported here so `--help` works outside the container
 
     sg = pymsg.SpecGrid(grid_path)
@@ -372,11 +415,11 @@ def bake(grid_path: str, out_path: str, *, lam_min: float, lam_max: float,
                        float(np.floor(cg.lam_max)) if cg is not None else np.inf)
     lo = max(lam_min, grid_lam_min)
     hi = min(lam_max, grid_lam_max)
-    lam_edges = np.arange(lo, hi + lam_step, lam_step)
-    lam_edges = lam_edges[lam_edges <= hi]
+    lam_edges = build_lam_edges(lo, hi, lam_step, nir_from, nir_step)
     lam = 0.5 * (lam_edges[:-1] + lam_edges[1:])
     n_lam = lam.size
-    print(f"  lam: {n_lam} bins [{lam[0]:.1f} .. {lam[-1]:.1f}] Å @ {lam_step} Å", flush=True)
+    steps = f"{lam_step} Å" if lam_edges[-1] <= nir_from else         f"{lam_step} Å below {nir_from:.0f} Å, {nir_step} Å above"
+    print(f"  lam: {n_lam} bins [{lam[0]:.1f} .. {lam[-1]:.1f}] Å @ {steps}", flush=True)
 
     param_shape = tuple(a.size for a in axes)
     cube = np.zeros(param_shape + (n_lam,), dtype=np.float32)
@@ -496,15 +539,23 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default="/tmp/spectra_grid.npz",
                    help="output .npz path (copy to host data/spectra/ after)")
     p.add_argument("--lam-min", type=float, default=3000.0)
-    p.add_argument("--lam-max", type=float, default=9000.0)
+    p.add_argument("--lam-max", type=float, default=25000.0,
+                   help="red edge in Å (default 2.5 µm — needs a cool grid that "
+                        "reaches it, e.g. sg-Goettingen-MedRes-R.h5; MedRes-A stops "
+                        "at 1 µm and silently clamps the whole cube there)")
     p.add_argument("--lam-step", type=float, default=2.5,
-                   help="wavelength bin width in Å (teaching resolution)")
+                   help="OPTICAL wavelength bin width in Å (teaching resolution)")
+    p.add_argument("--nir-from", type=float, default=NIR_FROM,
+                   help="λ above which the coarser near-IR bin width applies")
+    p.add_argument("--nir-step", type=float, default=NIR_STEP,
+                   help="near-IR bin width in Å (keeps the cube affordable; pass "
+                        "--nir-step equal to --lam-step for a uniform axis)")
     p.add_argument("--n-teff", type=int, default=None,
                    help="override the number of (log-spaced) Teff nodes")
     a = p.parse_args(argv)
     bake(a.grid, a.out, lam_min=a.lam_min, lam_max=a.lam_max,
          lam_step=a.lam_step, n_teff=a.n_teff, hot_grid_path=a.hot_grid,
-         cool_grid_path=a.cool_grid)
+         cool_grid_path=a.cool_grid, nir_from=a.nir_from, nir_step=a.nir_step)
     return 0
 
 

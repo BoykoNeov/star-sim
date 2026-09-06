@@ -102,6 +102,37 @@ def test_vectorized_stack_matches_scalar() -> None:
     assert np.allclose(mags["V"], scalar, atol=1e-9)
 
 
+# --- band availability is a function of the served λ grid (no cube needed) -----
+
+def test_bands_are_gated_by_the_served_wavelength_range() -> None:
+    """A band is only offered when the spectrum covers ALL of its transmission curve.
+
+    This is what lets the filter asset carry Gaia G/RP and 2MASS J/H/Ks before (and
+    after) the near-IR re-bake without ever claiming a magnitude the data cannot
+    support: on the optical v1 grid those five run off the red edge and are dropped;
+    on the v2 grid to 2.5 µm all eight are answerable. No version flag anywhere.
+    """
+    optical = np.linspace(3001.25, 8998.75, 2400)      # the v1 cube's λ grid
+    near_ir = np.linspace(3001.25, 24995.0, 4300)      # the v2 cube's λ grid
+
+    assert set(photometry.band_names(optical)) == {"B", "V", "BP"}
+    assert set(photometry.band_names(near_ir)) == {
+        "B", "V", "BP", "G", "RP", "J", "H", "Ks"}
+
+    # The asset itself still holds all eight — the gate is the data, not the table.
+    assert len(photometry.band_names()) == 8
+
+
+def test_a_band_off_the_edge_is_dropped_not_partially_integrated() -> None:
+    """The failure mode this gate exists to prevent: half a band integrated over the
+    slice that happens to be in range, returning a confident wrong magnitude."""
+    optical = np.linspace(3001.25, 8998.75, 2400)
+    flux = np.ones((1, optical.size))
+    mags = photometry.band_mags_stack(optical, flux, np.array([1.0]), 10.0)
+    assert "Ks" not in mags and "J" not in mags
+    assert "V" in mags
+
+
 # --- reddening law is monotone in A_V (no dependence on the cube) -------------
 
 def test_ccm89_shape() -> None:
@@ -117,9 +148,10 @@ def test_ccm89_matches_the_javascript_port() -> None:
     paint the *same* physical extinction side by side: the served magnitude/colour readout
     comes from here, the reddened curve drawn beside it from there. The port's header says
     it was matched at 5000 Å (optical branch), 2175 Å (the UV bump) and 1500 Å (deep UV) —
-    but that match was re-run by hand, so nothing caught a drift.
+    but that match was re-run by hand, so nothing caught a drift. The near-IR cube added a
+    fourth branch (CCM89 eq. 2a/2b, 0.3 ≤ x ≤ 1.1), so the 2MASS pivots are pinned too.
 
-    These three literals also appear verbatim in
+    These literals also appear verbatim in
     `frontend/tests/reddening.test.mjs`, so **either** language changing its answer now
     fails a test. Deliberately included: 1500 Å, where this implementation omits the deep-UV
     F_a/F_b correction a textbook CCM89 would add — a "fix" on one side alone would silently
@@ -130,10 +162,37 @@ def test_ccm89_matches_the_javascript_port() -> None:
     assert got[1] == pytest.approx(3.185101275314405, rel=1e-12)
     assert got[2] == pytest.approx(2.6366457176802633, rel=1e-12)
 
-    # The other half of the contract: outside 1.1–8 µm⁻¹ the law is *exactly* identity, not
+    ir = photometry.ccm89(np.array([12350.0, 16620.0, 21590.0, 25000.0]), rv=3.1)
+    assert ir[0] == pytest.approx(0.28760574926358984, rel=1e-12)   # 2MASS J
+    assert ir[1] == pytest.approx(0.17830578090680688, rel=1e-12)   # 2MASS H
+    assert ir[2] == pytest.approx(0.11701313389302863, rel=1e-12)   # 2MASS Ks
+    assert ir[3] == pytest.approx(0.09240552762537405, rel=1e-12)   # the cube's red edge
+
+    # The other half of the contract: outside 0.3–8 µm⁻¹ the law is *exactly* identity, not
     # merely small. The SED panel spans γ-ray → radio and leaves all but that slice alone.
-    off = photometry.ccm89(np.array([9500.0, 1200.0]), rv=3.1)
+    off = photometry.ccm89(np.array([40000.0, 1200.0]), rv=3.1)
     assert (off == 0.0).all()
+
+
+def test_ccm89_reddens_the_near_infrared() -> None:
+    """The IR branch is what keeps a reddened star's colours self-consistent.
+
+    Before it existed every λ past 9091 Å returned exactly 0, so J/H/K would have come
+    out UNREDDENED beside a dimmed B and V — the wrong answer in the very bands the
+    near-IR cube exists to serve. Extinction must be non-zero out to 3.33 µm, fall
+    monotonically towards the red, and stay below A(V).
+    """
+    lam = np.array([9500.0, 12350.0, 16620.0, 21590.0, 25000.0])
+    a = photometry.ccm89(lam, rv=3.1)
+    assert (a > 0).all()
+    assert (np.diff(a) < 0).all()
+    assert a[0] < photometry.ccm89(np.array([5500.0]), rv=3.1)[0]
+
+    # CCM89's branches are separate fits: they meet at x = 1.1 with a real 3.0e-4 step
+    # (0.06 %), which is the law's own, not a port bug. Pinned as a bound so a
+    # mis-transcribed coefficient — in either language — opens it wide and fails.
+    seam = photometry.ccm89(np.array([1e4 / 1.1, 1e4 / 1.0999999]), rv=3.1)
+    assert 1e-5 < abs(seam[0] - seam[1]) < 1e-3
 
 
 # --- route shape --------------------------------------------------------------

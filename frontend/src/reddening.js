@@ -14,19 +14,27 @@
 //   • the UV branch (3.3 < x ≤ 8) uses the base CCM89 eq. 4a/4b polynomials with NO
 //     deep-UV F_a/F_b correction term — matched on purpose, do not "fix" from a
 //     textbook or the drawn overlay drifts from the served readout in the deep UV;
-//   • outside 1.1 ≤ x ≤ 8 µm⁻¹ (λ ≳ 9091 Å or λ ≲ 1250 Å) the coefficients are 0, so
+//   • outside 0.3 ≤ x ≤ 8 µm⁻¹ (λ ≳ 3.33 µm or λ ≲ 1250 Å) the coefficients are 0, so
 //     the extinction factor is exactly 1 — reddening is identity there. On the SED
-//     (which spans γ-ray → radio) this means only the ~1250–9091 Å slice is reddened;
-//     the rest of the 14 decades is untouched, and the 2175 Å bump lives in the
-//     covered UV branch (the b(x) Lorentzian at x ≈ 4.6).
+//     (which spans γ-ray → radio) this means only the ~1250 Å–3.33 µm slice is
+//     reddened; the rest of the 14 decades is untouched, and the 2175 Å bump lives in
+//     the covered UV branch (the b(x) Lorentzian at x ≈ 4.6).
+// The IR branch (x < 1.1, λ > 9091 Å) arrived with the near-IR cube: without it every
+// near-IR wavelength was reddening-free, which on a reddened star would have drawn an
+// UNREDDENED J/H/K tail beside a dimmed optical one.
 
 // A(λ)/A(V) for a single wavelength λ (Å), parameterized by R_V. The extinction in
 // magnitudes is A_V · this; the flux is multiplied by 10^(−0.4 · A_V · this).
 export function ccm89(lamAng, rv = 3.1) {
   const x = 1.0e4 / lamAng;      // inverse microns (1 µm = 1e4 Å, so x = 1/λ_µm)
   let a = 0, b = 0;
-  if (x >= 1.1 && x <= 3.3) {
-    // Optical / NIR: CCM89 eq. 3a/3b — 7th-order polynomials in y = x − 1.82.
+  if (x >= 0.3 && x < 1.1) {
+    // Infrared: CCM89 eq. 2a/2b — one power law in x (continuous with the optical
+    // branch at x = 1.1 to 7 decimals; both give A(λ)/A(V) = 0.4713).
+    a = 0.574 * x ** 1.61;
+    b = -0.527 * x ** 1.61;
+  } else if (x >= 1.1 && x <= 3.3) {
+    // Optical: CCM89 eq. 3a/3b — 7th-order polynomials in y = x − 1.82.
     const y = x - 1.82;
     a = 1.0 + 0.17699 * y - 0.50447 * y ** 2 - 0.02427 * y ** 3 + 0.72085 * y ** 4
         + 0.01979 * y ** 5 - 0.77530 * y ** 6 + 0.32999 * y ** 7;
@@ -37,7 +45,7 @@ export function ccm89(lamAng, rv = 3.1) {
     a = 1.752 - 0.316 * x - 0.104 / ((x - 4.67) ** 2 + 0.341);
     b = -3.090 + 1.825 * x + 1.206 / ((x - 4.62) ** 2 + 0.263);
   }
-  // Below 1.1 µm⁻¹ or above 8: a = b = 0 → A(λ)/A(V) = 0 (reddening is identity).
+  // Below 0.3 µm⁻¹ or above 8: a = b = 0 → A(λ)/A(V) = 0 (reddening is identity).
   return a + b / rv;
 }
 

@@ -17,20 +17,26 @@ band), so — like `star_sim/data/gotberg_z014.csv` — the baked result is **co
 to the repo as `star_sim/data/filters.json`; `photometry.py` reads it directly and
 `/photometry` works on a fresh clone (gated only on the spectrum cube it convolves).
 
-**Band scope (measured — see the Axis-A plan / advisor Gate 0):** the main absorption
-cube covers **3001–8999 Å (optical only)**, so the clean, fully-in-cube bands are
-**Johnson–Cousins (Bessell) B and V** — the flagship (B−V, M_V) CMD — plus **Gaia BP**
-as a verification band. Gaia G is truncated (red tail past 8999 Å → ~0.05–0.13 mag
-error), Gaia RP and 2MASS JHK fall entirely off the red edge, so they are deliberately
-excluded (blackbody-filling them would be the invisible-Na trap). A true Gaia CMD would
-need a wider cube re-bake — a future extension, out of scope here.
+**Band scope.** Which bands are *usable* is not decided here — it is decided by the
+spectrum cube that is actually loaded. `photometry.py` keeps only the bands whose
+transmission lies inside the served λ range and reports the rest as unavailable, so
+this table can list a band before the data that supports it exists.
+
+The v1 cube covered **3001–8999 Å (optical only)**: B and V (the flagship (B−V, M_V)
+CMD) plus Gaia BP as a verification band, with Gaia G truncated and Gaia RP + 2MASS
+JHK entirely off the red edge — excluded, because blackbody-filling them would be the
+invisible-Na trap. The **v2 near-IR cube reaches 2.5 µm** (Göttingen MedRes-R on the
+cool end, CAP18/OSTAR already there), which is what makes **Gaia G/RP** and **2MASS
+J/H/Ks** real rather than extrapolated. They are listed below for that cube; on an
+older cube they simply do not appear in the payload.
 
 Run once (idempotent; the result is committed, so this only re-runs on a band change):
 
     python -m star_sim.fetch_filters
 
 Cite: Rodrigo, Solano & Bayo (2012) / Rodrigo & Solano (2020), the SVO Filter Profile
-Service; the Bessell (1990) UBVRI system; Gaia DR3 (Riello et al. 2021) passbands.
+Service; the Bessell (1990) UBVRI system; Gaia DR3 (Riello et al. 2021) passbands;
+2MASS (Cohen, Wheaton & Megeath 2003).
 """
 
 from __future__ import annotations
@@ -51,11 +57,18 @@ _FPS_BASE = "http://svo2.cab.inta-csic.es/theory/fps"
 _USER_AGENT = user_agent("Axis A photometry, SVO FPS")
 
 # The bands we bake: (short name, SVO id, role). B/V are the flagship (B−V, M_V) CMD;
-# BP is a photon-counting verification band (a different detector-type code path).
+# BP/G/RP are Gaia DR3 (photon counters — a different detector-type code path), and
+# J/H/Ks are 2MASS. The last five need a cube that reaches past 1 µm; on a narrower
+# cube `photometry.py` drops them rather than integrating over a missing red tail.
 _BANDS: list[tuple[str, str, str]] = [
     ("B", "Generic/Bessell.B", "Johnson-Cousins B (Bessell 1990), energy counter"),
     ("V", "Generic/Bessell.V", "Johnson-Cousins V (Bessell 1990), energy counter"),
     ("BP", "GAIA/GAIA3.Gbp", "Gaia DR3 BP, photon counter (verification band)"),
+    ("G", "GAIA/GAIA3.G", "Gaia DR3 G, photon counter (needs λ to ~1.05 µm)"),
+    ("RP", "GAIA/GAIA3.Grp", "Gaia DR3 RP, photon counter (needs λ to ~1.05 µm)"),
+    ("J", "2MASS/2MASS.J", "2MASS J (Cohen 2003), 1.24 µm"),
+    ("H", "2MASS/2MASS.H", "2MASS H (Cohen 2003), 1.66 µm"),
+    ("Ks", "2MASS/2MASS.Ks", "2MASS Ks (Cohen 2003), 2.16 µm"),
 ]
 
 # The FPS scalar PARAMs we keep, with the type to cast them to.
@@ -132,8 +145,8 @@ def build() -> dict:
     return {
         "provenance": (
             "SVO Filter Profile Service (Rodrigo & Solano 2020); Bessell (1990) "
-            "UBVRI; Gaia DR3 (Riello et al. 2021). Vega magnitude system; "
-            "zero-points in Jy, detector_type 0=energy 1=photon."
+            "UBVRI; Gaia DR3 (Riello et al. 2021); 2MASS (Cohen et al. 2003). Vega "
+            "magnitude system; zero-points in Jy, detector_type 0=energy 1=photon."
         ),
         "wavelength_unit": "Angstrom",
         "zeropoint_unit": "Jy",

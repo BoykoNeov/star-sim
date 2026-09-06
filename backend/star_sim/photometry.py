@@ -108,15 +108,48 @@ def _load() -> _Filters:
     return _CACHE
 
 
-def band_names() -> list[str]:
-    """The bands available for photometry (B, V, BP)."""
-    return list(_load().bands.keys())
+def bands_within(lam: np.ndarray) -> dict[str, dict]:
+    """The filters whose transmission lies entirely inside the served λ grid.
+
+    **Which bands are honest is a property of the DATA, not of a hand-kept list.** The
+    filter asset carries eight bands, but a band is only computable when the spectrum
+    cube covers all of it: integrating Ks over a cube that stops at 8999 Å would return
+    a magnitude for the ~0 % of the band that happens to be inside, i.e. a confident
+    number for a measurement that was never made (the invisible-Na trap, §7). So the
+    test is the tabulated curve's FULL support — not its 1 % width, and with no
+    blackbody-filling of the missing tail.
+
+    On the optical v1 cube (3001–8999 Å) this leaves B, V and BP, exactly the scope the
+    Axis-A build shipped; on the v2 near-IR cube (to 2.5 µm) Gaia G/RP and 2MASS J/H/Ks
+    join them. Neither case needs a code change — hence no `if cube_version == …`
+    anywhere.
+    """
+    lo, hi = float(np.min(lam)), float(np.max(lam))
+    return {
+        name: f for name, f in _load().bands.items()
+        if f["lam"][0] >= lo and f["lam"][-1] <= hi
+    }
+
+
+def band_names(lam: np.ndarray | None = None) -> list[str]:
+    """The photometry bands: every band in the filter asset, or — given a served λ
+    grid — only those `bands_within` it can honestly measure."""
+    if lam is None:
+        return list(_load().bands.keys())
+    return list(bands_within(lam).keys())
 
 
 def ccm89(lam_ang: np.ndarray, rv: float = 3.1) -> np.ndarray:
     """Cardelli, Clayton & Mathis (1989) extinction law A(λ)/A(V), a closed-form curve
-    parameterized by R_V. Covers optical/NIR (1.1 ≤ x ≤ 3.3 µm⁻¹) and near-UV
-    (3.3 < x ≤ 8), which spans the 3001–8999 Å cube. λ in Å.
+    parameterized by R_V. Covers the infrared (0.3 ≤ x ≤ 1.1 µm⁻¹, i.e. 0.909–3.33 µm),
+    optical (1.1 ≤ x ≤ 3.3) and near-UV (3.3 < x ≤ 8) — together spanning the whole
+    3000 Å – 2.5 µm cube. λ in Å.
+
+    The IR branch is load-bearing, not decorative: without it every λ past 9091 Å
+    returned A(λ)/A(V) = 0, so a reddened star would have come out with J/H/K
+    UNREDDENED while its B and V were dimmed — a silent, physically wrong colour
+    (and reddening in the near-IR is exactly what makes JHK worth having: A_K/A_V
+    ≈ 0.11, so a dust-buried star is far better behaved there than in B).
 
     Returns A(λ)/A(V) (so the extinction in mag is A_V · this); the observed extinction
     factor on the flux is 10^(−0.4 · A_V · A(λ)/A(V))."""
@@ -125,7 +158,12 @@ def ccm89(lam_ang: np.ndarray, rv: float = 3.1) -> np.ndarray:
     a = np.zeros_like(x)
     b = np.zeros_like(x)
 
-    # Optical / NIR: 1.1 ≤ x ≤ 3.3 (CCM89 eq. 3a/3b, 7th-order polynomials in x−1.82).
+    # Infrared: 0.3 ≤ x < 1.1 (CCM89 eq. 2a/2b — a single power law in x).
+    ir = (x >= 0.3) & (x < 1.1)
+    a[ir] = 0.574 * x[ir] ** 1.61
+    b[ir] = -0.527 * x[ir] ** 1.61
+
+    # Optical: 1.1 ≤ x ≤ 3.3 (CCM89 eq. 3a/3b, 7th-order polynomials in x−1.82).
     opt = (x >= 1.1) & (x <= 3.3)
     y = x[opt] - 1.82
     a[opt] = (1.0 + 0.17699 * y - 0.50447 * y**2 - 0.02427 * y**3 + 0.72085 * y**4
@@ -139,8 +177,8 @@ def ccm89(lam_ang: np.ndarray, rv: float = 3.1) -> np.ndarray:
     a[uv] = 1.752 - 0.316 * xu - 0.104 / ((xu - 4.67) ** 2 + 0.341)
     b[uv] = -3.090 + 1.825 * xu + 1.206 / ((xu - 4.62) ** 2 + 0.263)
 
-    # Below 1.1 µm⁻¹ (λ > 9091 Å, off the cube) or above 8 the coefficients are left 0;
-    # in practice every cube wavelength lands in the two covered branches above.
+    # Below 0.3 µm⁻¹ (λ > 3.33 µm, past the cube's 2.5 µm red edge) or above 8 the
+    # coefficients are left 0; every cube wavelength lands in one of the three branches.
     return a + b / rv
 
 
@@ -192,7 +230,7 @@ def band_mags_stack(
     ext = 10.0 ** (-0.4 * av * ccm89(lam, rv)) if av != 0.0 else np.ones_like(lam)
     flux_obs = flux_surface * dilute[:, None] * ext[None, :]  # (N, nlam)
 
-    filts = _load().bands
+    filts = bands_within(lam)
     return {name: _band_mags(f, lam, flux_obs) for name, f in filts.items()}
 
 
@@ -209,8 +247,10 @@ def photometry_point(
     extinction), plus the distance modulus and reddening E(B−V). The `/photometry`
     route's payload.
 
-    Colours are formed from whichever of B/V are present (the flagship B−V); BP rides
-    along as a verification magnitude.
+    Colours are formed from whichever of B/V are present (the flagship B−V); the other
+    bands ride along as magnitudes, so a panel can form (BP−RP), (V−K), (J−Ks) … itself
+    without this function growing a colour per pair. `bands` reports which ones the
+    served spectrum could honestly answer for (see `bands_within`).
     """
     lam = np.asarray(lam, dtype=float)
     flux1 = np.asarray(flux_surface, dtype=float)[None, :]
@@ -230,7 +270,8 @@ def photometry_point(
         "av": float(av),
         "rv": float(rv),
         "radius_rsun": float(radius_rsun),
-        "bands": band_names(),
+        # the bands this spectrum could actually answer for, not the asset's full list
+        "bands": list(absolute.keys()),
     }
     if "B" in absolute and "V" in absolute:
         out["bv0"] = absolute["B"] - absolute["V"]                 # intrinsic (B−V)₀

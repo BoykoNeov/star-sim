@@ -336,3 +336,53 @@ def test_cool_grid_extends_below_3500_with_molecular_bands():
         flux = np.asarray(d["flux"])
         assert np.all(np.isfinite(flux)) and np.all(flux >= 0) and flux.max() > 0
         assert _band_step(d, TIO_6159) > 0.3        # TiO still deep off-grid
+
+# --- the bake's wavelength plan (pure, no pymsg / no baked cube) --------------
+
+def _bake_module():
+    """Import `scripts/bake_spectra.py` by path.
+
+    The bake script is deliberately outside the packaged tree (it is the one module
+    that imports pymsg), but its wavelength planning is pure arithmetic that decides
+    the cube's size and resolution — the near-IR cube lives or dies on it — so it is
+    tested here. `import pymsg` sits inside `bake()`, so importing the module is safe.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "bake_spectra.py"
+    spec = importlib.util.spec_from_file_location("bake_spectra", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_lam_plan_keeps_the_optical_and_coarsens_only_the_near_ir() -> None:
+    """The v2 λ axis: 2.5 Å through the optical exactly as v1 baked it, 10 Å past 1 µm.
+
+    A uniform 2.5 Å axis to 2.5 µm would be 8800 bins (629 MB resident, measured);
+    a uniform coarser one would blunt the optical, whose 2.5 Å bins were measured at
+    ~1 bin/px at full panel width. So the seam is the whole point, and it must land
+    exactly on the break — no bin may straddle the two resolutions.
+    """
+    b = _bake_module()
+    edges = b.build_lam_edges(3000.0, 25000.0, 2.5, b.NIR_FROM, b.NIR_STEP)
+    d = np.diff(edges)
+
+    assert edges.size - 1 == 4300                      # bins, not edges
+    assert b.NIR_FROM in edges                         # the seam is a real edge
+    optical = edges[:-1] < b.NIR_FROM
+    assert np.allclose(d[optical], 2.5)
+    assert np.allclose(d[~optical], 10.0)
+    assert edges[0] == 3000.0 and edges[-1] == 25000.0
+
+
+def test_lam_plan_reproduces_the_v1_axis_when_it_stops_short_of_the_seam() -> None:
+    """The optical-only call is byte-for-byte what v1 baked (2400 uniform bins), so a
+    narrower re-bake — or an older grid that cannot reach 1 µm — is unchanged."""
+    b = _bake_module()
+    edges = b.build_lam_edges(3000.0, 9000.0, 2.5, b.NIR_FROM, b.NIR_STEP)
+    assert edges.size - 1 == 2400
+    assert np.allclose(np.diff(edges), 2.5)
+    lam = 0.5 * (edges[:-1] + edges[1:])
+    assert lam[0] == pytest.approx(3001.25) and lam[-1] == pytest.approx(8998.75)

@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 from fastapi import APIRouter, Query
 
-from ..photometry import band_names, photometry_payload, track_band_mags
+from ..photometry import photometry_payload, track_band_mags
 from ._deps import provider
 
 router = APIRouter()
@@ -104,4 +104,6 @@ def photometry_track(
         if "BP" in mags:
             row["bp"] = float(mags["BP"][i])
         points.append(row)
-    return {"bands": band_names(), "points": points, "has_bv": have_bv}
+    # The bands the served cube could answer for (not the filter asset's full list):
+    # `track_band_mags` already dropped any whose transmission runs off the cube's edge.
+    return {"bands": list(mags.keys()), "points": points, "has_bv": have_bv}

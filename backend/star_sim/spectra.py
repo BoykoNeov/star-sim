@@ -32,8 +32,20 @@ from scipy.interpolate import RegularGridInterpolator
 from ._grid import load_npz, snap_index
 from .errors import DataMissing
 
-# Must match scripts/bake_spectra.py's BAKE_VERSION; a stale cube is rejected.
-BAKE_VERSION = 1
+# Bake versions are PER CUBE (the `_CUBE_FILES` table below), not one constant for all
+# five: the cubes are baked by five different scripts from five different sources, so a
+# schema change in one must not reject the other four. (It nearly did — the near-IR
+# re-bake of the main cube bumped the shared constant, which would have blanked the
+# alpha/WD/WR/stripped panels on a machine whose other four cubes were fine, with CI
+# green because every one of those tests skips on a data-free clone.)
+#
+# `MAIN_BAKE_VERSION` must match scripts/bake_spectra.py's BAKE_VERSION, and so on per
+# row; a cube whose stamp disagrees with its row is rejected with a re-bake hint.
+MAIN_BAKE_VERSION = 2      # v2 = the near-IR cube (λ to 2.5 µm, piecewise bins)
+WD_BAKE_VERSION = 1
+ALPHA_BAKE_VERSION = 1
+WR_BAKE_VERSION = 1
+STRIPPED_BAKE_VERSION = 1
 
 # The WD cube's Koester(LTE)↔TMAP(NLTE) splice seam (endgame Chunk 6b). Koester DA
 # supplies Teff ≤ this; the TMAP hot-WD/CSPN slab supplies the post-AGB central star
@@ -85,34 +97,35 @@ STRIPPED_GRID_FILENAME = "stripped_spectra_grid.npz"
 # on the host by scripts/bake_alpha_spectra.py (no pymsg). See the atlas plan Tier B.
 ALPHA_GRID_FILENAME = "alpha_spectra_grid.npz"
 
-# The five baked cubes as one table: name -> (filename, the "not baked yet" recipe).
-# The recipes stay hand-written per cube (they fetch from five different places), but
-# the *plumbing* around them is written once in `_cube()` below. Adding a sixth cube is
-# a row here plus one `_cube(...)` call — never another cache global beside another
-# near-identical `_load_*`, which is how this file grew five of each.
-_CUBE_FILES: dict[str, tuple[str, str]] = {
-    "main": (GRID_FILENAME, (
+# The five baked cubes as one table: name -> (filename, bake version, "not baked yet"
+# recipe). The recipes stay hand-written per cube (they fetch from five different
+# places), but the *plumbing* around them is written once in `_cube()` below. Adding a
+# sixth cube is a row here plus one `_cube(...)` call — never another cache global
+# beside another near-identical `_load_*`, which is how this file grew five of each.
+# The version rides in the row so a re-bake of ONE cube bumps only that row.
+_CUBE_FILES: dict[str, tuple[str, int, str]] = {
+    "main": (GRID_FILENAME, MAIN_BAKE_VERSION, (
         "Spectrum grid not baked. Build it once in the MSG container and copy it to "
         "{path}:\n"
         "    (in msg_spike) python scripts/bake_spectra.py --out /tmp/spectra_grid.npz\n"
         "    docker cp msg_spike:/tmp/spectra_grid.npz data/spectra/spectra_grid.npz\n"
         "(see backend/docs/msg_spectra_build_recipe.md).")),
-    "wd": (WD_GRID_FILENAME, (
+    "wd": (WD_GRID_FILENAME, WD_BAKE_VERSION, (
         "White-dwarf spectrum grid not baked. Fetch + bake it once:\n"
         "    python -m star_sim.fetch_koester\n"
         "    python scripts/bake_wd_spectra.py   # -> {path}\n"
         "(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 6).")),
-    "alpha": (ALPHA_GRID_FILENAME, (
+    "alpha": (ALPHA_GRID_FILENAME, ALPHA_BAKE_VERSION, (
         "[alpha/Fe] spectrum grid not baked. Fetch + bake it once:\n"
         "    python -m star_sim.fetch_coelho\n"
         "    python scripts/bake_alpha_spectra.py   # -> {path}\n"
         "(see docs/plans/whirling-cohort-atlas.md, atlas Tier B).")),
-    "wr": (WR_GRID_FILENAME, (
+    "wr": (WR_GRID_FILENAME, WR_BAKE_VERSION, (
         "Wolf-Rayet spectrum grid not baked. Fetch + bake it once:\n"
         "    python -m star_sim.fetch_powr\n"
         "    python scripts/bake_wr_spectra.py   # -> {path}\n"
         "(see backend/docs/msg_spectra_build_recipe.md §7, endgame Chunk 7).")),
-    "stripped": (STRIPPED_GRID_FILENAME, (
+    "stripped": (STRIPPED_GRID_FILENAME, STRIPPED_BAKE_VERSION, (
         "Binary-stripped-star spectrum grid not baked. Fetch the Götberg "
         "spectra tree + bake it once:\n"
         "    python -m star_sim.fetch_gotberg   # recipe to get data/gotberg_stripped/\n"
@@ -138,9 +151,9 @@ class _Spectra:
     """Lazily-loaded baked grid + interpolator. One instance, built on first use
     (so importing the module — and the whole package — never touches disk)."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, bake_version: int):
         self.path = path
-        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+        npz = load_npz(path, expected=bake_version, exc=SpectraDataMissing,
                        rebake_cmd="scripts/bake_spectra.py")
 
         self.grid_name = str(npz["grid_name"])
@@ -148,7 +161,12 @@ class _Spectra:
         self.axis_keys: list[str] = [str(k) for k in npz["axis_keys"]]
         self.axis_log = np.asarray(npz["axis_log"], dtype=bool)
         self.lam = np.asarray(npz["lam"], dtype=float)
-        flux = np.asarray(npz["flux"], dtype=float)
+        # float32 as baked: the .npz stores float32, so upcasting to float64 here
+        # only DOUBLED the resident cube (measured: 343 MB -> 171 MB at the old
+        # 2400 bins) for interpolation noise ~1e-7 relative — far below the
+        # atmosphere models' own accuracy. The near-IR cube is 1.8x wider in λ,
+        # so this is what keeps it cheaper in memory than the optical cube was.
+        flux = np.asarray(npz["flux"], dtype=np.float32)
 
         # Per-axis node arrays (linear, human-readable) + the bounds we clamp to.
         self.axes = [np.asarray(npz[f"axis_{k}"], dtype=float) for k in self.axis_keys]
@@ -196,11 +214,11 @@ def _cube(name: str, cls: type[_C]) -> _C:
     """
     hit = _LOADED.get(name)
     if hit is None:
-        filename, hint = _CUBE_FILES[name]
+        filename, version, hint = _CUBE_FILES[name]
         path = SPECTRA_DATA_DIR / filename
         if not path.is_file():
             raise SpectraDataMissing(hint.format(path=path))
-        hit = _LOADED[name] = cls(path)
+        hit = _LOADED[name] = cls(path, bake_version=version)
     return hit  # type: ignore[return-value]
 
 
@@ -457,9 +475,9 @@ class _WRSpectra:
     (the endgame snap-to-track discipline) rather than interpolating a ragged,
     parallelogram-shaped grid."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, bake_version: int):
         self.path = path
-        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+        npz = load_npz(path, expected=bake_version, exc=SpectraDataMissing,
                        rebake_cmd="scripts/bake_wr_spectra.py", what="WR grid")
         self.grid_name = str(npz["grid_name"])
         self.flux_unit = str(npz["flux_unit"])
@@ -627,9 +645,9 @@ class _StrippedSpectra:
     — the same snap `binary.py` does — rather than interpolating (the grid is 1-D in mass
     per Z, a ragged (Teff, log g) footprint; §6 snap-not-interpolate)."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, bake_version: int):
         self.path = path
-        npz = load_npz(path, expected=BAKE_VERSION, exc=SpectraDataMissing,
+        npz = load_npz(path, expected=bake_version, exc=SpectraDataMissing,
                        rebake_cmd="scripts/bake_stripped_spectra.py", what="stripped grid")
         self.grid_name = str(npz["grid_name"])
         self.flux_unit = str(npz["flux_unit"])
