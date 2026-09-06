@@ -31,9 +31,10 @@ list. CLAUDE.md's "what's next" points at this file.
 
 | Item | Status | Hook | Where |
 |---|---|---|---|
-| Binarity follow-ons: `CO-HeMS` / `CO-HeMS_RLO` double-compact-object channel; a POSYDON population overlay | sketched / unscoped | Both are separate extractions from the 84 GB already on disk; the DCO channel is the GW-progenitor payoff. Merger *time* stays out (needs natal kicks — two prescriptions deep). | `tempered-lineage-inspiral.md`; memory `star-sim-co-hms-rlo.md` |
+| POSYDON population overlay | sketched / unscoped | The last un-built half of the old binarity-follow-ons row — the `CO-HeMS` / `CO-HeMS_RLO` double-compact-object channel itself **shipped 2026-07-09** (see `SHIPPED.md`); this is a separate extraction from the 84 GB already on disk. | `tempered-lineage-inspiral.md`; memory `star-sim-co-hms-rlo.md` |
+| Merger time / inspiral clock for a classified DCO | idea | The named gap left by the shipped DCO channel: it labels the *endpoint* ("BH + BH merger progenitor") but never says *when*. Needs natal kicks — two prescriptions deep — so the post-SN orbit POSYDON hands over is not enough on its own. | `tempered-lineage-inspiral.md` |
 | Live solver / reduced nuclear network | idea | The ultimate "any star" capability; large, only worth it if the grid approach hits a real wall (spec §9). | `whirling-cohort-atlas.md` (Tier D); spec §9 |
-| Type Ia supernova | blocked (needs a binary channel) | Off the WD branch, never the core-collapse arc. Recorded so it is not started in the wrong place. | memory `star-sim-supernova-remnant-endgame.md` |
+| Type Ia supernova | blocked (**measured 2026-09-06** — no channel on disk reaches it) | Off the WD branch, never the core-collapse arc. The shipped CO grids do *not* unblock it: scanning every WD-accretor track in all three CO kinds × all 8 metallicity buckets, the peak WD mass reached grid-wide is **1.0998 M☉** and the largest accreted gain is **0.0998 M☉** — nothing approaches the 1.38 M☉ Chandrasekhar mass, because POSYDON's CO grids start their WD accretors at ≤ 1.0 M☉. Recorded so it is not started in the wrong place. | memory `star-sim-supernova-remnant-endgame.md` |
 
 ## Minor / probably-skip — recorded so we don't re-propose them
 
