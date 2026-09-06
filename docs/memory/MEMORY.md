@@ -26,6 +26,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Near-IR cube (λ → 2.5 µm)](star-sim-near-ir-cube.md) — the v2 spectrum cube: the COOL grid was the wall (MedRes-A stops at 1 µm), piecewise λ bins + float32-as-baked make it cheaper than the optical cube, per-cube BAKE_VERSION, CCM89's IR branch, and the Johnson/Gaia/2MASS CMD planes.
 - [Binary-stripped stars](star-sim-binary-stripped.md) — `binary.py` + `/binary` (Götberg He-star, the ~70% WR channel), Roche geometry, the POSYDON two-star co-evolution movie.
 - [CO-HMS_RLO compact-object binary](star-sim-co-hms-rlo.md) — `posydon_co.py` + `/co_binary_track`, parameterized by `kind`; the DCO/GW-progenitor classifier and the Eddington accretion-cue gating.
+- [DCO endpoint view](star-sim-dco-endpoint-view.md) — the render half: the frame past the last living step where the pair is finally DRAWN; the scale wall (~1e-6 of the separation), the pre-collapse-orbit limit, the Blaauw unbinding gate (1.40% refused), and the two runtime-only defects.
 - [Coeval-ensemble overlay (BPASS)](star-sim-coeval-ensemble-bpass.md) — the first ENSEMBLE sibling: `bpass.py` + `/population` + `/population_hrd`, single-star vs +binaries.
 - [Non-thermal SED](star-sim-nonthermal-sed-plan.md) — coronal X-ray + Güdel–Benz radio + the hot-star wind free–free excess; the spine touch `mdot_msun_yr`.
 
