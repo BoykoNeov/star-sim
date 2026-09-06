@@ -34,6 +34,7 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `panelshot2.mjs` | the Controls panel in the **three states that vary** (default star · the hedge caption · the rotating track ticked) at 1440 / 481 / 390 — `panelshot.mjs` shoots only the Sun, which cannot show a reservation change in the states that drove it | `node panelshot2.mjs <suffix>` → `panel2-<suffix>/` |
 | `panelshot.mjs` | just the Controls panel, desktop + phone, so a reserved-space change can be compared without diffing a 4000 px full-page shot | `node panelshot.mjs <suffix>` → `panel-<suffix>/` |
 | `panelfloor.mjs` | **any** panel's floor (`ctlfloor.mjs` generalised): natural max **and min** (the min is what the floor costs in blank), the **rendered** height with the floor in place (`min === max` is the acceptance line), the tallest state's child-by-child breakdown, and **each child's own max over the sweep** — the number that decides "raise one element's reserve" vs "raise the panel". Each panel is swept over **its own** controls, not the star's | `node panelfloor.mjs <observer\|structure> [width …]` |
+| `rowgaps.mjs` · `rowgaps2.mjs` · `rowgaps3.mjs` · `rowgaps4.mjs` · `rowgaps5.mjs` | the dashboard's **dead space between wrap rows** — per row, per panel, per width. `rowgaps` measures the page as served; `2` compares candidate orders; `3` sweeps four star states; `4` adds the **round-trip check** that exposes half-settled boxes after a JS reorder; **`5` is the one to trust** — it loads the old commit's `index.html` through a request intercept, so both orders are measured natively | `node rowgaps5.mjs [width …]` |
 | `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
 | `time_startup.py` | provider startup stages: dir discovery, fingerprint, `.npz` read per grid | `python time_startup.py` (backend venv) |
 
@@ -381,21 +382,38 @@ acceptance check could never have caught it, which is why acceptance now needs b
   already ragged-bottom; the dead space was never *inside* a panel, it was **between rows**.
   Measure before quoting a plan row: the fix it proposes may already be in the file.
 - **Measured** (`rowgaps.mjs`, new — per row, per panel, through the served page): at 1440
-  the old order left **1453 px** of dead space on a 5070 px page; 1435 px at 1280; 2243 px
-  at 1920. A pure tallest-first sort takes 1440 to **424 px** — that is the size of the prize.
+  the old order left **1453 px** of dead space on a 5070 px page. A pure tallest-first sort
+  takes that to **424 px** — the size of the prize.
 - **Shipped** the authored order in `index.html` (a pure block move; `layout.js` reads the
   DOM order as the default *before* applying a saved one, so anyone who has dragged panels
   keeps theirs): star + HR · composition + spectrum · Controls + interior/MESA · SED +
   Lane–Emden · observer + seismology · **readout last and alone** (the shortest panel, so
-  standing by itself costs nothing). **1453 → 434 px** dead, page 5070 → **4267 px**; the
-  white-dwarf endgame 905 → **287 px**; 1280 → 416 px; 1920 → 1541 px.
+  standing by itself costs nothing).
+- **Every packing regime, both orders loaded natively** (`rowgaps5.mjs`) — the dashboard packs
+  2 columns to ~1590 px, 3 to ~2050, 5 at 2560, and one column on a phone:
+
+  | width | dead space (old → shipped) | page height (old → shipped) |
+  |---|---|---|
+  | 1280 | 1435 → **416** | 5070 → **4267** |
+  | 1440 | 1453 → **434** | 5070 → **4267** |
+  | 1600 | 2015 → **1438** | 3660 → **3300** |
+  | 1920 | 2243 → **1541** | 3660 → **3300** |
+  | 2560 | 2275 → **2174** | 2824 → **2297** |
+  | 390 | 0 → 0 | 8697 → 8697 |
+
+  The white-dwarf endgame improves on the same order (905 → **287 px** at 1440). **Read both
+  columns at the wide end:** at 2560 the dead-space win collapses to ~100 px while the page
+  still gets **527 px shorter** — with five panels per row the holes move between rows rather
+  than disappearing, so dead space stops being the metric a reader feels and page height is.
 - **Held to a defensible reading order, and the cheaper option rejected in writing.** The
   best-packing order (`C`: Controls, interior, SED, Lane–Emden, observer, seismology,
   spectrum, composition, readout) is **identical at 1280/1440** and only wins at ≥ 1600 px
-  (1136 vs 1541 at 1920) — and it buries the composition panel tenth, when the spec's three
-  core views are the 3D star, the HR diagram and composition. 400 px on a 3300 px page is
-  not worth demoting a core view; the arithmetic is in the `index.html` comment so the next
-  person does not re-derive it.
+  (1136 vs 1541 at 1920, 1729 vs 2174 at 2560) — and it buries the composition panel tenth,
+  when the spec's three core views are the 3D star, the HR diagram and composition. **The
+  price of refusing it is width-dependent and largest on very wide monitors**: nothing at
+  1280/1440, ~400 px at 1920, ~450 px at 2560. Still not worth demoting a core view, but say
+  so as a range rather than as one number; the arithmetic is in the `index.html` comment so
+  the next person does not re-derive it.
 - **Robust across the star, because the floors already made it so.** Sun / 15 M☉ / 0.3 M☉
   give *identical* numbers — V1b's and V6's reserved floors hold every panel's height fixed,
   which is what makes a static authored order meaningful at all. The endgame, which tears
@@ -404,8 +422,26 @@ acceptance check could never have caught it, which is why acceptance now needs b
   0 px of dead space before and after; what does change there is the reading order, and the
   state readout moves from 7th to last. Accepted: on a phone the pinned strip already
   carries mass, `[Fe/H]` and age, and a drag reorders anything a user prefers.
-- **Acceptance.** 1440 full-page screenshot (`shots.mjs v2order`), 73 JS tests unchanged,
-  zero console errors at 1440 and 390.
+- **The one hidden panel a click can reach was measured too.** `#hz-history-panel` and the
+  Roche panel were *placed* by judgement (both are hidden by default). The habitable-zone
+  toggle un-hides the first, so it was swept: shipped beats the old order in that state at
+  every width (1440 **749 vs 1317**, 1600 1620 vs 1936, 1920 1778 vs 2519, 2560 2417 vs 2729).
+  It costs 315 px against the no-HZ layout, because it lands on the readout's otherwise-free
+  last row. The **Roche panel's position is still unmeasured** — it needs binary mode — and
+  the `index.html` comment says so rather than letting the whole comment read as measured.
+- **A measurement trap worth more than the row.** The first candidate sweeps reordered the
+  live DOM and measured 500 ms later. That is wrong at 3+ columns: reordering changes each
+  panel's WIDTH, and the canvas heights follow width through a `ResizeObserver`, so the boxes
+  are still settling. It reported the shipped order at 1282 px dead at 1600 where a native
+  load measures 1438. **A round-trip caught it** — re-apply the order the page already has
+  and it must reproduce its own native numbers; at 1600 and 2560 it did not. The fix is
+  `rowgaps5.mjs`: intercept the *document* request and fulfil it with the old commit's
+  `index.html` while the modules and API come from the live server. That commit changed
+  nothing else under `frontend/`, so it is the old page, loaded natively. (A second uvicorn
+  on the old commit was tried first and is a dead end — the venv's editable install resolves
+  `star_sim` to the working tree, so it would serve the *new* frontend.)
+- **Acceptance.** 1440 full-page screenshot (`shots.mjs v2order`), both orders loaded
+  natively at five widths plus the phone, 73 JS tests unchanged, zero console errors.
 
 ### V3. Verify the parked render loop against the screenshot pass · **verified 2026-09-06 (with V2)**
 

@@ -201,8 +201,14 @@ panel and every shorter panel in it leaves a hole until the next row starts.
   were already ragged-bottom, so the dead space was never *inside* a panel — it was
   **between rows**. Read the CSS before quoting a plan row's remedy.
 - **Measured** (`rowgaps.mjs`, per row and per panel, through the served page): the authored
-  order left **1453 px** dead at 1440 on a 5070 px page (1435 at 1280, 2243 at 1920). The
-  worst single pair was the 303 px state readout beside the 1024 px Controls panel: 721 px.
+  order left **1453 px** dead at 1440 on a 5070 px page. The worst single pair was the 303 px
+  state readout beside the 1024 px Controls panel: 721 px.
+- **Every packing regime, both orders loaded natively** (2 columns to ~1590 px, 3 to ~2050,
+  5 at 2560, 1 on a phone) — dead space and page height, old → shipped: 1280 1435→416 /
+  5070→4267 · 1440 1453→434 / 5070→4267 · 1600 2015→**1438** / 3660→3300 · 1920 2243→1541 /
+  3660→3300 · 2560 2275→2174 / 2824→**2297** · 390 0→0 / 8697 unchanged. **At the wide end
+  read page height, not dead space:** at five panels per row the holes move between rows
+  instead of closing, so 2560 shows a ~100 px dead-space win and a 527 px shorter page.
 - **Shipped** a reordered `index.html` — a pure block move, since `layout.js` captures the
   DOM order as the default *before* applying a saved one, so anyone who has dragged panels
   keeps theirs. Pairs, by measured height: star 815 + HR 820 · composition 464 + spectrum
@@ -210,9 +216,26 @@ panel and every shorter panel in it leaves a hole until the next row starts.
   seismology 530 · **readout last and alone** (the shortest panel wastes nothing by itself).
   **1453 → 434 px**, page 5070 → **4267 px**; the white-dwarf endgame 905 → **287 px**.
 - **The better-packing order was measured and rejected in writing.** Sorting purely by height
-  is *identical* at 1280/1440 and wins only at ≥ 1600 px (1136 vs 1541 at 1920) — and it puts
-  the composition panel tenth, one of the spec's three core views. The arithmetic sits in an
+  is *identical* at 1280/1440 and wins only at ≥ 1600 px (1136 vs 1541 at 1920, 1729 vs 2174
+  at 2560) — and it puts the composition panel tenth, one of the spec's three core views. The
+  price of refusing it is **width-dependent** (nothing at 1440, ~400 px at 1920, ~450 at 2560)
+  and is stated as that range rather than as one number. The arithmetic sits in an
   `index.html` comment so it is not re-derived; **if you add a panel, pair it by height.**
+- **The hidden panel a click away was measured; the other is labelled unmeasured.** With the
+  habitable-zone history shown the shipped order still wins at every width (749 vs 1317 at
+  1440), costing 315 px because it lands on the readout's otherwise-free last row. The Roche
+  panel needs binary mode to appear, so its position says so in the markup — a comment full
+  of measured numbers must not let an unmeasured line ride along as if it were one.
+- **The measurement trap this row is really worth remembering for.** Reordering the live DOM
+  and measuring 500 ms later is wrong at 3+ columns: the reorder changes each panel's WIDTH
+  and canvas heights follow width through a `ResizeObserver`, so the boxes are still settling
+  — it read 1282 px at 1600 where a native load reads 1438. **A round-trip catches it**:
+  re-apply the order the page already has and it must reproduce its own native numbers.
+  The trustworthy method is `rowgaps5.mjs` — intercept the *document* request and fulfil it
+  with the old commit's `index.html` while the modules and API come from the live server
+  (that commit touched nothing else under `frontend/`). A second uvicorn on the old commit is
+  a dead end: the venv's editable install resolves `star_sim` to the working tree, so it
+  would serve the *new* frontend.
 - **V1b/V6 are what make one static order correct.** With every panel pinned to its reserved
   floor, Sun / 15 M☉ / 0.3 M☉ measure *identically* — the anti-jump work bought this for free.
 - **The phone changes in sequence, not in packing.** 390 px is one column, 0 px dead before
@@ -222,8 +245,8 @@ panel and every shorter panel in it leaves a hole until the next row starts.
   before the `IntersectionObserver` restarts the loop) does not reproduce: 15 M☉ late returns
   a red-supergiant disk, not the previous star's frame. No `waitForTimeout` added.
 
-New in the harness: `rowgaps.mjs`, `rowgaps2.mjs` (candidate orders against the real page),
-`rowgaps3.mjs` (the same orders across four star states, endgame included).
+New in the harness: `rowgaps{,2,3,4,5}.mjs` — `2` compares candidate orders, `3` sweeps four
+star states (endgame included), `4` adds the round-trip check, **`5` is the one to trust.**
 
 **Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
 (P4) and cold-disk first load (P5) — both conditional, neither queued.
