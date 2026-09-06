@@ -398,3 +398,86 @@ screenshot pass ever sees a stale star, add a `page.waitForTimeout(100)` after t
 - The M1 I red supergiant: the disk reads as a giant (dim granulation, warm limb).
 - HR class bands, iso-radius diagonals, the "→ white dwarf" leader: legible at both widths.
 - Real-GPU frame time is vsync-bound in every state measured.
+
+### V5. The three primary controls pinned above every panel · **shipped 2026-09-06**
+
+- **The report.** "Make the 3 main controls always on top and scroll with the page,
+  because many panels change with them and it is not convenient to scroll to only the
+  panel that changes them." Every panel is a function of mass, `[Fe/H]` and age, so the
+  one panel that carried them was the one you had to keep scrolling back to.
+- **What shipped.** Mass, `[Fe/H]` and age (label + slider + tick strip + `datalist`,
+  plus `#endgame-age-caption` and `#endgame-resnap-note`, which explain those two
+  sliders) left `.controls-panel` for `#primary-controls`, a `position: sticky` strip
+  between `<header>` and `<main>`. **Moved as markup, not duplicated and not relocated
+  at boot** — every id is unchanged, so all 23 `wire*()` handlers, `buildTickStrip`,
+  `commitNumber` and the `body.*-mode` age tags work untouched, and the three CSS rules
+  that were scoped to `.controls-panel` were **widened**, not copied. A pointer note
+  stays behind in the panel, the `.controls-overlay-pointer` idiom.
+- **`relocateOverlayControls()` is the same complaint with the other answer**, and the
+  split is now written down in both places: a control that drives ONE panel moves to
+  that panel; a control that drives EVERY panel has no panel to move to, so it is
+  pinned.
+- **Two floors, because a pinned box is stricter than a panel** — it sits *over* the
+  content, so a reflow inside it moves the whole page at once, and unlike a panel it
+  cannot grow into a flex row's slack.
+
+  | | live | endgame (`wd`/`wr`/`sn`/`stripped`) |
+  |---|---|---|
+  | measured tallest | 128 px | 204 px |
+  | `min-height` | **136 px** | **216 px** |
+
+  Live is **114 px in 1,015 of 1,020 states sampled** (`stripmax3.mjs`: 17 `[Fe/H]` ×
+  60 masses) and 128 px in five — around `[Fe/H]` +0.45, ~36 M☉, where the age landmarks
+  crowd enough to stagger the tick labels onto a second row. That 1-in-200 state is
+  exactly what a coarse sweep misses; three rows never occur. **One floor for both modes
+  was rejected**: the endgame caption reserves two lines and the re-snap note two more,
+  both `display:none`/`hidden` while the star is alive, so a single floor would hold
+  ~90 px of dead *pinned* space in the view the user actually scrolls.
+- **Sticky only above 800 px.** Three 230 px columns + two 22 px gaps = 734 px, so the
+  strip holds one row down to a 782 px viewport. Wrapped it measures 215 px at 761 and
+  316 px at 390 — more viewport than the scrolling it saves — so below 800 px it drops
+  to `position: static` and is simply the first block on the page.
+- **The knock-on the row had to pay: `.controls-panel`'s floor was now wrong.** 1214 /
+  1308 px were measured in V1b *with* those three rows in the panel; left alone they
+  would hold ~300 px of void. Re-measured with `ctlfloor.mjs`, which reads the panel's
+  natural height by setting its own `min-height` to 0 inline and taking `offsetHeight`
+  — that includes the child margins (the `.slider-wrap` tick reservations) a
+  bounding-box-of-children sweep drops, so V1b's `+19` correction is not needed twice.
+  The tallest state is still the two-sided uncertain-fate hedge (6.5 M☉, `[Fe/H]` −1.5),
+  not any endgame: the SN narration measures ~240 px (481) / ~205 px (390) shorter.
+
+  | width | measured tallest | old floor | new floor |
+  |---|---|---|---|
+  | 1440 (default rule, not binding) | 902 px | 1214 | — |
+  | **481** (default rule's binding width) | **1017 px** | 1214 | **1024** |
+  | **390** (phone rule) | **1130 px** | 1308 | **1140** |
+
+  That is 190 px of dead panel height returned on a desktop and 168 px on a phone — the
+  strip costs 136 px back, so the page is a little shorter overall and the Controls panel
+  no longer ends in a void.
+- **New in the harness:** `stripmax.mjs` (live + every endgame, entered for real through
+  the gateway buttons, including forcing the re-snap note by dragging the mass into a
+  fate the endgame cannot hold), `stripmax2/3.mjs` (dense live sweeps for the tick-row
+  term), `ctlfloor.mjs` (the panel floor, re-measurable after any content move) and
+  `stripshot.mjs` (the strip pinned vs scrolled at five widths). `jumpcheck.mjs` now
+  snapshots `#primary-controls` and its three columns as well as `main > section` — the
+  strip is not a `main > section`, so without that the acceptance check was blind to the
+  one box whose reflow moves everything.
+- **Acceptance (met).** `jumpcheck.mjs` at 1440 / 512 / 481 / 390: the Controls panel
+  renders at exactly its new floor (1024 / 1024 / 1024 / 1140) in the Sun state, the
+  uncertain-fate hedge state and across the rotating-track click, with **no panel moved**;
+  the strip holds 136 px at 1440 through the two-tick-row state, its three columns
+  unmoved. `innerjump.mjs` (now watching `#primary-controls` as well as the panel's own
+  children) reports **nothing moved inside the panel** at 1440 / 512 / 390. The strip
+  measures exactly 216 px in both the WD and SN endgames. Zero console errors in every
+  run. Screenshots: `temp/star-sim-perf/strip-after/` (pinned vs scrolled at five widths)
+  and `stripend-after/` (the two endgames).
+  **One caveat stated rather than papered over:** `jumpcheck`'s new third state compares
+  36 M☉ against the Sun, so the *unfloored* panels (seismo, spectrum, lane) legitimately
+  change height with their own content there. That is pre-existing and unrelated — the
+  diff is filtered to the strip so the noise cannot be misread as a jump.
+- **One trap, hit once and worth writing down:** the harness measures the *served* app,
+  which reads `frontend/index.html` off disk on every load. Editing a served file while
+  a sweep is in flight hands the browser a half-written page — it failed with `#feh-num`
+  not found, which reads exactly like a real regression. Don't touch `frontend/` while a
+  harness run is going.

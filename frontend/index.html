@@ -38,6 +38,78 @@
     <span class="layout-hint" aria-hidden="true">Tip: drag a panel by its ⠿ handle to rearrange.</span>
   </header>
 
+
+  <!-- The three primary controls — mass, [Fe/H] and age — pinned under the header.
+       They lived inside the Controls panel until a user named the obvious problem:
+       nearly every panel on the page is a function of these three, so changing one
+       meant scrolling back to the single panel that carried them and then scrolling
+       away again to see what it did. A sticky strip keeps them on screen whatever
+       panel you are reading.
+
+       MOVED, not duplicated: a second copy of a slider is a synchronisation bug
+       waiting to happen. Every id is unchanged, so every wire*() handler, tick
+       builder and number-box commit works untouched — relocateOverlayControls()
+       in main.js is the same move in the other direction (controls follow the
+       thing they change). The endgame age caption and the re-snap note come with
+       the sliders they annotate; they are display:none / hidden in the live view,
+       and the endgame floor below reserves their height so nothing shifts mid-scrub.
+
+       Sticky only above 480px (styles.css): three stacked sliders with their tick
+       rows would eat most of a phone viewport, so on a phone the strip simply sits
+       at the top of the page and scrolls away like any other block. -->
+  <div class="primary-controls" id="primary-controls" role="group" aria-label="Primary controls">
+    <div class="primary-controls-inner">
+      <div class="primary-control">
+        <label for="mass">Mass
+          <input id="mass-num" class="val-input" type="number" /> M<sub>☉</sub>
+          <span class="help" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
+        </label>
+        <div class="slider-wrap">
+          <input id="mass" type="range" list="mass-ticks" />
+          <div class="ticks" id="mass-marks"></div>
+        </div>
+        <datalist id="mass-ticks"></datalist>
+      </div>
+      <div class="primary-control">
+        <label for="feh">[Fe/H]
+          <input id="feh-num" class="val-input" type="number" />
+          <span class="help" tabindex="0" data-tip="Metallicity: log₁₀ of the iron-to-hydrogen ratio relative to the Sun. 0 = solar, + = metal-rich (cooler, dimmer), − = metal-poor (hotter, brighter). The marks below the slider are solar and the grid edges; type an exact value to land between them.">?</span>
+        </label>
+        <div class="slider-wrap">
+          <input id="feh" type="range" list="feh-ticks" />
+          <div class="ticks" id="feh-marks"></div>
+        </div>
+        <datalist id="feh-ticks"></datalist>
+      </div>
+      <div class="primary-control">
+        <label for="age">Age
+          <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
+          <span class="age-wd">· cooling time (white-dwarf endgame)</span>
+          <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
+          <span class="age-sn">· time since explosion (supernova)</span>
+          <span class="age-stripped">· one representative state (stripped star)</span>
+          <span class="age-binary">· system time (co-evolving binary)</span>
+          <span class="age-co-binary">· system time (star + compact object)</span>
+          <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
+        </label>
+        <div class="slider-wrap">
+          <input id="age" type="range" list="age-ticks" />
+          <div class="ticks" id="age-marks"></div>
+        </div>
+        <datalist id="age-ticks"></datalist>
+        <p class="note endgame-age-caption" id="endgame-age-caption"></p>
+      </div>
+    </div>
+    <!-- Feedback when a mass/[Fe/H] drag INSIDE an endgame re-snapped to a fate that
+         doesn't support the current endgame (e.g. dragging a WD progenitor up into the
+         supernova range): it reverts and says so. It follows the two sliders whose drag
+         fires it — left behind in the Controls panel it would explain a reverted drag
+         from off-screen, which is the complaint that moved the sliders here. BELOW them,
+         never above, so it can only grow the strip DOWNWARD rather than shove the mass
+         slider out from under the cursor mid-drag. Hidden in live mode (its own `hidden`,
+         toggled by setWDResnapNote); the endgame floor in styles.css reserves its height. -->
+    <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
+  </div>
   <main>
     <section class="panel star-panel" data-panel-id="star">
       <h2>3D star <span class="help" tabindex="0" data-tip="A live, physically-motivated 3D star — every visual driven by a real StellarState number (spec §7). COLOR: the true blackbody color at Teff (Planck spectrum → CIE → sRGB), so the Sun is warm near-white, cool stars orange-red, hot stars blue-white. GRANULATION: convective cells whose size comes from the pressure scale height H_p ∝ Teff/g — a compact dwarf shows fine granules, a low-gravity giant only a handful of enormous cells. LIMB DARKENING dims the disk toward its edge; the surface slowly spins (a plausible visual rate, not the real period). GRAVITY DARKENING: a fast rotator (the ones the rotation control spins, above the ~1.2 M☉ Kraft break) is flung into an oblate spheroid — measurably wider at its equator than pole — and, because its effective gravity falls from pole to equator, its poles run HOTTER, bluer and BRIGHTER while the equator turns cooler and dimmer (von Zeipel, T ∝ g_eff^0.25 — the real, interferometrically-resolved Regulus/Vega/Achernar effect). It is driven entirely by the star's REAL surface velocity (v_rot), so the median fast rotator shows only a gentle bulge while a near-critical one flattens dramatically with a dark equatorial band; the star is shown tilted three-quarters so both the shape and the hot pole are visible (a round, non-rotating star is untouched). CORONA: the additive outer glow tracks the activity proxy — bright and far-reaching for cool active stars, near-absent for hot ones. It is EVOCATIVE, NOT PREDICTIVE: real coronae and winds are magnetic or radiative structure we are not modeling. On-screen SIZE scales with radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout) — the scale bar below restores the honest size, plotting the real radius against the Solar System.">?</span></h2>
@@ -416,25 +488,15 @@
         </p>
       </div>
 
-      <label for="mass">Mass
-        <input id="mass-num" class="val-input" type="number" /> M<sub>☉</sub>
-        <span class="help" tabindex="0" data-tip="Initial mass, in Suns. The dominant control — it sets the star's brightness, color, lifetime and final fate. The valid range narrows at high [Fe/H] (metal-rich low-mass stars never leave the main sequence). Drag to snap to the round masses marked below the slider, or type an exact value.">?</span>
-      </label>
-      <div class="slider-wrap">
-        <input id="mass" type="range" list="mass-ticks" />
-        <div class="ticks" id="mass-marks"></div>
-      </div>
-      <datalist id="mass-ticks"></datalist>
-
-      <label for="feh">[Fe/H]
-        <input id="feh-num" class="val-input" type="number" />
-        <span class="help" tabindex="0" data-tip="Metallicity: log₁₀ of the iron-to-hydrogen ratio relative to the Sun. 0 = solar, + = metal-rich (cooler, dimmer), − = metal-poor (hotter, brighter). The marks below the slider are solar and the grid edges; type an exact value to land between them.">?</span>
-      </label>
-      <div class="slider-wrap">
-        <input id="feh" type="range" list="feh-ticks" />
-        <div class="ticks" id="feh-marks"></div>
-      </div>
-      <datalist id="feh-ticks"></datalist>
+      <!-- Mass, [Fe/H] and age were the first three controls in this panel; they now
+           live in the sticky strip under the page header, because every panel below is
+           a function of them (see index.html). This pointer stays behind to say where.
+           Everything still here is either about ONE panel or about a mode. -->
+      <p class="note controls-primary-pointer">
+        The three primary controls — <b>mass</b>, <b>[Fe/H]</b> and <b>age</b> — are in the
+        <b>strip pinned under the page title</b>, so they stay reachable while you read any
+        panel. What is left here changes one panel, or the mode.
+      </p>
 
       <!-- Rotation (rotation Chunk 3): a two-state non-rotating/rotating TOGGLE, not a
            slider — MIST v2.5 publishes only v/vcrit {0.0, 0.4}, so there is no third
@@ -641,22 +703,6 @@
       </p>
 
 
-      <label for="age">Age
-        <span class="age-live"><input id="age-num" class="val-input" type="number" /> Gyr</span>
-        <span class="age-wd">· cooling time (white-dwarf endgame)</span>
-        <span class="age-wr">· stripping sequence (Wolf–Rayet endgame)</span>
-        <span class="age-sn">· time since explosion (supernova)</span>
-        <span class="age-stripped">· one representative state (stripped star)</span>
-        <span class="age-binary">· system time (co-evolving binary)</span>
-        <span class="age-co-binary">· system time (star + compact object)</span>
-        <span class="help" tabindex="0" data-tip="Age along the track — scrub to evolve the star from the zero-age main sequence through the giant branches and into the early asymptotic-giant branch (the second giant ascent, where the track ends). The marks below the slider are the evolutionary landmarks (end of the main sequence, the giant branches, the RGB tip); type an exact age in Gyr. In the white-dwarf endgame this slider becomes a log-spaced cooling-time scrubber: the brief thermal-pulse and hot central-star acts at the left, then the long slow cooling over billions of years filling most of the slider.">?</span>
-      </label>
-      <div class="slider-wrap">
-        <input id="age" type="range" list="age-ticks" />
-        <div class="ticks" id="age-marks"></div>
-      </div>
-      <datalist id="age-ticks"></datalist>
-      <p class="note endgame-age-caption" id="endgame-age-caption"></p>
 
       <!-- The ⁵⁶Ni-mass slider (SN endgame, Tier-3): the ONE free knob of the light curve.
            The radioactive tail / peak height scales linearly with the (unmodeled) explosion's
@@ -675,13 +721,6 @@
         <p class="note sn-mni-note" id="sn-mni-note"></p>
       </div>
 
-      <!-- Feedback when a mass/[Fe/H] drag INSIDE an endgame re-snapped to a fate that
-           doesn't support the current endgame (e.g. dragging a WD progenitor up into the
-           supernova range): it reverts and says so. Placed below the sliders (not in the
-           endgame bar above) so it grows the panel DOWNWARD when it appears, rather than
-           shoving the mass slider out from under the cursor mid-drag. Hidden in live mode
-           (its own `hidden`, toggled by setWDResnapNote). -->
-      <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
 
       <!-- The stellar-endgame gateway (docs/plans/smoldering-cinder-gateway.md): at
            the end of a star's life, a button to "continue" into its remnant (a white

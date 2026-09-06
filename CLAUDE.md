@@ -84,6 +84,13 @@ must lie *between* its neighbors on the HR diagram at every phase.
   `init`. Nothing in a `wire*()` paints. Snapping to landmarks, log-position sliders and
   number-box commits already exist as tested pure functions (`snapWithin` / `logValueAt` +
   `logPosOf` / `commitNumber`); re-hand-rolling one is how the 7 snap loops happened.
+- **A control lives where its effect is visible.** Drives ONE panel → it belongs on that
+  panel (`relocateOverlayControls()` moves the He / α / isochrone / population toggles
+  there at boot). Drives EVERY panel → there is no panel to move it to, so it is **pinned**:
+  mass, `[Fe/H]` and age are the sticky `#primary-controls` strip between `<header>` and
+  `<main>`, moved (never duplicated — ids unchanged, so every `wire*()` is untouched) and
+  floored twice, live and endgame, because a pinned box reflowing moves the whole page.
+  [[star-sim-pinned-primary-controls]]
 - **Superseded fetches die by their own guard.** Every fetch a newer one can replace
   holds a `makeLatest()` guard: `const req = xLatest.begin()`, then `if (!req.current …)
   return` after each await, and `xLatest.invalidate()` to drop what's in flight. One

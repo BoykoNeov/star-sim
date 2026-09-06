@@ -39,6 +39,79 @@ header .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
 }
 code { color: var(--accent); }
 
+/* ── The pinned primary-control strip ──────────────────────────────────────────────
+   Mass, [Fe/H] and age were the first three rows of the Controls panel. Nearly every
+   panel on this page is a function of those three, so changing one meant scrolling
+   back to the single panel that carried them and then scrolling away again to see
+   what it did (user request). The strip pins them under the header instead.
+
+   `position: sticky`, not fixed: it rides in normal flow and merely stops at the top
+   of the viewport, so there is no body padding to keep in sync, nothing to re-measure
+   on resize, and the phone case degrades to "an ordinary block at the top of the page"
+   by switching one property.
+
+   z-index 50 — above every panel, below the dragged panel (1000) and the fixed tooltip
+   layer (9999): dragging a panel still floats over the strip, and a `?` opened inside
+   the strip is never clipped by it.
+
+   Opaque `--panel` background because it overlays scrolling content; the border and
+   the soft shadow under it are what make "this is pinned, that is scrolling" readable
+   rather than a rendering glitch. */
+.primary-controls {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 8px 24px 4px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.95);
+}
+.primary-controls-inner {
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  column-gap: 22px;
+}
+/* One column per slider. The basis is what decides when the strip wraps to a second
+   row — and a wrapped strip is exactly what the media query below refuses to pin. */
+.primary-control { flex: 1 1 230px; min-width: 0; }
+
+/* The strip reuses the Controls panel's label/slider idiom — same widgets, same
+   arithmetic (controls.js), same tick strips — so these are the panel's own rules
+   widened to cover the strip, never a second copy of them. Only the label's top
+   margin differs: 16px of lead-in is right between stacked panel rows and wrong at
+   the top of a pinned bar. */
+.primary-control label { margin-top: 2px; }
+
+/* Anti-jump floors, the same discipline as the panel min-heights above — and for a
+   sharper reason: the strip is pinned OVER content, so a reflow there moves every
+   panel on the page at once. Two floors, not one, because the strip's tallest live
+   state and its tallest endgame state are far apart: the endgame age caption reserves
+   two lines and the re-snap note another two, both `display:none`/`hidden` while the
+   star is alive. One floor covering both would leave ~90px of dead pinned space in the
+   live view, which is the view the user actually scrolls. Within either mode nothing
+   moves; entering an endgame re-renders the whole page anyway.
+   Both numbers are measured, not guessed — see docs/plans/visual-performance.md V5. */
+.primary-controls { min-height: 136px; }
+body.wd-mode .primary-controls, body.wr-mode .primary-controls,
+body.sn-mode .primary-controls, body.stripped-mode .primary-controls {
+  min-height: 216px;
+}
+
+/* Below 800px the strip wraps to a second row (measured: 3 x 230px basis + 2 x 22px
+   gap = 734px of content, so it packs in one row down to a 782px viewport), and a
+   two-row pinned strip costs more viewport than the scrolling it saves — so there it
+   stops being sticky and is just the first block on the page. At 390px it is three
+   stacked sliders, 316px tall: pinning that would leave almost nothing to look at. */
+@media (max-width: 799px) {
+  .primary-controls {
+    position: static;
+    min-height: 0;
+    box-shadow: none;
+  }
+  body.wd-mode .primary-controls, body.wr-mode .primary-controls,
+  body.sn-mode .primary-controls, body.stripped-mode .primary-controls { min-height: 0; }
+}
+
+
 /* First-load skeletons: on a cold cache the panels sit as blank black boxes for a
    few seconds while the first /track (and the CDN three.js) land — which reads as
    "broken", not "loading". The markup ships <body class="loading">; main.js removes
@@ -129,33 +202,34 @@ main {
    held steady by the per-element reserves further down (`.rot-control` min-height, the per-note
    `#…-note` floors) so an element APPEARING (inclination facet on the rotation toggle, a what-if
    note growing to its active caption) can't shove its siblings — the two mechanisms are additive.
-   Controls is the one panel whose floor is DERIVED rather than read off a single state, because
-   the two mechanisms stack: the panel must hold max(content outside .rot-control) + .rot-control's
-   own floor, and once that floor covers the section's tallest state the section renders at exactly
-   the floor in EVERY state, so the sum is the requirement and not merely an upper bound. Measured
-   2026-09-06 (temp/star-sim-perf/{panelmax,rotmax,edge481}.mjs) at each regime's binding width —
-   481px for the default rule, NOT the 512px the old values used: the phone rule only starts at
-   480, and those 31px of extra wrapping cost the gateway caption another 19px. The phone rule is
-   sized at 390px (360px measures identically, so 390 covers the narrow end).
-     base   813 (non-rotation content) + 376 (.rot-control) + 19 = 1208 → 1214
-     phone  870 (non-rotation content) + 412 (.rot-control) + 19 = 1301 → 1308
-   The +19 is the panel's own bottom padding + border + the gateway's trailing margin. It has to
-   be added by hand because the measured "content" term runs from the panel's box top to its
-   LOWEST CHILD's bottom, so it carries the top padding but not the bottom one; min-height is a
-   border-box height and must cover both. Leaving it out is what made a first pass at these
-   numbers come up 13px short on the phone — and pass at 512px purely by luck, since 512 has
-   19px less wrapping than the 481px the rule actually has to hold at.
+   Each regime's floor is sized at its BINDING width — 481px for the default rule, NOT 512: the
+   phone rule only starts at 480, and those 31px of extra wrapping are worth another ~19px of
+   caption. The phone rule is sized at 390px.
+
+   Controls is re-measured whenever its content moves. Re-measured 2026-09-06 after mass, [Fe/H]
+   and age left for the pinned strip (temp/star-sim-perf/ctlfloor.mjs), which reads the panel's
+   NATURAL height by setting the panel's own min-height to 0 inline and taking offsetHeight:
+     base (481px)  1017 → 1024      phone (390px)  1130 → 1140
+   That method supersedes the earlier `max(content outside .rot-control) + .rot-control floor + 19`
+   arithmetic and its hand-added +19. offsetHeight is a border-box height and block layout already
+   accounts for the child margins, so both the bottom padding and the .slider-wrap tick reservations
+   are inside the number — the +19 existed only because the old measurement ran from the panel's box
+   top to its LOWEST CHILD's bottom and therefore carried the top padding but not the bottom one.
+   (The derivation's premise still holds and is why the sum was exact: once .rot-control's own floor
+   covers its tallest state, that section renders at exactly the floor in EVERY state.)
+
    The tallest state is 6.5 M☉ at [Fe/H] −1.5, where the two-sided uncertain-fate hedge alone is
-   215/253px. That caption is the 3rd honesty gate and its length is a CONSTRAINT, not the variable
-   being optimised: the floors move to fit the caption, never the reverse. Re-measure with those
-   scripts if the gateway's wording changes. */
-.controls-panel  { min-height: 1214px; }
+   215/253px — not any endgame, whose narration measures ~240/300px shorter. That caption is the
+   3rd honesty gate and its length is a CONSTRAINT, not the variable being optimised: the floors
+   move to fit the caption, never the reverse. Re-measure with ctlfloor.mjs if the gateway's
+   wording changes or content moves in or out of the panel again. */
+.controls-panel  { min-height: 1024px; }
 .structure-panel { min-height: 855px; }
 .star-panel      { min-height: 815px; }
 .hr-panel        { min-height: 820px; }
 .sed-panel       { min-height: 830px; }
 @media (max-width: 480px) {
-  .controls-panel  { min-height: 1308px; }
+  .controls-panel  { min-height: 1140px; }
   .structure-panel { min-height: 910px; }
   .star-panel      { min-height: 830px; }
   .hr-panel        { min-height: 870px; }
@@ -567,11 +641,16 @@ body.stripped-mode .hr-panel .helium-control { display: none; }
   border-color: var(--accent); font-weight: 600;
 }
 
-.controls-panel label {
+/* Shared by the Controls panel and the pinned primary-control strip (the three
+   sliders moved there but kept every widget and id) — one rule, two homes. */
+.controls-panel label,
+.primary-control label {
   display: block; margin: 16px 0 2px; font-size: 14px; color: var(--muted);
 }
-.controls-panel label span { color: var(--ink); font-weight: 600; }
-.controls-panel input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 6px; }
+.controls-panel label span,
+.primary-control label span { color: var(--ink); font-weight: 600; }
+.controls-panel input[type="range"],
+.primary-control input[type="range"] { width: 100%; accent-color: var(--accent); margin-top: 6px; }
 
 /* Editable value inputs sitting inside each slider's label — type an exact value
    as an alternative to dragging (the slider snaps to landmarks; this does not). */
@@ -680,9 +759,12 @@ body.stripped-mode .hr-panel .helium-control { display: none; }
    it would overflow the bottom, so no per-token anchoring is required. */
 /* Win over `.controls-panel label span { color: var(--ink) }` so the glyph reads
    as a muted affordance, not body text. */
-.controls-panel label .help { color: var(--muted); font-weight: 700; }
+.controls-panel label .help,
+.primary-control label .help { color: var(--muted); font-weight: 700; }
 .controls-panel label .help:hover,
-.controls-panel label .help:focus-visible { color: var(--ink); }
+.controls-panel label .help:focus-visible,
+.primary-control label .help:hover,
+.primary-control label .help:focus-visible { color: var(--ink); }
 
 /* Slider snap marks: a custom strip under each range input (native <datalist>
    tick rendering is browser-roulette, so it's a bonus, not the source of truth).

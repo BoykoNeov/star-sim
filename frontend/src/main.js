@@ -4591,10 +4591,17 @@ async function refreshMassRangeThenTrack() {
 // The helium/α-enhanced + cluster-isochrone overlays act on the HR-diagram panel, and the
 // coeval-population overlay acts on the SED panel — so their controls belong UNDER those panels
 // (user request: a click in the Controls column changed a panel that could be scrolled off-screen,
-// reading as "nothing happened"). They are DECLARED in the Controls panel in index.html (grouped
-// with the sliders they conceptually sit near) and relocated here at boot — layout.js's panel drag
-// is the precedent for structural moves in JS. IDs are unchanged, so every update*/toggle handler,
-// and the reserveWhatIf greying that travels with them, keeps working untouched.
+// reading as "nothing happened"). They are DECLARED in the Controls panel in index.html and
+// relocated here at boot — layout.js's panel drag is the precedent for structural moves in JS.
+// IDs are unchanged, so every update*/toggle handler, and the reserveWhatIf greying that travels
+// with them, keeps working untouched.
+//
+// The same complaint has TWO answers, and which one applies depends on how many panels the
+// control drives. A control that changes ONE panel moves to that panel — this function. Mass,
+// [Fe/H] and age change nearly every panel, so there is no panel to move them to: they are
+// PINNED instead, in the sticky strip above <main> (index.html + the .primary-controls block in
+// styles.css). That move is plain markup, not a relocation at boot, because it has no
+// "which panel does this drive" question to answer at runtime.
 function relocateOverlayControls() {
   const hr = document.querySelector(".hr-panel");
   const sed = document.querySelector(".sed-panel");

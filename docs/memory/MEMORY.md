@@ -46,6 +46,7 @@ file, never here.** Architecture lives in `CLAUDE.md`; unbuilt work in the ROADM
 - [Phase 2 shaders](star-sim-phase2-shaders.md) — §7 beauty: Planck→CIE color, granulation, limb darkening, corona quad; the moiré fix.
 - [True-size scale bar](star-sim-true-size-scale-bar.md) — `scale.js` log scale bar + the 3D star's tangent-cone clip math.
 - [Instability-strip overlay](star-sim-instability-strip-overlay.md) — the opt-in variable-star-zones HR overlay; the first "show a subpopulation" feature.
+- [Pinned primary controls](star-sim-pinned-primary-controls.md) — the sticky mass/[Fe/H]/age strip above every panel: move-don't-duplicate, the two measured floors (live vs endgame), the sticky-only-above-800px rule, and the Controls-panel floor that shrank with it.
 - [Tooltip singleton](star-sim-tooltip-singleton.md) — one body-mounted `position:fixed` tooltip layer (`tooltip.js`) replacing clipping CSS hovers.
 - [UX four fixes](star-sim-ux-four-fixes.md) — range quantization → source-of-truth values; SED X-ray gap marker; toggle-without-resize; `classify.js` MK type.
 - [Age-tick fixes](star-sim-ux-age-tick-fixes.md) — five age-slider landmark-tick bugs (quantization, dedup, endpoint snap, label stagger, phone MIN_GAP).
