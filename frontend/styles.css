@@ -245,18 +245,39 @@ main {
    215/253px — not any endgame, whose narration measures ~240/300px shorter. That caption is the
    3rd honesty gate and its length is a CONSTRAINT, not the variable being optimised: the floors
    move to fit the caption, never the reverse. Re-measure with ctlfloor.mjs if the gateway's
-   wording changes or content moves in or out of the panel again. */
+   wording changes or content moves in or out of the panel again.
+
+   Observer + structure floors added/raised 2026-09-06 (temp/star-sim-perf/panelfloor.mjs, which
+   generalises ctlfloor.mjs to any panel). Both were short for the SAME reason and it is the one
+   to remember: a floor is only as good as the state space it was swept over, and each panel's
+   state space is ITS OWN controls, not the star.
+     .observer-panel had no floor at all, so it moved its neighbours at any width where its text
+   reflowed. Its two variable notes are driven by the panel's own distance / A_V / R_V sliders —
+   which a mass × [Fe/H] sweep never touches — so it is swept over those, and the readout is also
+   checked against the longest string the code can BUILD (four sign/digit extremes injected into
+   the live element) rather than whichever state a sweep happened to visit.
+     .structure-panel's tallest state is the snapped-far note, which needs the request off the
+   partial MESA grid in mass AND metallicity at once: 0.1 M☉ at [Fe/H] −1.5 measures 882px, not
+   the 864 a gateway-shaped mass list found. The phone floor already covered it.
+     Measured maxima (481 = the base rule's binding width, 390 = phone), floors = max + ~7:
+       .observer-panel   668 → 675     phone  707 → 715
+       .structure-panel  882 → 890     phone  882, under the existing 910 — unchanged
+   481 covers the wider widths for free: the panel is 433px there vs 480 at a 1024 viewport and
+   688 at 1440 (the dashboard packs 2 columns at both, so 1440 is the WIDEST panel, not the
+   narrowest). 1024 is where the shift was first seen, not a regime needing its own rule. */
 .controls-panel  { min-height: 1024px; }
-.structure-panel { min-height: 855px; }
+.structure-panel { min-height: 890px; }
 .star-panel      { min-height: 815px; }
 .hr-panel        { min-height: 820px; }
 .sed-panel       { min-height: 830px; }
+.observer-panel  { min-height: 675px; }
 @media (max-width: 480px) {
   .controls-panel  { min-height: 1140px; }
   .structure-panel { min-height: 910px; }
   .star-panel      { min-height: 830px; }
   .hr-panel        { min-height: 870px; }
   .sed-panel       { min-height: 960px; }
+  .observer-panel  { min-height: 715px; }
 }
 
 /* The 3D star: a modest square that shrinks to fit a narrow (phone) panel. star.js
@@ -336,6 +357,14 @@ main {
 }
 /* Phone / single-column: the narrow panel wraps the longest captions to 3 lines. */
 @media (max-width: 480px) { .lane-caption { min-height: 4.35em; } }
+/* …and the interior-structure caption wraps to 3 lines on a DESKTOP too, so it gets the phone
+   reserve at every width. The comment above sized 2 lines for a panel ">=460px"; at the base
+   rule's binding width (a 481px viewport) the panel is only 433px, where the longest caption —
+   the fully-convective wording plus a snapped-far snapshot line — measures 54px. Scoped to this
+   id rather than raised on .lane-caption, which the Lane-Emden and Roche captions also use and
+   whose own longest strings were not re-measured here. Its siblings (the readout, then the note)
+   sit below it, so the extra line would otherwise shove them. */
+#structure-caption { min-height: 4.35em; }
 
 /* Spectrum panel (spec §5): a full-width band (the `.wide` class) — the wavelength
    axis wants width, and it's a derived view (of Teff/log g/[Fe/H]), not part of the
@@ -381,8 +410,14 @@ main {
 .observer-panel label {
   display: block; margin: 12px 0 0; font-size: 13px; color: var(--ink); font-weight: 600;
 }
+/* 3.5em, not the old 2.8em (2 lines): the readout reaches 3 lines (43px) at every panel width
+   below ~680px — measured, and confirmed against the longest string the code can build. It has
+   the three dust/distance sliders BELOW it, so an unreserved 3rd line shoves them down inside the
+   panel; that is the within-panel half the whole-panel floor cannot cover. (#observer-note needs
+   no such reserve for the mirror-image reason: it is LAST in the panel, so its growth is absorbed
+   by .observer-panel's min-height — the same rule as #isochrone-note / #population-note.) */
 .observer-panel .observer-readout {
-  color: var(--ink); font-size: 12.5px; min-height: 2.8em; margin: 8px 0 2px; text-align: center;
+  color: var(--ink); font-size: 12.5px; min-height: 3.5em; margin: 8px 0 2px; text-align: center;
 }
 .obs-dim { color: var(--muted); }
 

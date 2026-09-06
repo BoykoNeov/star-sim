@@ -33,6 +33,7 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `phonegap.mjs` | a child-by-child breakdown of the Controls panel in one state, when a floor comes out short and you need to know which term is wrong before raising the constant | `node phonegap.mjs` |
 | `panelshot2.mjs` | the Controls panel in the **three states that vary** (default star · the hedge caption · the rotating track ticked) at 1440 / 481 / 390 — `panelshot.mjs` shoots only the Sun, which cannot show a reservation change in the states that drove it | `node panelshot2.mjs <suffix>` → `panel2-<suffix>/` |
 | `panelshot.mjs` | just the Controls panel, desktop + phone, so a reserved-space change can be compared without diffing a 4000 px full-page shot | `node panelshot.mjs <suffix>` → `panel-<suffix>/` |
+| `panelfloor.mjs` | **any** panel's floor (`ctlfloor.mjs` generalised): natural max **and min** (the min is what the floor costs in blank), the **rendered** height with the floor in place (`min === max` is the acceptance line), the tallest state's child-by-child breakdown, and **each child's own max over the sweep** — the number that decides "raise one element's reserve" vs "raise the panel". Each panel is swept over **its own** controls, not the star's | `node panelfloor.mjs <observer\|structure> [width …]` |
 | `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
 | `time_startup.py` | provider startup stages: dir discovery, fingerprint, `.npz` read per grid | `python time_startup.py` (backend venv) |
 
@@ -501,33 +502,111 @@ screenshot pass ever sees a stale star, add a `page.waitForTimeout(100)` after t
   misread as a jump. (2) Adding 1024 to the width list surfaced **two floors that are
   short — pre-existing, unrelated to this row, and recorded not fixed** (see V6).
 
-### V6. Two more reserved floors are short · *measured 2026-09-06, NOT fixed*
+### V6. Two more reserved floors are short · *fixed 2026-09-06*
 
-Surfaced by V5's wider `jumpcheck` sweep, on the same trigger V1b used (drag to 6.5 M☉ at
-`[Fe/H]` −1.5, the two-sided uncertain-fate hedge). Nothing here is caused by the pinned
-strip — both are panels whose own content differs between the Sun and that star:
+Surfaced by V5's wider `jumpcheck` sweep. Neither is caused by the pinned strip — both are
+panels whose own content differs from star to star. Both were short **for the same reason, and
+it is the lesson worth keeping**: a floor is only as good as the state space it was swept over,
+and *each panel's state space is its own controls, not the star's*. V6's first pass measured
+both panels with the Controls panel's trigger (drag to 6.5 M☉ at `[Fe/H]` −1.5) and so
+under-measured one of them by 18 px.
 
-| Width | Panel | Overflow | Consequence |
+| Width | Panel | Before | After |
 |---|---|---|---|
-| 1024 | `.observer-panel` (no floor at all) | +7 px | the seven panels below it shift +8 px |
-| 481 | `.structure-panel` (floor 855) | +9 px | absorbed — no neighbour moved |
+| base rule (sized at **481**) | `.observer-panel` | **no floor at all** | `min-height: 675px` |
+| phone rule (sized at **390**) | `.observer-panel` | **no floor at all** | `min-height: 715px` |
+| base rule (sized at **481**) | `.structure-panel` | 855 — short by **27**, not the 9 first recorded | `min-height: 890px` |
+| phone rule (sized at **390**) | `.structure-panel` | 910 — natural max is 882, already covered | unchanged |
 
-- **Why it was never seen:** V1b sized every floor at 481 and 390 and verified at 1440 /
-  512 / 481 / 390. 1024 is a *different* wrapping regime — two columns at a width where
-  the observer panel's caption breaks differently — and no earlier run visited it.
-- **Not fixed here, deliberately.** V1b's precedent: closing a floor costs permanent
-  whitespace on every star, so the arithmetic gets written down and the decision taken on
-  its own. The 481 row is arguably not worth paying at all (nothing moves). The 1024 row
-  is a real 8 px shift and is the one to price.
-- **Recipe.** `ctlfloor.mjs` generalises: point it at `.observer-panel` / `.structure-panel`,
-  sweep mass × `[Fe/H]` at 1024 and 481, take the max, add ~7. Acceptance is
-  `jumpcheck.mjs 1024` reporting no moved panels on the hedge trigger.
-  **One caveat stated rather than papered over:** `jumpcheck`'s new third state compares
-  36 M☉ against the Sun, so the *unfloored* panels (seismo, spectrum, lane) legitimately
-  change height with their own content there. That is pre-existing and unrelated — the
-  diff is filtered to the strip so the noise cannot be misread as a jump.
-- **One trap, hit once and worth writing down:** the harness measures the *served* app,
-  which reads `frontend/index.html` off disk on every load. Editing a served file while
-  a sweep is in flight hands the browser a half-written page — it failed with `#feh-num`
-  not found, which reads exactly like a real regression. Don't touch `frontend/` while a
-  harness run is going.
+**The measured maxima** (`panelfloor.mjs`, which generalises `ctlfloor.mjs` to any panel;
+natural height read by zeroing the panel's own `min-height` inline and taking `offsetHeight`):
+
+| viewport | panel width | observer max | structure max |
+|---|---|---|---|
+| 1440 | 688 px (2 columns) | 643 | 742 |
+| 1024 | 480 px (2 columns) | **668** | 742 |
+| 512 | 464 px | 668 | 841 |
+| **481** | **433 px** | **668** | **882** |
+| 390 | 342 px | **707** | 882 |
+
+**481 is the binding width and it covers everything wider for free.** The dashboard packs two
+columns at *both* 1024 and 1440, so 1440 gives the **widest** panel (688 px), not the narrowest —
+1024 is where the shift happened to be visible, not a wrapping regime needing a third rule.
+
+**Two mechanisms, and which one each note gets.** The panel `min-height` is the dashboard-level
+guarantee (neighbours don't move); a per-element reserve is what keeps the *within-panel* stack
+still. The rule that decides between them was already written down for `#isochrone-note` /
+`#population-note` and applies unchanged here: **a note that is LAST in its panel is absorbed by
+the panel floor and needs no reserve of its own; one with siblings below it needs one**, because
+its extra line shoves them.
+
+- `#observer-readout` (three dust/distance sliders below it) reached **3 lines / 43 px** against
+  a 2-line `2.8em` reserve → raised to `3.5em`. This is what actually caused the 1024 symptom,
+  and fixing it at the source removed the variation rather than hiding it: the observer panel's
+  *natural* height is now constant at 670 px across all 105 swept states at 1024.
+- `#observer-note` is last in its panel → no reserve; its 18 px of growth at 390 is absorbed by
+  the 715 floor.
+- `#structure-caption` (readout and note below it) reaches **3 lines / 54 px** at a 433 px panel,
+  while `.lane-caption`'s base reserve is 2 lines — that comment sized 2 lines for a panel
+  "≥460px", and at a 481 px viewport the panel is 433. Given the phone reserve at every width,
+  **scoped to the id**: `.lane-caption` is shared with the Lane–Emden and Roche captions, whose
+  own longest strings were not re-measured here.
+- `#structure-note` is last in its panel → no reserve.
+
+**What the sweep had to cover, and why the first pass missed it.** `ctlfloor.mjs` sweeps mass ×
+`[Fe/H]` × the rotating-track toggle because those are what move the *Controls* panel. Neither
+of these panels is driven by that:
+- the observer panel's two variable notes are driven by **its own three sliders** (distance,
+  A_V, R_V), which that sweep never touches. Swept over those, and — the `capmax.mjs`
+  discipline — the readout is *also* checked against the longest string the code can **build**
+  (four sign/digit extremes injected straight into the live element), not merely whichever
+  state a sweep happened to visit. Both agree on 43 px.
+- the structure panel's tallest text is the snapped-far note, which needs the request off the
+  partial MESA grid in **mass and metallicity at once**: 0.1 M☉ at `[Fe/H]` −1.5 measures
+  **882 px**. A gateway-shaped mass list (0.3, 1, 1.35, 5, 6.5, 7, 7.5, 8, 20, 60, 200) never
+  visits it, which is exactly how "short by 9" was recorded for something short by 27.
+
+**The price, stated rather than buried.** A floor is permanent blank space in every state below
+it. Against the *shortest* reachable state: the observer panel holds 0 px at 481/512/1024, 23 px
+at 1440 and 24 px at 390; the structure panel holds 184 px at 1440, 62 px at 481 and 82 px at
+390. **Most of that wide-width void is pre-existing**, not bought here — the old 855 floor
+already held 149 px at 1440; this raise adds **35**. The structure panel is short at wide widths
+because *every* text block in it un-wraps: at a 688 px panel the intro is 73 px (vs 110), the
+legend 43 (vs 67), the readout 83 (vs 145) and the note 36 (vs 54), while the canvas stays 340.
+
+A third media tier for wide viewports would genuinely recover ~140 px there, and it is the
+obvious next thought — but it is **not** a safe one-liner, for a reason worth writing down:
+**panel width is not monotonic in viewport width.** `.panel` is `flex: 1 1 460px; max-width:
+700px` in a wrap container with 24 px dashboard padding and a 16 px gap, so two columns first fit
+at a viewport of 984 px. At **983** the dashboard is one column and the panel is **700 px** wide
+(and short); at **984** it becomes two columns and the panel drops to **460 px** (and tall). A
+`min-width: 1200px` tier is safe; anything lower straddles that cliff. There is a second cliff
+just above the binding width — a 480 px panel (1024 viewport) measures 742 px while a 464 px one
+(512 viewport) measures 841, so ~16 px of width crosses several wrap boundaries at once. Sizing
+at 481 covers both cliffs, which is exactly why the two-tier rule holds. Left as-is.
+
+**Acceptance (met).** Stronger than this section's original recipe, which proposed a single
+`jumpcheck 1024` state pair — a floor can still be short where jumpcheck does not look. Instead,
+V5's standard: **every swept state renders at exactly the floor.** `panelfloor.mjs` at 1440 /
+1024 / 512 / 481 / 390 reports the observer panel at **675 px in all 105 states** at every base
+width and **715 px** at 390, and the structure panel at **890 px in all 165 states** at every
+base width and **910 px** at 390 — `min === max` everywhere. Plus `jumpcheck.mjs` at all six
+widths with no panel moved, and the Playwright screenshot pass at 1440 + 390.
+
+**New in the harness:** `panelfloor.mjs <observer|structure> [width …]` — the generalised floor
+measurer. It reports the natural max *and* min (the min is the price of the floor), the
+**rendered** height with the floor in place (`min === max` is the acceptance line), the tallest
+state's child-by-child breakdown, and **each child's own max over the whole sweep** — which is
+the number you need to decide whether to raise one element's reserve or the whole panel.
+
+**One pre-existing thing found and deliberately not fixed here:** `/photometry_track?mass=0.1&
+feh=0.25` returns 422 — a real corner of MIST's non-rectangular domain. `refreshPhotometryTrack`
+catches it, clears the locus and stays retryable, so the only trace is the browser's own
+"failed to load resource" line; the panel's height is unaffected (the CMD canvas is fixed). It
+is an honesty-gate question, not a layout one, so it is recorded rather than folded into a
+reservation change.
+
+**The trap from the first pass still stands:** the harness measures the *served* app, which reads
+`frontend/index.html` off disk on every load. Editing a served file while a sweep is in flight
+hands the browser a half-written page — it failed with `#feh-num` not found, which reads exactly
+like a real regression. Don't touch `frontend/` while a harness run is going.

@@ -135,6 +135,55 @@ the reverse. New harness scripts: `innerjump.mjs` · `notefit.mjs` · `edge481.m
 `panelshot.mjs` only ever shot the Sun and so could not show a change in the states that
 drove it).
 
+## V6 (2026-09-06) — the last two floors, and the rule for which mechanism to use
+
+`.observer-panel` had **no floor at all**; `.structure-panel`'s 855 was short. Both were short
+for the **same** reason, and it is the one to carry forward: *a floor is only as good as the
+state space it was swept over, and each panel's state space is its own controls, not the star's.*
+Sizing both with the Controls panel's trigger (6.5 M☉ at `[Fe/H]` −1.5) recorded the structure
+panel as short by 9 px when it is short by **27** — its tallest text is the snapped-far note,
+which needs the request off the partial MESA grid in **mass and metallicity at once** (0.1 M☉ at
+`[Fe/H]` −1.5 → 882 px), a state a gateway-shaped mass list never visits. The observer panel's
+two variable notes are driven by **its own three sliders** (distance, A_V, R_V), which a
+mass × `[Fe/H]` sweep never touches at all.
+
+Shipped: `.observer-panel` **675 / 715** (new), `.structure-panel` 855 → **890** (the 910 phone
+floor already covered 882).
+
+- **Which mechanism a note gets — the rule was already written down** for `#isochrone-note` /
+  `#population-note` and generalises: **a note that is LAST in its panel is absorbed by the
+  panel floor and needs no reserve; one with siblings below it needs its own**, because its
+  extra line shoves them. So `#observer-readout` 2.8em → **3.5em** (3 lines / 43 px, three dust
+  sliders below it) and `#structure-caption` **4.35em** at every width (3 lines / 54 px at a
+  433 px panel) — but `#observer-note` and `#structure-note` get nothing.
+- **Fixing it at the element removes the variation instead of hiding it.** After the readout
+  reserve the observer panel's *natural* height is constant at 670 px across all 105 swept
+  states at 1024 — the floor is then a guarantee, not a patch.
+- **Scope a shared class by id.** `#structure-caption` rather than `.lane-caption`, which the
+  Lane–Emden and Roche captions also use and whose longest strings were not re-measured.
+- **Trap 3: wider is not always shorter.** The dashboard packs **two** columns at both 1024 and
+  1440, so 1440 gives the **widest** panel (688 px) and 1024 the narrower one (480). 481 (a
+  433 px panel) is still the binding width and covers everything above it — 1024 was only where
+  the symptom was visible, not a regime needing a third media rule.
+- **Acceptance above the recipe.** The row proposed one `jumpcheck 1024` state pair, which a
+  still-short floor can pass. Use V5's standard instead: **every swept state renders at exactly
+  the floor** (`min === max` on the rendered height). Met at five widths on both panels, plus
+  `jumpcheck` clean at all six.
+- **`panelfloor.mjs`** (`ctlfloor.mjs` generalised to any panel) reports natural max **and min**
+  — the min is what the floor costs in permanent blank — the **rendered** height, and **each
+  child's own max over the whole sweep**, which is the number that decides "raise one element's
+  reserve" vs "raise the panel".
+- **Price, stated:** the structure raise costs **+35 px** of permanent blank at 1440 — on top of
+  the 149 px the old floor already held there, so the big wide-width void is pre-existing. A
+  third tier would recover ~140 px but is **not** a safe one-liner: **panel width is not
+  monotonic in viewport width** (`flex: 1 1 460px; max-width: 700px` → two columns first fit at
+  a 984 px viewport, so the panel is 700 px wide at 983 and **460 at 984**), and there is a
+  second wrap cliff just above the binding width (a 480 px panel measures 742, a 464 px one
+  841). Sizing at 481 covers both cliffs — which is why the two-tier rule holds. Left as-is.
+- **Found, not fixed:** `/photometry_track?mass=0.1&feh=0.25` 422s on a real corner of MIST's
+  non-rectangular domain — caught, locus cleared, retryable, panel height unaffected. An
+  honesty-gate question, not a layout one.
+
 **Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
 (P4), cold-disk first load (P5), row-height pairing in the two-column layout (V2 — worth
 more now that Controls is 222 px taller).

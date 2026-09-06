@@ -71,7 +71,6 @@ append here.
 | `/track` payload (792 KB per mass change) | **measured 2026-09-06 → skip** | `JSON.parse` is 0.8–2.6 ms, far under the 15 ms gate; the cost is server-side serialisation (32–79 ms), which gzip does not touch. No compression added. | `visual-performance.md` P3 |
 | Static layers for `sed.js` / the comp cno view | optional | The scrub is ~1.5 ms now; only if a slower target is measured. | `visual-performance.md` P4 |
 | Cold-disk first load (155 s) | only if still a complaint | Hidden behind the pre-warm; shortening it means a cache-format change and a re-bake of the hosted assets. | `visual-performance.md` P5 |
-| Two reserved floors are short at 1024 / 481 | **measured 2026-09-06, not fixed** | The observer panel (no floor) overflows 7 px at 1024 and shifts the seven panels below it by 8 px; the structure panel overflows 9 px at 481 and nothing moves. Pre-existing — 1024 is a wrapping regime no earlier run visited. Closing a floor costs permanent whitespace, so the arithmetic is written down and the call is separate. | `visual-performance.md` V6 |
 | Row-height pairing in the two-column layout | idea | Short beside tall (Readout ↔ Controls, Spectrum ↔ SED); three options, screenshot each. **Smaller than it was:** V1b raised the Controls floor by 222 px, but V5 then took 190/168 px back off it when the three primary sliders moved to the pinned strip — re-look at a 1440 screenshot before assuming there is much left to win. | `visual-performance.md` V2 |
 
 ## Cross-cutting cautions (unchanged)
