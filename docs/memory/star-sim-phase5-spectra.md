@@ -187,7 +187,9 @@ before); Sun → no TiO guides; no JS errors. Recipe §5b (fetch + rationale + f
 **BROADBAND SED PANEL (gamma → radio) — DONE (this session, FRONTEND-ONLY, the "wider range" view).**
 User asked to see the spectrum "not only near visible" → clarified **"extend to gamma and radio."** The
 honest answer (advisor-confirmed) is **NOT more grid data**: (1) the baked MSG cube is only ~3000–9000 Å
-(the three grids barely reach ~10000 Å — Göttingen MedRes-A is the binding limit), and (2) **gamma/X-ray +
+(the three grids barely reach ~10000 Å — Göttingen MedRes-A is the binding limit; **that limit was lifted
+2026-09-06 by swapping in MedRes-R, which reaches 2.5 µm** — see [[star-sim-near-ir-cube]] — but 2.5 µm is
+still nothing against the SED panel's 14 decades, so this conclusion is untouched), and (2) **gamma/X-ray +
 radio emission of a real star is NOT photospheric** — it's coronal/chromospheric/flare/wind emission
 (activity-driven), which has **no model grid** and which the project already treats as "evocative, not
 predictive." So the only physically honest object spanning the whole EM spectrum is the **Planck blackbody

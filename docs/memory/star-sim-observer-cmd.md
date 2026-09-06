@@ -102,12 +102,20 @@ Its findings still hold:
   integrating the served solar spectrum: it reaches **98.2%** of the Planck in-band
   σT⁴ (9000 K → 102%). So `observed F_λ = surface F_λ · (R/d)²` gives real absolute
   magnitudes. (Cool 4000 K = 61.5% is real optical line-blanketing, not a scale error.)
-- **The cube stops at 8999 Å** (optical only, 3001–8999 Å). This is the advisor's
-  load-bearing catch: **Gaia RP + 2MASS JHK fall entirely off the red edge; Gaia G is
-  truncated ~0.05–0.13 mag.** So the anchor **swapped from M_G to M_V**, flagship CMD =
-  **(B−V, M_V)** — the classic observational HR diagram (still composes with Axis B).
-  Clean in-cube bands: **Bessell B, V + Gaia BP** (verification only — BP alone isn't a
-  standard color, RP is off-edge). A true Gaia CMD needs a WIDER cube re-bake (future).
+- **The cube stopped at 8999 Å when Axis A was built** (optical only, 3001–8999 Å) — the
+  advisor's load-bearing catch: Gaia RP + 2MASS JHK fell entirely off the red edge and
+  Gaia G was truncated ~0.05–0.13 mag. So the anchor **swapped from M_G to M_V**, flagship
+  CMD = **(B−V, M_V)**, clean in-cube bands **Bessell B, V + Gaia BP** (verification only).
+  **SUPERSEDED 2026-09-06** by the near-IR re-bake ([[star-sim-near-ir-cube]]): the cube
+  now reaches 2.5 µm, so **Gaia G/RP and 2MASS J/H/Ks are real**, and the panel draws three
+  planes — Johnson (B−V, M_V), Gaia (BP−RP, M_G), 2MASS (J−Ks, M_Ks). Two consequences that
+  outlive that change: `/photometry_track` carries a **`mag` dict per row** rather than a
+  hand-picked mv/bv0/bp trio (a colour is a difference of two of them; computing one here
+  too would put V in the payload twice with no authoritative copy), and **which bands are
+  offered is decided by `bands_within(lam)`** — a filter is used only when the served
+  spectrum covers ALL of its transmission — so this section's old scope and the new one are
+  the same code path with different data. B/V/M_V stays the *flagship* (the classic
+  observational HR diagram, and what composes with the Axis-B isochrone).
 - **Use SVO ZeroPoints, NOT a Vega spectrum** (advisor reversed his own earlier steer):
   the SVO per-band ZeroPoint(Jy) method EMPIRICALLY nails M_V,Sun=**4.832** (t 4.81±0.05)
   and the exact 10.000 distance modulus, so the absolute pipeline is right. A Vega SED is

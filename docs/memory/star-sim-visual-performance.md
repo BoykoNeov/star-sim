@@ -150,6 +150,16 @@ mass × `[Fe/H]` sweep never touches at all.
 Shipped: `.observer-panel` **675 / 715** (new), `.structure-panel` 855 → **890** (the 910 phone
 floor already covered 882).
 
+**`.observer-panel` re-measured 2026-09-06 → 707 / 728** (`temp/star-sim-perf/nir-observer-floor.mjs`)
+after the near-IR work ([[star-sim-near-ir-cube]]) added a band-picker row (23 px) *and* lengthened
+the readout's labels — the CMD plane is selectable now, so the widest strings are the 2MASS/Gaia
+ones (M_Ks / (BP−RP)₀ / E(BP−RP)), not M_V / (B−V)₀ / E(B−V). **Both had to be re-swept: a new
+control raises a floor twice over — the row it adds, and whatever it makes the existing text say.**
+The tallest state still pairs the longest READOUT with the Johnson NOTE (the B-band zero-point
+caveat is Johnson's alone and the note is empty in the other two planes) — a combination no single
+screen shows, which is exactly why it is injected rather than swept for. The panel-order pairing is
+unaffected: 707 sits in the same band 675 did, between the SED (830) and seismology (530).
+
 - **Which mechanism a note gets — the rule was already written down** for `#isochrone-note` /
   `#population-note` and generalises: **a note that is LAST in its panel is absorbed by the
   panel floor and needs no reserve; one with siblings below it needs its own**, because its
