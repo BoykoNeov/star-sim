@@ -252,6 +252,13 @@ def photometry_point(
     bands ride along as magnitudes, so a panel can form (BP−RP), (V−K), (J−Ks) … itself
     without this function growing a colour per pair. `bands` reports which ones the
     served spectrum could honestly answer for (see `bands_within`).
+
+    **`absolute_mag` / `apparent_mag` are authoritative.** The flat `mv_abs`, `mv_app`,
+    `bv0`, `bv_obs` and `ebv` keys are convenience copies of the Johnson flagship, kept
+    because they are what the anchor tests and the API docs speak; V therefore appears
+    twice in this payload. Read the dicts. (The whole-track route deliberately does NOT
+    carry the duplicate — see `/photometry_track`, where a per-row `mag` dict is the only
+    representation, so no reader has to guess which copy leads.)
     """
     lam = np.asarray(lam, dtype=float)
     flux1 = np.asarray(flux_surface, dtype=float)[None, :]

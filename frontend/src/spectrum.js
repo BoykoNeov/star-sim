@@ -1227,9 +1227,13 @@ export function createSpectrum({ api }) {
     if (!viewBand) {
       // The default frame is optical, so say so whenever the served model has more to give
       // than the frame shows — otherwise the near-IR band looks like a feature with no data
-      // behind it. Silent on every cube that stops at 8999 Å (all four endgame ones).
+      // behind it. Silent on every cube that stops at 8999 Å (all four endgame ones), and
+      // silent whenever the zoom row is HIDDEN: an endgame mode can still be showing a
+      // main-cube spectrum (the WD scrub opens on the star's own AGB tip), and pointing at
+      // a band button that is not on screen is a caption the picture cannot support.
       const hi0 = lam[lam.length - 1];
-      return hi0 > OPTICAL_VIEW_HI
+      const canZoom = zoomRow && !zoomRow.hidden;
+      return hi0 > OPTICAL_VIEW_HI && canZoom
         ? ` · Framed on the optical; this model runs to ${(hi0 / 1e4).toFixed(1)} µm — the ` +
           `near-IR band shows the rest.`
         : "";
