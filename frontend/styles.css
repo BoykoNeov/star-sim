@@ -1173,6 +1173,11 @@ body.co-binary-view .sed-panel, body.co-binary-view .structure-panel { display: 
    structure stay hidden (out of 2b scope). Higher specificity (two body classes) beats the
    plain co-binary-view hide above. */
 body.co-binary-view.co-he-kind .comp-panel { display: block; }
+/* Chunk 2d — the after-collapse frame: the star has become a compact object, so there is no
+   surface left to break into elements. Re-hide the composition panel the He-kind rule above
+   reveals (three body classes → wins the tie), rather than leaving the last living step's
+   surface on screen beside a picture of two point masses. */
+body.co-binary-view.co-he-kind.co-dco-endpoint .comp-panel { display: none; }
 /* The STATE READOUT, the true-size SCALE strip and the MK class line are single-star
    consumers NOT wired to the per-step scrub of EITHER two-body view — refreshBinary and the CO
    scrub both leave them FROZEN on the unrelated stripped-snapshot's numbers (a 10 M☉ subdwarf

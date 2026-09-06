@@ -84,6 +84,66 @@ def test_dco_classifier_nan_mass_becomes_none():
     assert d.is_dco is True     # the TYPE still classifies; only the mass is unresolved
 
 
+# --- pure `dco_endpoint` unit tests (Chunk 2d — the render block) ----------------------------
+
+def _dco(r1="BH", r2="BH", m1=10.0, m2=12.0):
+    return pc.dco_classification(r1, r2, m1, m2, "CCSN", "S1_SN_MODEL_v2_01")
+
+
+def test_endpoint_absent_whenever_there_is_no_pair():
+    """No pair, no geometry. The WD and unresolved branches must yield None rather than a
+    block with a hedge on it — a caller that has an endpoint at all is entitled to draw it."""
+    for r1, r2 in [("WD", "BH"), ("NS", "WD"), ("None", "BH"), ("BH", "None")]:
+        assert pc.dco_endpoint(_dco(r1, r2), 50.0, 10.0, 12.0) is None
+
+
+def test_bh_radius_is_derived_and_ns_radius_is_flagged_as_assumed():
+    """The two radii are different KINDS of number and the payload has to say which is which:
+    2GM/c^2 follows from the mass, ~12 km for a neutron star is an equation-of-state
+    assumption. A caption that quoted both the same way would paint a guess as a model."""
+    e = pc.dco_endpoint(_dco("BH", "NS", m1=10.0, m2=1.4), 50.0, 10.0, 12.0)
+    assert e.s1_radius_km == pytest.approx(29.53, abs=0.01)   # 2GM/c^2 for 10 Msun
+    assert e.s1_radius_assumed is False
+    assert e.s2_radius_km == pytest.approx(12.0)
+    assert e.s2_radius_assumed is True
+
+
+def test_size_ratio_uses_the_larger_object_and_stays_minuscule():
+    """`size_over_separation` is the caption's whole justification for schematic glyphs, so it
+    takes the LARGER of the two radii — the most generous possible statement. If even that is
+    ~1e-6, no size drawn on screen can be to scale."""
+    e = pc.dco_endpoint(_dco("BH", "NS", m1=10.0, m2=1.4), 50.0, 10.0, 12.0)
+    bigger_km = max(e.s1_radius_km, e.s2_radius_km)
+    assert e.size_over_separation == pytest.approx(bigger_km / (50.0 * pc._RSUN_KM))
+    assert e.size_over_separation < 1e-5
+
+
+def test_blaauw_gate_fires_at_the_half_and_not_below():
+    """The unbinding test is a strict half of the TOTAL system mass, companion included. The
+    boundary is asserted from both sides because it is the whole gate: one comparison decides
+    whether a system is drawn as an orbiting pair or refused."""
+    # star 10 -> remnant 5 beside a 5 Msun companion: dM=5, M_tot=15 -> 1/3, bound.
+    below = pc.dco_endpoint(_dco("BH", "BH", m1=5.0, m2=5.0), 50.0, 10.0, 10.0)
+    assert below.ejected_mass_fraction == pytest.approx(1 / 3)
+    assert below.mass_loss_unbinds is False
+    # star 10 -> remnant 1.3 beside 1.2: dM=8.7, M_tot=11.2 -> 0.78, unbound with no kick.
+    above = pc.dco_endpoint(_dco("NS", "NS", m1=1.3, m2=1.2), 30.0, 2.0, 10.0)
+    assert above.ejected_mass_fraction == pytest.approx(8.7 / 11.2)
+    assert above.mass_loss_unbinds is True
+    # exactly at the half counts as unbound (>= , not >): star 10 -> 2 beside 6, dM=8, M=16.
+    at = pc.dco_endpoint(_dco("BH", "BH", m1=2.0, m2=6.0), 40.0, 5.0, 10.0)
+    assert at.ejected_mass_fraction == pytest.approx(0.5)
+    assert at.mass_loss_unbinds is True
+
+
+def test_endpoint_never_reports_negative_ejecta():
+    """A remnant heavier than the star it came from is unphysical, but the grid is allowed to
+    round; the fraction floors at 0 so it can never read as mass being GAINED at collapse."""
+    e = pc.dco_endpoint(_dco("BH", "BH", m1=10.5, m2=8.0), 40.0, 5.0, 10.0)
+    assert e.ejected_mass_fraction == 0.0
+    assert e.mass_loss_unbinds is False
+
+
 # =============================================================================================
 # Data-gated tests
 # =============================================================================================
@@ -529,3 +589,119 @@ def test_dco_classifier_robust_and_honest_across_full_axis(kind):
         assert m is None or math.isfinite(m), "a nan remnant mass must degrade to None, not leak"
         seen_dco.add(bool(t.dco.is_dco))
     assert seen_dco, "no tracks sampled"
+
+
+# --- Chunk 2d: the endpoint block, measured over the real grids ------------------------------
+
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_endpoint_presence_tracks_the_classifier_exactly(kind):
+    """`dco_endpoint` must appear for every classified pair and for nothing else. If the two
+    could disagree, the view would either draw a pair the classifier denies or withhold one it
+    asserts — and the caption prints the classifier's label, so the picture would contradict
+    its own words."""
+    grid = pc._snap_feh(pc._available_grids(kind), 0.0)
+    rng = np.random.default_rng(11)
+    n = grid.m_star_init.size
+    for i in rng.choice(n, size=min(120, n), replace=False):
+        tr = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                float(grid.p_init_d[i]), feh=grid.feh, kind=kind)
+        assert (tr.dco_endpoint is not None) == tr.dco.is_dco
+
+
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_endpoint_orbit_is_the_last_modelled_row(kind):
+    """The drawn separation must BE the final step's, not a recomputed or post-SN value. This
+    is what makes the caption's "the values going into the supernova" literally true, and it is
+    what lets the view reuse the last step's Roche geometry without the scale bar jumping."""
+    grid = pc._snap_feh(pc._available_grids(kind), 0.0)
+    rng = np.random.default_rng(12)
+    n = grid.m_star_init.size
+    checked = 0
+    for i in rng.choice(n, size=min(120, n), replace=False):
+        tr = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                float(grid.p_init_d[i]), feh=grid.feh, kind=kind)
+        if tr.dco_endpoint is None:
+            continue
+        assert tr.dco_endpoint.separation_rsun == tr.steps[-1].separation_rsun
+        assert tr.dco_endpoint.period_d == tr.steps[-1].period_d
+        checked += 1
+    assert checked > 0, f"kind={kind}: no DCO endpoints in the sample"
+
+
+@pytest.mark.parametrize("kind", _HE_KINDS)
+def test_compact_objects_are_never_within_orders_of_magnitude_of_the_separation(kind):
+    """The measure-first gate behind the whole render decision. Both bodies are drawn as
+    fixed-pixel glyphs because nothing else is possible: measured over both He grids the
+    largest object is ~1e-9 to ~1e-6 of the gap, so a to-scale pair would be sub-pixel by
+    six orders of magnitude. Pinned loosely (< 1e-4) — the claim is the ORDER, and a tight
+    bound here would fail on a legitimately tighter orbit rather than on a real regression."""
+    grid = pc._snap_feh(pc._available_grids(kind), 0.0)
+    worst = 0.0
+    rng = np.random.default_rng(13)
+    n = grid.m_star_init.size
+    for i in rng.choice(n, size=min(150, n), replace=False):
+        tr = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                float(grid.p_init_d[i]), feh=grid.feh, kind=kind)
+        e = tr.dco_endpoint
+        if e is None or e.size_over_separation is None:
+            continue
+        worst = max(worst, e.size_over_separation)
+    assert 0.0 < worst < 1e-4, f"kind={kind}: largest size/separation {worst:.2e}"
+
+
+@requires_posydon_co_he_multifeh
+def test_the_unbound_branch_is_real_and_rare_across_the_whole_axis():
+    """The Blaauw gate is not a formality — it has to be reachable, or it would be dead code
+    dressed as an honesty check; and it has to be rare, or withholding the view would gut the
+    feature. Measured 2026-09-06 over ALL 66,599 DCO tracks in both He grids x all 8
+    metallicity buckets: 935 unbind on mass loss alone (1.40 %), worst ejected fraction 0.78,
+    concentrated at low metallicity. This asserts the shape of that population from a sample
+    of the extremes, not the exact count (a re-bake may legitimately move it)."""
+    seen_unbound = seen_bound = 0
+    for kind in _HE_KINDS:
+        grids = sorted(pc._available_grids(kind), key=lambda g: g.feh)
+        for grid in (grids[0], grids[-1]):        # the metal-poor floor and the rich ceiling
+            rng = np.random.default_rng(17)
+            n = grid.m_star_init.size
+            for i in rng.choice(n, size=min(200, n), replace=False):
+                tr = pc.co_binary_track(float(grid.m_star_init[i]), float(grid.m_co_init[i]),
+                                        float(grid.p_init_d[i]), feh=grid.feh, kind=kind)
+                if tr.dco is None or not tr.dco.is_dco:
+                    continue
+                # A classified pair always gets a block; only the FLAG decides whether it draws.
+                assert tr.dco_endpoint is not None
+                if tr.dco_endpoint.mass_loss_unbinds:
+                    seen_unbound += 1
+                else:
+                    seen_bound += 1
+    assert seen_bound > 0, "no drawable pairs anywhere — the endpoint view would never appear"
+    assert seen_unbound > 0, "the unbound branch was never reached; the gate is untested in situ"
+    assert seen_unbound < seen_bound / 4, "unbound pairs should be the rare minority"
+
+
+def test_track_route_carries_the_endpoint_block():
+    """The route's JSON shape — the frontend reads `dco_endpoint` straight off it."""
+    client = TestClient(app)
+    r = client.get("/co_binary_track", params={
+        "m_star": _DCO_M_STAR, "m_co": _DCO_M_CO, "p": _DCO_P, "kind": "co-hems"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["dco"]["is_dco"] is True
+    e = d["dco_endpoint"]
+    assert e is not None
+    for key in ("separation_rsun", "period_d", "s1_radius_km", "s2_radius_km",
+                "s1_radius_assumed", "s2_radius_assumed", "size_over_separation",
+                "ejected_mass_fraction", "mass_loss_unbinds"):
+        assert key in e, f"missing {key}"
+    assert e["separation_rsun"] > 0 and e["period_d"] > 0
+
+
+def test_co_hms_rlo_has_no_endpoint_block():
+    """The H-rich kind has no DCO story, so it must have no geometry for one either — the
+    same additive-key discipline Chunk 2a kept for `dco`."""
+    client = TestClient(app)
+    r = client.get("/co_binary_track", params={"m_star": 15, "m_co": 10, "p": 10})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["dco"] is None
+    assert d["dco_endpoint"] is None

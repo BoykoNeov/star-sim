@@ -953,6 +953,24 @@ export function createStar(canvas) {
   coMarker.visible = false;
   scene.add(coMarker);
 
+  // A SECOND schematic glyph, for the double-compact endpoint (Chunk 2d), where the star
+  // itself has collapsed and both bodies are point masses. It needs its own material, not a
+  // shared one: the pair is routinely mixed (a black hole beside a neutron star), and uType
+  // is a per-material uniform — one material could only ever draw two of the same kind.
+  const coMarker2Mat = new THREE.ShaderMaterial({
+    vertexShader: CORONA_VERT,
+    fragmentShader: CO_MARKER_FRAG,
+    uniforms: { uType: { value: 0.0 } },
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const coMarker2 = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), coMarker2Mat);
+  coMarker2.renderOrder = 2;
+  coMarker2.visible = false;
+  scene.add(coMarker2);
+
   // Compare against the BACKING-STORE size renderer.setSize will actually set
   // (CSS px × pixel ratio), not the CSS size. The old `canvas.width !== w` test was
   // only ever equal at devicePixelRatio 1: on any HiDPI screen (DPR 1.5–2, i.e.
@@ -1019,6 +1037,12 @@ export function createStar(canvas) {
     // The schematic compact-object marker rides the SAME fit factor + right offset as the
     // companion sphere (Chunk 1b), so a live resize refits it too instead of clipping.
     if (L.coMarker != null) { coMarker.scale.setScalar(L.coMarker * s); coMarker.position.x = xC; }
+    // The endpoint pair (Chunk 2d): the LEFT glyph stands where the star stood, so the
+    // collapse reads as a substitution in place rather than the pair shuffling sideways.
+    if (L.coMarkerLeft != null) {
+      coMarker.scale.setScalar(L.coMarkerLeft * s); coMarker.position.x = xD;
+      coMarker2.scale.setScalar(L.coMarker2 * s); coMarker2.position.x = xC;
+    }
   }
 
   // update(state, opts): opts.endgame === "wd" renders the white-dwarf endgame. The
@@ -1041,8 +1065,12 @@ export function createStar(canvas) {
     // NOT a StellarState — a point mass has no photosphere). Mutually exclusive with `cmp`
     // in practice (different demos); both drive the side-by-side layout + glare tempering.
     const co = (!eg && opts && opts.coMarker) || null;
+    // Chunk 2d: the double-compact endpoint — {left, right} remnant-type strings, no state
+    // for either body. Unlike `co` (a LIVING star beside a point mass) this hides the star
+    // entirely: there is no photosphere left in the frame at all.
+    const dcoPair = (!eg && opts && opts.dcoPair) || null;
     const twoBody = !!cmp;
-    const sideBySide = !!cmp || !!co;
+    const sideBySide = !!cmp || !!co || !!dcoPair;
     const [r, g, b] = teffToLinearRGB(state.Teff_K);
     surfaceMat.uniforms.uColor.value.setRGB(r, g, b);
     coronaMat.uniforms.uColor.value.setRGB(r, g, b);
@@ -1137,7 +1165,9 @@ export function createStar(canvas) {
     // SN mode hides the living-star surface sphere and shows the fireball instead; every
     // other mode restores it. Set unconditionally (not just inside an `if (sn)`) so a mode
     // switch can never strand a stale mesh on screen.
-    star.visible = !sn;
+    // Chunk 2d adds the second reason the surface sphere is absent: at the double-compact
+    // endpoint the star is GONE, not transformed — there is no photosphere in the frame.
+    star.visible = !sn && !dcoPair;
     fireball.visible = sn;
 
     // Corona: activity drives how far the glow reaches (extent) and, gently, how
@@ -1158,14 +1188,17 @@ export function createStar(canvas) {
     corona.scale.setScalar(rad * extent);
     coronaMat.uniforms.uInnerFrac.value = 1.0 / extent;
     coronaMat.uniforms.uFalloff.value = 3.2 / (extent - 1.0);
-    coronaMat.uniforms.uIntensity.value = (0.12 + 0.3 * act) * gDeg;
+    // A corona belongs to a stellar atmosphere. With the star collapsed there is none, so
+    // the glow is zeroed rather than left riding the last living state's activity — a halo
+    // around a point mass would be exactly the "evocative cue read as data" defect.
+    coronaMat.uniforms.uIntensity.value = dcoPair ? 0 : (0.12 + 0.3 * act) * gDeg;
 
     // Glare (GLARE_FRAG): keyed to SURFACE brightness (Teff — a cool giant is huge
     // but its surface is dim: soft corona, no glare) and scaled up by luminosity,
     // so an O star or a fresh 100 kK white dwarf blazes while the Sun stays quiet.
     // The SN branch below re-keys it to the fireball's light-curve luminosity.
     const logL = Math.log10(Math.max(1, state.L_lsun));
-    let glareInt = sn ? 0 : sstep(7000, 22000, state.Teff_K) * (0.5 + 0.5 * sstep(0, 6, logL));
+    let glareInt = (sn || dcoPair) ? 0 : sstep(7000, 22000, state.Teff_K) * (0.5 + 0.5 * sstep(0, 6, logL));
     let glareRad = rad;
 
     // WR wind halo (Chunk 5): shown ONLY in the WR endgame — hidden for the living star and
@@ -1270,7 +1303,10 @@ export function createStar(canvas) {
     // and lay the two stars side by side. When absent, reset the primary to the origin and
     // hide the companion meshes — set UNCONDITIONALLY so a toggle-off is byte-identical.
     companion.visible = twoBody;
-    coMarker.visible = !!co;
+    // Set unconditionally, like star.visible — the endpoint frame is one scrub step past the
+    // living track, so a scrub BACK has to strand nothing.
+    coMarker.visible = !!co || !!dcoPair;
+    coMarker2.visible = !!dcoPair;
     if (twoBody) {
       const [cr, cg, cb] = teffToLinearRGB(cmp.Teff_K);
       companionMat.uniforms.uColor.value.setRGB(cr, cg, cb);
@@ -1308,6 +1344,27 @@ export function createStar(canvas) {
         glare: glare.visible ? glareRad * GLARE_EXTENT : null,
         comp: cRad,                                    // companion sphere base scale
         cglare: companionGlare.visible ? cRad * GLARE_EXTENT : null,
+      };
+      applyCompanionScale();
+    } else if (dcoPair) {
+      // The double-compact endpoint (Chunk 2d): TWO schematic glyphs and nothing else. Both
+      // are drawn at the SAME fixed size — deliberately, and it is the one place this panel
+      // refuses to encode a real quantity in a size. The two objects differ in radius by a
+      // factor of a few at most, while both are ~10^-6 of their separation, so any size
+      // difference drawn here would be a hundred-thousand-fold exaggeration read as
+      // information. Equal glyphs say "point mass" and let the caption carry the masses.
+      coMarkerMat.uniforms.uType.value = dcoPair.left === "NS" ? 1.0 : 0.0;
+      coMarker2Mat.uniforms.uType.value = dcoPair.right === "NS" ? 1.0 : 0.0;
+      companionGlare.visible = false;
+      const gRad = 0.62;
+      const sep = 2.6 * gRad;
+      companionLayout = {
+        sep, halfW: sep / 2 + gRad, halfV: gRad,
+        dsx: rad * gd.kEq, dsy: rad * gd.kPol,   // the hidden star; scaled harmlessly
+        corona: rad * extent,
+        glare: null,
+        comp: gRad, cglare: null,                // companion sphere stays hidden
+        coMarkerLeft: gRad, coMarker2: gRad,     // the pair's placement flag
       };
       applyCompanionScale();
     } else if (co) {
@@ -1429,7 +1486,7 @@ export function createStar(canvas) {
     // refits to the frame each frame, so a live resize can't clip the two-body layout (the
     // applyWindScale precedent). Cheap to set uTime unconditionally; refit only when shown.
     companionMat.uniforms.uTime.value = t;
-    if (companion.visible || coMarker.visible) applyCompanionScale();
+    if (companion.visible || coMarker.visible || coMarker2.visible) applyCompanionScale();
     // The WR wind outflow streams from the same clock (the corona has no uTime); refit it
     // to the frame each frame so a live resize can't slice the additive quad at the edge.
     if (wind.visible) {

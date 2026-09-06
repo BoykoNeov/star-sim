@@ -2585,6 +2585,7 @@ function exitEndgame() {
   coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");
   document.body.classList.remove("co-he-kind");
+  document.body.classList.remove("co-dco-endpoint");
   if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   els.mass.disabled = false; els.feh.disabled = false;    // in case binaryView had disabled them
@@ -3940,6 +3941,7 @@ async function enterStripped() {
   coBinaryView = false; coBinaryTrackData = null; coBinaryStar = null; coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");   // Chunk 1b — snapshot first here too
   document.body.classList.remove("co-he-kind");
+  document.body.classList.remove("co-dco-endpoint");
   if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
   if (els.coBinaryDemoBack) els.coBinaryDemoBack.hidden = true;
   updateBinaryDemoButtons();
@@ -4164,18 +4166,74 @@ function refreshBinary() {
 // overloaded refreshBinary) because the step shape differs: one real star + a point-mass
 // compact object (no star_2 StellarState), so the HR gets only ONE marker and the 3D/Roche
 // panels draw a schematic CO glyph, never a second photosphere.
+// Chunk 2d — the ENDPOINT SLOT. A DCO track's classifier has always named the pair the
+// system ends as; this is the one scrub position past the last modelled step where that pair
+// is actually drawn. It exists only when there is genuinely a pair to draw, and the gate is
+// deliberately stricter than `is_dco`:
+//
+//   `mass_loss_unbinds` says the collapse ejects more than half the system's mass, which
+//   unbinds a circular orbit on its own — before any natal kick, i.e. in the most generous
+//   case there is. Drawing two objects in a shared orbit for such a system would be a picture
+//   the model's own numbers contradict, which is the defect this project keeps re-learning.
+//   Those tracks keep the classifier's label and lose the frame; the note says which and why.
+//
+// Measured: 935 of 66,599 DCO tracks (1.40 %) fail it, up to an ejected fraction of 0.78 —
+// rare, but reachable through the metallicity picker, so it is a real branch, not a formality.
+function coBinaryEndpointBlock() {
+  const d = coBinaryTrackData;
+  if (!d || !d.dco || !d.dco.is_dco || !d.dco_endpoint) return null;
+  return d.dco_endpoint.mass_loss_unbinds ? null : d.dco_endpoint;
+}
+
+// The share of the slider the endpoint frame owns. It is ONE frame against a track of a few
+// hundred steps, so an equal slot would be ~0.4 % of the travel: practically unlandable by
+// drag, and close enough to "end" that the tick strip's minimum-gap rule drops its label —
+// measured, both happened on the first build. A frame that is the feature's whole payoff
+// cannot be the hardest position on the slider to reach, so it gets a deliberate share
+// instead. The track keeps the rest, still linear in step index within it.
+//
+// The value is not free: buildTickStrip drops any label within MIN_GAP = 0.11 of the previous
+// one, so a share below that leaves the frame reachable but ANONYMOUS — measured on the first
+// pass at 0.08, where "after collapse" silently vanished from the strip while the frame itself
+// worked. Sitting above MIN_GAP is what buys the label; the extra width is not decorative.
+//
+// 0.14 cleared MIN_GAP but still collided on screen: buildTickStrip right-ANCHORS a label past
+// 0.9, so "after collapse" hangs left from the very end while "end" is centred just before it,
+// and the two overlapped. 0.20 puts "end" at 0.80, clear of both the anchor switch and its
+// neighbour — verified rendered, not just computed.
+const CO_ENDPOINT_SHARE = 0.20;
+
+// Where the last modelled step sits, in slider fraction — the boundary between the track and
+// the endpoint frame. Everything that maps a step to a position goes through this, so the
+// ticks and the scrub can never disagree about where the track ends.
+function coBinaryTrackSpan() {
+  return coBinaryEndpointBlock() ? 1 - CO_ENDPOINT_SHARE : 1;
+}
+
+// Slider fraction -> step index. Returns coBinaryStar.length (one PAST the last step) for the
+// endpoint frame; refreshCoBinary keys off exactly that.
 function coBinaryIndexFromFraction(frac) {
-  if (!coBinaryStar || !coBinaryStar.length) return 0;
-  return Math.max(0, Math.min(coBinaryStar.length - 1, Math.round(clamp01(frac) * (coBinaryStar.length - 1))));
+  const n = coBinaryStar ? coBinaryStar.length : 0;
+  if (!n) return 0;
+  const f = clamp01(frac);
+  const span = coBinaryTrackSpan();
+  if (span < 1 && f > span) return n;
+  return Math.max(0, Math.min(n - 1, Math.round((f / span) * (n - 1))));
 }
 
 function rebuildCoBinaryTicks() {
   if (!coBinaryTrackData) return;
   const steps = coBinaryTrackData.steps;
   const n = steps.length;
-  const marks = [{ pos01: 0, label: "start" }, { pos01: 1, label: "end" }];
+  // Positions run over the SLOTS, not the steps — with an endpoint frame there is one more
+  // stop than there are modelled steps, so "end" is no longer at 1.0 and dividing by n-1
+  // would push every landmark right by one slot.
+  const span = coBinaryTrackSpan();
+  const at = (i) => (n > 1 ? (i / (n - 1)) * span : 0);
+  const marks = [{ pos01: 0, label: "start" }, { pos01: at(n - 1), label: "end" }];
   const mtStart = steps.findIndex((s) => s.mt_state !== "detached");
-  if (mtStart > 0 && mtStart < n - 1) marks.push({ pos01: mtStart / (n - 1), label: "accretion begins" });
+  if (mtStart > 0 && mtStart < n - 1) marks.push({ pos01: at(mtStart), label: "accretion begins" });
+  if (coBinaryEndpointBlock()) marks.push({ pos01: 1, label: "after collapse" });
   buildTickStrip(els.ageMarks, marks);
   els.ageTicks.innerHTML = "";
 }
@@ -4193,6 +4251,7 @@ function _applyCoBinaryTrackData(data) {
   // Drive the He-kind body class + narration/comp swap off the SERVED kind (authoritative),
   // not the selector — so they can never desync from the track actually being shown.
   document.body.classList.toggle("co-he-kind", isHeKind(data.kind));
+  document.body.classList.remove("co-dco-endpoint");
   updateCoBinaryDcoNote();
   rebuildCoBinaryTicks();
   updateCoBinaryCustomNote();
@@ -4209,7 +4268,22 @@ function updateCoBinaryDcoNote() {
   // Prescription labeled by index (POSYDON ships 24 core-collapse models; index→mechanism
   // isn't verifiable from the grid file — the boron-b8 discipline), with a friendlier gloss.
   const presc = String(dco.sn_model).replace(/^S1_SN_MODEL_/, "");
-  els.coBinaryDcoNote.textContent = `Endpoint: ${dco.label} (POSYDON core-collapse prescription ${presc}).`;
+  let tail = "";
+  const e = coBinaryTrackData.dco_endpoint;
+  // Chunk 2d: say which of the three states the after-collapse view is in, and never leave
+  // its absence unexplained. A missing frame with no reason reads as a broken feature; worse,
+  // an unbound system that simply showed no frame would let the standing "merger progenitor"
+  // label go unqualified, when the model's own mass budget contradicts it.
+  if (e && e.mass_loss_unbinds) {
+    tail = ` The collapse ejects ${(e.ejected_mass_fraction * 100).toFixed(0)}% of the system's`
+      + ` mass — more than half, which unbinds a circular orbit on its own, before any natal`
+      + ` kick. So this pair most likely does not stay together, and the after-collapse view`
+      + ` is withheld rather than drawn as an orbiting couple.`;
+  } else if (e) {
+    tail = " Scrub past the end of the track to see the pair.";
+  }
+  els.coBinaryDcoNote.textContent =
+    `Endpoint: ${dco.label} (POSYDON core-collapse prescription ${presc}).${tail}`;
 }
 
 // Sync the demo-button label + the demo-row `?` tooltip to the selected grid kind. The HTML
@@ -4285,6 +4359,7 @@ function exitCoBinaryView() {
   coBinaryLatest.invalidate();
   document.body.classList.remove("co-binary-view");
   document.body.classList.remove("co-he-kind");
+  document.body.classList.remove("co-dco-endpoint");
   if (els.coBinaryCustomControls) els.coBinaryCustomControls.hidden = true;
   if (els.coBinaryFehNote) els.coBinaryFehNote.textContent = "";
   if (els.coBinaryDcoNote) els.coBinaryDcoNote.textContent = "";
@@ -4324,6 +4399,8 @@ async function refetchCoBinaryTrack() {
 function refreshCoBinary() {
   if (!coBinaryView || !coBinaryTrackData) return;
   const i = coBinaryIndexFromFraction(coBinaryFraction);
+  if (i >= coBinaryStar.length) return refreshCoBinaryEndpoint();
+  document.body.classList.remove("co-dco-endpoint");
   const step = coBinaryTrackData.steps[i];
   const s = coBinaryStar[i];
   const coType = coBinaryTrackData.co_type;
@@ -4354,6 +4431,50 @@ function refreshCoBinary() {
       `(${sepAU} AU) · star ${step.star_current_msun.toFixed(2)} M☉, ${coType} ${step.co_mass_msun.toFixed(2)} M☉ · ${step.mt_state}` +
       acc +
       (i === coBinaryStar.length - 1 ? ` · outcome: ${coBinaryTrackData.outcome}` : "");
+  }
+}
+
+// Chunk 2d — paint the endpoint frame: the surviving He star has collapsed and the pair the
+// `dco` classifier has been naming is finally on screen. Reached only through refreshCoBinary,
+// which means coBinaryEndpointBlock() has already vouched for it (a real pair, still bound
+// without a kick), so nothing here re-checks that.
+//
+// Everything driven by a photosphere is torn down rather than left showing the last living
+// step, because none of it exists any more: no HR marker (a compact object has no Teff or L
+// to sit at), no surface composition, no spectrum, no readout.
+function refreshCoBinaryEndpoint() {
+  const e = coBinaryEndpointBlock();
+  const dco = coBinaryTrackData.dco;
+  const steps = coBinaryTrackData.steps;
+  const last = steps[steps.length - 1];
+  if (!e || !dco || !last) return;
+
+  document.body.classList.add("co-dco-endpoint");
+
+  // Index === length is one PAST the end, and both halves of that are wanted: drawBinaryTrail
+  // splits on `i <= splitIdx`, so the whole track draws bold (the star lived all of it), while
+  // the marker is guarded by `idx < length` and so is not drawn at all.
+  hr.updateBinaryIndex(coBinaryStar.length);
+
+  star.update(coBinaryStar[coBinaryStar.length - 1],
+    { dcoPair: { left: dco.s1_remnant_type, right: dco.s2_co_type } });
+
+  if (last.roche) roche.drawDcoEndpoint(last.roche, e, dco);
+  else roche.clear();
+
+  if (els.endgameAgeCaption) {
+    const nameOf = (k) => ({ BH: "black hole", NS: "neutron star" }[k] || k);
+    const m1 = dco.s1_remnant_mass_msun;
+    const yrs = last.age_yr >= 1e6 ? `${(last.age_yr / 1e6).toFixed(2)} Myr`
+      : last.age_yr < 1 ? "<1 yr" : `${Math.round(last.age_yr)} yr`;
+    els.endgameAgeCaption.textContent =
+      `After the collapse, at system age ${yrs} — ${dco.label}: a ` +
+      `${nameOf(dco.s1_remnant_type)}${m1 != null ? ` of ${m1.toFixed(2)} M☉` : ""} where the ` +
+      `star was, and the ${nameOf(dco.s2_co_type)} of ${dco.s2_mass_msun.toFixed(2)} M☉ it had ` +
+      `been orbiting all along. Separation ${e.separation_rsun.toFixed(e.separation_rsun < 10 ? 2 : 0)} R☉, ` +
+      `period ${e.period_d.toFixed(2)} d — the values going INTO the supernova, which is where ` +
+      `POSYDON stops; the explosion then moves the orbit by an amount that depends on the kick, ` +
+      `and no merger time is claimed here for the same reason.`;
   }
 }
 

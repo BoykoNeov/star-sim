@@ -170,6 +170,24 @@ _C_CGS = 2.99792458e10
 _MSUN_G = 1.989e33
 _SEC_PER_YR = 365.25 * 86400.0
 _LSUN_ERG_S = 3.828e33
+_RSUN_KM = 6.957e5
+
+# Compact-object SIZES, for the endpoint render's honesty caption (Chunk 2d). The two are
+# NOT the same kind of number and the payload keeps them apart via `*_radius_assumed`:
+#   * a black hole's Schwarzschild radius 2GM/c^2 FOLLOWS from the mass — 2.953 km per Msun,
+#     a derived quantity with no free parameter;
+#   * a neutron star's radius does NOT. It is set by the nuclear equation of state, which is
+#     the open question of the field; ~12 km is the round middle of the observationally
+#     allowed band (NICER/GW170817 favour ~11-13 km for a 1.4 Msun NS), not a modelled value
+#     and not one this grid supplies. Any caption quoting it must say "assumed".
+_R_SCHWARZSCHILD_KM_PER_MSUN = 2.953250077
+_NS_RADIUS_KM_ASSUMED = 12.0
+
+# Symmetric (kick-free) mass loss unbinds a circular orbit once the ejected mass exceeds half
+# the system's total — the Blaauw 1961 limit. Used ONLY as a gate: a track past it must not be
+# DRAWN as an orbiting pair. The post-SN orbit it implies (a_f/a_i, e) is deliberately NOT
+# surfaced — that is the merger-clock feature, which needs natal kicks and is out of scope.
+_BLAAUW_UNBIND_FRACTION = 0.5
 
 # Standard round-number accretion efficiency for a compact accretor (order of magnitude of
 # GM/Rc^2 for a NS/BH; ~0.1-0.2 in the literature) — a schematic cue, not fit to this grid.
@@ -241,6 +259,43 @@ class DcoClassification:
 
 
 @dataclass
+class DcoEndpoint:
+    """What it takes to DRAW the double-compact pair, once `DcoClassification` has said there
+    is one (Chunk 2d — the render half of the DCO channel, which until now printed a label and
+    drew nothing).
+
+    Every number here is read off the LAST MODELLED ROW of the snapped track — the instant
+    *before* the surviving He star collapses. That is the honest limit of this grid and the
+    reason `separation_rsun` is named for what it is: POSYDON follows the binary up to the
+    collapse and stops. The supernova then changes the orbit, by mass loss and by a natal
+    kick, and the kick is a prescription this grid does not serve (module docstring). So the
+    pair is drawn at its pre-collapse separation and the caption must say so; the post-SN
+    orbit is not computed here and neither is a merger time.
+
+    The one exception, and it is a GATE rather than a payoff: symmetric mass loss alone
+    unbinds a circular orbit once the ejected mass passes half the system total (Blaauw 1961).
+    That test needs no kick model — it is the kick-FREE, most optimistic case — so a track
+    failing it is one the model's own numbers say does not survive as a pair, whatever the
+    kick does. `mass_loss_unbinds` flags those so the view refuses to draw a bound orbit for
+    them. Measured over all 66,599 DCO tracks in both He grids x all 8 metallicity buckets:
+    935 fail it (1.40 %), reaching an ejected fraction of 0.78 at [Fe/H] = -4.0 — small, but
+    not empty, and reachable through the UI's own metallicity picker."""
+
+    separation_rsun: float           # the LAST MODELLED row's separation — PRE-collapse
+    period_d: float
+    s1_radius_km: float | None       # the He star's future remnant (BH: Schwarzschild; NS: assumed)
+    s2_radius_km: float | None       # the existing compact object, same two rules
+    s1_radius_assumed: bool          # True iff that radius is the EOS-dependent NS guess
+    s2_radius_assumed: bool
+    size_over_separation: float | None   # the LARGER object's radius / the separation. The
+                                          # reason the markers are schematic: measured 1.7e-9
+                                          # to 6.3e-6 grid-wide, i.e. sub-pixel by six orders
+                                          # of magnitude, so nothing here can be to scale.
+    ejected_mass_fraction: float     # dM / M_tot at the collapse, kick-free
+    mass_loss_unbinds: bool          # ejected fraction past the Blaauw half — do NOT draw a pair
+
+
+@dataclass
 class CoBinaryTrack:
     """A snapped grid node's full time series, plus the honesty/routing scalars."""
 
@@ -261,6 +316,8 @@ class CoBinaryTrack:
     kind: str                        # which CO grid this track came from (VALID_KINDS)
     dco: DcoClassification | None    # the double-compact-object endpoint (He kinds only; None
                                       # for co-hms-rlo, whose H-rich star has no DCO story)
+    dco_endpoint: DcoEndpoint | None  # what the pair needs to be DRAWN — None unless `dco`
+                                       # says there IS a pair (Chunk 2d)
 
 
 @dataclass(frozen=True)
@@ -438,6 +495,58 @@ def dco_classification(
     )
 
 
+def _compact_radius_km(remnant_type: str, mass_msun: float | None) -> tuple[float | None, bool]:
+    """(radius km, is-assumed) for one compact object. See the `_NS_RADIUS_KM_ASSUMED` note:
+    the BH radius is derived from the mass, the NS radius is an assumption, and the caller
+    has to be able to tell them apart — hence the flag rather than a bare number."""
+    if remnant_type == "NS":
+        return _NS_RADIUS_KM_ASSUMED, True
+    if remnant_type == "BH" and mass_msun is not None and math.isfinite(mass_msun):
+        return _R_SCHWARZSCHILD_KM_PER_MSUN * mass_msun, False
+    return None, False
+
+
+def dco_endpoint(dco: DcoClassification, separation_rsun: float, period_d: float,
+                 m_star_final_msun: float) -> DcoEndpoint | None:
+    """The geometry for drawing a classified double-compact pair (Chunk 2d), or None when
+    there is no pair to draw.
+
+    Deliberately separate from `dco_classification`: that answers "is there a merger
+    progenitor here, and what is it called", which is a physics verdict; this answers "what
+    does the picture need", which is a render concern that must never be able to change the
+    verdict. Returning None for `not dco.is_dco` keeps the WD and unresolved branches drawing
+    nothing at all rather than drawing a pair with a hedge on it."""
+    if not dco.is_dco:
+        return None
+
+    r1, r1_assumed = _compact_radius_km(dco.s1_remnant_type, dco.s1_remnant_mass_msun)
+    r2, r2_assumed = _compact_radius_km(dco.s2_co_type, dco.s2_mass_msun)
+    radii = [r for r in (r1, r2) if r is not None]
+    sep_km = separation_rsun * _RSUN_KM
+    ratio = (max(radii) / sep_km) if radii and sep_km > 0 else None
+
+    # Kick-free ejected fraction. dM is what the He star sheds in becoming its remnant; the
+    # denominator is the whole system at that instant, the companion included.
+    m_rem = dco.s1_remnant_mass_msun
+    m_tot = m_star_final_msun + dco.s2_mass_msun
+    if m_rem is None or m_tot <= 0:
+        frac = 0.0
+    else:
+        frac = max(0.0, (m_star_final_msun - m_rem) / m_tot)
+
+    return DcoEndpoint(
+        separation_rsun=separation_rsun,
+        period_d=period_d,
+        s1_radius_km=r1,
+        s2_radius_km=r2,
+        s1_radius_assumed=r1_assumed,
+        s2_radius_assumed=r2_assumed,
+        size_over_separation=ratio,
+        ejected_mass_fraction=frac,
+        mass_loss_unbinds=frac >= _BLAAUW_UNBIND_FRACTION,
+    )
+
+
 def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0,
                     kind: str = DEFAULT_KIND) -> CoBinaryTrack:
     """(M_star, M_co_init, P_init [days], [Fe/H], kind) -> the snapped POSYDON CO track:
@@ -538,6 +647,7 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0,
     # AND only when the bake recorded the SN-model scalars (an old CO-HMS_RLO npz has none,
     # so `dco` stays None — the optional-load degrades to "no DCO", never an error).
     dco = None
+    endpoint = None
     if kind in _HE_KINDS and grid.sn_co_type is not None:
         # S2's mass is the FINAL-row (post-accretion) mass, not m_co_init (advisor); S1's
         # remnant mass is POSYDON's own prediction, read off the snapped track (never blended).
@@ -550,6 +660,12 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0,
             sn_type=str(grid.sn_type[idx]),
             sn_model=grid.sn_model_default,   # guaranteed set when sn_co_type is not None
         )
+        # The render block reads the LAST MODELLED row — the orbit the instant before the
+        # collapse, which is where POSYDON stops. See `DcoEndpoint` for why that is the
+        # honest thing to draw and what the caption therefore owes.
+        if steps:
+            endpoint = dco_endpoint(dco, steps[-1].separation_rsun, steps[-1].period_d,
+                                    steps[-1].star_current_msun)
 
     return CoBinaryTrack(
         steps=steps,
@@ -568,6 +684,7 @@ def co_binary_track(m_star: float, m_co: float, p: float, feh: float = 0.0,
         grid_p_range=(float(grid.p_init_d.min()), float(grid.p_init_d.max())),
         kind=kind,
         dco=dco,
+        dco_endpoint=endpoint,
     )
 
 
@@ -650,4 +767,5 @@ def co_binary_track_payload(m_star: float, m_co: float, p: float, feh: float = 0
         "grid_p_range": list(track.grid_p_range),
         "kind": track.kind,
         "dco": asdict(track.dco) if track.dco is not None else None,
+        "dco_endpoint": asdict(track.dco_endpoint) if track.dco_endpoint is not None else None,
     }

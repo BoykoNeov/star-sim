@@ -71,6 +71,11 @@ export function createRoche() {
   // orbiting companion — NOT the SN arc's "winks out"), NS/other = a tiny hot point + halo.
   let coMode = false;
   let coType = null;
+  // Chunk 2d — the endpoint frame: the He star has collapsed, so there is no photosphere
+  // anywhere and BOTH bodies are point masses. `dcoEndpoint`/`dcoInfo` are the served
+  // `dco_endpoint` + `dco` blocks; non-null is what puts the panel in that mode.
+  let dcoEndpoint = null;
+  let dcoInfo = null;
 
   // World-space (units of separation a) → canvas, EQUAL aspect on both axes (this is a
   // physical geometry — it must not be stretched). The frame spans L3 (behind the donor)
@@ -140,9 +145,9 @@ export function createRoche() {
   // A schematic point-mass marker for a compact-object accretor (Chunk 1b). It is NOT sized
   // by any radius — a compact object is a point at orbital scale; this is a fixed-pixel
   // glyph, the same honesty tier as the stream/lobe-fill cues.
-  function drawCoMarker(cx, T) {
+  function drawCoMarker(cx, T, type) {
     const px = T.X(cx), py = T.Y(0);
-    if (coType === "BH") {
+    if ((type || coType) === "BH") {
       // Persistent dark disc + a thin bright ring so it reads against the dark panel — an
       // ongoing orbiting companion, deliberately NOT the SN remnant's wink-out.
       ctx.fillStyle = "#05070d";
@@ -182,6 +187,7 @@ export function createRoche() {
   function draw() {
     ctx.clearRect(0, 0, W, H);
     if (!geo) return;
+    if (dcoEndpoint) { drawDcoFrame(); return; }
     if (liveMode) { drawLiveFrame(); return; }
     const T = transform();
 
@@ -229,6 +235,76 @@ export function createRoche() {
   // outline during RLOF (Roche overflow is a local excess at L1, not a whole-photosphere
   // inflation past the mean lobe radius — measured on the real grid) — the fill is the
   // schematic "transferring right now" cue, same discipline as the static stream.
+  // Chunk 2d — the frame one step past the end of a DCO track: the surviving He star has
+  // collapsed, and what is left is the pair the classifier has been NAMING all along without
+  // ever drawing it. Everything that implied a photosphere is gone (no discs, no fills, no
+  // stream, no Teff colour anywhere); both bodies are the same schematic point-mass glyph the
+  // accretor already used, because that is what they now both are.
+  //
+  // The lobes stay, faint and empty, and that is not a leftover: the Roche potential is a
+  // TWO-POINT-MASS construction, so this is the one configuration where it holds exactly
+  // rather than approximately. Nothing is anywhere near filling them — hence outline-only,
+  // and the caption says why they are still on screen.
+  function drawDcoFrame() {
+    const T = transform();
+    drawAxisLine(T);
+
+    for (const lobe of [geo.companion_lobe, geo.donor_lobe]) {
+      poly(lobe, T);
+      ctx.fillStyle = "rgba(255,255,255,0.012)"; ctx.fill();
+      ctx.strokeStyle = "rgba(160,172,196,0.35)"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // The star was drawn LEFT at every prior step and its remnant stays LEFT — the fixed
+    // identity the live view promises ("it is the lobe sizes that swap, never the labels")
+    // has to survive the collapse too, or the pair reads as having traded places.
+    drawCoMarker(0, T, dcoInfo.s1_remnant_type);
+    drawCoMarker(1, T, dcoInfo.s2_co_type);
+
+    drawLPointsAndCM(T);
+
+    ctx.fillStyle = "#c9d2e4"; ctx.font = "11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    const drop = 16;
+    ctx.fillText(`${CO_NAME[dcoInfo.s1_remnant_type] || dcoInfo.s1_remnant_type} (was the star)`,
+      T.X(0), T.Y(0) + 4 + drop);
+    ctx.fillText(CO_NAME[dcoInfo.s2_co_type] || dcoInfo.s2_co_type, T.X(1), T.Y(0) - 6 - drop);
+
+    drawScaleBar(T);
+
+    if (caption) caption.textContent = captionTextDco();
+  }
+
+  function captionTextDco() {
+    const e = dcoEndpoint;
+    const a = e.separation_rsun;
+    // The size statement is the whole reason the glyphs are schematic, so it quotes the
+    // MEASURED ratio rather than gesturing at "tiny". One significant figure: this is an
+    // order-of-magnitude fact, and more digits would imply a precision the round NS radius
+    // (see below) does not have.
+    const ratio = e.size_over_separation;
+    const scale = ratio ? `about 1 part in ${Number(1 / ratio).toPrecision(1)}` : "far below one pixel";
+    const assumed = (e.s1_radius_assumed || e.s2_radius_assumed)
+      ? ` A black hole's size follows from its mass (the Schwarzschild radius); a neutron ` +
+        `star's does NOT — it depends on the nuclear equation of state, and the ~12 km used ` +
+        `here is an assumption, not a modelled value.`
+      : ` Both sizes are Schwarzschild radii, which follow from the masses.`;
+    return (
+      `The star has collapsed. Both bodies are now compact objects — POINT MASSES, drawn as ` +
+      `schematic glyphs at a fixed pixel size, NOT to scale: at this separation each is ` +
+      `${scale} of the gap between them, so nothing about their true size could be drawn ` +
+      `here.${assumed} The Roche lobes are kept as empty outlines because two point masses ` +
+      `are the one case where that potential is exact — but nothing is near filling them. ` +
+      `Separation a ≈ ${a.toFixed(a < 10 ? 2 : 0)} R☉ and period ${e.period_d.toFixed(2)} d ` +
+      `are the values at the LAST MODELLED MOMENT, the instant BEFORE the collapse: POSYDON ` +
+      `follows the binary up to there and stops. The supernova then changes this orbit — ` +
+      `through the mass it ejects and through the kick it gives the remnant — and the kick ` +
+      `is a prescription this grid does not supply, so the orbit you see is the one going ` +
+      `IN, not the one coming out. For the same reason no merger time is shown.`
+    );
+  }
+
   function drawLiveFrame() {
     const T = transform();
     drawAxisLine(T);
@@ -359,6 +435,7 @@ export function createRoche() {
 
   function drawPanel(rocheBlock, companionState) {
     liveMode = false; coMode = false; coType = null;
+    dcoEndpoint = null; dcoInfo = null;
     donorState = null; mtState = "detached";
     geo = rocheBlock || null;
     companion = companionState || null;
@@ -372,6 +449,7 @@ export function createRoche() {
   // fixed-q=0.8 snapshot). `donor`/`companionState` are that step's real StellarStates.
   function drawLive(rocheBlock, donor, companionState, mtStateNow) {
     liveMode = true; coMode = false; coType = null;
+    dcoEndpoint = null; dcoInfo = null;
     geo = rocheBlock || null;
     donorState = donor || null;
     companion = companionState || null;
@@ -385,6 +463,7 @@ export function createRoche() {
   // the glyph). Same per-step Roche geometry as drawLive, but with no companion StellarState.
   function drawLiveCo(rocheBlock, star, coTypeNow, mtStateNow) {
     liveMode = true; coMode = true; coType = coTypeNow || "NS";
+    dcoEndpoint = null; dcoInfo = null;
     geo = rocheBlock || null;
     donorState = star || null;
     companion = null;
@@ -393,9 +472,26 @@ export function createRoche() {
     draw();
   }
 
+  // Chunk 2d: the endpoint frame past the last step of a DCO track. `rocheBlock` is the LAST
+  // step's own geometry — reused deliberately rather than recomputed, so the separation, the
+  // lobe shapes and the scale bar are continuous with the frame the scrub just left and the
+  // only thing that visibly changes is the star becoming a point. `endpoint`/`dco` are the
+  // served blocks; the caller is responsible for never calling this when the pair is unbound.
+  function drawDcoEndpoint(rocheBlock, endpoint, dco) {
+    if (!rocheBlock || !endpoint || !dco) return clear();
+    liveMode = false; coMode = false; coType = null;
+    donorState = null; companion = null; mtState = "detached";
+    geo = rocheBlock;
+    dcoEndpoint = endpoint;
+    dcoInfo = dco;
+    ({ ctx, W, H } = fitCanvas(canvas, canvas.clientWidth || 380, canvas.clientHeight || 300));
+    draw();
+  }
+
   function clear() {
     geo = null; companion = null; donorState = null; liveMode = false; mtState = "detached";
     coMode = false; coType = null;
+    dcoEndpoint = null; dcoInfo = null;
     ctx.clearRect(0, 0, W, H);
     if (caption) caption.textContent = "";
   }
@@ -407,5 +503,5 @@ export function createRoche() {
     draw();
   }
 
-  return { draw: drawPanel, drawLive, drawLiveCo, resize, clear };
+  return { draw: drawPanel, drawLive, drawLiveCo, drawDcoEndpoint, resize, clear };
 }
