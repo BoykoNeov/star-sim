@@ -260,3 +260,38 @@ star states (endgame included), `4` adds the round-trip check, **`5` is the one 
 
 **Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
 (P4) and cold-disk first load (P5) — both conditional, neither queued.
+
+## Turning a physics error into pixels — the HR panel's measured scale (2026-09-06)
+
+Reusable beyond the row that needed it (`science-hurdles.md` §1.1a, "is the 0.3-0.45 M☉
+grid coarseness visible?"). The generic question is *"we know the model is X dex off — can
+anyone see it?"*, and the conversion is panel geometry, so measure the panel, don't read
+constants out of the source.
+
+**The HR panel at a 1440 viewport is 654 × 320 CSS px** (`fitCanvas` returns CSS px, not
+device px — `PAD` 30 / `PAD_L` 50), and its living frame is FIXED for anything that doesn't
+overflow it (log Teff 3.4-4.7, log L -4..6). That gives a **17× asymmetry**:
+
+| axis | span | px/dex |
+|---|---|---|
+| log Teff (x) | 1.3 dex over 574 px | **441.5** |
+| log L (y) | 10 dex over 260 px | **26.0** |
+
+So a tenth of a dex in Teff is 44 px and screams; the same error in L is 2.6 px and hides.
+Any "is it visible" answer that quotes only Δlog L is answering the easy half.
+
+**Confirm the frame is unexpanded through the runtime, not by reading `applyLivingBounds`:**
+screenshot the canvas at several inputs and diff. If the frame auto-fit per input, the axis
+furniture would move and the diff would cover the canvas; a diff confined to a ~40 × 40 px
+box around the marker proves the mapping you just used. That check is 20 lines of Playwright
+and it is the difference between a measured verdict and a plausible one.
+
+**The other half of a "visible?" question is the control's own resolution.** The mass slider
+is `step = 0.0005` of a 0..1 position spanning 0.1-300 M☉ logarithmically = **0.00174 dex per
+step**, and the thumb is ~449 px wide, so one step is 0.22 px of thumb travel and a whole
+0.05-M☉ grid bracket down at 0.3 M☉ is only ~9 px of drag. Compare the artefact against the
+per-step motion, not against zero: an artefact smaller than one step's own movement cannot be
+perceived as a discontinuity.
+
+Harness: `M:\claud_projects\temp\star-sim-lowmass` (`sweep.py` = the per-step walk,
+`measure2.py` = readout kinks + held-out offsets, `visual.py` = the screenshot diff).
