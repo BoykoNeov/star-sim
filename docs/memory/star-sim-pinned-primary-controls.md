@@ -49,17 +49,35 @@ it moves every panel at once. Two floors, not one:
 
 | | live | endgame |
 |---|---|---|
-| measured tallest | 128 px | 204 px |
-| `min-height` | **136 px** | **216 px** (`body.wd-/wr-/sn-/stripped-mode`) |
+| measured tallest | 128 px | 169 px |
+| `min-height` | **136 px** | **176 px** (`body.wd-/wr-/sn-/stripped-mode`) |
 
 - **Live is 114 px in 1,015 of 1,020 sampled states** and 128 px in five — `[Fe/H]`
   ≈ +0.45, ≈ 36 M☉, where the age landmarks crowd enough to stagger the tick labels
   onto a second row. A 1-in-200 state is exactly what a coarse sweep misses and a user
   finds. Three tick rows never occur.
-- **One floor for both modes would waste ~90 px of pinned space in the live view** —
-  the endgame caption reserves two lines and the re-snap note two more, and both are
-  `display:none` / `hidden` while the star is alive. Splitting the floor by body class
-  costs one extra rule and keeps the live strip honest.
+- **One floor for both modes would waste pinned space in the live view** — the endgame
+  caption is `display:none` while the star is alive. Splitting by body class costs one
+  extra rule and keeps the live strip honest.
+
+### The endgame floor was wrong twice, both times from measuring at one width
+
+First pass: 204 px measured at 1440, reserved 216. Across the whole pinned regime the
+*steady* endgame strip was 164 px at 1440 but **242 px at 800** — `#endgame-age-caption`
+sat inside the age COLUMN, and a ~150-character sentence in a 236 px column is six lines.
+216 was therefore ~50 px of dead pinned space on a desktop **and 26 px short** at the
+width the rule has to hold. Two changes:
+
+- **the caption spans the strip**, not one column → 35–38 px at every pinned width;
+- **`#endgame-resnap-note` is out of flow** (absolute, hanging below the strip, its own
+  opaque background). A one-shot message must not buy permanent reserved space in a
+  pinned box; out of flow it moves nothing — verified, no panel's box changes when it
+  fires at 1440 / 800 / 390.
+
+Then 151 / 166 / **169** px at 1440 / 1024 / 800 → floor **176**. The worst case is
+checked against the caption TEXT, not an age sweep: `capmax.mjs` injects the seven longest
+strings the code can build, including the stripped-star "Snapped:" clause and the
+co-binary accretion clause, which no gateway button can reach.
 
 ## Sticky only above 800 px
 

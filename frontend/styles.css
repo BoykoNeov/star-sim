@@ -81,19 +81,40 @@ code { color: var(--accent); }
    the top of a pinned bar. */
 .primary-control label { margin-top: 2px; }
 
+/* The endgame age caption spans the strip (see index.html) — full width it is one or two
+   lines at every pinned width, where inside the age column it measured six lines at 800px. */
+.primary-controls > .endgame-age-caption { margin: 2px 0 0; }
+
+/* The re-snap note hangs BELOW the strip, out of flow. It is a one-shot message after a
+   reverted drag; reserving its two lines inside a PINNED box would cost ~40px of permanent
+   blank in every endgame view — the same waste the two floors below exist to avoid, one mode
+   down. Out of flow it can move nothing at all. The strip is `position: sticky` (and
+   `relative` under the media query, for exactly this reason), so it is the containing block;
+   the opaque background and shadow are because the note now overlays the first panel row. */
+.primary-controls > .endgame-resnap-note {
+  position: absolute;
+  left: 24px; right: 24px; top: calc(100% + 8px);
+  margin: 0;
+  background: var(--panel);
+  box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.95);
+}
+
 /* Anti-jump floors, the same discipline as the panel min-heights above — and for a
    sharper reason: the strip is pinned OVER content, so a reflow there moves every
    panel on the page at once. Two floors, not one, because the strip's tallest live
-   state and its tallest endgame state are far apart: the endgame age caption reserves
-   two lines and the re-snap note another two, both `display:none`/`hidden` while the
-   star is alive. One floor covering both would leave ~90px of dead pinned space in the
-   live view, which is the view the user actually scrolls. Within either mode nothing
-   moves; entering an endgame re-renders the whole page anyway.
-   Both numbers are measured, not guessed — see docs/plans/visual-performance.md V5. */
+   state and its tallest endgame state are far apart: the endgame age caption is
+   `display:none` while the star is alive, and one floor covering both would leave dead
+   pinned space in the live view — the view the user actually scrolls. Within either mode
+   nothing moves; entering an endgame re-renders the whole page anyway.
+
+   Both are sized at the NARROWEST pinned width (800px, where the strip is still one row),
+   not at 1440: the caption wraps harder as the strip narrows, and a floor verified only on
+   a wide desktop is unverified over most of the regime it has to hold. Measured, not
+   guessed — see docs/plans/visual-performance.md V5. */
 .primary-controls { min-height: 136px; }
 body.wd-mode .primary-controls, body.wr-mode .primary-controls,
 body.sn-mode .primary-controls, body.stripped-mode .primary-controls {
-  min-height: 216px;
+  min-height: 176px;
 }
 
 /* Below 800px the strip wraps to a second row (measured: 3 x 230px basis + 2 x 22px
@@ -103,7 +124,9 @@ body.sn-mode .primary-controls, body.stripped-mode .primary-controls {
    stacked sliders, 316px tall: pinning that would leave almost nothing to look at. */
 @media (max-width: 799px) {
   .primary-controls {
-    position: static;
+    /* `relative`, not `static`: in flow like any other block (which is the point), but still
+       the containing block for the out-of-flow re-snap note above. */
+    position: relative;
     min-height: 0;
     box-shadow: none;
   }

@@ -97,17 +97,25 @@
           <div class="ticks" id="age-marks"></div>
         </div>
         <datalist id="age-ticks"></datalist>
-        <p class="note endgame-age-caption" id="endgame-age-caption"></p>
       </div>
     </div>
+    <!-- The endgame age caption spans the whole strip rather than sitting in the age COLUMN,
+         where it was measured at 56px on a 1440 desktop but 113px (six lines) at 800px — a
+         ~150-character sentence in a 236px column. Full width it is one or two lines at every
+         pinned width, which is what makes the endgame floor below affordable. It still reads as
+         the age slider's caption: it is immediately under the row, and the age column is the one
+         directly above it. -->
+    <p class="note endgame-age-caption" id="endgame-age-caption"></p>
     <!-- Feedback when a mass/[Fe/H] drag INSIDE an endgame re-snapped to a fate that
          doesn't support the current endgame (e.g. dragging a WD progenitor up into the
          supernova range): it reverts and says so. It follows the two sliders whose drag
          fires it — left behind in the Controls panel it would explain a reverted drag
-         from off-screen, which is the complaint that moved the sliders here. BELOW them,
-         never above, so it can only grow the strip DOWNWARD rather than shove the mass
-         slider out from under the cursor mid-drag. Hidden in live mode (its own `hidden`,
-         toggled by setWDResnapNote); the endgame floor in styles.css reserves its height. -->
+         from off-screen, which is the complaint that moved the sliders here.
+         It is the LAST child and, in styles.css, positioned OUT OF FLOW so it hangs below
+         the strip: it is a one-shot message, and reserving its two lines inside a PINNED
+         box would cost every endgame view ~40px of permanent blank. Out of flow it can
+         neither shove the mass slider under the cursor nor move a panel. Hidden in live
+         mode (its own `hidden`, toggled by setWDResnapNote). -->
     <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
   </div>
   <main>

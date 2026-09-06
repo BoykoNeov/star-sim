@@ -423,16 +423,35 @@ screenshot pass ever sees a stale star, add a `page.waitForTimeout(100)` after t
 
   | | live | endgame (`wd`/`wr`/`sn`/`stripped`) |
   |---|---|---|
-  | measured tallest | 128 px | 204 px |
-  | `min-height` | **136 px** | **216 px** |
+  | measured tallest | 128 px | 169 px |
+  | `min-height` | **136 px** | **176 px** |
 
   Live is **114 px in 1,015 of 1,020 states sampled** (`stripmax3.mjs`: 17 `[Fe/H]` ×
   60 masses) and 128 px in five — around `[Fe/H]` +0.45, ~36 M☉, where the age landmarks
   crowd enough to stagger the tick labels onto a second row. That 1-in-200 state is
   exactly what a coarse sweep misses; three rows never occur. **One floor for both modes
-  was rejected**: the endgame caption reserves two lines and the re-snap note two more,
-  both `display:none`/`hidden` while the star is alive, so a single floor would hold
-  ~90 px of dead *pinned* space in the view the user actually scrolls.
+  was rejected**: the endgame caption is `display:none` while the star is alive, so a
+  single floor would hold dead *pinned* space in the view the user actually scrolls.
+- **The endgame floor was wrong twice, both times for the same reason — one width.** The
+  first pass measured 204 px at 1440 and reserved 216. Re-measured across the whole pinned
+  regime (`endfloor.mjs`), the *steady* endgame strip was 164 px at 1440 but **242 px at
+  800**, because `#endgame-age-caption` sat inside the age COLUMN — a ~150-character
+  sentence in a 236 px column is six lines. So 216 was simultaneously ~50 px of dead
+  pinned space on a desktop **and 26 px short** where the rule actually has to hold. Two
+  changes fixed both:
+  - **the caption now spans the strip** instead of one column — one or two lines at every
+    pinned width (35–38 px), which is what makes a small floor affordable;
+  - **the re-snap note moved out of flow**, hanging below the strip with its own opaque
+    background. It is a one-shot message after a reverted drag; reserving its two lines in
+    a pinned box cost ~40 px of permanent blank in every endgame view. Out of flow it can
+    neither shove the mass slider under the cursor nor move a panel — verified: the note
+    fires and **no panel's box changes** at 1440 / 800 / 390 (`resnapshot.mjs`).
+
+  After both: 151 / 166 / **169** px at 1440 / 1024 / 800, floored at **176**. The worst
+  case is checked against the caption text, not just an age sweep: `capmax.mjs` injects the
+  seven longest strings the code can build — including the stripped-star "Snapped:" and the
+  co-binary accretion clause, which the three gateway buttons cannot reach — and the tallest
+  is still 38 px.
 - **Sticky only above 800 px.** Three 230 px columns + two 22 px gaps = 734 px, so the
   strip holds one row down to a 782 px viewport. Wrapped it measures 215 px at 761 and
   316 px at 390 — more viewport than the scrolling it saves — so below 800 px it drops
@@ -463,15 +482,46 @@ screenshot pass ever sees a stale star, add a `page.waitForTimeout(100)` after t
   snapshots `#primary-controls` and its three columns as well as `main > section` — the
   strip is not a `main > section`, so without that the acceptance check was blind to the
   one box whose reflow moves everything.
-- **Acceptance (met).** `jumpcheck.mjs` at 1440 / 512 / 481 / 390: the Controls panel
-  renders at exactly its new floor (1024 / 1024 / 1024 / 1140) in the Sun state, the
+- **Acceptance (met).** `jumpcheck.mjs` at 1440 / 1024 / 800 / 512 / 481 / 390 — the
+  first three are the whole *pinned* regime, added because a strip verified only at 1440
+  is unverified over most of the widths it is pinned at; the last three exercise the
+  panel's floors while the strip is static. The Controls panel
+  renders at exactly its new floor (1024 above 480 px, 1140 below) in the Sun state, the
   uncertain-fate hedge state and across the rotating-track click, with **no panel moved**;
-  the strip holds 136 px at 1440 through the two-tick-row state, its three columns
-  unmoved. `innerjump.mjs` (now watching `#primary-controls` as well as the panel's own
-  children) reports **nothing moved inside the panel** at 1440 / 512 / 390. The strip
-  measures exactly 216 px in both the WD and SN endgames. Zero console errors in every
-  run. Screenshots: `temp/star-sim-perf/strip-after/` (pinned vs scrolled at five widths)
-  and `stripend-after/` (the two endgames).
+  the strip holds its floor through the two-tick-row state at every pinned width, its
+  three columns unmoved. `innerjump.mjs` (now watching `#primary-controls` as well as the
+  panel's own children) reports **nothing moved inside the panel** at 1440 / 512 / 390.
+  The strip measures exactly 176 px in both the WD and SN endgames. Zero console errors in
+  every run. Screenshots: `temp/star-sim-perf/strip-after/` (pinned vs scrolled at five
+  widths), `stripend-after2/` (the two endgames) and `resnap-after/` (the out-of-flow
+  note over the first panel row).
+  **Two caveats stated rather than papered over.** (1) `jumpcheck`'s new third state
+  compares 36 M☉ against the Sun, so the *unfloored* panels legitimately change height
+  with their own content there; the diff is filtered to the strip so that noise cannot be
+  misread as a jump. (2) Adding 1024 to the width list surfaced **two floors that are
+  short — pre-existing, unrelated to this row, and recorded not fixed** (see V6).
+
+### V6. Two more reserved floors are short · *measured 2026-09-06, NOT fixed*
+
+Surfaced by V5's wider `jumpcheck` sweep, on the same trigger V1b used (drag to 6.5 M☉ at
+`[Fe/H]` −1.5, the two-sided uncertain-fate hedge). Nothing here is caused by the pinned
+strip — both are panels whose own content differs between the Sun and that star:
+
+| Width | Panel | Overflow | Consequence |
+|---|---|---|---|
+| 1024 | `.observer-panel` (no floor at all) | +7 px | the seven panels below it shift +8 px |
+| 481 | `.structure-panel` (floor 855) | +9 px | absorbed — no neighbour moved |
+
+- **Why it was never seen:** V1b sized every floor at 481 and 390 and verified at 1440 /
+  512 / 481 / 390. 1024 is a *different* wrapping regime — two columns at a width where
+  the observer panel's caption breaks differently — and no earlier run visited it.
+- **Not fixed here, deliberately.** V1b's precedent: closing a floor costs permanent
+  whitespace on every star, so the arithmetic gets written down and the decision taken on
+  its own. The 481 row is arguably not worth paying at all (nothing moves). The 1024 row
+  is a real 8 px shift and is the one to price.
+- **Recipe.** `ctlfloor.mjs` generalises: point it at `.observer-panel` / `.structure-panel`,
+  sweep mass × `[Fe/H]` at 1024 and 481, take the max, add ~7. Acceptance is
+  `jumpcheck.mjs 1024` reporting no moved panels on the hedge trigger.
   **One caveat stated rather than papered over:** `jumpcheck`'s new third state compares
   36 M☉ against the Sun, so the *unfloored* panels (seismo, spectrum, lane) legitimately
   change height with their own content there. That is pre-existing and unrelated — the
