@@ -370,21 +370,44 @@ acceptance check could never have caught it, which is why acceptance now needs b
   it). Zero console errors throughout. Screenshots: `temp/star-sim-perf/panel2-{before,after2}/`,
   three states × three widths.
 
-### V2. Row-height imbalance in the two-column layout · *idea, judgement call*
+### V2. Row-height imbalance in the two-column layout · **shipped 2026-09-06**
 
-- **What.** Flex rows stretch to their tallest panel: State readout (short) beside
-  Controls (tall), Spectrum beside the much taller SED, Interior (MESA) alone on the last
-  row at half width.
-- **Options.** (a) Change the default panel order so tall pairs with tall (Controls ↔
-  Composition, Readout ↔ Spectrum) — one array in `layout.js`; users who reordered keep
-  their saved order. (b) `align-items: flex-start` on `main` so panels stop stretching —
-  ragged bottoms instead of dead space inside panels; try it and screenshot. (c) A
-  `layout.js` rule that gives the last panel `flex-basis: 100%` when it is alone on its
-  row (needs a measurement of the row, CSS alone cannot express it).
-- **Acceptance.** Full-page 1440 screenshot with visibly less dead space; 390 unchanged
-  (single column, nothing to pair).
+- **What it was.** `main` is a flex-wrap grid; a wrap row is as tall as its tallest panel,
+  so every shorter panel in that row leaves a hole beneath it until the next row starts.
+  The authored order paired short with tall throughout (state readout 303 px beside
+  Controls 1024, Composition 464 beside Observer 675, Spectrum 487 beside SED 830).
+- **Option (b) was already spent.** The row's first suggestion — `align-items: flex-start`
+  so panels stop stretching — has been on `main` since the dashboard was built. Panels were
+  already ragged-bottom; the dead space was never *inside* a panel, it was **between rows**.
+  Measure before quoting a plan row: the fix it proposes may already be in the file.
+- **Measured** (`rowgaps.mjs`, new — per row, per panel, through the served page): at 1440
+  the old order left **1453 px** of dead space on a 5070 px page; 1435 px at 1280; 2243 px
+  at 1920. A pure tallest-first sort takes 1440 to **424 px** — that is the size of the prize.
+- **Shipped** the authored order in `index.html` (a pure block move; `layout.js` reads the
+  DOM order as the default *before* applying a saved one, so anyone who has dragged panels
+  keeps theirs): star + HR · composition + spectrum · Controls + interior/MESA · SED +
+  Lane–Emden · observer + seismology · **readout last and alone** (the shortest panel, so
+  standing by itself costs nothing). **1453 → 434 px** dead, page 5070 → **4267 px**; the
+  white-dwarf endgame 905 → **287 px**; 1280 → 416 px; 1920 → 1541 px.
+- **Held to a defensible reading order, and the cheaper option rejected in writing.** The
+  best-packing order (`C`: Controls, interior, SED, Lane–Emden, observer, seismology,
+  spectrum, composition, readout) is **identical at 1280/1440** and only wins at ≥ 1600 px
+  (1136 vs 1541 at 1920) — and it buries the composition panel tenth, when the spec's three
+  core views are the 3D star, the HR diagram and composition. 400 px on a 3300 px page is
+  not worth demoting a core view; the arithmetic is in the `index.html` comment so the next
+  person does not re-derive it.
+- **Robust across the star, because the floors already made it so.** Sun / 15 M☉ / 0.3 M☉
+  give *identical* numbers — V1b's and V6's reserved floors hold every panel's height fixed,
+  which is what makes a static authored order meaningful at all. The endgame, which tears
+  down the living-only panels, improves on the same order rather than needing its own.
+- **The phone is untouched in packing and changed in sequence.** 390 px is one column,
+  0 px of dead space before and after; what does change there is the reading order, and the
+  state readout moves from 7th to last. Accepted: on a phone the pinned strip already
+  carries mass, `[Fe/H]` and age, and a drag reorders anything a user prefers.
+- **Acceptance.** 1440 full-page screenshot (`shots.mjs v2order`), 73 JS tests unchanged,
+  zero console errors at 1440 and 390.
 
-### V3. Verify the parked render loop against the screenshot pass · *do with any V-item*
+### V3. Verify the parked render loop against the screenshot pass · **verified 2026-09-06 (with V2)**
 
 The loop now parks when `#star-canvas` leaves the viewport. Playwright's element
 screenshot scrolls the element into view and the observer restarts the loop on the next
@@ -392,6 +415,11 @@ tick, so a `canvas.screenshot()` taken *immediately* after a scroll could captur
 frame before restart (still a valid frame, just not the newest uniforms). If a future
 screenshot pass ever sees a stale star, add a `page.waitForTimeout(100)` after the scroll
 — do not remove the gate.
+
+**Checked with V2's acceptance run:** `shots.mjs` at 15 M☉ late returns a red-supergiant
+disk (dim granulation, warm limb), not the previous star's frame, at both 1440 and 390.
+No `waitForTimeout` was needed; the row stays here as the diagnosis to reach for *if* a
+future pass ever does capture a stale frame.
 
 ### V4. Things checked and found fine (do not re-propose)
 

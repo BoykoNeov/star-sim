@@ -1,6 +1,6 @@
 ---
 name: star-sim-visual-performance
-description: "The 2026-09-05/06 visuals/performance passes: the seven measured fixes, three.js vendored, the star's adaptive pixel ratio, and the reserved-floor raise (V1b) with its two measurement traps — the missing bottom padding and the 481px binding width"
+description: "The 2026-09-05/06 visuals/performance passes: the seven measured fixes, three.js vendored, the star's adaptive pixel ratio, the reserved-floor raise (V1b) with its two measurement traps, and V2's height-paired panel order"
 metadata:
   type: project
 ---
@@ -191,6 +191,39 @@ floor already covered 882).
   non-rectangular domain — caught, locus cleared, retryable, panel height unaffected. An
   honesty-gate question, not a layout one.
 
+## V2 — the panel order pairs by height (2026-09-06)
+
+The last visual row. `main` is a flex-wrap grid, so a wrap row is as tall as its tallest
+panel and every shorter panel in it leaves a hole until the next row starts.
+
+- **The plan's first option was already in the file.** It proposed `align-items: flex-start`
+  so panels stop stretching; that has been on `main` since the dashboard was built. Panels
+  were already ragged-bottom, so the dead space was never *inside* a panel — it was
+  **between rows**. Read the CSS before quoting a plan row's remedy.
+- **Measured** (`rowgaps.mjs`, per row and per panel, through the served page): the authored
+  order left **1453 px** dead at 1440 on a 5070 px page (1435 at 1280, 2243 at 1920). The
+  worst single pair was the 303 px state readout beside the 1024 px Controls panel: 721 px.
+- **Shipped** a reordered `index.html` — a pure block move, since `layout.js` captures the
+  DOM order as the default *before* applying a saved one, so anyone who has dragged panels
+  keeps theirs. Pairs, by measured height: star 815 + HR 820 · composition 464 + spectrum
+  487 · Controls 1024 + interior/MESA 890 · SED 830 + Lane–Emden 703 · observer 675 +
+  seismology 530 · **readout last and alone** (the shortest panel wastes nothing by itself).
+  **1453 → 434 px**, page 5070 → **4267 px**; the white-dwarf endgame 905 → **287 px**.
+- **The better-packing order was measured and rejected in writing.** Sorting purely by height
+  is *identical* at 1280/1440 and wins only at ≥ 1600 px (1136 vs 1541 at 1920) — and it puts
+  the composition panel tenth, one of the spec's three core views. The arithmetic sits in an
+  `index.html` comment so it is not re-derived; **if you add a panel, pair it by height.**
+- **V1b/V6 are what make one static order correct.** With every panel pinned to its reserved
+  floor, Sun / 15 M☉ / 0.3 M☉ measure *identically* — the anti-jump work bought this for free.
+- **The phone changes in sequence, not in packing.** 390 px is one column, 0 px dead before
+  and after; the readout moves 7th → last, accepted because the pinned strip already carries
+  mass, `[Fe/H]` and age.
+- **V3 closed on the same run.** The parked-render-loop worry (a screenshot catching the frame
+  before the `IntersectionObserver` restarts the loop) does not reproduce: 15 M☉ late returns
+  a red-supergiant disk, not the previous star's frame. No `waitForTimeout` added.
+
+New in the harness: `rowgaps.mjs`, `rowgaps2.mjs` (candidate orders against the real page),
+`rowgaps3.mjs` (the same orders across four star states, endgame included).
+
 **Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
-(P4), cold-disk first load (P5), row-height pairing in the two-column layout (V2 — worth
-more now that Controls is 222 px taller).
+(P4) and cold-disk first load (P5) — both conditional, neither queued.

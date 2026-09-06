@@ -119,6 +119,23 @@
     <p class="endgame-resnap-note" id="endgame-resnap-note" hidden></p>
   </div>
   <main>
+    <!-- PANEL ORDER = the authored default (layout.js captures this DOM order before it
+         applies any saved order, so a user who has dragged panels keeps theirs and only a
+         fresh visitor sees this one). It is not arbitrary: `main` is a flex-wrap grid with
+         `align-items: flex-start`, so a wrap row is as tall as its TALLEST panel and every
+         shorter panel in that row leaves a hole beneath it until the next row starts.
+         Measured through the served page at 1440 px (temp/star-sim-perf/rowgaps*.mjs), the
+         old order left 1453 px of that dead space; pairing panels of similar height brings
+         it to 434 px and the page from 5070 to 4267 px — the same in the white-dwarf endgame
+         (905 -> 287 px), and identical at 0.3 / 1 / 15 M(sun) because the reserved floors
+         hold every panel's height fixed across the star.
+         The pairs, by measured height: star 815 + HR 820, composition 464 + spectrum 487,
+         controls 1024 + interior/MESA 890, SED 830 + Lane-Emden 703, observer 675 + seismo
+         530, and the readout (303, the shortest) LAST so it sits alone and wastes nothing.
+         Reading order still leads with the three core views (spec: 3D star, HR, composition).
+         A pure height sort would save another ~400 px at 1920 px but buries composition
+         tenth, which is why it was measured and rejected. If you add a panel, pair it with
+         one of a similar height rather than appending it. -->
     <section class="panel star-panel" data-panel-id="star">
       <h2>3D star <span class="help" tabindex="0" data-tip="A live, physically-motivated 3D star — every visual driven by a real StellarState number (spec §7). COLOR: the true blackbody color at Teff (Planck spectrum → CIE → sRGB), so the Sun is warm near-white, cool stars orange-red, hot stars blue-white. GRANULATION: convective cells whose size comes from the pressure scale height H_p ∝ Teff/g — a compact dwarf shows fine granules, a low-gravity giant only a handful of enormous cells. LIMB DARKENING dims the disk toward its edge; the surface slowly spins (a plausible visual rate, not the real period). GRAVITY DARKENING: a fast rotator (the ones the rotation control spins, above the ~1.2 M☉ Kraft break) is flung into an oblate spheroid — measurably wider at its equator than pole — and, because its effective gravity falls from pole to equator, its poles run HOTTER, bluer and BRIGHTER while the equator turns cooler and dimmer (von Zeipel, T ∝ g_eff^0.25 — the real, interferometrically-resolved Regulus/Vega/Achernar effect). It is driven entirely by the star's REAL surface velocity (v_rot), so the median fast rotator shows only a gentle bulge while a near-critical one flattens dramatically with a dark equatorial band; the star is shown tilted three-quarters so both the shape and the hot pole are visible (a round, non-rotating star is untouched). CORONA: the additive outer glow tracks the activity proxy — bright and far-reaching for cool active stars, near-absent for hot ones. It is EVOCATIVE, NOT PREDICTIVE: real coronae and winds are magnetic or radiative structure we are not modeling. On-screen SIZE scales with radius R, log-compressed so a tiny dwarf and a vast giant both stay visible (the true R is in the readout) — the scale bar below restores the honest size, plotting the real radius against the Solar System.">?</span></h2>
       <canvas id="star-canvas"></canvas>
@@ -173,53 +190,6 @@
       <p class="note hr-cliff-caption" id="hr-cliff-caption" hidden></p>
     </section>
 
-    <!-- Observer's view (Axis A of the outward quartet) — the theory→telescope bridge, now its
-         own panel with the observational colour–magnitude diagram (the observer's HR diagram).
-         The intrinsic star's whole track is plotted as (B−V, M_V); the three sliders below then
-         show what DISTANCE (a uniform downward slide — the distance modulus) and interstellar
-         DUST (the reddening vector — fainter AND redder) do to it. The apparent-magnitude readout
-         is fetched from /photometry (the tested absolute-flux path); the reddening also overlays a
-         reddened curve on the Spectrum + SED panels (client-side CCM89 — reddening.js). A pure
-         VIEW — it never touches the HR marker or the intrinsic StellarState (apparent quantities
-         are observer-dependent, so they live HERE, not in the "everything from one StellarState"
-         readout). Living-only (magnitudes need the absolute-flux main spectrum cube; WD/WR/stripped
-         cubes are continuum-normalized), gated on that cube being present. -->
-    <section class="panel observer-panel" id="observer-panel" data-panel-id="observer" hidden>
-      <h2>Observer's view · colour–magnitude <span class="help" tabindex="0" data-tip="The observer's version of the HR diagram. Everything else in this simulator is INTRINSIC — the star as it truly is. A telescope instead records a COLOUR (here B−V, from synthetic B and V magnitudes through real filter curves) and an apparent BRIGHTNESS. This panel plots the star's whole evolutionary track as an observational colour–magnitude diagram: colour B−V across (blue left, red right) versus absolute magnitude M_V down the side (bright at the top, as astronomers draw it). Your star sits on it as the ringed marker. Then the two things between us and the star: DISTANCE dims it (the distance modulus μ = 5·log₁₀(d/10 pc) — every ×10 in distance is 5 magnitudes fainter) with NO colour change, sliding the star straight DOWN; interstellar DUST both dims and REDDENS it (scattering blue light more than red), sliding it DOWN and to the RIGHT along the reddening vector. The orange marker is where the star is actually observed, the arrow is that shift, and the dashed orange locus is the whole track as observed. This is the diagram you fit to a real star cluster's photometry to measure its distance and reddening. A pure VIEW — it never moves the star on the theoretical HR diagram.">?</span></h2>
-      <canvas id="cmd-canvas"></canvas>
-      <p class="note observer-readout" id="observer-readout"></p>
-
-      <label for="obs-distance">Distance <span id="obs-distance-val" class="note"></span>
-        <span class="help" tabindex="0" data-tip="How far away the star is, in parsecs (1 pc ≈ 3.26 light-years). Distance dims the star by the distance modulus μ = 5·log₁₀(d/10 pc): at the reference 10 pc the apparent magnitude equals the absolute magnitude (μ = 0); at 100 pc the star is 5 magnitudes fainter, at 1 kpc 10 magnitudes fainter. Distance changes only the brightness, never the colour — so on the CMD it slides the star straight DOWN. Landmarks: ~10 pc (the nearest bright stars), ~100 pc (the Hyades cluster), ~8 kpc (the Galactic centre), ~50 kpc (the Large Magellanic Cloud).">?</span>
-      </label>
-      <div class="slider-wrap"><input id="obs-distance" type="range" min="0" max="1" step="0.001" /></div>
-
-      <label for="obs-av">Extinction A<sub>V</sub> <span id="obs-av-val" class="note"></span>
-        <span class="help" tabindex="0" data-tip="The total dimming from interstellar dust in the V (visual) band, in magnitudes. A_V = 0 is a dust-free line of sight; A_V ≈ 1 is a typical value looking a kiloparsec through the Galactic disk; A_V of several magnitudes occurs toward dense molecular clouds and the Galactic centre. Because dust extinguishes blue light more than red (Cardelli–Clayton–Mathis 1989 law), raising A_V both dims the star and REDDENS it — on the CMD it slides the star DOWN and to the RIGHT along the reddening vector, and it overlays a reddened curve on the Spectrum/SED panels (blue end pulled down, the 2175 Å bump carved out). The observed colour grows by E(B−V) = A_V/R_V.">?</span>
-      </label>
-      <div class="slider-wrap"><input id="obs-av" type="range" min="0" max="5" step="0.05" /></div>
-
-      <label for="obs-rv">Reddening R<sub>V</sub> <span id="obs-rv-val" class="note"></span>
-        <span class="help" tabindex="0" data-tip="The shape parameter of the dust extinction law, R_V = A_V / E(B−V) — the ratio of total to selective extinction. It encodes the dust grain size: R_V ≈ 3.1 is the standard diffuse interstellar medium, lower values (~2) mean smaller grains and a steeper (bluer) reddening curve, higher values (up to ~5.5) mean larger grains found in dense clouds and a flatter, greyer curve. At fixed A_V, a smaller R_V reddens the star MORE (a larger E(B−V)); the strength of the 2175 Å ultraviolet bump also tracks it. 3.1 is the right default for almost every sightline.">?</span>
-      </label>
-      <div class="slider-wrap"><input id="obs-rv" type="range" min="2" max="5.5" step="0.1" /></div>
-
-      <p class="note rot-note" id="observer-note"></p>
-    </section>
-
-    <!-- Habitable-zone history (Axis D2a) — the TEMPORAL twin of the scale-bar HZ band. Plots the
-         whole life's habitable zone as distance (log AU) vs age (LINEAR — the giant-branch march is
-         the last ~8% of the star's linear life; a log-age axis would crush it against the edge), so
-         the outward MARCH is legible on one static figure. A pure VIEW of L + Teff (reuses hz.js,
-         never touches the HR marker). Governed by the SAME #hz-toggle as the scale-bar band (one
-         concept, two views — the population-toggle idiom); shown only when that toggle is on and in
-         live mode. Hidden by default; main.js un-hides it. -->
-    <section class="panel hz-history-panel" id="hz-history-panel" data-panel-id="hz-history" hidden>
-      <h2>Habitable-zone history <span class="help" tabindex="0" data-tip="How the circumstellar HABITABLE ZONE — the range of orbital distances where a planet could hold liquid surface water — moves over the star's whole life. The true-size panel shows this zone at ONE age (a band on the size axis); this shows every age at once, so you can read the story rather than scrub for it. Distance from the star is up the side (in AU, log scale); age runs across the bottom (linear, so the explosive giant-branch march — when the brightening star flings the zone out to tens of AU in the final few percent of its life — stays visible instead of being crushed into the corner). The green band is the zone itself: SOLID conservative (runaway greenhouse inner edge → maximum greenhouse outer), DASHED optimistic (recent Venus → early Mars), from the Kopparapu (2014) climate parameterization for a 1 Earth-mass planet. The blue horizontal lines are the Solar-System orbits (Venus, Earth, Mars) as a FIXED reference — not this star's own planets; watch where Earth's 1 AU line enters and then leaves the band. The amber vertical line is the current age (it tracks the age slider), and it marks the same instant the true-size band shows. A break in the band is an age where the star's temperature leaves the model's calibrated 2600–7200 K range. This is a liquid-water (energy-balance) zone only — it does not account for ultraviolet/X-ray output or flares.">?</span></h2>
-      <canvas id="hz-history-canvas"></canvas>
-      <p class="note spectrum-caption" id="hz-history-caption"></p>
-    </section>
-
     <section class="panel comp-panel" data-panel-id="comp">
       <h2>Composition <span class="help" tabindex="0" data-tip="Mass fractions versus EEP (evolutionary stage, not raw age — so the core-H→He transition is visible instead of a sliver). Top sub-chart = the core, where fusion rewrites composition; bottom = the surface. Faint vertical lines mark phase changes; the white line is the current age. Three views: H/He/metals (the bulk make-up); a per-element detail (lithium, carbon, nitrogen, oxygen, neon, sodium, magnesium, aluminium, silicon, phosphorus, sulfur, calcium, titanium and iron — the breakdown of the metals), with a linear/log toggle; and a light-element view (lithium, beryllium, fluorine) on a log scale, where you watch the fragile light elements burn away as the star evolves. (Boron is absent: the only boron isotope in this stellar model is radioactive and present at essentially zero — there is no stable boron to show.)">?</span></h2>
       <div class="comp-modes" role="group" aria-label="composition view">
@@ -259,6 +229,54 @@
         <span><i style="background:#ff2d6f"></i><span class="tip" tabindex="0" data-tip="The most fragile light element: it burns by proton capture at only ~2.5 million K, so it survives just in the thin, cool outer envelope. As the red-giant convective envelope deepens into hotter gas, surface lithium is dredged down and destroyed first and hardest — the surface line plunges off the bottom (~2400× by the tip). The headline of this view.">Li — lithium</span></span>
         <span><i style="background:#2ee6c0"></i><span class="tip" tabindex="0" data-tip="More robust than lithium: beryllium burns at a higher temperature (~3.5 million K), so the same deepening envelope depletes it only modestly (~3× by the red-giant tip), not catastrophically. It sits in the middle of the fragility sequence — destroyed, but later and less than lithium. This ordering (Li burns before Be) is the lesson.">Be — beryllium</span></span>
         <span><i style="background:#cfe85a"></i><span class="tip" tabindex="0" data-tip="Survives this side of the asymptotic-giant branch: its destruction needs hotter gas than the convective envelope reaches, so it holds roughly steady — the stable backdrop you read the lithium and beryllium depletion against (the role iron plays in the per-element view). Fluorine's real enrichment story is on the thermally-pulsing AGB, which this simulator stops short of.">F — fluorine</span></span>
+      </div>
+    </section>
+
+    <section class="panel spectrum-panel" data-panel-id="spectrum">
+      <h2>Spectrum <span class="help" tabindex="0" data-tip="The star's synthetic spectrum — flux versus wavelength, with real absorption lines — for the current effective temperature, surface gravity and metallicity. This is the spectrum the 3D star's single colour is the eye's average of: integrate this curve against the eye's response and you get that one pixel. Interpolated from a grid of model-atmosphere spectra (MSG / Townsend) baked once into the backend. The visible band (3800–7800 Å) is painted in its true per-wavelength colour, so you see a spectrograph's rainbow with dark absorption lines notched into it; the ultraviolet and near-infrared flanks are shown muted grey. Flux is normalized to each spectrum's own peak — the absolute brightness (which varies thousands-fold from cool to hot stars) lives in the 3D star and the luminosity readout; here the story is the CONTINUUM SLOPE (hot stars rise toward the blue, cool stars toward the red) and the LINES. Watch the hydrogen Balmer lines (Hα, Hβ, …) deepen to a maximum around A-type stars (~9500 K) and fade in both hotter and cooler stars, while the Ca II H&K and Na D lines are strong in cool stars and vanish when hot. In the hottest stars the helium lines take over — neutral He I (4471 Å) in B and A stars, and singly-ionized He II (4686 Å) only in O stars (above ~30000 K, where the spectra come from the OSTAR2002 hot-star grid spliced onto the high-temperature end); their cool-blue guides appear only once the star is hot enough to show them. At the cool end the reverse happens: below ~4000 K the gas is cool enough for molecules, and titanium-oxide (TiO) bands carve broad troughs across the optical spectrum, with vanadium oxide (VO) joining in the coolest M stars — these bands deepen fast as the star cools, so the spectra below 3500 K come from the Göttingen/PHOENIX grid spliced onto the LOW-temperature end (the coolest M-dwarfs and red-giant tips, ~2800 K, then show real molecular bands rather than a frozen 3500 K spectrum); their warm-tinted guides appear only once the star is cool enough. The dashed gold line is the Wien peak (the blackbody's brightest wavelength), shown when it falls in range.">?</span></h2>
+      <canvas id="spectrum-canvas"></canvas>
+      <!-- Zoom / detail sub-band view. The baked grid is served at its NATIVE resolution
+           (3000–9000 Å in 2.5 Å bins, R≈2400); across the full-panel width a 2.5 Å bin is
+           sub-pixel, so the fine line structure is invisibly squashed. These preset bands
+           reframe the x-axis onto a narrow window — a pure client-side reframe of the SAME
+           served data, no refetch — so the individual line cores (and the grid's actual
+           sample points, marked as dots) become visible. This is the honest prerequisite
+           for ever deciding a finer bake is worthwhile: you can only see whether higher R
+           would help once the native sampling is on-screen. Owned by spectrum.js (by id);
+           shown for the living-star + [α/Fe] spectra, hidden (and reset to Full) in the
+           WD/WR/SN endgames, whose cubes cover different wavelength ranges. -->
+      <div class="spectrum-zoom" id="spectrum-zoom" role="group" aria-label="Spectrum detail band">
+        <span class="zoom-label">Zoom</span>
+        <button type="button" class="mode-btn active" data-lo="" data-hi="">Full</button>
+        <button type="button" class="mode-btn" data-lo="3880" data-hi="4030">Ca H&amp;K</button>
+        <button type="button" class="mode-btn" data-lo="5100" data-hi="5250">Mg b</button>
+        <button type="button" class="mode-btn" data-lo="5840" data-hi="5945">Na D</button>
+        <button type="button" class="mode-btn" data-lo="6480" data-hi="6640">Hα</button>
+        <button type="button" class="mode-btn" data-lo="4620" data-hi="4740">He 4686</button>
+        <span class="help" tabindex="0" data-tip="Zoom into a narrow wavelength band. The spectra are baked at the model grid's native resolution — 2.5 Å per sample (a resolving power R = λ/Δλ that runs from about 1200 in the blue to 3600 in the red) — but stretched across the whole panel a single 2.5 Å sample is thinner than a pixel, so the detailed line shapes are squashed to invisibility. Pick a band and the panel reframes onto that ~120–150 Å window (the same data, no refetch); now each sample is ~11 pixels wide, marked as a dot, and the individual line cores resolve. Ca II H (3968 Å) and K (3933 Å) split into two separate lines; the Mg b region shows the triplet against the continuum; Na D is a close doublet right at the sampling limit; Hα shows its broad pressure-broadened wings; He 4686 lights up only in the hottest O stars. This is where you can judge whether a finer (higher-resolution) bake would actually reveal more — the whole point of the view.">?</span>
+      </div>
+      <!-- [α/Fe] enhancement (atlas Tier B, whirling-cohort-atlas.md): a spectrum-only
+           "what-if" TOGGLE. It overlays two Coelho-2014 model spectra — solar-scaled
+           (α = 0) vs α-enhanced (α = +0.4) — so the gap between them IS the lesson: a
+           thick-disk/halo α-rich star's DEEPER Ca/Mg/Ti lines (with Na D moving the
+           opposite way). Owned by spectrum.js (by id). Honest domain (Gate-1 + loci
+           measured): ~4000–9000 K stars + all cool giants; hidden in the WD/WR/SN endgames.
+           Off-domain (hotter, cool dwarf, or off the α grid's [Fe/H] range) it falls back
+           to the standard spectrum with a note. NOT the evolutionary track: MIST is
+           solar-scaled, so the HR diagram and composition panel do not follow [α/Fe]. -->
+      <label class="alpha-toggle-row" id="alpha-toggle-row" for="alpha-toggle" hidden>
+        <input id="alpha-toggle" type="checkbox" />
+        <span>[α/Fe] enhancement <span class="alpha-afe">α-rich what-if</span>
+          <span class="help" tabindex="0" data-tip="A SPECTRUM-ONLY what-if for a Galactic subpopulation: the α-enhanced thick-disk and halo stars, whose oxygen, magnesium, silicon, calcium and titanium (the α-elements, forged in massive-star core-collapse supernovae) are over-abundant relative to iron compared with the Sun. Toggle it on and the panel overlays two model spectra from the same atmosphere code (Coelho 2014): solar-scaled ([α/Fe] = 0, white) and α-enhanced ([α/Fe] = +0.4, coral). The α-rich spectrum has visibly DEEPER Ca (4227 Å, H&K, the 8542 Å triplet), Mg b (5175 Å) and TiO lines — while Na D (an odd-Z element, not an α-element) moves the OPPOSITE way (shallower), a control that shows this is real differential line-strength chemistry, not a normalization shift. IMPORTANT: this is a hypothesis about the spectrum only — the star's evolutionary track (the HR diagram) and its composition panel are computed from solar-scaled MIST models and do NOT follow [α/Fe] (that would need α-enhanced stellar-evolution grids). The effect washes out in hot stars (above ~9000 K the metal lines are too weak), and the model grid covers ~4000–9000 K stars plus cool giants — for a hotter star, a cool M dwarf, or a metallicity outside the grid, it falls back to the standard spectrum and says so.">?</span></span>
+      </label>
+      <p class="note spectrum-caption" id="spectrum-caption"></p>
+      <div class="legend">
+        <span><i style="background:linear-gradient(90deg,#7a00ff,#00b3ff,#33dd33,#ffdd00,#ff3300)"></i>visible band (true spectral colour)</span>
+        <span><i style="background:#9aa6bd;opacity:.4"></i>UV / near-IR (outside the eye's range)</span>
+        <span><span class="tip" tabindex="0" data-tip="Hydrogen Balmer lines (Hα 6563 Å, Hβ 4861 Å, Hγ, Hδ): absorption from hydrogen atoms with an electron already in the second level. They need warmth to populate that level but are wiped out if the gas is too hot to keep the atom neutral — so they peak around A-type stars (~9500 K) and fade toward both cooler and hotter stars.">H Balmer (Hα, Hβ …)</span></span>
+        <span><span class="tip" tabindex="0" data-tip="Singly-ionized calcium (Ca II H 3968 Å &amp; K 3933 Å) and neutral sodium (Na D, 5893 Å): strong in cool stars (the Sun, K and M dwarfs) where these metals sit in the right ionization state, and essentially gone in hot stars. Among the deepest features in a solar-type spectrum.">Ca II H&amp;K · Na D</span></span>
+        <span><span class="tip" tabindex="0" data-tip="Helium lines — the hot-star signature. Neutral He I (4471 Å, plus the famous yellow D3 line near the Na D doublet) needs a hot star to absorb at all, appearing in B and A stars. Singly-ionized He II (4686 Å) appears ONLY in the hottest O stars (above ~30000 K), where it is the defining feature — the spectra above 30000 K come from the OSTAR2002 model grid spliced onto the hot end. Their cool-blue guides appear only once the star is hot enough to show them: drag the mass slider to a massive O star to watch He II 4686 light up.">He I · He II (hot stars)</span></span>
+        <span><span class="tip" tabindex="0" data-tip="Molecular bands — the cool-star signature. Below ~4000 K the gas is cool enough for molecules to form, and titanium oxide (TiO) carves broad troughs across the optical spectrum: the marked bandheads near 5167, 6159 and 7053 Å are real, deep edges (the spectrum drops by half or more across them in an M star, but barely at all in the Sun). These bands deepen fast as the star cools — which is why the spectra below 3500 K come from the Göttingen/PHOENIX model grid spliced onto the COOL end (a 3500 K spectrum is a poor stand-in for a 2800 K one). Their warm-tinted guides appear only once the star is cool enough: drag to an M-dwarf or scrub a low-mass star to its red-giant tip to watch the TiO bands light up. (Vanadium oxide and other metal oxides strengthen further in the very latest M stars, but form no single clean bandhead in this range, so they are not separately marked.)">TiO bands (cool stars)</span></span>
       </div>
     </section>
 
@@ -760,59 +778,34 @@
 
     </section>
 
-    <section class="panel readout-panel" data-panel-id="readout">
-      <h2>State readout
-        <span class="help" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
-      </h2>
-      <div id="readout" class="readout"></div>
-      <p class="note" id="status"></p>
-    </section>
-
-    <section class="panel spectrum-panel" data-panel-id="spectrum">
-      <h2>Spectrum <span class="help" tabindex="0" data-tip="The star's synthetic spectrum — flux versus wavelength, with real absorption lines — for the current effective temperature, surface gravity and metallicity. This is the spectrum the 3D star's single colour is the eye's average of: integrate this curve against the eye's response and you get that one pixel. Interpolated from a grid of model-atmosphere spectra (MSG / Townsend) baked once into the backend. The visible band (3800–7800 Å) is painted in its true per-wavelength colour, so you see a spectrograph's rainbow with dark absorption lines notched into it; the ultraviolet and near-infrared flanks are shown muted grey. Flux is normalized to each spectrum's own peak — the absolute brightness (which varies thousands-fold from cool to hot stars) lives in the 3D star and the luminosity readout; here the story is the CONTINUUM SLOPE (hot stars rise toward the blue, cool stars toward the red) and the LINES. Watch the hydrogen Balmer lines (Hα, Hβ, …) deepen to a maximum around A-type stars (~9500 K) and fade in both hotter and cooler stars, while the Ca II H&K and Na D lines are strong in cool stars and vanish when hot. In the hottest stars the helium lines take over — neutral He I (4471 Å) in B and A stars, and singly-ionized He II (4686 Å) only in O stars (above ~30000 K, where the spectra come from the OSTAR2002 hot-star grid spliced onto the high-temperature end); their cool-blue guides appear only once the star is hot enough to show them. At the cool end the reverse happens: below ~4000 K the gas is cool enough for molecules, and titanium-oxide (TiO) bands carve broad troughs across the optical spectrum, with vanadium oxide (VO) joining in the coolest M stars — these bands deepen fast as the star cools, so the spectra below 3500 K come from the Göttingen/PHOENIX grid spliced onto the LOW-temperature end (the coolest M-dwarfs and red-giant tips, ~2800 K, then show real molecular bands rather than a frozen 3500 K spectrum); their warm-tinted guides appear only once the star is cool enough. The dashed gold line is the Wien peak (the blackbody's brightest wavelength), shown when it falls in range.">?</span></h2>
-      <canvas id="spectrum-canvas"></canvas>
-      <!-- Zoom / detail sub-band view. The baked grid is served at its NATIVE resolution
-           (3000–9000 Å in 2.5 Å bins, R≈2400); across the full-panel width a 2.5 Å bin is
-           sub-pixel, so the fine line structure is invisibly squashed. These preset bands
-           reframe the x-axis onto a narrow window — a pure client-side reframe of the SAME
-           served data, no refetch — so the individual line cores (and the grid's actual
-           sample points, marked as dots) become visible. This is the honest prerequisite
-           for ever deciding a finer bake is worthwhile: you can only see whether higher R
-           would help once the native sampling is on-screen. Owned by spectrum.js (by id);
-           shown for the living-star + [α/Fe] spectra, hidden (and reset to Full) in the
-           WD/WR/SN endgames, whose cubes cover different wavelength ranges. -->
-      <div class="spectrum-zoom" id="spectrum-zoom" role="group" aria-label="Spectrum detail band">
-        <span class="zoom-label">Zoom</span>
-        <button type="button" class="mode-btn active" data-lo="" data-hi="">Full</button>
-        <button type="button" class="mode-btn" data-lo="3880" data-hi="4030">Ca H&amp;K</button>
-        <button type="button" class="mode-btn" data-lo="5100" data-hi="5250">Mg b</button>
-        <button type="button" class="mode-btn" data-lo="5840" data-hi="5945">Na D</button>
-        <button type="button" class="mode-btn" data-lo="6480" data-hi="6640">Hα</button>
-        <button type="button" class="mode-btn" data-lo="4620" data-hi="4740">He 4686</button>
-        <span class="help" tabindex="0" data-tip="Zoom into a narrow wavelength band. The spectra are baked at the model grid's native resolution — 2.5 Å per sample (a resolving power R = λ/Δλ that runs from about 1200 in the blue to 3600 in the red) — but stretched across the whole panel a single 2.5 Å sample is thinner than a pixel, so the detailed line shapes are squashed to invisibility. Pick a band and the panel reframes onto that ~120–150 Å window (the same data, no refetch); now each sample is ~11 pixels wide, marked as a dot, and the individual line cores resolve. Ca II H (3968 Å) and K (3933 Å) split into two separate lines; the Mg b region shows the triplet against the continuum; Na D is a close doublet right at the sampling limit; Hα shows its broad pressure-broadened wings; He 4686 lights up only in the hottest O stars. This is where you can judge whether a finer (higher-resolution) bake would actually reveal more — the whole point of the view.">?</span>
-      </div>
-      <!-- [α/Fe] enhancement (atlas Tier B, whirling-cohort-atlas.md): a spectrum-only
-           "what-if" TOGGLE. It overlays two Coelho-2014 model spectra — solar-scaled
-           (α = 0) vs α-enhanced (α = +0.4) — so the gap between them IS the lesson: a
-           thick-disk/halo α-rich star's DEEPER Ca/Mg/Ti lines (with Na D moving the
-           opposite way). Owned by spectrum.js (by id). Honest domain (Gate-1 + loci
-           measured): ~4000–9000 K stars + all cool giants; hidden in the WD/WR/SN endgames.
-           Off-domain (hotter, cool dwarf, or off the α grid's [Fe/H] range) it falls back
-           to the standard spectrum with a note. NOT the evolutionary track: MIST is
-           solar-scaled, so the HR diagram and composition panel do not follow [α/Fe]. -->
-      <label class="alpha-toggle-row" id="alpha-toggle-row" for="alpha-toggle" hidden>
-        <input id="alpha-toggle" type="checkbox" />
-        <span>[α/Fe] enhancement <span class="alpha-afe">α-rich what-if</span>
-          <span class="help" tabindex="0" data-tip="A SPECTRUM-ONLY what-if for a Galactic subpopulation: the α-enhanced thick-disk and halo stars, whose oxygen, magnesium, silicon, calcium and titanium (the α-elements, forged in massive-star core-collapse supernovae) are over-abundant relative to iron compared with the Sun. Toggle it on and the panel overlays two model spectra from the same atmosphere code (Coelho 2014): solar-scaled ([α/Fe] = 0, white) and α-enhanced ([α/Fe] = +0.4, coral). The α-rich spectrum has visibly DEEPER Ca (4227 Å, H&K, the 8542 Å triplet), Mg b (5175 Å) and TiO lines — while Na D (an odd-Z element, not an α-element) moves the OPPOSITE way (shallower), a control that shows this is real differential line-strength chemistry, not a normalization shift. IMPORTANT: this is a hypothesis about the spectrum only — the star's evolutionary track (the HR diagram) and its composition panel are computed from solar-scaled MIST models and do NOT follow [α/Fe] (that would need α-enhanced stellar-evolution grids). The effect washes out in hot stars (above ~9000 K the metal lines are too weak), and the model grid covers ~4000–9000 K stars plus cool giants — for a hotter star, a cool M dwarf, or a metallicity outside the grid, it falls back to the standard spectrum and says so.">?</span></span>
-      </label>
-      <p class="note spectrum-caption" id="spectrum-caption"></p>
-      <div class="legend">
-        <span><i style="background:linear-gradient(90deg,#7a00ff,#00b3ff,#33dd33,#ffdd00,#ff3300)"></i>visible band (true spectral colour)</span>
-        <span><i style="background:#9aa6bd;opacity:.4"></i>UV / near-IR (outside the eye's range)</span>
-        <span><span class="tip" tabindex="0" data-tip="Hydrogen Balmer lines (Hα 6563 Å, Hβ 4861 Å, Hγ, Hδ): absorption from hydrogen atoms with an electron already in the second level. They need warmth to populate that level but are wiped out if the gas is too hot to keep the atom neutral — so they peak around A-type stars (~9500 K) and fade toward both cooler and hotter stars.">H Balmer (Hα, Hβ …)</span></span>
-        <span><span class="tip" tabindex="0" data-tip="Singly-ionized calcium (Ca II H 3968 Å &amp; K 3933 Å) and neutral sodium (Na D, 5893 Å): strong in cool stars (the Sun, K and M dwarfs) where these metals sit in the right ionization state, and essentially gone in hot stars. Among the deepest features in a solar-type spectrum.">Ca II H&amp;K · Na D</span></span>
-        <span><span class="tip" tabindex="0" data-tip="Helium lines — the hot-star signature. Neutral He I (4471 Å, plus the famous yellow D3 line near the Na D doublet) needs a hot star to absorb at all, appearing in B and A stars. Singly-ionized He II (4686 Å) appears ONLY in the hottest O stars (above ~30000 K), where it is the defining feature — the spectra above 30000 K come from the OSTAR2002 model grid spliced onto the hot end. Their cool-blue guides appear only once the star is hot enough to show them: drag the mass slider to a massive O star to watch He II 4686 light up.">He I · He II (hot stars)</span></span>
-        <span><span class="tip" tabindex="0" data-tip="Molecular bands — the cool-star signature. Below ~4000 K the gas is cool enough for molecules to form, and titanium oxide (TiO) carves broad troughs across the optical spectrum: the marked bandheads near 5167, 6159 and 7053 Å are real, deep edges (the spectrum drops by half or more across them in an M star, but barely at all in the Sun). These bands deepen fast as the star cools — which is why the spectra below 3500 K come from the Göttingen/PHOENIX model grid spliced onto the COOL end (a 3500 K spectrum is a poor stand-in for a 2800 K one). Their warm-tinted guides appear only once the star is cool enough: drag to an M-dwarf or scrub a low-mass star to its red-giant tip to watch the TiO bands light up. (Vanadium oxide and other metal oxides strengthen further in the very latest M stars, but form no single clean bandhead in this range, so they are not separately marked.)">TiO bands (cool stars)</span></span>
+    <section class="panel structure-panel" data-panel-id="structure">
+      <h2>Interior structure · real (MESA) <span class="help" tabindex="0" data-tip="The honest counterpart to the Lane–Emden panel: a REAL radial structure of the selected star — density, temperature, pressure and hydrogen fraction at every radius — computed offline by the MESA stellar-evolution code and read from a saved profile snapshot. Unlike the polytrope beside it, this shows the true convective and radiative regions the single-index model can only fake. The two canonical polytropes (n = 3/2 and n = 3) are overlaid so you can see how well — and where — the idealization holds. It snaps to the nearest saved snapshot in mass, metallicity and age (a handful exist, not a continuum), and always labels the true snapshot it is showing.">?</span></h2>
+      <p class="hint structure-intro">
+        The <b>real</b> interior of the star, from a full MESA model — the same
+        quantities the polytrope beside it approximates, but computed with
+        temperature, composition and energy transport all in play. Watch the
+        real density (bold) sit against the two canonical polytropes, and the
+        shaded band where the star is <b>convective</b> — structure the single-n
+        model cannot represent.
+        <span class="help" tabindex="0" data-tip="Why MESA and not the same provider as the rest of the app? The evolutionary tracks driving the HR diagram carry only surface quantities (L, Teff, radius) — no radial profile of the interior at all. A real interior comes from a full structure calculation, which MESA does offline; a live solve is out of scope. So these are a few pre-computed snapshots (near-ZAMS, mid-main-sequence, end of the main sequence), and the panel jumps between the nearest ones as you scrub age — it never invents an in-between profile.">?</span>
+      </p>
+      <div class="lane-body">
+        <div>
+          <canvas id="structure-canvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#ff9966"></i><span class="tip" tabindex="0" data-tip="The real density profile ρ(r)/ρc from the MESA model — density at each radius as a fraction of the central value. This is the direct analogue of the polytrope's density curve; compare its steepness (central concentration) against the two dashed references.">ρ/ρc — real density</span></span>
+            <span><i style="background:#e5555f"></i><span class="tip" tabindex="0" data-tip="Temperature T(r)/Tc as a fraction of the central temperature. It falls from 1 at the core to a thin sliver at the surface — the steep drop that drives the star's energy outward.">T/Tc — temperature</span></span>
+            <span><i style="background:#9a7fd0"></i><span class="tip" tabindex="0" data-tip="Pressure P(r)/Pc as a fraction of the central pressure. Since pressure rises with both density and temperature (P ∝ ρ·T), it plunges fastest of all — the lowest curve — the enormous weight the core must hold up.">P/Pc — pressure</span></span>
+            <span><i style="background:#5fbf7f"></i><span class="tip" tabindex="0" data-tip="Hydrogen mass fraction X(r). On the main sequence it is depleted in the core (where H is fusing to He) and near-pristine in the envelope — a direct picture of nuclear burning eating into the centre. Flat across a young star, visibly hollowed as it ages.">X — hydrogen</span></span>
+            <span><i style="border-top:2px dashed #7f8aa3;background:none;height:0"></i><span class="tip" tabindex="0" data-tip="The two canonical Lane–Emden polytropes — n = 3/2 (fully convective / adiabatic) and n = 3 (radiative, the Eddington standard model). These are NOT fitted to the star; they are the fixed textbook idealizations, drawn so the real density can be seen departing from them. The label notes which one the core matches.">n = 3/2 · 3 — polytropes</span></span>
+            <span><i style="background:rgba(120,170,255,0.30)"></i><span class="tip" tabindex="0" data-tip="Shaded where the star is CONVECTIVE (energy carried by rising and sinking gas, MESA's mixing flag / the Schwarzschild criterion), unshaded where it is radiative (energy carried by photons). A 1 M☉ star has a radiative core and a convective outer envelope; this boundary is exactly what the polytrope's single index cannot express.">convective zone</span></span>
+          </div>
+        </div>
+        <div class="lane-controls">
+          <p class="lane-caption" id="structure-caption"></p>
+          <div id="structure-readout" class="readout"></div>
+          <p class="hint structure-note" id="structure-note"></p>
+        </div>
       </div>
     </section>
 
@@ -837,20 +830,6 @@
         <span class="sed-nonthermal-legend" data-series="rotline"><i style="background:rgba(150,210,255,0.95)"></i><span class="tip" tabindex="0" data-tip="The blue line inside the coral band is this star's rotation→activity LEVEL — the band collapsed to a single L_X/L_bol once rotation is supplied (Wright 2011: L_X/L_bol from the Rossby number Ro = P_rot/τ_conv). For a cool main-sequence star the period is DERIVED from age by gyrochronology (so scrubbing age slides the line); the rotation slider lets you pin it yourself. It keeps a ±dex fuzz (real scatter + the activity cycle), and appears ONLY where a convective dynamo exists — never for hot stars, the A/early-F gap, or giants. (Click to hide/show it.)">rotation→activity line (age-derived / set)</span></span>
         <span class="sed-nonthermal-legend" data-series="wind"><i style="background:rgba(130,222,176,0.95)"></i><span class="tip" tabindex="0" data-tip="The green line is the hot star's WIND thermal free–free (bremsstrahlung) excess — and unlike the coral X-ray band (an evocative range), this one is DATA-GROUNDED: it is computed from the star's real on-disk mass-loss rate Ṁ. A hot massive star drives a fast, ionized wind; that wind emits optically-thick free–free emission with Fλ ∝ λ⁻²·⁶, a SHALLOWER slope than the photosphere's λ⁻⁴ Rayleigh–Jeans floor — so it OVERTAKES the blackbody and rises above it in the mid/far-infrared and sub-millimetre (Wright & Barlow 1975; Panagia & Felli 1975). It is drawn as a solid line only where it clears the photospheric floor: a luminous, strong-wind evolved supergiant shows a clear far-IR/sub-mm excess, while a ZAMS O star's is fainter and sits near the floor. The SLOPE (λ⁻²·⁶) is the robust, teachable part; the absolute LEVEL carries about a dex of uncertainty (the terminal wind speed v∞ ≈ 2.6·v_escape straddles the ~21000 K bistability jump, and the smooth-wind Ṁ runs a little below the real clumped value — so this is an upper-ish estimate). Drawn ONLY for hot ionized winds (Teff ≳ 12000 K): cool-giant and AGB winds are dusty/molecular, not thermal free–free emitters, so no line is drawn there. γ-rays stay empty. Predictive from real data — the data-grounded counterpart to the evocative coronal band. (Click to hide/show it.)">wind free–free excess (real Ṁ · far-IR/sub-mm)</span></span>
       </div>
-    </section>
-
-    <!-- Asteroseismology (Axis C of the outward quartet) — the star rings like a bell. A pure VIEW
-         of the served Teff/log g/R (frontend-only, the sed.js/hz.js precedent): the two seismic
-         scaling relations turn them into nu_max and Delta-nu, drawn as a schematic power spectrum
-         (Delta-nu comb under a nu_max Gaussian envelope) and the echelle diagram (frequency mod
-         Delta-nu -> vertical l=0/1/2 ridges). Gated to the convective-envelope regime by the physics
-         (hot stars blank with an instability-strip pointer); living-only (main.js drops it in every
-         endgame via the shared mode-switch chokepoint — a cooling WD's log g~8 would otherwise paint
-         a garbage spectrum). Not hidden by default: it's meaningful for any cool living star. -->
-    <section class="panel seismo-panel" id="seismo-panel" data-panel-id="seismo">
-      <h2>Asteroseismology · the star rings <span class="help" tabindex="0" data-tip="A star oscillates like a bell — its convective surface stochastically drives sound waves (p-modes) that resonate through the interior, exactly as the Sun does. Two numbers carry almost all of the information. ν_max is the frequency where the oscillation power peaks (it scales with the surface gravity: ν_max ∝ g/√Teff, so the Sun rings near 3090 µHz while a puffed-up red giant rings hundreds of times slower, at tens of µHz). Δν is the near-even spacing between consecutive overtones (it scales with the square root of the mean density: Δν ∝ √ρ̄). TOP: a schematic power spectrum — a comb of modes (spaced by Δν) under a Gaussian envelope centred on ν_max. BOTTOM: the échelle diagram — the spectrum sliced into Δν-wide strips and stacked, so modes of the same degree line up into near-vertical RIDGES (ℓ=0 radial and ℓ=2 quadrupole pack into one ridge, ℓ=1 dipole sits about half a Δν across). This is exactly how Kepler and TESS weigh and age hundreds of thousands of stars: the two observables invert to give the star's mass and radius. Tier-2, labeled approximate — real scaling relations, not a full pulsation solve, and the relations carry a known few-percent systematic. Only stars with a CONVECTIVE ENVELOPE ring this way (cool dwarfs and red giants); hot stars have radiative envelopes and pulsate differently — those are the instability-strip zones on the HR diagram.">?</span></h2>
-      <canvas id="seismo-canvas"></canvas>
-      <p class="note spectrum-caption" id="seismo-caption"></p>
     </section>
 
     <section class="panel lane-panel" data-panel-id="lane">
@@ -893,35 +872,73 @@
       </div>
     </section>
 
-    <section class="panel structure-panel" data-panel-id="structure">
-      <h2>Interior structure · real (MESA) <span class="help" tabindex="0" data-tip="The honest counterpart to the Lane–Emden panel: a REAL radial structure of the selected star — density, temperature, pressure and hydrogen fraction at every radius — computed offline by the MESA stellar-evolution code and read from a saved profile snapshot. Unlike the polytrope beside it, this shows the true convective and radiative regions the single-index model can only fake. The two canonical polytropes (n = 3/2 and n = 3) are overlaid so you can see how well — and where — the idealization holds. It snaps to the nearest saved snapshot in mass, metallicity and age (a handful exist, not a continuum), and always labels the true snapshot it is showing.">?</span></h2>
-      <p class="hint structure-intro">
-        The <b>real</b> interior of the star, from a full MESA model — the same
-        quantities the polytrope beside it approximates, but computed with
-        temperature, composition and energy transport all in play. Watch the
-        real density (bold) sit against the two canonical polytropes, and the
-        shaded band where the star is <b>convective</b> — structure the single-n
-        model cannot represent.
-        <span class="help" tabindex="0" data-tip="Why MESA and not the same provider as the rest of the app? The evolutionary tracks driving the HR diagram carry only surface quantities (L, Teff, radius) — no radial profile of the interior at all. A real interior comes from a full structure calculation, which MESA does offline; a live solve is out of scope. So these are a few pre-computed snapshots (near-ZAMS, mid-main-sequence, end of the main sequence), and the panel jumps between the nearest ones as you scrub age — it never invents an in-between profile.">?</span>
-      </p>
-      <div class="lane-body">
-        <div>
-          <canvas id="structure-canvas"></canvas>
-          <div class="legend">
-            <span><i style="background:#ff9966"></i><span class="tip" tabindex="0" data-tip="The real density profile ρ(r)/ρc from the MESA model — density at each radius as a fraction of the central value. This is the direct analogue of the polytrope's density curve; compare its steepness (central concentration) against the two dashed references.">ρ/ρc — real density</span></span>
-            <span><i style="background:#e5555f"></i><span class="tip" tabindex="0" data-tip="Temperature T(r)/Tc as a fraction of the central temperature. It falls from 1 at the core to a thin sliver at the surface — the steep drop that drives the star's energy outward.">T/Tc — temperature</span></span>
-            <span><i style="background:#9a7fd0"></i><span class="tip" tabindex="0" data-tip="Pressure P(r)/Pc as a fraction of the central pressure. Since pressure rises with both density and temperature (P ∝ ρ·T), it plunges fastest of all — the lowest curve — the enormous weight the core must hold up.">P/Pc — pressure</span></span>
-            <span><i style="background:#5fbf7f"></i><span class="tip" tabindex="0" data-tip="Hydrogen mass fraction X(r). On the main sequence it is depleted in the core (where H is fusing to He) and near-pristine in the envelope — a direct picture of nuclear burning eating into the centre. Flat across a young star, visibly hollowed as it ages.">X — hydrogen</span></span>
-            <span><i style="border-top:2px dashed #7f8aa3;background:none;height:0"></i><span class="tip" tabindex="0" data-tip="The two canonical Lane–Emden polytropes — n = 3/2 (fully convective / adiabatic) and n = 3 (radiative, the Eddington standard model). These are NOT fitted to the star; they are the fixed textbook idealizations, drawn so the real density can be seen departing from them. The label notes which one the core matches.">n = 3/2 · 3 — polytropes</span></span>
-            <span><i style="background:rgba(120,170,255,0.30)"></i><span class="tip" tabindex="0" data-tip="Shaded where the star is CONVECTIVE (energy carried by rising and sinking gas, MESA's mixing flag / the Schwarzschild criterion), unshaded where it is radiative (energy carried by photons). A 1 M☉ star has a radiative core and a convective outer envelope; this boundary is exactly what the polytrope's single index cannot express.">convective zone</span></span>
-          </div>
-        </div>
-        <div class="lane-controls">
-          <p class="lane-caption" id="structure-caption"></p>
-          <div id="structure-readout" class="readout"></div>
-          <p class="hint structure-note" id="structure-note"></p>
-        </div>
-      </div>
+    <!-- Observer's view (Axis A of the outward quartet) — the theory→telescope bridge, now its
+         own panel with the observational colour–magnitude diagram (the observer's HR diagram).
+         The intrinsic star's whole track is plotted as (B−V, M_V); the three sliders below then
+         show what DISTANCE (a uniform downward slide — the distance modulus) and interstellar
+         DUST (the reddening vector — fainter AND redder) do to it. The apparent-magnitude readout
+         is fetched from /photometry (the tested absolute-flux path); the reddening also overlays a
+         reddened curve on the Spectrum + SED panels (client-side CCM89 — reddening.js). A pure
+         VIEW — it never touches the HR marker or the intrinsic StellarState (apparent quantities
+         are observer-dependent, so they live HERE, not in the "everything from one StellarState"
+         readout). Living-only (magnitudes need the absolute-flux main spectrum cube; WD/WR/stripped
+         cubes are continuum-normalized), gated on that cube being present. -->
+    <section class="panel observer-panel" id="observer-panel" data-panel-id="observer" hidden>
+      <h2>Observer's view · colour–magnitude <span class="help" tabindex="0" data-tip="The observer's version of the HR diagram. Everything else in this simulator is INTRINSIC — the star as it truly is. A telescope instead records a COLOUR (here B−V, from synthetic B and V magnitudes through real filter curves) and an apparent BRIGHTNESS. This panel plots the star's whole evolutionary track as an observational colour–magnitude diagram: colour B−V across (blue left, red right) versus absolute magnitude M_V down the side (bright at the top, as astronomers draw it). Your star sits on it as the ringed marker. Then the two things between us and the star: DISTANCE dims it (the distance modulus μ = 5·log₁₀(d/10 pc) — every ×10 in distance is 5 magnitudes fainter) with NO colour change, sliding the star straight DOWN; interstellar DUST both dims and REDDENS it (scattering blue light more than red), sliding it DOWN and to the RIGHT along the reddening vector. The orange marker is where the star is actually observed, the arrow is that shift, and the dashed orange locus is the whole track as observed. This is the diagram you fit to a real star cluster's photometry to measure its distance and reddening. A pure VIEW — it never moves the star on the theoretical HR diagram.">?</span></h2>
+      <canvas id="cmd-canvas"></canvas>
+      <p class="note observer-readout" id="observer-readout"></p>
+
+      <label for="obs-distance">Distance <span id="obs-distance-val" class="note"></span>
+        <span class="help" tabindex="0" data-tip="How far away the star is, in parsecs (1 pc ≈ 3.26 light-years). Distance dims the star by the distance modulus μ = 5·log₁₀(d/10 pc): at the reference 10 pc the apparent magnitude equals the absolute magnitude (μ = 0); at 100 pc the star is 5 magnitudes fainter, at 1 kpc 10 magnitudes fainter. Distance changes only the brightness, never the colour — so on the CMD it slides the star straight DOWN. Landmarks: ~10 pc (the nearest bright stars), ~100 pc (the Hyades cluster), ~8 kpc (the Galactic centre), ~50 kpc (the Large Magellanic Cloud).">?</span>
+      </label>
+      <div class="slider-wrap"><input id="obs-distance" type="range" min="0" max="1" step="0.001" /></div>
+
+      <label for="obs-av">Extinction A<sub>V</sub> <span id="obs-av-val" class="note"></span>
+        <span class="help" tabindex="0" data-tip="The total dimming from interstellar dust in the V (visual) band, in magnitudes. A_V = 0 is a dust-free line of sight; A_V ≈ 1 is a typical value looking a kiloparsec through the Galactic disk; A_V of several magnitudes occurs toward dense molecular clouds and the Galactic centre. Because dust extinguishes blue light more than red (Cardelli–Clayton–Mathis 1989 law), raising A_V both dims the star and REDDENS it — on the CMD it slides the star DOWN and to the RIGHT along the reddening vector, and it overlays a reddened curve on the Spectrum/SED panels (blue end pulled down, the 2175 Å bump carved out). The observed colour grows by E(B−V) = A_V/R_V.">?</span>
+      </label>
+      <div class="slider-wrap"><input id="obs-av" type="range" min="0" max="5" step="0.05" /></div>
+
+      <label for="obs-rv">Reddening R<sub>V</sub> <span id="obs-rv-val" class="note"></span>
+        <span class="help" tabindex="0" data-tip="The shape parameter of the dust extinction law, R_V = A_V / E(B−V) — the ratio of total to selective extinction. It encodes the dust grain size: R_V ≈ 3.1 is the standard diffuse interstellar medium, lower values (~2) mean smaller grains and a steeper (bluer) reddening curve, higher values (up to ~5.5) mean larger grains found in dense clouds and a flatter, greyer curve. At fixed A_V, a smaller R_V reddens the star MORE (a larger E(B−V)); the strength of the 2175 Å ultraviolet bump also tracks it. 3.1 is the right default for almost every sightline.">?</span>
+      </label>
+      <div class="slider-wrap"><input id="obs-rv" type="range" min="2" max="5.5" step="0.1" /></div>
+
+      <p class="note rot-note" id="observer-note"></p>
+    </section>
+
+    <!-- Asteroseismology (Axis C of the outward quartet) — the star rings like a bell. A pure VIEW
+         of the served Teff/log g/R (frontend-only, the sed.js/hz.js precedent): the two seismic
+         scaling relations turn them into nu_max and Delta-nu, drawn as a schematic power spectrum
+         (Delta-nu comb under a nu_max Gaussian envelope) and the echelle diagram (frequency mod
+         Delta-nu -> vertical l=0/1/2 ridges). Gated to the convective-envelope regime by the physics
+         (hot stars blank with an instability-strip pointer); living-only (main.js drops it in every
+         endgame via the shared mode-switch chokepoint — a cooling WD's log g~8 would otherwise paint
+         a garbage spectrum). Not hidden by default: it's meaningful for any cool living star. -->
+    <section class="panel seismo-panel" id="seismo-panel" data-panel-id="seismo">
+      <h2>Asteroseismology · the star rings <span class="help" tabindex="0" data-tip="A star oscillates like a bell — its convective surface stochastically drives sound waves (p-modes) that resonate through the interior, exactly as the Sun does. Two numbers carry almost all of the information. ν_max is the frequency where the oscillation power peaks (it scales with the surface gravity: ν_max ∝ g/√Teff, so the Sun rings near 3090 µHz while a puffed-up red giant rings hundreds of times slower, at tens of µHz). Δν is the near-even spacing between consecutive overtones (it scales with the square root of the mean density: Δν ∝ √ρ̄). TOP: a schematic power spectrum — a comb of modes (spaced by Δν) under a Gaussian envelope centred on ν_max. BOTTOM: the échelle diagram — the spectrum sliced into Δν-wide strips and stacked, so modes of the same degree line up into near-vertical RIDGES (ℓ=0 radial and ℓ=2 quadrupole pack into one ridge, ℓ=1 dipole sits about half a Δν across). This is exactly how Kepler and TESS weigh and age hundreds of thousands of stars: the two observables invert to give the star's mass and radius. Tier-2, labeled approximate — real scaling relations, not a full pulsation solve, and the relations carry a known few-percent systematic. Only stars with a CONVECTIVE ENVELOPE ring this way (cool dwarfs and red giants); hot stars have radiative envelopes and pulsate differently — those are the instability-strip zones on the HR diagram.">?</span></h2>
+      <canvas id="seismo-canvas"></canvas>
+      <p class="note spectrum-caption" id="seismo-caption"></p>
+    </section>
+
+    <!-- Habitable-zone history (Axis D2a) — the TEMPORAL twin of the scale-bar HZ band. Plots the
+         whole life's habitable zone as distance (log AU) vs age (LINEAR — the giant-branch march is
+         the last ~8% of the star's linear life; a log-age axis would crush it against the edge), so
+         the outward MARCH is legible on one static figure. A pure VIEW of L + Teff (reuses hz.js,
+         never touches the HR marker). Governed by the SAME #hz-toggle as the scale-bar band (one
+         concept, two views — the population-toggle idiom); shown only when that toggle is on and in
+         live mode. Hidden by default; main.js un-hides it. -->
+    <section class="panel hz-history-panel" id="hz-history-panel" data-panel-id="hz-history" hidden>
+      <h2>Habitable-zone history <span class="help" tabindex="0" data-tip="How the circumstellar HABITABLE ZONE — the range of orbital distances where a planet could hold liquid surface water — moves over the star's whole life. The true-size panel shows this zone at ONE age (a band on the size axis); this shows every age at once, so you can read the story rather than scrub for it. Distance from the star is up the side (in AU, log scale); age runs across the bottom (linear, so the explosive giant-branch march — when the brightening star flings the zone out to tens of AU in the final few percent of its life — stays visible instead of being crushed into the corner). The green band is the zone itself: SOLID conservative (runaway greenhouse inner edge → maximum greenhouse outer), DASHED optimistic (recent Venus → early Mars), from the Kopparapu (2014) climate parameterization for a 1 Earth-mass planet. The blue horizontal lines are the Solar-System orbits (Venus, Earth, Mars) as a FIXED reference — not this star's own planets; watch where Earth's 1 AU line enters and then leaves the band. The amber vertical line is the current age (it tracks the age slider), and it marks the same instant the true-size band shows. A break in the band is an age where the star's temperature leaves the model's calibrated 2600–7200 K range. This is a liquid-water (energy-balance) zone only — it does not account for ultraviolet/X-ray output or flares.">?</span></h2>
+      <canvas id="hz-history-canvas"></canvas>
+      <p class="note spectrum-caption" id="hz-history-caption"></p>
+    </section>
+
+    <section class="panel readout-panel" data-panel-id="readout">
+      <h2>State readout
+        <span class="help" tabindex="0" data-tip="Everything below is computed from one StellarState (spec §3). Each row: what it is (hover its ?), then the value.">?</span>
+      </h2>
+      <div id="readout" class="readout"></div>
+      <p class="note" id="status"></p>
     </section>
 
     <section class="panel roche-panel" data-panel-id="roche">
