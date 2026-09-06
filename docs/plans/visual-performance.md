@@ -27,6 +27,11 @@ Lives outside the repo, in `M:\claud_projects\temp\star-sim-perf\` (the repo's t
 | `rotmax.mjs` | the **tallest reachable** rotation section and Controls panel, swept over 22 masses × 5 [Fe/H] × rotation off/on at three widths — what a `min-height` floor has to cover | `node rotmax.mjs` |
 | `gatenote.mjs` | the `#incl-gate-note` floor against the state space that actually selects its text — **[Fe/H] × mass**, not mass alone, because the rotating-track toggle's visibility moves with metallicity — at all three widths | `node gatenote.mjs` |
 | `jumpcheck.mjs` | whether a state change actually **moves a neighbouring panel** — every panel's top/height before and after the two known overflow states. The difference between a real jump and a floor that is merely undersized on paper | `node jumpcheck.mjs` |
+| `innerjump.mjs` | whether the rotation section overflowing its floor moves anything **inside** the Controls panel (age slider, gateway). `jumpcheck.mjs` only snapshots `main > section`, so it is blind to a within-panel shove — at 1440 the panel's own floor absorbs the growth and jumpcheck reports clean while the age slider drops 36 px | `node innerjump.mjs` |
+| `notefit.mjs` | how tall `#incl-gate-note` may be for a given `.rot-control` floor: the content above the note in the **tightest note-showing** state, measured order-independently so it stays right if the note stops being the last child | `node notefit.mjs` |
+| `edge481.mjs` | both base-rule maxima at **481 px**, the binding width for the default rule (the phone rule starts at 480), with the rotating-track click **asserted** — an unasserted click that silently fails is indistinguishable from a short state | `node edge481.mjs` |
+| `phonegap.mjs` | a child-by-child breakdown of the Controls panel in one state, when a floor comes out short and you need to know which term is wrong before raising the constant | `node phonegap.mjs` |
+| `panelshot2.mjs` | the Controls panel in the **three states that vary** (default star · the hedge caption · the rotating track ticked) at 1440 / 481 / 390 — `panelshot.mjs` shoots only the Sun, which cannot show a reservation change in the states that drove it | `node panelshot2.mjs <suffix>` → `panel2-<suffix>/` |
 | `panelshot.mjs` | just the Controls panel, desktop + phone, so a reserved-space change can be compared without diffing a 4000 px full-page shot | `node panelshot.mjs <suffix>` → `panel-<suffix>/` |
 | `p3_track.mjs` | `/track` payload bytes, row/field counts, fetch and `JSON.parse` time per mass (P3); plus a 41-step age sweep asking whether a facet is ever *enabled* on a given track | `node p3_track.mjs` |
 | `time_startup.py` | provider startup stages: dir discovery, fingerprint, `.npz` read per grid | `python time_startup.py` (backend venv) |
@@ -294,39 +299,72 @@ case appears.
   of the slot); they cannot go to zero without cutting the reservation. Screenshots:
   `temp/star-sim-perf/panel-{before,after2}/`.
 
-### V1b. The reserved floors are UNDERSIZED — three measured jumps · *open, needs a decision*
+### V1b. The reserved floors were UNDERSIZED — three measured jumps · **shipped 2026-09-06**
 
 Found while measuring V1, pre-existing, and **not** caused by it (the numbers below reproduce
 with the note reverted). `jumpcheck.mjs` records every panel's box before/after a state change,
-so these are confirmed movements of neighbouring panels, not bookkeeping:
+so these were confirmed movements, not bookkeeping:
 
-| Trigger | 1440 | 512 | 390 | What moves |
+| Trigger | 1440 | 512 | 390 | What moved |
 |---|---|---|---|---|
-| Mass → 6.5 M☉ at [Fe/H] −1.5 (the two-sided uncertain-fate hedge) | +60 px | +137 px | +145 px | 5–6 panels below |
-| Ticking the rotating track at 1.35 M☉ | 0 (absorbed) | +33 px | +21 px | 6 panels below |
+| Mass → 6.5 M☉ at [Fe/H] −1.5 (the two-sided uncertain-fate hedge) | +60 px | +137 px | +145 px | 5–6 neighbouring panels |
+| Ticking the rotating track at 1.35 M☉ | +36 px | +53 px | +89 px | the age slider + gateway, **inside** the panel |
+| …the same click, measured at panel level | 0 | +33 px | +21 px | 6 neighbouring panels |
 
-- **Why.** `.rot-control`'s 316 px floor was set from a single "311 px at ~512 px" measurement
-  taken before the inclination facet grew its orientation-grid row; it now needs 351 / 369 /
-  405. And `.controls-panel`'s 992 / 1060 floors miss the gateway's tallest state entirely —
-  `panelmax.mjs` puts max non-rotation content at 717 / 794 / 870 (at 6.5 M☉, [Fe/H] −1.5,
-  where the hedge caption alone is 158 / 196 / 253 px).
-- **The arithmetic.** Required panel floor = max(non-rotation content) + rotation floor →
-  **1129 base / 1205 phone** against today's 992 / 1060.
-- **The trade, and why it is not obvious.** Closing the jumps costs ~137 px (desktop) and
-  ~145 px (phone) of *permanent* bottom slack on every star — more whitespace than the ~180 px
-  V1 was opened to remove. Raising the floors and V1 pull in opposite directions.
-- **A third option — with a hard limit on it.** Both floors are dominated by ONE caption: the
-  two-sided uncertain-fate hedge in the gateway (`panelmax.mjs` prints `gateway`). Shortening it
-  would shrink the jump *and* the reservation instead of trading one for the other. **But its
-  length is a CONSTRAINT, not the variable being optimised.** That caption is the 3rd honesty
-  gate — hedged on both sides deliberately, with a measured lower edge and a cited 8 M☉ ceiling
-  ([[star-sim-uncertain-fate-band]]) — and it is 158/196/253 px tall because refusing to give a
-  false verdict takes words. Trimming a hedge to fit a pixel budget is the "never paint a false
-  caption" rule inverted, and it is the failure this project keeps re-learning. The floors move
-  to fit the caption; the caption does not shrink to fit the floors. Whoever picks this row up
-  may re-word for density only if the hedge still refuses the verdict on both sides — and if it
-  cannot, the answer is to leave every number here alone and close the row as "measured → skip".
-- **Acceptance.** `jumpcheck.mjs` reports no moved panels in either trigger, at all three widths.
+**The 1440 row is the one the original write-up got wrong.** It read "0 (absorbed)", because
+`jumpcheck.mjs` only snapshots `main > section` and at that width the panel's own floor swallowed
+the growth — no neighbour moved. `innerjump.mjs` (new) watches the panel's *children* and shows
+the age slider and the whole endgame gateway sliding 36 px down under the cursor. A panel-level
+acceptance check could never have caught it, which is why acceptance now needs both scripts.
+
+**What shipped.** Every constant re-measured at each regime's binding width and raised:
+
+| | `.rot-control` | `.controls-panel` | `#incl-gate-note` |
+|---|---|---|---|
+| base (> 480 px) | 316 → **376** | 992 → **1214** | 100 → **160** |
+| phone (≤ 480 px) | *(none)* → **412** | 1060 → **1308** | 64 → *(none needed)* |
+
+- **The arithmetic is exact, not conservative.** Once a rotation floor covers that section's
+  tallest state, the section renders at exactly the floor in *every* state — so the panel needs
+  `max(content outside the section) + that floor + 19`, and the sum is the requirement rather
+  than an upper bound. Measured: base `813 + 376 + 19 = 1208 → 1214`, phone `870 + 412 + 19 =
+  1301 → 1308`. The margin is applied once, at the end, so it is not double-counted.
+- **The +19 is the panel's own bottom padding + border + trailing margin,** and leaving it out
+  is the mistake this row made on its first pass. The measured "content" term runs from the
+  panel's box top to its lowest child's bottom: it carries the *top* padding but not the bottom
+  one, while `min-height` is a border-box height that must cover both. Symptom: the phone still
+  jumped 13 px after the raise. Any future floor derived from a `panelUsed`-style number owes
+  the same +19.
+- **481 px is the binding width for the default rule, not 512.** The phone rule only starts at
+  480, and those 31 px of extra wrapping cost the gateway caption another 19 px (813 vs 794).
+  Sizing at 512 — which is what every earlier floor here did — leaves the rule short over its
+  own narrowest 32 px, and the acceptance run passes anyway because it never visits them. 481
+  is now in `jumpcheck.mjs`'s width list. The phone rule is sized at 390; 360 measures
+  identically, so 390 covers the narrow end.
+- **The gate note's two regimes coincide.** Its ceiling is `floor − content above it − its top
+  margin`: `376 − 198 − 12` and `412 − 234 − 12` both give 166 → 160. So the ≤ 480 override is
+  gone rather than duplicated. `gatenote.mjs` now reads the floor off the page instead of
+  hardcoding it, and reports 6 px headroom and zero overflows across the whole [Fe/H] × mass
+  sweep at every width.
+- **The cost, stated plainly.** +222 px (desktop) and +248 px (phone) of *permanent* bottom slack
+  on every star — more than the ~140 px this row estimated, and more than the ~180 px V1 was
+  opened to remove. The estimate was low because it read the raw observed panel heights out of
+  `jumpcheck.mjs` instead of adding the two reservations. This is the honest price of "panels
+  never change size on slider/click" and it is now paid in full. **V2 (row-height pairing) is the
+  mitigation** — a taller Controls panel makes the pairing worse — but it is a separate row and
+  was not folded in here.
+- **The hedge caption was not touched.** It remains the single dominant term (215 px at 481, 253
+  at 390) and the 3rd honesty gate ([[star-sim-uncertain-fate-band]]). The third option this row
+  recorded — shorten it — was declined: the floors move to fit the caption, never the reverse.
+- **One artefact seen and explained.** At an intermediate value (1196) the seismology panel's own
+  height changed by 19 px between the two states while its top stayed put. It is a flex-row
+  stretch effect — a taller Controls panel re-pairs the wrap rows — and it disappeared at the
+  final 1214. Nothing moved in either case; it is V2's subject, not a floor bug.
+- **Acceptance (met).** `jumpcheck.mjs` reports **no moved panels** in either trigger at
+  **1440 / 512 / 481 / 390**, *and* `innerjump.mjs` reports nothing moving inside the panel at
+  all three widths (only the gateway's own caption reflowing ±3 px in place, with nothing below
+  it). Zero console errors throughout. Screenshots: `temp/star-sim-perf/panel2-{before,after2}/`,
+  three states × three widths.
 
 ### V2. Row-height imbalance in the two-column layout · *idea, judgement call*
 

@@ -1,6 +1,6 @@
 ---
 name: star-sim-visual-performance
-description: "The 2026-09-05 visuals/performance passes: the seven measured fixes, then three.js vendored (the app now has no external assets) and the star's adaptive pixel ratio; the harness in temp/ and what remains"
+description: "The 2026-09-05/06 visuals/performance passes: the seven measured fixes, three.js vendored, the star's adaptive pixel ratio, and the reserved-floor raise (V1b) with its two measurement traps — the missing bottom padding and the 481px binding width"
 metadata:
   type: project
 ---
@@ -90,14 +90,51 @@ pixel, so it validates the screenshot baseline before P1 might change one).**
   a shrink *and* keeps the floor is asking for something impossible; read the acceptance
   criterion against the constraint before implementing it.
 - **The floors were undersized, and `jumpcheck.mjs` is why we know it matters.** Both
-  `.rot-control` (316) and `.controls-panel` (992/1060) miss states that are reachable, and
-  the overflow **really does move 5–6 neighbouring panels** — 60/137/145 px at the
-  uncertain-fate hedge, 33/21 px on ticking the rotating track at 1.35 M☉. A floor being
-  numerically short is not the finding; a *neighbour moving* is, and those are different
-  questions. Always ask the second one before changing a floor: a panel that is not the
-  tallest in its flex row can overflow and shift nothing. Left unfixed on purpose — closing
-  it costs ~140 px of permanent whitespace everywhere, more than V1 removed (see V1b).
+  `.rot-control` (316) and `.controls-panel` (992/1060) missed reachable states, and the
+  overflow **really did move 5–6 neighbouring panels** — 60/137/145 px at the uncertain-fate
+  hedge, 33/21 px on ticking the rotating track at 1.35 M☉. A floor being numerically short
+  is not the finding; a *neighbour moving* is, and those are different questions. Always ask
+  the second one before changing a floor: a panel that is not the tallest in its flex row can
+  overflow and shift nothing.
+
+## V1b — the floors raised (2026-09-06)
+
+Shipped: `.rot-control` 316 → **376** base + a new **412** phone rule; `.controls-panel`
+992/1060 → **1214/1308**; `#incl-gate-note` 100/64 → **160** with the phone override deleted.
+Acceptance met at **1440 / 512 / 481 / 390** on *two* scripts. Four things worth carrying to
+any future reservation work:
+
+- **A panel-level jump check is not enough — `innerjump.mjs` exists because of this.**
+  `jumpcheck.mjs` snapshots `main > section`, so it cannot see a panel's own children move.
+  At 1440 the Controls floor absorbed the rotation section's growth: no neighbour moved, the
+  check said clean, and the age slider plus the entire endgame gateway still slid **36 px**
+  down under the cursor (53 at 512, 89 at 390). The plan had recorded that width as
+  "0 (absorbed)". **Two mechanisms, two checks:** the panel floor stops neighbours moving, the
+  per-element floor stops siblings moving, and each needs its own probe.
+- **The two reservations ADD.** Once a rotation floor covers its own tallest state the section
+  renders at exactly that floor in every state, so the panel requirement is
+  `max(content outside it) + that floor + 19` — exact, not an upper bound. Reading a raw
+  observed panel height instead (which is what produced the row's "~140 px" estimate) under-
+  counts it; the real cost was **+222 px desktop / +248 px phone** of permanent slack.
+- **Trap 1: the missing bottom padding (+19).** A "content height" measured from the panel's
+  box top to its lowest child's bottom carries the *top* padding but not the bottom one, while
+  `min-height` is a border-box height covering both. Omitting it left the phone jumping 13 px
+  after the raise. Any floor derived from a `panelUsed`-style number owes this.
+- **Trap 2: 481 px, not 512, is the binding width** for a rule whose phone breakpoint is 480.
+  Those 31 px cost the hedge caption another 19 px (813 vs 794). Every earlier floor in this
+  file was sized at 512, so each was short over its own narrowest 32 px — and the acceptance
+  run passed regardless, because it never visited them. **Size a responsive floor at the
+  narrowest member of its regime, and put that width in the checker.** 481 is now in
+  `jumpcheck.mjs`.
+
+The uncertain-fate hedge caption — the single dominant term, 215/253 px — was **not**
+shortened; that was the row's recorded third option and it was declined, because it is the
+3rd honesty gate ([[star-sim-uncertain-fate-band]]). The floors move to fit the caption, never
+the reverse. New harness scripts: `innerjump.mjs` · `notefit.mjs` · `edge481.mjs` ·
+`phonegap.mjs` · `panelshot2.mjs` (the last shoots the three states that *vary*, since
+`panelshot.mjs` only ever shot the Sun and so could not show a change in the states that
+drove it).
 
 **Still open (in the plan, payoff order):** static layers for `sed.js` / the comp cno view
-(P4), cold-disk first load (P5), the undersized floors + the three measured jumps (V1b),
-row-height pairing in the two-column layout (V2).
+(P4), cold-disk first load (P5), row-height pairing in the two-column layout (V2 — worth
+more now that Controls is 222 px taller).

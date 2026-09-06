@@ -129,15 +129,33 @@ main {
    held steady by the per-element reserves further down (`.rot-control` min-height, the per-note
    `#…-note` floors) so an element APPEARING (inclination facet on the rotation toggle, a what-if
    note growing to its active caption) can't shove its siblings — the two mechanisms are additive.
-   Controls' live max rose 985→988 once the rotation section reserved its incl-reveal state, so
-   the floor follows it up to 992. */
-.controls-panel  { min-height: 992px; }
+   Controls is the one panel whose floor is DERIVED rather than read off a single state, because
+   the two mechanisms stack: the panel must hold max(content outside .rot-control) + .rot-control's
+   own floor, and once that floor covers the section's tallest state the section renders at exactly
+   the floor in EVERY state, so the sum is the requirement and not merely an upper bound. Measured
+   2026-09-06 (temp/star-sim-perf/{panelmax,rotmax,edge481}.mjs) at each regime's binding width —
+   481px for the default rule, NOT the 512px the old values used: the phone rule only starts at
+   480, and those 31px of extra wrapping cost the gateway caption another 19px. The phone rule is
+   sized at 390px (360px measures identically, so 390 covers the narrow end).
+     base   813 (non-rotation content) + 376 (.rot-control) + 19 = 1208 → 1214
+     phone  870 (non-rotation content) + 412 (.rot-control) + 19 = 1301 → 1308
+   The +19 is the panel's own bottom padding + border + the gateway's trailing margin. It has to
+   be added by hand because the measured "content" term runs from the panel's box top to its
+   LOWEST CHILD's bottom, so it carries the top padding but not the bottom one; min-height is a
+   border-box height and must cover both. Leaving it out is what made a first pass at these
+   numbers come up 13px short on the phone — and pass at 512px purely by luck, since 512 has
+   19px less wrapping than the 481px the rule actually has to hold at.
+   The tallest state is 6.5 M☉ at [Fe/H] −1.5, where the two-sided uncertain-fate hedge alone is
+   215/253px. That caption is the 3rd honesty gate and its length is a CONSTRAINT, not the variable
+   being optimised: the floors move to fit the caption, never the reverse. Re-measure with those
+   scripts if the gateway's wording changes. */
+.controls-panel  { min-height: 1214px; }
 .structure-panel { min-height: 855px; }
 .star-panel      { min-height: 815px; }
 .hr-panel        { min-height: 820px; }
 .sed-panel       { min-height: 830px; }
 @media (max-width: 480px) {
-  .controls-panel  { min-height: 1060px; }
+  .controls-panel  { min-height: 1308px; }
   .structure-panel { min-height: 910px; }
   .star-panel      { min-height: 830px; }
   .hr-panel        { min-height: 870px; }
@@ -306,10 +324,20 @@ main {
    reveals the inclination facet (the within-panel jump the user now wants gone; the earlier
    design called that reveal an "intentional disclosure" and deliberately left it un-reserved —
    this reverses that). Sized to the tallest reachable live state, measured across the mass/[Fe/H]
-   sweep + every facet + the rot-toggle checked: ROT-ON at ~1.3 M☉ (toggle row + note + the
-   revealed inclination slider) = 311px at the narrowest desktop panel (~512px). Desktop-only per
-   the user (no ≤480 override — the old one would clamp this floor back down and re-break it). */
-.rot-control { margin: 16px 0 2px; min-height: 316px; }
+   sweep + every facet + the rot-toggle checked (ROT-ON at ~1.25 M☉: toggle row + note + period
+   slider + the revealed inclination facet), at each regime's binding width — 369px at 481px, 405px
+   at 390px (rotmax.mjs / edge481.mjs, 2026-09-06).
+
+   The earlier 316px came from one 512px reading taken before the inclination facet grew its
+   orientation-grid row, and was short by 53/89px. That is why ticking the toggle still moved the
+   age slider and the gateway by 36/53/89px INSIDE the panel — at 1440 the panel's own floor
+   absorbed the growth so no neighbour moved and the panel-level jumpcheck reported clean; only
+   innerjump.mjs, which watches the panel's own children, saw it.
+
+   The ≤480 override RAISES this floor (the phone facets wrap taller); the override removed earlier
+   was one that CLAMPED it, which is what re-broke it. */
+.rot-control { margin: 16px 0 2px; min-height: 376px; }
+@media (max-width: 480px) { .rot-control { min-height: 412px; } }
 .rot-head { font-size: 14px; color: var(--muted); margin: 0 0 2px; display: flex; align-items: center; gap: 6px; }
 /* Track facet: the vvcrit toggle. `.disabled` (set by main.js) greys it where rotation
    is a data-derived no-op (below the Kraft break). */
@@ -346,22 +374,22 @@ main {
    The min-height makes the note ABSORB the slack instead of floating at the top of a void:
    the section's floor reserves the facet's height in every state, so on a star that can't show
    the facet the leftover read as a rendering fault (~180px of nothing on the Sun). The value is
-   the slack available in the TIGHTEST state that shows this note — 1.35 M☉ with the rotating
-   track unticked, where the toggle + its note + the period slider are all present (used 198px
-   of the 316px floor at both 1440 and 512, 234px at 390) — minus this element's own top margin.
+   the slack available in the TIGHTEST state that shows this note — the toggle + its note + the
+   period slider all present, ~1.25–1.35 M☉ with the rotating track unticked — minus this element's
+   own top margin and a few px of safety. That tightest state puts 198px above this note at every
+   width above 480 and 234px on the phone, so 376−198−12 and 412−234−12 both land on 166 → 160:
+   the two regimes coincide to the pixel, which is why there is no ≤480 override here any more
+   (there was a 64px one, needed only while .rot-control had a single desktop-wide floor).
    Sized to the tightest state, so the note can never push the section past its floor: it only
-   ever eats space that is already reserved and already empty. Re-measure with heights.mjs if
-   either the floor or a facet's height changes. */
+   ever eats space that is already reserved and already empty. Re-measure with notefit.mjs (it
+   reads the floor off the page) if either the floor or a facet's height changes. */
 .incl-gate-note {
   color: var(--muted); margin-top: 12px;
-  min-height: 100px; display: flex; align-items: center;
+  min-height: 160px; display: flex; align-items: center;
 }
 /* `display:flex` above beats the UA [hidden]{display:none}, exactly as it does for
    .rot-toggle-row, so the JS `.hidden = true` wouldn't hide it — re-assert it. */
 .incl-gate-note[hidden] { display: none; }
-/* The phone stack shares the 316px floor (no ≤480 override on .rot-control) but its facets are
-   taller — the tightest state uses 234px, leaving 82px — so this floor has to come down. */
-@media (max-width: 480px) { .incl-gate-note { min-height: 64px; } }
 /* The relocated period slider: left-aligned + full-width here (it was centered/narrow
    in the SED panel). Its label/note styling (.sed-rot*) is reused as-is. */
 .rot-control .sed-rot { max-width: none; margin: 8px 0 0; }
