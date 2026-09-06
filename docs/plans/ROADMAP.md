@@ -6,6 +6,12 @@ something ships, move its row (with the measured payoff) to `SHIPPED.md` — thi
 narrates builds. When scope changes, edit the plan and the one-line hook here, not a second
 list. CLAUDE.md's "what's next" points at this file.
 
+**Finished designs are deliberately absent.** Every shipped row in [`SHIPPED.md`](SHIPPED.md)
+names the plan doc it came from, so a completed design is reached through its build-log row,
+not through a second index here. Those docs carry their own "built" status line; the only one
+no shipped row points at is [`lantern-grid-waystation.md`](lantern-grid-waystation.md) (the
+hosted pre-baked assets), which is built and recorded in memory `star-sim-hosted-data-assets`.
+
 ## Status legend
 
 - **planned** — designed and chunked in a plan doc; ready to implement.

@@ -1,6 +1,8 @@
 # Plan: Binary-stripped stars — the ~70% WR channel, as a sibling
 
-## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–3 BUILT (companion on the HR + drawn in 3D + the Roche-lobe / mass-transfer geometry). NEXT = path (b) Chunk 4 = the on-ramp to a real binary grid (POSYDON/BPASS), a separate recon+handoff.
+## Status: PATH (a) CHUNKS 1–3 BUILT (complete). PATH (b) CHUNKS 1–3 BUILT (companion on the HR + drawn in 3D + the Roche-lobe / mass-transfer geometry). Path (b) Chunk 4 — the on-ramp to a real binary grid — **shipped as its own plans**:
+POSYDON two-star co-evolution (`entwined-consort-inspiral.md`, 2026-07-07) and the BPASS
+coeval population (`coeval-ensemble-overlay.md`, 2026-07-10). Nothing here is open.
 
 **Path (b) Chunk 3 done 2026-07-06 (backend + frontend, 287 pytest [+8], Playwright 1440 + 390
 zero console errors).** "The mass-transfer geometry / Roche lobes" — a genuinely new TWO-STAR

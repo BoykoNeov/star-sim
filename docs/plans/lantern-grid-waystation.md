@@ -1,5 +1,13 @@
 # Plan: hosted pre-baked data assets (starting with POSYDON)
 
+## Status: BUILT — ten release tags now host the pre-baked assets (2026-07-09/10).
+
+The durable record is `docs/memory/star-sim-hosted-data-assets.md` (which tag holds what,
+and which MESA output is hosted vs excluded); the fetch plumbing shipped later as
+`_fetch.py` + the `star-sim-fetch` catalogue (`structure-refactor.md` §1.5, memory
+`star-sim-fetch-framework.md`). Nothing here is open — the doc is kept for the licence
+audit and the why-Releases-not-the-repo-tree rationale below.
+
 ## Context
 
 A casual user who clones the repo and runs `start.bat`/`start.sh` gets the core

@@ -124,8 +124,8 @@ against the real data:**
   linear-q space to the nearest track, builds `BinaryStep`/`BinaryTrack`); `/binary_track`
   + `/binary_track_meta` routes (bypass `PROVIDER`, snap-always, 422 only on structurally
   invalid input, 503 if unbaked); `requires_posydon_data` + 15 tests in `test_posydon.py`.
-- **Next = Chunk 4b** (the two-star time render, frontend) — unchanged from the design
-  below, now unblocked.
+- **Next at the time = Chunk 4b** (the two-star time render, frontend) — unchanged from the
+  design below, and built 2026-07-07 (see the status line at the top).
 
 ## Original design status (superseded by the above; kept for the Chunk 4b architecture)
 

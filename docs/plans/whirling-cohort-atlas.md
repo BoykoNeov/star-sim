@@ -1,6 +1,14 @@
 # Plan: Rotation & the subpopulation-control atlas
 
-## Status: DISCUSSION CAPTURED (nothing built). A landscape, not a single feature.
+## Status: A MENU, NOT A BUILD — and most of what it listed has since shipped.
+
+Written as a landscape of candidate subpopulation controls, not a chunked feature. **Built
+since** (rows in `SHIPPED.md` naming this doc): the instability-strip HR overlay, the
+rotation `vvcrit` axis, v sin i line broadening, the [α/Fe] spectral axis, the α-enhanced
+evolution overlay, gravity darkening / oblateness, and Ap/Bp magnetic peculiarity. **Still
+open from this menu, both carried in `ROADMAP.md`:** microturbulence (Tier B — real but thin
+pedagogy, probably skip) and the live solver / reduced nuclear network (Tier D — spec §9,
+only if the grid approach hits a real wall).
 
 This is a survey of **what extra controls would let the sim show different
 subpopulations of stars**, prompted by the rotation question below. Unlike the

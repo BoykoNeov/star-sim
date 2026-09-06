@@ -1,6 +1,14 @@
 # Plan: The outward quartet — four new axes turning the sim outward from the star
 
-## Status: PROPOSED (not built). Four brand-new directions, planned together.
+## Status: ALL FOUR AXES BUILT (2026-07-10 → 2026-09-06). Kept as the source of truth for each axis's design.
+
+**A** observer's view / CMD — A1 + A2 + A3 built 2026-07-10, extended to the Gaia and 2MASS
+planes by the near-IR bake 2026-09-06 · **B** isochrone / cluster — B1 + B2 + B3 built
+2026-07-10 · **C** asteroseismology — C1 + C2 built 2026-07-13 · **D** habitable zone —
+D1 + D2a + D2b built 2026-07-10/13. The measured payoffs are the five rows in
+`SHIPPED.md`; the durable knowledge is in `docs/memory/star-sim-observer-cmd.md`,
+`…-isochrone-cluster.md`, `…-asteroseismology.md` and `…-habitable-zone.md`. Nothing in
+this plan is open — the design below is history plus the per-axis rationale.
 
 The single-star-over-time story is exhaustive (tracks, composition, 3D, spectra, SED, interior
 structure, endgames, binarity, populations, rotation, He/α overlays). Every axis so far looks
