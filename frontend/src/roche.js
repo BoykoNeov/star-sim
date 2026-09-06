@@ -283,8 +283,16 @@ export function createRoche() {
     // MEASURED ratio rather than gesturing at "tiny". One significant figure: this is an
     // order-of-magnitude fact, and more digits would imply a precision the round NS radius
     // (see below) does not have.
+    // Round to one significant figure and then FORMAT it. `toPrecision(1)` returns "5e+5" for
+    // anything past six digits, and scientific notation mid-sentence is unreadable in a caption
+    // meant to teach — this is the one number a reader has to feel the size of.
     const ratio = e.size_over_separation;
-    const scale = ratio ? `about 1 part in ${Number(1 / ratio).toPrecision(1)}` : "far below one pixel";
+    let scale = "far below one pixel";
+    if (ratio) {
+      const inv = 1 / ratio;
+      const mag = Math.pow(10, Math.floor(Math.log10(inv)));
+      scale = `about 1 part in ${(Math.round(inv / mag) * mag).toLocaleString("en-US")}`;
+    }
     const assumed = (e.s1_radius_assumed || e.s2_radius_assumed)
       ? ` A black hole's size follows from its mass (the Schwarzschild radius); a neutron ` +
         `star's does NOT — it depends on the nuclear equation of state, and the ~12 km used ` +

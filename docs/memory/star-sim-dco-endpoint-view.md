@@ -58,6 +58,23 @@ Both are the recurring "plausible but wrong" class, and neither is reachable by 
    returned but **collided on screen**, because that helper right-ANCHORS a label past 0.9,
    so "after collapse" hangs left from the end while "end" sits centred just before it.
    **0.20** clears both. Each was found by looking at the rendered strip, not the numbers.
+3. **`toPrecision(1)` printed the scale ratio as `"5e+5"`** — scientific notation mid-sentence,
+   in the one number a reader has to feel the size of. Round to one figure, then
+   `toLocaleString`: "about 1 part in 500,000".
+
+## What the browser pass has to cover (advisor catch)
+
+The first pass only ever drove `co-hems` on a track that HAS an endpoint, i.e. the happy path.
+The two branches that can actually strand state were HTTP-verified only. Both are now rendered:
+
+- **A kind switch performed WHILE sitting on the endpoint** (`co-hems` -> `co-hems-rlo`, whose
+  curated demo ends WD and so has no pair). `coBinaryTrackSpan()` goes 0.80 -> 1.0 with
+  `coBinaryFraction` preserved, which is the transition most likely to leave the mode on.
+  Verified: the class comes off, the comp panel returns, the "after collapse" tick goes.
+  Note the demo BUTTONS are CSS-hidden inside the view — the kind picker itself refetches.
+- **The unbound refusal**, reachable through "Custom system…" at the metallicity floor
+  ([Fe/H] = -4.0, m_star 95.3 / m_co 5.99 / p 0.561: 63 % ejected). Verified: the note explains
+  it, and the frame stays withheld even at the far right of the slider.
 
 ## Shape
 
