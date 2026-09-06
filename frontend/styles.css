@@ -355,16 +355,21 @@ main {
   color: var(--accent); font-size: 12.5px; line-height: 1.45;
   margin: 2px 0 12px; min-height: 2.9em;   /* 2 lines @ line-height 1.45 */
 }
-/* Phone / single-column: the narrow panel wraps the longest captions to 3 lines. */
-@media (max-width: 480px) { .lane-caption { min-height: 4.35em; } }
-/* …and the interior-structure caption wraps to 3 lines on a DESKTOP too, so it gets the phone
+/* The interior-structure caption wraps to 3 lines on a DESKTOP too, so it gets the 3-line
    reserve at every width. The comment above sized 2 lines for a panel ">=460px"; at the base
    rule's binding width (a 481px viewport) the panel is only 433px, where the longest caption —
    the fully-convective wording plus a snapped-far snapshot line — measures 54px. Scoped to this
    id rather than raised on .lane-caption, which the Lane-Emden and Roche captions also use and
    whose own longest strings were not re-measured here. Its siblings (the readout, then the note)
-   sit below it, so the extra line would otherwise shove them. */
+   sit below it, so the extra line would otherwise shove them.
+   It sits ABOVE the phone rule on purpose: an id beats a class at equal specificity-in-media, so
+   were it below, this unconditional 4.35em would outrank the phone rule in BOTH directions and a
+   later raise of the phone .lane-caption reserve would silently stop applying here while still
+   reading as if it did. Ordered this way (and named in the phone selector list), the phone rule
+   still governs below 480px. */
 #structure-caption { min-height: 4.35em; }
+/* Phone / single-column: the narrow panel wraps the longest captions to 3 lines. */
+@media (max-width: 480px) { .lane-caption, #structure-caption { min-height: 4.35em; } }
 
 /* Spectrum panel (spec §5): a full-width band (the `.wide` class) — the wavelength
    axis wants width, and it's a derived view (of Teff/log g/[Fe/H]), not part of the
@@ -410,8 +415,10 @@ main {
 .observer-panel label {
   display: block; margin: 12px 0 0; font-size: 13px; color: var(--ink); font-weight: 600;
 }
-/* 3.5em, not the old 2.8em (2 lines): the readout reaches 3 lines (43px) at every panel width
-   below ~680px — measured, and confirmed against the longest string the code can build. It has
+/* 3.5em, not the old 2.8em (2 lines): the readout measures 3 lines (43px) at every panel width
+   measured from 342 to 480px, and 2 lines at the 688px panel a 1440 viewport gives — nothing
+   between 480 and 688 was measured, so that is the range, not an interpolated threshold.
+   Confirmed against the longest string the code can build as well as the sweep. It has
    the three dust/distance sliders BELOW it, so an unreserved 3rd line shoves them down inside the
    panel; that is the within-panel half the whole-panel floor cannot cover. (#observer-note needs
    no such reserve for the mirror-image reason: it is LAST in the panel, so its growth is absorbed

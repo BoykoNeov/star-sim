@@ -180,6 +180,13 @@ floor already covered 882).
   a 984 px viewport, so the panel is 700 px wide at 983 and **460 at 984**), and there is a
   second wrap cliff just above the binding width (a 480 px panel measures 742, a 464 px one
   841). Sizing at 481 covers both cliffs — which is why the two-tier rule holds. Left as-is.
+- **Two limits recorded rather than papered over.** (1) The structure sweep sampled the age axis
+  at **three points**, not against the bounded set of `phase` strings the caption embeds — a
+  longer phase name is one wrapped line (18 px) against 8 px of margin, so **re-measure if a
+  phase name changes**; the `capmax.mjs` move (inject the string set) is the fix if it matters.
+  (2) A per-element reserve scoped to an **id** must sit ABOVE the phone rule and be named in its
+  selector list: an id outside a media query outranks a class inside one in *both* directions, so
+  a later raise of the phone value would silently stop applying while still reading as if it did.
 - **Found, not fixed:** `/photometry_track?mass=0.1&feh=0.25` 422s on a real corner of MIST's
   non-rectangular domain — caught, locus cleared, retryable, panel height unaffected. An
   honesty-gate question, not a layout one.

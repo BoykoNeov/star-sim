@@ -606,6 +606,17 @@ catches it, clears the locus and stays retryable, so the only trace is the brows
 is an honesty-gate question, not a layout one, so it is recorded rather than folded into a
 reservation change.
 
+**One limit of the structure sweep, stated so the next raise knows to close it.** The age axis
+was sampled at **three points** (slider 0 / 0.5 / 1), not bounded against the set of strings it
+can produce. The caption embeds the snapshot's `phase`, so a longer phase name than the three
+samples happened to hit is one wrapped line — **18 px**, which the floor's 8 px of margin over
+882 would not absorb. The tallest state came out at `ageFrac: 0` at every width, and the fix if
+this ever matters is the `capmax.mjs` move: inject the bounded phase-string set into the live
+caption rather than sampling the axis. **Re-measure if a phase name changes.** (`.lane-caption`'s
+reserve is likewise ordered above the phone rule and named in its selector list — an id outside a
+media query would otherwise outrank that rule in both directions, so a later raise of the phone
+value would silently stop applying to `#structure-caption` while still reading as if it did.)
+
 **The trap from the first pass still stands:** the harness measures the *served* app, which reads
 `frontend/index.html` off disk on every load. Editing a served file while a sweep is in flight
 hands the browser a half-written page — it failed with `#feh-num` not found, which reads exactly
