@@ -41,8 +41,17 @@ if ! ls -d ../data/feh_* >/dev/null 2>&1; then
     echo "[warn] Grid download failed -- the app still starts, but shows a data error until you run it again."
 fi
 
-# Open the browser shortly after the server has had time to bind.
-( sleep 3; open_browser ) &
+# Open the browser once the server actually answers (a fixed delay raced the
+# server's startup and left the browser on "can't connect"). Up to ~2 min.
+(
+  for _ in $(seq 1 240); do
+    if curl -fs -m 1 http://127.0.0.1:8000/health >/dev/null 2>&1; then
+      open_browser
+      exit 0
+    fi
+    sleep 0.5
+  done
+) &
 
 echo
 echo "[run] Star Simulator is running at http://127.0.0.1:8000"

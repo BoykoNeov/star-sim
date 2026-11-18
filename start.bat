@@ -41,14 +41,23 @@ if not defined HAVE_DATA (
   "%PY%" -m star_sim.fetch_mist || echo [warn] Grid download failed -- the app still starts, but shows a data error until you run it again.
 )
 
-REM --- Open the browser shortly after the server has had time to bind. ----------
-start "" /b powershell -NoProfile -Command "Start-Sleep 3; Start-Process 'http://127.0.0.1:8000'"
+REM --- Open the browser once the server actually answers. -----------------------
+REM  A fixed delay raced the server: startup takes ~3 s warm and longer after a
+REM  reboot, so the browser landed on "can't connect" and never retried. Poll
+REM  /health instead (up to ~2 min) and open the page only when it responds.
+start "" /b powershell -NoProfile -Command "for ($i = 0; $i -lt 240; $i++) { try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 http://127.0.0.1:8000/health | Out-Null; Start-Process 'http://127.0.0.1:8000'; exit 0 } catch { Start-Sleep -Milliseconds 500 } }"
 
 echo.
 echo [run] Star Simulator is running at http://127.0.0.1:8000
 echo       Close this window or press Ctrl+C to stop it.
 echo.
 "%PY%" -m uvicorn star_sim.api:app --host 127.0.0.1 --port 8000
+if errorlevel 1 (
+  echo.
+  echo [error] The server stopped with an error -- see the messages above.
+  echo         If it says port 8000 is in use, close the other program using it.
+  pause
+)
 goto :eof
 
 :nopython
