@@ -2496,6 +2496,7 @@ function enterWD() {
   mode = "wd";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
+  updateStrippedControl();   // hide the strip-in-a-binary fork too (live-only; Back is the exit)
   // Invalidate any in-flight live /track so it can't land and clobber the WD render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackLatest.invalidate();
@@ -2529,6 +2530,7 @@ function enterWR() {
   mode = "wr";
   updateRotControl();   // hide the rotation toggle inside the endgame (mode != live)
   updatePeculiarControl();
+  updateStrippedControl();   // hide the strip-in-a-binary fork too (live-only; Back is the exit)
   // Invalidate any in-flight live /track so it can't land and clobber the WR render
   // (the age scrub is fetch-free now, so /track is the only live fetch to guard).
   trackLatest.invalidate();
@@ -2940,6 +2942,7 @@ async function enterSN() {
   mode = "sn";
   updateRotControl();   // hide the rotation control inside the endgame (mode != live)
   updatePeculiarControl();
+  updateStrippedControl();   // hide the strip-in-a-binary fork too (live-only; Back is the exit)
   trackLatest.invalidate();         // invalidate any in-flight live /track
   document.body.classList.add("sn-mode");
   if (els.pulseToggle) els.pulseToggle.hidden = true;   // the pulse toggle is WD-only
